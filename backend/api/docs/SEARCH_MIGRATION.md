@@ -21,7 +21,9 @@ The default search backend is an in-memory inverted index implemented in
   categories.
 - **Updates:** incremental — `addListing` / `removeListing` keep the index
   in sync with listing mutations.
-- **Lifecycle:** rebuilt from the database on startup; lost on restart.
+- **Lifecycle:** rebuilt from the database on startup (the API warms the
+  process-local index via `syncListingsToSearchIndex` when the serving
+  backend is in-memory); lost on restart.
 
 ### When to use it
 
@@ -70,9 +72,33 @@ MEILISEARCH_INDEX=listings
 
 When `MEILISEARCH_URL` is set, `createSearchAdapter()` (in
 [`src/lib/searchAdapter.ts`](../src/lib/searchAdapter.ts)) automatically
-returns a `MeilisearchSearchAdapter`. If the SDK is not installed or the
-server is unreachable, operations transparently fall back to the in-memory
-adapter so the service never hard-fails.
+returns a `MeilisearchSearchAdapter`.
+
+**Degraded mode is explicit, never silent.** If the SDK is missing, the
+client cannot be constructed, or any request to Meilisearch fails, the
+adapter serves the process-local in-memory index — but it reports the
+state everywhere it matters:
+
+- `retrievalInfo()` returns `backend: 'in_memory'` + `degraded: true`,
+  which flows into `retrievalMeta.backend`/`retrievalMeta.degraded` and
+  `serveMode: 'cold_start'` on `/search` and `/search/semantic`.
+- `health()` returns `false` → `GET /search/health` responds 503.
+- `/health/ready` reports `checks.search: 'degraded'` (still serving, so
+  readiness does not flap the pod) and `/health/deep` includes the full
+  `retrievalInfo` under `details.search`.
+- The adapter logs `search.backend.degraded` once at first failure, and
+  the startup probe logs `search.backend.degraded` as an error when the
+  configured backend is unreachable at boot.
+
+**Production gate.** With `NODE_ENV=production`, boot fails
+(`assertProductionReadiness`) unless `MEILISEARCH_URL` is set or
+`SEARCH_ALLOW_IN_MEMORY=true` explicitly opts into the process-local
+index for single-instance deployments. `ELASTICSEARCH_URL` does not
+satisfy the gate — that adapter is a placeholder serving in-memory.
+`createSearchAdapter()` enforces the same rule defensively at call time.
+
+Canonical key var is `MEILISEARCH_KEY`; `MEILISEARCH_API_KEY` is accepted
+as a legacy fallback in `config.ts` only.
 
 ### 2.3 Install the SDK (optional but recommended)
 
@@ -128,8 +154,11 @@ for await (const listing of streamAllListings()) {
 
 ### 2.6 Rollback
 
-Unset `MEILISEARCH_URL` and restart the API. The factory returns the
-in-memory adapter with no code changes required.
+Unset `MEILISEARCH_URL` and restart the API. In non-production the factory
+returns the in-memory adapter with no code changes required. In
+production, rollback requires `SEARCH_ALLOW_IN_MEMORY=true` — the
+process-local index is an explicit degraded-mode choice, not a silent
+fallback.
 
 ---
 

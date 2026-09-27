@@ -345,8 +345,19 @@ function CachedImageComponent({
     setLoaded(true);
     imageOpacity.value = withTiming(1, { duration: reducedMotionEnabled ? 0 : 200 });
     previewOpacity.value = withTiming(0, { duration: reducedMotionEnabled ? 0 : 180 });
-    if (onLoad && e?.source) {
-      onLoad({ source: { width: e.source.width, height: e.source.height } });
+    // Normalize decoded source geometry across the three render paths:
+    // expo-image emits `e.source`, RN Image emits `e.nativeEvent.source`,
+    // expo-av Video emits `e.naturalSize` (with an orientation field).
+    // Consumers use this to feed real measured aspect ratios back into
+    // masonry tiles (utils/measuredMediaRatio).
+    const src = e?.source ?? e?.nativeEvent?.source ?? e?.naturalSize;
+    if (
+      onLoad &&
+      src &&
+      typeof src.width === 'number' &&
+      typeof src.height === 'number'
+    ) {
+      onLoad({ source: { width: src.width, height: src.height } });
     }
   }, [imageOpacity, previewOpacity, reducedMotionEnabled, onLoad]);
 

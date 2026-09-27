@@ -19,17 +19,21 @@ import { track } from '../../analytics';
 import { isDbAvailable } from '../../storage/db';
 import {
   drainMoodboardOutbox,
+  enqueueMoodboardOperationBatch,
   getMoodboardOutboxPendingCount } from '../../storage/moodboardOutbox';
+import { createStableId } from '../../utils/createStableId';
 import {
   fetchMoodboardDetail,
   fetchMoodboardThemes,
   fetchPickerItems,
   createMoodboard,
   getThemeById,
+  submitMoodboardOperation,
   type Moodboard,
   type MoodboardItem,
   type MoodboardTheme,
   type MoodboardOperationResponse } from '../../services/moodboardApi';
+import type { MoodboardQueuedOp } from './moodboardHistory';
 
 export const DEFAULT_THEME_ID = 'theme-linen';
 
@@ -52,6 +56,23 @@ export interface ConflictDetail {
   currentRevision: number;
   message: string;
 }
+
+/**
+ * Discriminated outcome of a `submitBoardOps` batch — the history layer
+ * only advances undo/redo stacks on 'applied' or 'queued' (durable intent).
+ * 'conflict'/'forbidden'/'failed' mean the batch did not fully persist and
+ * the caller must reconcile the optimistic update against server truth.
+ * 'unreconciled' means the ops persisted/drained but the canonical re-fetch
+ * afterwards FAILED — local state is unverified optimistic, never to be
+ * presented as confirmed truth (S21-04).
+ */
+export type SubmitBoardOpsOutcome =
+  | 'applied'
+  | 'queued'
+  | 'unreconciled'
+  | 'conflict'
+  | 'forbidden'
+  | 'failed';
 
 export function useMoodboardBoard({ moodboardId }: { moodboardId?: string }) {
   const haptic = useHaptic();
@@ -171,8 +192,15 @@ export function useMoodboardBoard({ moodboardId }: { moodboardId?: string }) {
   // occurs, we re-fetch the canonical board state and update local state to
   // match. The user's unsynced work is preserved in the optimistic update
   // until the re-fetch replaces it with the server's version.
-  const reconcileBoard = useCallback(async () => {
-    if (!moodboard) return;
+  // Returns whether the canonical re-fetch succeeded and replaced local
+  // state. A failed reconcile is NOT a silent rollback: the optimistic
+  // board stays on screen but is flagged 'error' (with a retry surface via
+  // the sync overlay) so unverified local state is never presented as
+  // applied truth (S21-04). Callers use the boolean to keep command
+  // outcomes honest — e.g. flushOutbox reports 'unreconciled' instead of
+  // 'applied' when the post-drain fetch fails.
+  const reconcileBoard = useCallback(async (): Promise<boolean> => {
+    if (!moodboard) return false;
     // Preserve the pre-reconcile local version so the compare sheet can show
     // "your version" truthfully after the server state replaces it.
     setConflictLocalSnapshot(moodboard);
@@ -183,9 +211,17 @@ export function useMoodboardBoard({ moodboardId }: { moodboardId?: string }) {
         setActiveThemeId(mb.theme);
         boardRevisionRef.current = mb.revision;
       }
+      // A null detail means the board is gone — still not reconciled.
+      return mb != null;
     } catch {
-      // Re-fetch failed — leave the user's local state intact. The next
-      // successful load or operation will reconcile.
+      // Re-fetch failed (offline / server error) — leave the user's local
+      // state intact but mark it unverified. The next successful load,
+      // drain, or the sync overlay's Retry re-runs the reconcile.
+      setSyncStatus('error');
+      setConflictDetail({
+        currentRevision: boardRevisionRef.current,
+        message: 'We couldn\u2019t verify the latest board state. Your canvas may be out of date — retry sync when you\u2019re back online.' });
+      return false;
     }
   }, [moodboard]);
 
@@ -196,24 +232,41 @@ export function useMoodboardBoard({ moodboardId }: { moodboardId?: string }) {
   // pending rows are surfaced honestly through the sync status machine —
   // 'synced' is only reported when the queue is fully drained.
   const drainingRef = useRef(false);
-  const flushOutbox = useCallback(async () => {
-    if (isOffline || drainingRef.current || !isDbAvailable()) return;
+  const flushOutbox = useCallback(async (): Promise<SubmitBoardOpsOutcome> => {
+    if (!isDbAvailable()) return 'failed';
+    // Rows already enqueued are durable intent — whether we are offline or
+    // another drain owns the queue right now, they will be retried.
+    if (isOffline || drainingRef.current) return 'queued';
     drainingRef.current = true;
     try {
+      // True when a drain reported per-row errors; whether that is terminal
+      // depends on what is still pending afterwards (checked below).
+      let sawErrors = false;
+      // Whether the most recent post-drain canonical re-fetch succeeded. A
+      // failed reconcile means pushed ops can't be verified against server
+      // truth — the final outcome must not claim 'applied' (S21-04).
+      let lastReconcileOk = true;
+      // Whether this call actually pushed any rows. An empty-queue flush
+      // (mount/reconnect effect, or a racing drain that already emptied the
+      // queue) must NOT claim 'synced' — nothing was verified by this call
+      // and writing 'synced' would mask a real 'error'/'conflict' flag set
+      // moments earlier by a failed reconcile (S21-04).
+      let pushedAny = false;
       for (;;) {
         const pending = await getMoodboardOutboxPendingCount();
         if (pending === 0) break;
         setSyncStatus('syncing');
         const result = await drainMoodboardOutbox();
+        if (result.pushed > 0) pushedAny = true;
         // Re-fetch the canonical board so server state reconciles.
-        await reconcileBoard();
+        lastReconcileOk = await reconcileBoard();
         if (result.conflicts > 0) {
           setSyncStatus('conflict');
           setConflictDetail({
             currentRevision: boardRevisionRef.current,
             message: 'Another edit changed this board. Your canvas has been updated to the latest version.' });
           haptic.warning();
-          return;
+          return 'conflict';
         }
         if (result.forbidden > 0) {
           setSyncStatus('error');
@@ -221,12 +274,11 @@ export function useMoodboardBoard({ moodboardId }: { moodboardId?: string }) {
             currentRevision: boardRevisionRef.current,
             message: 'You no longer have permission to edit this board. Your unsaved work is preserved locally.' });
           haptic.error();
-          return;
+          return 'forbidden';
         }
         if (result.errors > 0) {
-          setSyncStatus('error');
-          haptic.error();
-          return;
+          sawErrors = true;
+          break;
         }
         // A drain that applied nothing and failed nothing made no progress —
         // stop looping and let the pending check below report honestly.
@@ -234,13 +286,34 @@ export function useMoodboardBoard({ moodboardId }: { moodboardId?: string }) {
       }
       const remaining = await getMoodboardOutboxPendingCount();
       if (remaining > 0) {
-        // Ops are still queued — do not claim success.
+        // Ops are still queued — do not claim success. They are durable and
+        // will flush on the next drain, so 'queued' is the honest outcome.
         setSyncStatus('error');
         haptic.error();
-      } else {
-        setSyncStatus('synced');
-        setTimeout(() => setSyncStatus('idle'), 1500);
+        return 'queued';
       }
+      if (sawErrors) {
+        // Nothing left pending — every queued row was terminally rejected.
+        setSyncStatus('error');
+        haptic.error();
+        return 'failed';
+      }
+      if (!lastReconcileOk) {
+        // Every queued row drained, but the canonical re-fetch failed — the
+        // canvas still shows unverified optimistic state. reconcileBoard
+        // already flagged 'error'; report 'unreconciled' so consumers keep
+        // the command recoverable rather than recording it as applied.
+        haptic.error();
+        return 'unreconciled';
+      }
+      if (!pushedAny) {
+        // The queue was already empty — this call verified nothing. Leave
+        // the existing sync status untouched rather than masking it.
+        return 'applied';
+      }
+      setSyncStatus('synced');
+      setTimeout(() => setSyncStatus('idle'), 1500);
+      return 'applied';
     } finally {
       drainingRef.current = false;
     }
@@ -293,6 +366,85 @@ export function useMoodboardBoard({ moodboardId }: { moodboardId?: string }) {
     [haptic, reconcileBoard],
   );
 
+  // ── Submit a batch of operations through the canonical write path ──
+  // Single submission route for multi-op changes (conflict resolution,
+  // undo/redo): when the durable outbox is available the ops are enqueued
+  // with the current base revision (the drain rebases the tail after each
+  // applied op) and flushed immediately — no-oping while offline so queued
+  // rows flush on reconnect. Without a local DB the ops are submitted
+  // online in order, advancing the base revision from each applied
+  // response and stopping on conflict/forbidden.
+  //
+  // Returns a SubmitBoardOpsOutcome describing how far the batch got —
+  // 'applied' when every op persisted AND the canonical re-fetch verified
+  // it, 'queued' when the intent is durable in the outbox, 'unreconciled'
+  // when the ops drained but the post-drain fetch failed (local state is
+  // unverified), and 'conflict'/'forbidden'/'failed' when it did not fully
+  // persist (the caller must reconcile rather than trust the optimistic
+  // update). Ordering policy:
+  // submissions serialize on the server board revision — a concurrent edit
+  // that lands first surfaces as 'conflict' and reconciles, instead of a
+  // client-side lock that could deadlock the editor.
+  const submitBoardOps = useCallback(
+    async (ops: MoodboardQueuedOp[], baseRev?: number): Promise<SubmitBoardOpsOutcome> => {
+      if (!moodboard) return 'failed';
+      if (ops.length === 0) {
+        setSyncStatus('idle');
+        return 'applied';
+      }
+      setSyncStatus('syncing');
+      setConflictDetail(null);
+      const base = baseRev ?? boardRevisionRef.current;
+
+      if (isDbAvailable()) {
+        try {
+          // ONE storage transaction for the whole command (S21-04): if any
+          // insert fails the batch rolls back, so a 'failed' outcome means
+          // nothing is durable — no orphaned prefix can drain on reconnect
+          // after history already reported the command as failed.
+          await enqueueMoodboardOperationBatch(ops.map((op) => ({
+            operationId: op.operationId ?? createStableId('op'),
+            boardId: moodboard.id,
+            operation: op.operation,
+            payload: op.payload,
+            baseRev: base })));
+        } catch {
+          // The intent never reached durable storage — report failure so
+          // callers reconcile instead of trusting the optimistic update.
+          setSyncStatus('error');
+          haptic.error();
+          return 'failed';
+        }
+        return flushOutbox();
+      }
+
+      let nextBaseRev = base;
+      for (const op of ops) {
+        try {
+          const response = await submitMoodboardOperation(moodboard.id, {
+            clientOperationId: op.operationId ?? createStableId('op'),
+            baseRevision: nextBaseRev,
+            type: op.operation,
+            itemId: typeof op.payload.itemId === 'string' ? op.payload.itemId : undefined,
+            payload: op.payload });
+          if (response.outcome === 'applied' || response.outcome === 'duplicate') {
+            nextBaseRev = response.revision;
+            boardRevisionRef.current = response.revision;
+          }
+          handleOperationResponse(response);
+          if (response.outcome === 'conflict') return 'conflict';
+          if (response.outcome === 'forbidden') return 'forbidden';
+        } catch {
+          setSyncStatus('error');
+          haptic.error();
+          return 'failed';
+        }
+      }
+      return 'applied';
+    },
+    [moodboard, haptic, flushOutbox, handleOperationResponse],
+  );
+
   return {
     moodboard,
     setMoodboard,
@@ -316,6 +468,8 @@ export function useMoodboardBoard({ moodboardId }: { moodboardId?: string }) {
     loadAll,
     reconcileBoard,
     handleOperationResponse,
+    /** Push a batch of LWW ops via the outbox (or sequentially online). */
+    submitBoardOps,
     /** Re-run the outbox drain + reconcile. Wired to the sync-error retry. */
     retrySync: flushOutbox };
 }

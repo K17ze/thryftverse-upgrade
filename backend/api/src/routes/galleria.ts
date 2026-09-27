@@ -300,6 +300,26 @@ export function registerGalleriaRoutes({
   });
 
   // ── Editorials ──
+  app.get<{ Params: { id: string } }>('/galleria/editorials/:id', async (request, reply) => {
+    const { id } = request.params;
+    const result = await readDb.query<GalleriaEditorialRow>(
+      `SELECT id, title, excerpt, hero_image_url, author_name, author_avatar,
+              body_content, read_time_minutes, status, theme,
+              created_at, published_at
+       FROM galleria_editorials
+       WHERE id = $1`,
+      [id]
+    );
+    const row = result.rows[0];
+    // Unpublished pieces resolve identically to missing ones — a draft or
+    // removed editorial must not be readable via a guessed id.
+    if (!row || row.status !== 'published') {
+      reply.code(404);
+      return { ok: false, error: 'editorial_not_found' };
+    }
+    return { ok: true, editorial: mapEditorial(row) };
+  });
+
   app.get('/galleria/editorials', async () => {
     const limit = 24;
     const offset = 0;

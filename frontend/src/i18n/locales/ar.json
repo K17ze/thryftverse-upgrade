@@ -1100,7 +1100,14 @@
       "errorApproveTitle": "تعذّرت الموافقة",
       "errorApproveMessage": "تعذّر الموافقة على الطلب.",
       "errorRejectTitle": "تعذّر الرفض",
-      "errorRejectMessage": "تعذّر رفض الطلب."
+      "errorRejectMessage": "تعذّر رفض الطلب.",
+      "status": {
+        "pending": "قيد الانتظار",
+        "approved": "تمت الموافقة",
+        "rejected": "مرفوض",
+        "expired": "منتهي الصلاحية",
+        "superseded": "مستبدل"
+      }
     },
     "cancel": {
       "cancelling": "جارٍ الإلغاء…",
@@ -1126,6 +1133,29 @@
     },
     "tokens": {
       "usage": "{{input}} دخول · {{output}} خروج"
+    },
+    "trace": {
+      "toggle": "عرض تفاصيل التشغيل لـ {{botName}}",
+      "loadError": "تعذر تحميل تتبع التشغيل",
+      "retry": "إعادة المحاولة",
+      "empty": "لا توجد خطوات مسجلة لهذا التشغيل",
+      "approvalLine": "{{tool}} · {{status}}",
+      "status": {
+        "pending": "قيد الانتظار",
+        "running": "قيد التنفيذ",
+        "succeeded": "ناجح",
+        "failed": "فاشل",
+        "skipped": "تم تخطيه"
+      },
+      "step": {
+        "modelCall": "استدعاء النموذج",
+        "toolCall": "استدعاء الأداة",
+        "retrieval": "استرجاع الذاكرة",
+        "guardrail": "حاجز حماية",
+        "approval": "موافقة",
+        "retry": "إعادة محاولة",
+        "handoff": "تسليم"
+      }
     }
   },
   "liveStreamViewer": {
@@ -1362,7 +1392,7 @@
       "noSessionsRunning": "لا توجد جلسات وكيل قيد التشغيل",
       "sessionsRunning": "{{count}} جلسة/جلسات وكيل قيد التشغيل",
       "activity": "نشاط الوكيل",
-      "activitySub": "سجل محلي لإجراءات الوكيل والموافقات"
+      "activitySub": "سجل خادم لتشغيلات الوكلاء والموافقات"
     },
     "connect": {
       "cancel": "إلغاء",

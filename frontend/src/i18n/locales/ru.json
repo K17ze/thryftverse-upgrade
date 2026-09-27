@@ -1100,7 +1100,14 @@
       "errorApproveTitle": "Не удалось одобрить",
       "errorApproveMessage": "Запрос не удалось одобрить.",
       "errorRejectTitle": "Не удалось отклонить",
-      "errorRejectMessage": "Запрос не удалось отклонить."
+      "errorRejectMessage": "Запрос не удалось отклонить.",
+      "status": {
+        "pending": "Ожидание",
+        "approved": "Одобрено",
+        "rejected": "Отклонено",
+        "expired": "Истекло",
+        "superseded": "Заменено"
+      }
     },
     "cancel": {
       "cancelling": "Отмена…",
@@ -1126,6 +1133,29 @@
     },
     "tokens": {
       "usage": "{{input}} вх · {{output}} вых"
+    },
+    "trace": {
+      "toggle": "Показать детали запуска для {{botName}}",
+      "loadError": "Не удалось загрузить трассировку",
+      "retry": "Повторить",
+      "empty": "Для этого запуска нет записанных шагов",
+      "approvalLine": "{{tool}} · {{status}}",
+      "status": {
+        "pending": "Ожидание",
+        "running": "Выполняется",
+        "succeeded": "Успешно",
+        "failed": "Ошибка",
+        "skipped": "Пропущено"
+      },
+      "step": {
+        "modelCall": "Вызов модели",
+        "toolCall": "Вызов инструмента",
+        "retrieval": "Обращение к памяти",
+        "guardrail": "Ограничение",
+        "approval": "Подтверждение",
+        "retry": "Повтор",
+        "handoff": "Передача"
+      }
     }
   },
   "liveStreamViewer": {
@@ -1362,7 +1392,7 @@
       "noSessionsRunning": "Нет запущенных сессий агентов",
       "sessionsRunning": "{{count}} сессий агентов запущено",
       "activity": "Активность агента",
-      "activitySub": "Локальный журнал действий и одобрений агента"
+      "activitySub": "Серверная запись запусков и подтверждений агентов"
     },
     "connect": {
       "cancel": "Отмена",

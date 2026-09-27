@@ -1,9 +1,11 @@
-import React, { useCallback, useState } from 'react';
+import React, { useCallback, useEffect, useState } from 'react';
 import {
   View,
   Text,
   StyleSheet,
   ActivityIndicator,
+  AppState,
+  Linking,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useNavigation } from '@react-navigation/native';
@@ -18,7 +20,7 @@ import { Space, Radius, FontFamily, LetterSpacing } from '../theme/designTokens'
 import { TypographyV2 } from '../theme/typography.v2';
 import { AnimatedPressable } from '../components/AnimatedPressable';
 import { OfflineBanner } from '../components/OfflineBanner';
-import { requestPushPermissionWithContext } from '../lib/pushPermission';
+import { requestPushPermissionWithContextDetailed, getPushPermissionStatus } from '../lib/pushPermission';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 
 /**
@@ -61,6 +63,10 @@ export default function OnboardingScreen() {
 
   const [isRequestingPermission, setIsRequestingPermission] = useState(false);
   const [permissionDenied, setPermissionDenied] = useState(false);
+  // False when the OS can no longer re-prompt (iOS after the one-shot dialog
+  // is denied) — the recovery action becomes "Open Settings" instead of a
+  // "Try again" that would loop on a prompt the OS will never re-show.
+  const [canAskAgain, setCanAskAgain] = useState(true);
 
   const finishOnboarding = useCallback(() => {
     markOnboardingComplete();
@@ -73,9 +79,10 @@ export default function OnboardingScreen() {
     haptic.success();
     setIsRequestingPermission(true);
     try {
-      const granted = await requestPushPermissionWithContext('settings');
+      const result = await requestPushPermissionWithContextDetailed('settings');
       setIsRequestingPermission(false);
-      if (granted) {
+      setCanAskAgain(result.canAskAgain);
+      if (result.granted) {
         finishOnboarding();
       } else {
         setPermissionDenied(true);
@@ -100,6 +107,37 @@ export default function OnboardingScreen() {
     haptic.medium();
     setPermissionDenied(false);
   }, [haptic]);
+
+  const handleOpenSettings = useCallback(() => {
+    haptic.light();
+    void Linking.openSettings().catch(() => undefined);
+  }, [haptic]);
+
+  // Settings recovery — the OS dialog cannot be re-shown once permanently
+  // denied, so the grant happens in system Settings. When the user returns
+  // with permission granted, onboarding completes automatically.
+  useEffect(() => {
+    if (!permissionDenied || canAskAgain) {
+      return;
+    }
+    const subscription = AppState.addEventListener('change', (state) => {
+      if (state !== 'active') {
+        return;
+      }
+      void (async () => {
+        try {
+          const status = await getPushPermissionStatus();
+          if (status.status === 'granted') {
+            finishOnboarding();
+          }
+        } catch {
+          // A failed foreground re-check must not crash onboarding — the
+          // user can still reopen Settings or continue without.
+        }
+      })();
+    });
+    return () => subscription.remove();
+  }, [permissionDenied, canAskAgain, finishOnboarding]);
 
   return (
     <SafeAreaView style={[styles.root, { backgroundColor: colors.background }]} edges={['top', 'bottom']}>
@@ -147,19 +185,35 @@ export default function OnboardingScreen() {
             </Text>
           </AnimatedPressable>
 
-          <AnimatedPressable
-            onPress={handleRetryPermission}
-            style={styles.skipLink}
-            scaleValue={0.98}
-            hapticFeedback="light"
-            accessibilityLabel="Try enabling notifications again"
-            accessibilityHint="Retry the notifications permission request"
-            accessibilityRole="button"
-          >
-            <Text style={[styles.skipText, { color: colors.textMuted }]} maxFontSizeMultiplier={1.5}>
-              Try again
-            </Text>
-          </AnimatedPressable>
+          {canAskAgain ? (
+            <AnimatedPressable
+              onPress={handleRetryPermission}
+              style={styles.skipLink}
+              scaleValue={0.98}
+              hapticFeedback="light"
+              accessibilityLabel="Try enabling notifications again"
+              accessibilityHint="Retry the notifications permission request"
+              accessibilityRole="button"
+            >
+              <Text style={[styles.skipText, { color: colors.textMuted }]} maxFontSizeMultiplier={1.5}>
+                Try again
+              </Text>
+            </AnimatedPressable>
+          ) : (
+            <AnimatedPressable
+              onPress={handleOpenSettings}
+              style={styles.skipLink}
+              scaleValue={0.98}
+              hapticFeedback="light"
+              accessibilityLabel="Open Settings to enable notifications"
+              accessibilityHint="Opens the system settings where notifications can be enabled"
+              accessibilityRole="button"
+            >
+              <Text style={[styles.skipText, { color: colors.textMuted }]} maxFontSizeMultiplier={1.5}>
+                Open Settings
+              </Text>
+            </AnimatedPressable>
+          )}
         </View>
       ) : (
         <View style={styles.content}>

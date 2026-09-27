@@ -96,6 +96,7 @@ const TERMS_OF_SERVICE_URL = process.env.EXPO_PUBLIC_TERMS_URL
  *
  * Endpoints:
  *   GET  /compliance/privacy-policy        — public, returns privacy policy URL + data summary
+ *   GET  /compliance/account-deletion      — public, Play-required deletion instructions (HTML for browsers, JSON for API)
  *   GET  /compliance/data-categories       — public, returns categories of data collected
  *   POST /compliance/ccpa/request-data     — authenticated, starts a CCPA data export job
  *   POST /compliance/ccpa/request-deletion — authenticated, starts a CCPA data deletion job
@@ -119,6 +120,66 @@ export function registerComplianceRoutes({
         purpose: c.purpose,
       })),
     };
+  });
+
+  // Google Play "Data deletion" requirement: a public, web-accessible URL
+  // that explains how a user can delete their account without needing the
+  // app installed. Browsers (Accept: text/html) get a readable page; API
+  // clients get the same facts as JSON. The deletion itself stays in-app /
+  // authenticated — this page only describes and links the flow.
+  app.get('/compliance/account-deletion', async (request, reply) => {
+    const facts = {
+      ok: true,
+      steps: [
+        'Open ThryftVerse and sign in to the account you want to delete.',
+        'Go to Profile → Settings → Account → Delete account.',
+        'Confirm with your password — deletion cannot proceed without re-authentication.',
+        'Your account, listings, messages, wallet activity and personal data are erased per our retention schedule.',
+      ],
+      withoutApp:
+        'If you no longer have the app or cannot sign in, email '
+        + 'privacy@thryftverse.com from the address on the account with the '
+        + 'subject "Account deletion" — we verify ownership and complete the '
+        + 'erasure within 30 days.',
+      scope:
+        'Deletion removes your profile, listings, chats, follows, wallet '
+        + 'balance history and device identifiers. Transaction records needed '
+        + 'for tax, AML and chargeback defence are retained as required by law '
+        + '(typically 5–7 years) and are pseudonymised where possible.',
+      retentionDays: 30,
+      privacyPolicyUrl: PRIVACY_POLICY_URL,
+    };
+
+    const acceptsHtml = String(request.headers.accept ?? '').includes('text/html');
+    if (!acceptsHtml) {
+      return facts;
+    }
+
+    reply.header('Content-Type', 'text/html; charset=utf-8');
+    return `<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Delete your ThryftVerse account</title>
+  <style>
+    body{font-family:-apple-system,Segoe UI,Roboto,Helvetica,Arial,sans-serif;max-width:640px;margin:48px auto;padding:0 20px;color:#111;line-height:1.55}
+    h1{font-size:1.5rem;margin-bottom:.25rem}
+    ol{padding-left:1.25rem} li{margin-bottom:.5rem}
+    .muted{color:#555} a{color:#0a58ca}
+  </style>
+</head>
+<body>
+  <h1>Delete your ThryftVerse account</h1>
+  <p class="muted">You can delete your account at any time. Deletion is permanent.</p>
+  <ol>${facts.steps.map((s) => `<li>${s}</li>`).join('')}</ol>
+  <h2>No app access?</h2>
+  <p>${facts.withoutApp}</p>
+  <h2>What gets deleted</h2>
+  <p>${facts.scope}</p>
+  <p class="muted">See our <a href="${PRIVACY_POLICY_URL}">privacy policy</a> for the full data-retention schedule.</p>
+</body>
+</html>`;
   });
 
   app.get('/compliance/data-categories', async () => {

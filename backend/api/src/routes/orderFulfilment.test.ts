@@ -119,10 +119,16 @@ function fakeDb(state: FakeState) {
       }]) as QueryResult<T>;
     }
 
-    // parcel event insert — dedupe on (provider, provider_event_id)
+    // parcel event insert — dedupe on (provider, provider_event_id).
+    // The handoff-assertion route hardcodes the event type in the SQL text;
+    // the carrier-exception route binds it as a parameter.
     if (text.includes("INSERT INTO order_parcel_events")) {
-      const [orderId, provider, providerEventId, trackingId, payload] =
-        params as [string, string, string, string | null, string];
+      const isHandoff = text.includes("'handoff_asserted'");
+      const [orderId, provider, p3, p4, p5, , p7] = params as unknown[];
+      const providerEventId = (isHandoff ? p3 : p4) as string;
+      const eventType = isHandoff ? "handoff_asserted" : (p3 as string);
+      const trackingId = (isHandoff ? p4 : p5) as string | null;
+      const payload = (isHandoff ? p5 : p7) as string;
       const existing = state.parcelEvents.find(
         (e) => e.provider === provider && e.provider_event_id === providerEventId,
       );
@@ -130,14 +136,25 @@ function fakeDb(state: FakeState) {
       const row = {
         order_id: orderId,
         provider,
-        event_type: "handoff_asserted",
+        event_type: eventType,
         provider_event_id: providerEventId,
         tracking_id: trackingId,
         occurred_at: "2026-03-01T12:00:00.000Z",
+        received_at: "2026-03-01T12:00:00.000Z",
         payload: JSON.parse(payload),
       };
       state.parcelEvents.push(row);
-      return rows([{ occurred_at: row.occurred_at, payload: row.payload }]) as QueryResult<T>;
+      return rows([{ occurred_at: row.occurred_at, received_at: row.received_at, payload: row.payload }]) as QueryResult<T>;
+    }
+
+    // carrier-exception status fold: shipped → delivery_failed
+    if (text.includes("UPDATE orders") && text.includes("SET status = 'delivery_failed'")) {
+      const order = state.orders.get((params as string[])[0]);
+      if (order && order.status === "shipped") {
+        order.status = "delivery_failed";
+        return rows([{ status: order.status }]) as QueryResult<T>;
+      }
+      return empty();
     }
 
     // idempotent parcel-event re-read
@@ -146,7 +163,9 @@ function fakeDb(state: FakeState) {
       const found = state.parcelEvents.find(
         (e) => e.provider === provider && e.provider_event_id === providerEventId,
       );
-      return (found ? rows([{ occurred_at: found.occurred_at }]) : empty()) as QueryResult<T>;
+      return (found
+        ? rows([{ occurred_at: found.occurred_at, received_at: found.received_at }])
+        : empty()) as QueryResult<T>;
     }
 
     // order shipping persistence (COALESCE semantics)
@@ -215,6 +234,7 @@ interface BuildOptions {
   authUser?: { userId: string; role: string } | null;
   createShipmentFn?: () => Promise<unknown>;
   emittedCards?: Array<Record<string, unknown>>;
+  notifications?: Array<Record<string, unknown>>;
 }
 
 async function buildApp(state: FakeState, options: BuildOptions = {}) {
@@ -244,6 +264,10 @@ async function buildApp(state: FakeState, options: BuildOptions = {}) {
     emitOrderCommerceCardFn: (async (input: Record<string, unknown>) => {
       options.emittedCards?.push(input);
       return { emitted: true, conversationId: "conv_1", messageId: "m1" };
+    }) as never,
+    queueUserNotificationFn: (async (input: Record<string, unknown>) => {
+      options.notifications?.push(input);
+      return "notif_1";
     }) as never,
   });
   await app.ready();
@@ -457,4 +481,131 @@ test("handoff-assertion: idempotent replay returns the original claim", async ()
   assert.equal(second.statusCode, 200);
   assert.equal(state.parcelEvents.length, 1);
   assert.equal(second.json().handoffClaimedAt, first.json().handoffClaimedAt);
+});
+
+// ── POST /orders/:orderId/fulfilment/carrier-exception ────────────────────
+// 'lost'/'damaged' are discrete carrier facts (migration 325). Order status
+// folds to 'delivery_failed' only from 'shipped' — the same mapping
+// applyOrderParcelEvent applies for delivery_failed events.
+
+const OPS = "usr_ops_1";
+const ADMIN = { userId: OPS, role: "admin" };
+
+test("carrier-exception: requires authentication", async () => {
+  const { app } = await buildApp(seedState(), { authUser: null });
+  const res = await app.inject({
+    method: "POST",
+    url: "/orders/ord_1/fulfilment/carrier-exception",
+    payload: { eventType: "lost" },
+  });
+  assert.equal(res.statusCode, 401);
+});
+
+test("carrier-exception: rejects non-operator callers", async () => {
+  for (const authUser of [
+    { userId: SELLER, role: "user" },
+    { userId: BUYER, role: "user" },
+  ]) {
+    const { app } = await buildApp(seedState(), { authUser });
+    const res = await app.inject({
+      method: "POST",
+      url: "/orders/ord_1/fulfilment/carrier-exception",
+      payload: { eventType: "lost" },
+    });
+    assert.equal(res.statusCode, 403);
+  }
+});
+
+test("carrier-exception: 404 for unknown order", async () => {
+  const { app } = await buildApp(seedState(), { authUser: ADMIN });
+  const res = await app.inject({
+    method: "POST",
+    url: "/orders/ord_missing/fulfilment/carrier-exception",
+    payload: { eventType: "lost" },
+  });
+  assert.equal(res.statusCode, 404);
+});
+
+test("carrier-exception: 409 outside the fulfilment window", async () => {
+  for (const status of ["delivered", "completed", "cancelled", "returned", "refunded"]) {
+    const state = seedState();
+    state.orders.set("ord_1", seedOrder({ status }));
+    const { app } = await buildApp(state, { authUser: ADMIN });
+    const res = await app.inject({
+      method: "POST",
+      url: "/orders/ord_1/fulfilment/carrier-exception",
+      payload: { eventType: "lost" },
+    });
+    assert.equal(res.statusCode, 409, `status ${status} should be rejected`);
+    assert.equal(res.json().code, "ORDER_INVALID_STATE");
+    assert.equal(state.parcelEvents.length, 0);
+  }
+});
+
+test("carrier-exception: records discrete 'lost' event and folds shipped → delivery_failed", async () => {
+  const state = seedState();
+  state.orders.set("ord_1", seedOrder({
+    status: "shipped",
+    tracking_number: "EVR0001TEST",
+    shipping_provider: "evri",
+  }));
+  const notifications: Array<Record<string, unknown>> = [];
+  const { app } = await buildApp(state, { authUser: ADMIN, notifications });
+  const res = await app.inject({
+    method: "POST",
+    url: "/orders/ord_1/fulfilment/carrier-exception",
+    payload: { eventType: "lost", note: "Carrier confirmed lost in depot" },
+  });
+  assert.equal(res.statusCode, 200);
+  const body = res.json();
+  assert.equal(body.ok, true);
+  assert.equal(body.eventType, "lost");
+  assert.equal(body.recorded, true);
+  assert.equal(body.status, "delivery_failed");
+  // discrete event_type persisted — not folded into a generic failure
+  assert.equal(state.parcelEvents.length, 1);
+  assert.equal(state.parcelEvents[0].event_type, "lost");
+  assert.equal(state.parcelEvents[0].tracking_id, "EVR0001TEST");
+  assert.equal(state.parcelEvents[0].provider, "evri");
+  assert.equal(state.orders.get("ord_1")?.status, "delivery_failed");
+  // buyer notified through the canonical queue
+  assert.equal(notifications.length, 1);
+  assert.equal(notifications[0].userId, BUYER);
+  assert.equal(notifications[0].eventType, "order_parcel_lost");
+});
+
+test("carrier-exception: 'damaged' on a paid order records evidence without status change or notification", async () => {
+  const state = seedState();
+  const notifications: Array<Record<string, unknown>> = [];
+  const { app } = await buildApp(state, { authUser: ADMIN, notifications });
+  const res = await app.inject({
+    method: "POST",
+    url: "/orders/ord_1/fulfilment/carrier-exception",
+    payload: { eventType: "damaged" },
+  });
+  assert.equal(res.statusCode, 200);
+  const body = res.json();
+  assert.equal(body.recorded, true);
+  assert.equal(body.status, "paid");
+  assert.equal(state.parcelEvents.length, 1);
+  assert.equal(state.parcelEvents[0].event_type, "damaged");
+  assert.equal(state.orders.get("ord_1")?.status, "paid");
+  // pre-dispatch evidence is not a buyer-facing fact yet
+  assert.equal(notifications.length, 0);
+});
+
+test("carrier-exception: idempotent replay never duplicates or re-notifies", async () => {
+  const state = seedState();
+  state.orders.set("ord_1", seedOrder({ status: "shipped", shipping_provider: "evri" }));
+  const notifications: Array<Record<string, unknown>> = [];
+  const { app } = await buildApp(state, { authUser: ADMIN, notifications });
+  const url = "/orders/ord_1/fulfilment/carrier-exception";
+  const first = await app.inject({ method: "POST", url, payload: { eventType: "damaged" } });
+  const second = await app.inject({ method: "POST", url, payload: { eventType: "damaged" } });
+  assert.equal(first.statusCode, 200);
+  assert.equal(second.statusCode, 200);
+  assert.equal(second.json().recorded, false);
+  assert.equal(second.json().duplicate, true);
+  assert.equal(state.parcelEvents.length, 1);
+  assert.equal(notifications.length, 1);
 });

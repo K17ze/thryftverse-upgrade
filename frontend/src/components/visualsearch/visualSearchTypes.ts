@@ -4,6 +4,13 @@
 
 export type ResultStatus = 'idle' | 'loading' | 'populated' | 'empty' | 'error' | 'offline' | 'partial';
 
+// R24: Region-of-interest rect the user frames on the query image —
+// normalised [0,1] fractions, min 0.04 linear, must fit bounds. The type
+// itself lives next to the POST /visual-search client it is sent through;
+// re-exported here so screen/hook/component imports stay local to the
+// feature's shared-types module.
+export type { VisualSearchRegion } from '../../services/listingsApi';
+
 // F08: Per-facet candidate counts returned by the backend (keyed by facet
 // value). Null when the backend did not supply facet metadata (offline /
 // cached fallback) so chips never show fabricated numbers.

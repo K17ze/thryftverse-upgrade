@@ -272,6 +272,12 @@ export default function AIPreferencesScreen({ navigation }: Props) {
             subtitle="See the signals that shape your feed"
             onPress={() => navigation.navigate('YourAlgorithm')}
             isFirst
+          />
+          <SettingsRow
+            icon="bookmark-outline"
+            title="Agent memory"
+            subtitle="See and forget what agents remember about you"
+            onPress={() => navigation.navigate('AgentMemory')}
             isLast
           />
         </SettingsSection>

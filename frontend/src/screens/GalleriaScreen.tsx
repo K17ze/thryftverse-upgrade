@@ -27,6 +27,7 @@ import {
   useGalleriaStyles } from '../hooks/galleria';
 import type {
   GalleriaCollection,
+  GalleriaEditorial,
   GalleriaFeaturedAsset } from '../services/galleriaApi';
 import { openProductDetail } from '../platform/product/openProductDetail';
 import { useAppTranslation } from '../i18n/useAppTranslation';
@@ -90,6 +91,16 @@ export default function GalleriaScreen() {
     navigation.navigate('CreatorStudio', { type: 'poster', openTemplates: true });
   }, [haptic, navigation]);
 
+  // Editorial teasers open the piece's own article screen by ID (S21-02) —
+  // the destination renders the full body, not another teaser.
+  const handleEditorialPress = useCallback(
+    (editorial: GalleriaEditorial) => {
+      haptic.selection();
+      navigation.navigate('GalleriaEditorial', { editorialId: editorial.id });
+    },
+    [haptic, navigation],
+  );
+
   // ── FlashList masonry callbacks ──
   const keyExtractor = useCallback(
     (item: GalleriaFeaturedAsset) => item.id,
@@ -127,6 +138,7 @@ export default function GalleriaScreen() {
         hasFeaturedAssets={featuredAssets.length > 0}
         reducedMotion={reducedMotion}
         onCollectionPress={handleCollectionPress}
+        onEditorialPress={handleEditorialPress}
       />
     ),
     [
@@ -140,6 +152,7 @@ export default function GalleriaScreen() {
       reducedMotion,
       styles,
       handleCollectionPress,
+      handleEditorialPress,
       t,
     ],
   );
@@ -150,6 +163,7 @@ export default function GalleriaScreen() {
         loading={loading}
         remainingEditorials={remainingEditorials}
         onPosterStudioPress={handlePosterStudioPress}
+        onEditorialPress={handleEditorialPress}
       />
     ),
     [
@@ -161,6 +175,7 @@ export default function GalleriaScreen() {
       haptic,
       navigation,
       handlePosterStudioPress,
+      handleEditorialPress,
       t,
     ],
   );

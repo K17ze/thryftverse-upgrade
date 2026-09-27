@@ -19,6 +19,102 @@ import {
 } from './index.js';
 import type { MediaAssetStatus } from '../mediaLifecycle.js';
 
+// ---------------------------------------------------------------------------
+// Boot-time provider validation (audit S3)
+// ---------------------------------------------------------------------------
+
+/**
+ * Validate the configured moderation provider deployment. Selecting a real
+ * provider without its credentials previously produced a stack that booted
+ * cleanly and then failed every moderation call — the fail-closed pipeline
+ * held every listing write on `risk_pending` forever (audit S3).
+ *
+ * Rules:
+ * - `sightengine` requires `SIGHTENGINE_API_USER` + `SIGHTENGINE_API_KEY`.
+ * - `rekognition` requires `AWS_REGION` + `AWS_ACCESS_KEY_ID` +
+ *   `AWS_SECRET_ACCESS_KEY` — AND cannot serve as the sole provider:
+ *   Rekognition moderates images only, so listing/profile text moderation
+ *   would fail closed on every write. No `MODERATION_TEXT_PROVIDER`-style
+ *   split config exists in this codebase (verified), so a sole-provider
+ *   rekognition selection is rejected outright.
+ * - `mock`/unset/unknown values produce no errors here — production gating
+ *   of those lives in `createModerationProvider` and
+ *   `assertProductionReadiness`.
+ */
+export function collectModerationProviderConfigErrors(
+  environment: NodeJS.ProcessEnv,
+): string[] {
+  const provider = (environment.MODERATION_PROVIDER ?? '').trim().toLowerCase();
+  const errors: string[] = [];
+
+  if (provider === 'sightengine') {
+    for (const key of ['SIGHTENGINE_API_USER', 'SIGHTENGINE_API_KEY'] as const) {
+      if (!(environment[key] ?? '').trim()) {
+        errors.push(
+          `${key} is required when MODERATION_PROVIDER=sightengine`,
+        );
+      }
+    }
+  } else if (provider === 'rekognition') {
+    for (const key of [
+      'AWS_REGION',
+      'AWS_ACCESS_KEY_ID',
+      'AWS_SECRET_ACCESS_KEY',
+    ] as const) {
+      if (!(environment[key] ?? '').trim()) {
+        errors.push(
+          `${key} is required when MODERATION_PROVIDER=rekognition`,
+        );
+      }
+    }
+    errors.push(
+      'MODERATION_PROVIDER=rekognition cannot be the sole moderation provider: ' +
+        'AWS Rekognition moderates images only and has no text moderation, so ' +
+        'every listing/profile text write would fail closed forever. ' +
+        'Set MODERATION_PROVIDER=sightengine (or add a text-capable provider) ' +
+        'for text moderation.',
+    );
+  } else if (provider !== '' && provider !== 'mock') {
+    // An unrecognised provider silently resolves to the mock factory in
+    // createModerationProvider — a typo would disable moderation entirely.
+    // Surface it at boot in every environment, not just production.
+    errors.push(
+      `MODERATION_PROVIDER='${provider}' is not a supported provider ` +
+        `(expected 'sightengine', 'rekognition', or 'mock' outside production)`,
+    );
+  }
+
+  return errors;
+}
+
+/**
+ * Throw when the configured moderation provider is undeployable. Wired at
+ * module load below so the failure surfaces at service boot — never at
+ * first request.
+ *
+ * @throws {Error} When a real provider is selected without its credentials,
+ *   or the sole provider cannot moderate text.
+ */
+export function assertModerationProviderReady(
+  environment: NodeJS.ProcessEnv = process.env,
+): void {
+  const errors = collectModerationProviderConfigErrors(environment);
+  if (errors.length === 0) {
+    return;
+  }
+  throw new Error(
+    [
+      'Moderation provider configuration is undeployable; refusing to start:',
+      ...errors.map((error) => `- ${error}`),
+    ].join('\n'),
+  );
+}
+
+// Module-load gate: index.ts imports this module during API startup, so an
+// explicitly-selected-but-unconfigured provider kills the process before it
+// serves traffic rather than silently failing closed on every write.
+assertModerationProviderReady();
+
 /**
  * The lifecycle status that a moderation outcome maps to.
  * `review` keeps the asset in `moderation_pending` (no transition).
@@ -124,27 +220,63 @@ export async function moderateImageAsset(
 }
 
 /**
- * Moderate listing text (title + description) and return the raw result.
+ * The publish-gate action a listing-text {@link ModerationStatus} maps to.
  *
- * The caller is responsible for acting on the status: rejecting creation on
- * `rejected`, flagging for human review on `review`, or proceeding on
- * `approved`. Never throws.
- *
- * @param listingId - The listing identifier (for logging/audit).
- * @param text - The concatenated text to evaluate.
- * @returns A {@link ModerationResult}. Never throws.
+ * - `publish` — `approved`; the write may proceed to a publicly servable
+ *   status.
+ * - `hold` — `review` or `failed`; the listing must land on a non-public
+ *   held state (`risk_pending`) so unreviewed text never reaches a feed,
+ *   search document, or bidding surface (B2 fail-closed).
+ * - `block` — `rejected`; the write is refused outright.
  */
-export async function moderateListingText(
+export type ListingTextGateAction = 'publish' | 'hold' | 'block';
+
+/**
+ * Map a listing-text moderation status to its publish-gate action. Kept as
+ * a single source so the create route, the PATCH route, and any future
+ * caller can never drift on which verdicts are safe to publish.
+ */
+export function listingTextGateAction(
+  status: ModerationStatus,
+): ListingTextGateAction {
+  switch (status) {
+    case 'rejected':
+      return 'block';
+    case 'review':
+    case 'failed':
+      return 'hold';
+    case 'approved':
+    default:
+      return 'publish';
+  }
+}
+
+/**
+ * Total provider evaluations attempted per listing-text gate call. The
+ * first retry absorbs transient provider blips (timeouts, 5xx, rate-limit
+ * windows) without holding the listing; a still-failing provider produces a
+ * durable hold the caller persists, so recovery never depends on the
+ * request staying alive.
+ */
+const LISTING_TEXT_MODERATION_ATTEMPTS = 2;
+const LISTING_TEXT_MODERATION_RETRY_DELAY_MS = 200;
+
+function sleep(ms: number): Promise<void> {
+  return new Promise((resolve) => {
+    setTimeout(resolve, ms).unref();
+  });
+}
+
+async function evaluateListingTextOnce(
   listingId: string,
   text: string,
 ): Promise<ModerationResult> {
-  let result: ModerationResult;
   try {
     const provider = createModerationProvider();
-    result = await provider.moderateText(text, buildOptions());
+    return await provider.moderateText(text, buildOptions());
   } catch (error) {
     const message = error instanceof Error ? error.message : 'Unexpected moderation error';
-    result = {
+    return {
       status: 'failed',
       confidence: 0,
       labels: [],
@@ -154,7 +286,39 @@ export async function moderateListingText(
       error: message,
     };
   }
+}
+
+/**
+ * Moderate listing text (title + description) and return the raw result.
+ *
+ * The caller is responsible for acting on the status via
+ * {@link listingTextGateAction}: `block` refuses the write, `hold` persists
+ * a non-public held status, `publish` proceeds. `failed` verdicts are
+ * retried once before surfacing — transient provider errors must not pin a
+ * legitimate listing into review, but a persistently failing provider must
+ * never fail open (B2). Never throws.
+ *
+ * @param listingId - The listing identifier (for logging/audit).
+ * @param text - The concatenated text to evaluate.
+ * @returns A {@link ModerationResult}. Never throws.
+ */
+export async function moderateListingText(
+  listingId: string,
+  text: string,
+): Promise<ModerationResult> {
+  let result = await evaluateListingTextOnce(listingId, text);
   logResult('listing_text', listingId, result);
+
+  for (
+    let attempt = 1;
+    result.status === 'failed' && attempt < LISTING_TEXT_MODERATION_ATTEMPTS;
+    attempt += 1
+  ) {
+    await sleep(LISTING_TEXT_MODERATION_RETRY_DELAY_MS);
+    result = await evaluateListingTextOnce(listingId, text);
+    logResult('listing_text_retry', listingId, result);
+  }
+
   return result;
 }
 

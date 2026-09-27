@@ -1,4 +1,5 @@
 import type { ThemeColors } from '../theme/ThemeContext';
+import { t } from '../i18n';
 import type { CommerceOrder, OrderParcelEvent } from '../services/commerceApi';
 import type { TimelineEntry } from '../components/orders/OrderTrackingTimeline';
 
@@ -163,9 +164,48 @@ export function isTerminalStatus(normalised: string): boolean {
 
 // --- Parcel event display ---
 
+/**
+ * The discrete carrier-reported failure kind for a parcel event.
+ * 'lost'/'damaged' are carrier facts (audit R40): rows ingested before the
+ * ingestion path admitted the discrete event_type carry the truth on
+ * `payload.carrierEventType` under event_type 'delivery_failed'; newer
+ * writes use the dedicated event types (migration 325).
+ */
+export function resolveParcelFailureKind(
+  event: Pick<OrderParcelEvent, 'eventType' | 'payload'>
+): 'lost' | 'damaged' | null {
+  if (event.eventType === 'lost' || event.eventType === 'damaged') {
+    return event.eventType;
+  }
+
+  if (event.eventType === 'delivery_failed') {
+    const carrierEventType = event.payload?.carrierEventType;
+    if (carrierEventType === 'lost' || carrierEventType === 'damaged') {
+      return carrierEventType;
+    }
+  }
+
+  return null;
+}
+
 export function getParcelEventDisplay(
-  eventType: OrderParcelEvent['eventType']
+  event: Pick<OrderParcelEvent, 'eventType' | 'payload'>
 ): { label: string; subtitle: string } {
+  const failureKind = resolveParcelFailureKind(event);
+  if (failureKind === 'lost') {
+    return {
+      label: t('orderDetail.tracking.event.lost.label'),
+      subtitle: t('orderDetail.tracking.event.lost.subtitle'),
+    };
+  }
+  if (failureKind === 'damaged') {
+    return {
+      label: t('orderDetail.tracking.event.damaged.label'),
+      subtitle: t('orderDetail.tracking.event.damaged.subtitle'),
+    };
+  }
+
+  const eventType = event.eventType;
   switch (eventType) {
     case 'picked_up':
       return { label: 'Picked up', subtitle: 'Carrier collected the parcel from the seller.' };
@@ -202,6 +242,8 @@ export type TimelineSemanticKey =
   | 'delivered'
   | 'collection_confirmed'
   | 'delivery_failed'
+  | 'lost'
+  | 'damaged'
   | 'returned'
   | 'cancelled'
   | 'refunded'
@@ -221,6 +263,8 @@ export const PARCEL_EVENT_SEMANTIC_KEY: Record<OrderParcelEvent['eventType'], Ti
   delivered: 'delivered',
   collection_confirmed: 'collection_confirmed',
   delivery_failed: 'delivery_failed',
+  lost: 'lost',
+  damaged: 'damaged',
   returned: 'returned',
   // Own key — a seller assertion must never collapse into the
   // carrier-confirmed 'shipped' semantic.
@@ -330,8 +374,12 @@ export function buildTimelineEntries(
   );
 
   for (const event of sortedEvents) {
-    const display = getParcelEventDisplay(event.eventType);
-    const isFailure = event.eventType === 'delivery_failed' || event.eventType === 'returned';
+    const display = getParcelEventDisplay(event);
+    const isFailure =
+      event.eventType === 'delivery_failed'
+      || event.eventType === 'returned'
+      || event.eventType === 'lost'
+      || event.eventType === 'damaged';
     const semanticKey = PARCEL_EVENT_SEMANTIC_KEY[event.eventType];
     entries.push({
       id: `parcel_${event.id}`,

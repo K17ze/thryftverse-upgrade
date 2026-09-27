@@ -4,14 +4,16 @@ import {
   Text,
   StyleSheet,
   Pressable,
+  Modal,
   ActivityIndicator } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import Reanimated, { FadeIn } from 'react-native-reanimated';
 import { FlashList } from '@shopify/flash-list';
 import { AnimatedPressable } from '../AnimatedPressable';
 import { useAppTheme, type ThemeColors } from '../../theme/ThemeContext';
 import { Space, FontFamily, Control } from '../../theme/designTokens';
-import { TypographyV2 } from '../../theme/typography.v2';
+import { TypographyV2, MAX_FONT_SCALE } from '../../theme/typography.v2';
 import { RadiusRoleValue } from '../../theme/surfaceRadiusRules';
 import { useAppTranslation } from '../../i18n/useAppTranslation';
 import type { Listing } from '../../domain';
@@ -35,8 +37,10 @@ export interface ClosetGridProps {
 /** Preview cap for the nested grid (F20): this FlashList renders inside the
  *  screen's ScrollView with scrollEnabled={false}, so every cell mounts
  *  eagerly — an unbounded closet stalls the whole profile. The profile grid
- *  is a preview; "View all" deep-links to MyListings. Reorder mode keeps the
- *  full set visible since the user is explicitly managing featured order. */
+ *  is a preview; "View all" deep-links to MyListings.
+ *  FRESH-07: reorder mode does NOT mount the full set here — it opens a
+ *  dedicated modal surface whose FlashList actually scrolls, so a
+ *  1000-item reorder never mounts 1000 media views. */
 const PREVIEW_LIMIT = 12;
 
 export function ClosetGrid({
@@ -51,10 +55,13 @@ export function ClosetGrid({
   renderItem }: ClosetGridProps) {
   const { colors } = useAppTheme();
   const { t: tt } = useAppTranslation('myProfile');
+  const insets = useSafeAreaInsets();
   const styles = React.useMemo(() => createStyles(colors), [colors]);
 
-  const visibleListings = reorderMode ? listings : listings.slice(0, PREVIEW_LIMIT);
-  const isCapped = !reorderMode && listings.length > visibleListings.length;
+  // The inline grid is always the capped preview — reorder operates on the
+  // full list inside its own scrollable surface.
+  const visibleListings = listings.slice(0, PREVIEW_LIMIT);
+  const isCapped = listings.length > visibleListings.length;
 
   return (
     <Reanimated.View
@@ -62,11 +69,53 @@ export function ClosetGrid({
       entering={reducedMotion ? undefined : FadeIn.duration(200)}
       style={{ backgroundColor: colors.background, paddingBottom: 100, paddingTop: Space.md }}
     >
+      {/* ── Reorder surface — dedicated virtualized modal (FRESH-07) ──
+          The profile grid lives inside the screen's ScrollView with
+          scrollEnabled={false}, so every cell mounts eagerly. Reorder
+          therefore runs in a modal whose FlashList actually scrolls and
+          recycles — a 1000-item closet no longer mounts 1000 media views.
+          The modal's Done runs the same save path as the rail action
+          (onToggleReorder → handleSaveReorder). */}
+      <Modal
+        visible={reorderMode}
+        animationType={reducedMotion ? 'none' : 'slide'}
+        onRequestClose={onToggleReorder}
+      >
+        <View style={[styles.reorderSurface, { paddingTop: insets.top, paddingBottom: insets.bottom }]}>
+          <View style={styles.reorderHeader}>
+            <Text style={styles.reorderTitle} maxFontSizeMultiplier={MAX_FONT_SCALE.heading}>
+              {tt('listings.reorderTitle')}
+            </Text>
+            <Pressable
+              onPress={onToggleReorder}
+              disabled={isSaving}
+              accessibilityRole="button"
+              accessibilityLabel={tt('listings.done')}
+              hitSlop={13}
+            >
+              {isSaving ? (
+                <ActivityIndicator size="small" color={colors.brand} />
+              ) : (
+                <Text style={styles.gridHeaderAction} maxFontSizeMultiplier={MAX_FONT_SCALE.utility}>
+                  {tt('listings.done')}
+                </Text>
+              )}
+            </Pressable>
+          </View>
+          <FlashList
+            data={listings}
+            numColumns={3}
+            keyExtractor={(item) => item.id}
+            renderItem={renderItem}
+          />
+        </View>
+      </Modal>
+
       {listings.length === 0 ? (
         <View style={styles.listingsEmpty}>
           <Ionicons name="bag-add-outline" size={28} color={colors.textSecondary} aria-hidden={true} />
           <Text style={styles.listingsEmptyTitle}>{tt('listings.emptyTitle')}</Text>
-          <Text style={styles.listingsEmptyBody} maxFontSizeMultiplier={2}>
+          <Text style={styles.listingsEmptyBody} maxFontSizeMultiplier={MAX_FONT_SCALE.content}>
             {tt('listings.emptyBody')}
           </Text>
           <AnimatedPressable
@@ -86,7 +135,7 @@ export function ClosetGrid({
             accessibilityHint={tt('accessibility.importListingsHint')}
             hitSlop={8}
           >
-            <Text style={styles.listingsEmptyImportText} maxFontSizeMultiplier={2}>
+            <Text style={styles.listingsEmptyImportText} maxFontSizeMultiplier={MAX_FONT_SCALE.utility}>
               {tt('listings.bringOverListings')}
             </Text>
           </AnimatedPressable>
@@ -107,7 +156,7 @@ export function ClosetGrid({
                 {isSaving ? (
                   <ActivityIndicator size="small" color={colors.brand} />
                 ) : (
-                  <Text style={styles.gridHeaderAction} maxFontSizeMultiplier={2}>
+                  <Text style={styles.gridHeaderAction} maxFontSizeMultiplier={MAX_FONT_SCALE.utility}>
                     {reorderMode ? tt('listings.done') : tt('listings.editOrder')}
                   </Text>
                 )}
@@ -142,7 +191,7 @@ export function ClosetGrid({
               hitSlop={8}
               style={styles.viewAllFooter}
             >
-              <Text style={styles.viewAllFooterText} maxFontSizeMultiplier={2}>
+              <Text style={styles.viewAllFooterText} maxFontSizeMultiplier={MAX_FONT_SCALE.utility}>
                 {tt('listings.viewAll')} ({listings.length})
               </Text>
             </Pressable>
@@ -170,6 +219,23 @@ function createStyles(colors: ThemeColors) {
       fontSize: TypographyV2.meta.size,
       fontFamily: FontFamily.semibold,
       color: colors.brand },
+    // ── Reorder surface (FRESH-07) — full-screen modal; its FlashList
+    // scrolls so the full closet is virtualized, not eagerly mounted.
+    reorderSurface: {
+      flex: 1,
+      backgroundColor: colors.background },
+    reorderHeader: {
+      flexDirection: 'row',
+      justifyContent: 'space-between',
+      alignItems: 'center',
+      paddingHorizontal: Space.md,
+      paddingVertical: Space.sm,
+      borderBottomWidth: StyleSheet.hairlineWidth,
+      borderBottomColor: colors.border },
+    reorderTitle: {
+      fontSize: TypographyV2.sectionTitle.size,
+      fontFamily: FontFamily.semibold,
+      color: colors.textPrimary },
     // Trailing "View all" affordance after a capped preview grid (F20).
     viewAllFooter: {
       alignItems: 'center',

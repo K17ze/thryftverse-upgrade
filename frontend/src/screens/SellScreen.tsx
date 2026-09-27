@@ -32,7 +32,8 @@ import { EmptyState } from '../components/EmptyState';
 import { ListingModeSelector } from '../components/listing/ListingModeSelector';
 import { ListingPublishFooter } from '../components/listing/ListingPublishFooter';
 import { KeyboardAwareScrollView } from '../platform/keyboard/KeyboardProvider';
-import { t } from '../i18n';
+import { t, getI18nLocale } from '../i18n';
+import { formatDateRange } from '../utils/dateFormat';
 import { useSellScreenData, useSellScreenForm, useSellScreenActions } from '../hooks/sell';
 import AuctionFieldsSection from '../components/sell/AuctionFieldsSection';
 import ShippingPickerSheet from '../components/sell/ShippingPickerSheet';
@@ -88,6 +89,10 @@ export default function SellScreen() {
     aiListingAssistEnabled,
     pickerTaxonomy,
   } = data;
+
+  // Freshness window for the sold-comparables hint — '' when the comps
+  // carry no usable date range (client-derived fallback, missing fields).
+  const soldCompsWindow = formatDateRange(soldComps.dateFrom, soldComps.dateTo, getI18nLocale());
 
   const {
     title, desc, price, originalPrice, tags, tagInput, category, subcategory, brand, size, condition,
@@ -367,7 +372,7 @@ export default function SellScreen() {
               When the flag is off, the current autofill-only behaviour runs. */}
           {aiListingAssistEnabled && mediaDraftItems.length > 0 ? (
             <View style={[styles.autofillCard, themed.autofillCard, { flexDirection: 'row', alignItems: 'center', gap: Space.sm }]}>
-              <AppIcon name="sparkles-outline" size={IconSize.sm} color="brand" opticalCenter accessible={false} />
+              <AppIcon concept="sparkle" size={IconSize.sm} color="brand" opticalCenter accessible={false} />
               <View style={{ flex: 1 }}>
                 <Text style={[styles.autofillTitle, themed.autofillTitle]}>{t('listing.create.aiAssist')}</Text>
                 <Text style={[themed.autofillDesc, { marginTop: 2 }]}>
@@ -383,7 +388,7 @@ export default function SellScreen() {
           {autofillSuggestion.hasSuggestions && !autofillDismissed && (
             <View style={[styles.autofillCard, themed.autofillCard]}>
               <View style={styles.autofillHeader}>
-                <AppIcon name="sparkles-outline" size={IconSize.sm} color="brand" opticalCenter accessible={false} />
+                <AppIcon concept="sparkle" size={IconSize.sm} color="brand" opticalCenter accessible={false} />
                 <Text style={[styles.autofillTitle, themed.autofillTitle]}>{t('listing.create.suggestedDetails')}</Text>
                 <AnimatedPressable
                   hitSlop={8}
@@ -623,7 +628,9 @@ export default function SellScreen() {
                       <View style={styles.soldCompsHint}>
                         <AppIcon name="bag-handle-outline" size={IconSize.micro} color="textMuted" opticalCenter accessible={false} />
                         <Text style={[styles.soldCompsText, themed.soldCompsText]}>
-                          {t('listing.create.soldCompsRange', { min: `${currencySymbol}${soldComps.minPrice.toFixed(0)}`, max: `${currencySymbol}${soldComps.maxPrice.toFixed(0)}`, count: soldComps.sampleSize })}
+                          {soldCompsWindow
+                            ? t('comps.soldRangeWindow', { min: `${currencySymbol}${soldComps.minPrice.toFixed(0)}`, max: `${currencySymbol}${soldComps.maxPrice.toFixed(0)}`, count: soldComps.sampleSize, window: soldCompsWindow })
+                            : t('listing.create.soldCompsRange', { min: `${currencySymbol}${soldComps.minPrice.toFixed(0)}`, max: `${currencySymbol}${soldComps.maxPrice.toFixed(0)}`, count: soldComps.sampleSize })}
                         </Text>
                       </View>
                       {soldComps.medianPrice != null && (
@@ -639,7 +646,7 @@ export default function SellScreen() {
                           accessibilityRole="button"
                           accessibilityLabel={`Suggested price ${currencySymbol}${soldComps.medianPrice.toFixed(0)}. Tap to set suggested price.`}
                         >
-                          <AppIcon name="sparkles-outline" size={IconSize.micro} color="brand" opticalCenter accessible={false} />
+                          <AppIcon concept="sparkle" size={IconSize.micro} color="brand" opticalCenter accessible={false} />
                           <Text style={[styles.soldCompsText, themed.priceSuggestion]}>
                             {t('listing.create.suggestedPrice', { amount: `${currencySymbol}${soldComps.medianPrice.toFixed(0)}` })}
                           </Text>
@@ -841,7 +848,7 @@ export default function SellScreen() {
               <View style={styles.fieldLabelRow}>
                 <Text style={[styles.fieldLabel, themed.fieldLabel]}>{t('listing.create.description')}</Text>
                 {desc.trim().length >= 10 ? (
-                  <AppIcon name="checkmark-circle" size={12} color="successText" opticalCenter accessible={false} />
+                  <AppIcon name="checkmark-circle" size={IconSize.micro} color="successText" opticalCenter accessible={false} />
                 ) : (
                   <Text style={[styles.fieldRequiredHint, themed.fieldRequiredHint]}>{t('listing.create.required')}</Text>
                 )}
@@ -888,7 +895,7 @@ export default function SellScreen() {
             <Text style={[styles.sectionHeading, themed.sectionHeading]}>{t('listing.create.shipping')}</Text>
             {!shippingMethod && (
               <View style={styles.contextualHintRow}>
-                <AppIcon name="car-outline" size={16} color="brand" opticalCenter accessible={false} />
+                <AppIcon name="car-outline" size={IconSize.sm} color="brand" opticalCenter accessible={false} />
                 <Text style={[styles.contextualHintText, { color: colors.textSecondary }]}>
                   {t('listing.create.shippingMethodHint')}
                 </Text>
@@ -896,7 +903,7 @@ export default function SellScreen() {
             )}
             {shippingMethod && !shippingPayer && (
               <View style={styles.contextualHintRow}>
-                <AppIcon name="card-outline" size={16} color="brand" opticalCenter accessible={false} />
+                <AppIcon name="card-outline" size={IconSize.sm} color="brand" opticalCenter accessible={false} />
                 <Text style={[styles.contextualHintText, { color: colors.textSecondary }]}>
                   {t('listing.create.shippingPayerHint')}
                 </Text>
@@ -918,7 +925,7 @@ export default function SellScreen() {
                   {formatShippingSummary(shippingMethod, shippingPayer)}
                 </Text>
               </View>
-              <AppIcon name="forward" size={16} color="textMuted" opticalCenter accessible={false} />
+              <AppIcon name="forward" size={IconSize.sm} color="textMuted" opticalCenter accessible={false} />
             </AnimatedPressable>
           </View>
 
@@ -958,7 +965,7 @@ export default function SellScreen() {
                       accessibilityRole="button"
                       accessibilityLabel="Remove authentication photo"
                     >
-                      <AppIcon name="close-circle" size={22} color="textPrimary" opticalCenter accessible={false} />
+                      <AppIcon name="close-circle" size={IconSize.lg} color="textPrimary" opticalCenter accessible={false} />
                     </AnimatedPressable>
                   </View>
                 ))}
@@ -971,7 +978,7 @@ export default function SellScreen() {
                     accessibilityRole="button"
                     accessibilityLabel="Add authentication photo"
                   >
-                    <AppIcon name="add" size={22} color="textMuted" opticalCenter accessible={false} />
+                    <AppIcon name="add" size={IconSize.lg} color="textMuted" opticalCenter accessible={false} />
                   </AnimatedPressable>
                 )}
               </View>
@@ -984,7 +991,7 @@ export default function SellScreen() {
               only when the pipeline is idle. */}
           {errorMsg && (
             <View style={styles.inlineErrorRow}>
-              <AppIcon name="alert-circle-outline" size={16} color="dangerText" opticalCenter accessible={false} />
+              <AppIcon name="alert-circle-outline" size={IconSize.sm} color="dangerText" opticalCenter accessible={false} />
               <Text style={[styles.inlineErrorText, themed.inlineErrorText]}>{errorMsg}</Text>
             </View>
           )}
@@ -999,7 +1006,7 @@ export default function SellScreen() {
           <View style={styles.completenessRow}>
             <AppIcon
               name={completeness.canActivate ? 'checkmark-circle' : 'alert-circle-outline'}
-              size={16}
+              size={IconSize.sm}
               color={completeness.canActivate ? colors.successText : colors.warningText}
               opticalCenter
               accessible={false}
@@ -1028,7 +1035,7 @@ export default function SellScreen() {
             <View style={styles.reviewSummaryRow}>
               <AppIcon
                 name={listingMode === 'auction' ? 'hammer-outline' : 'people-outline'}
-                size={16}
+                size={IconSize.sm}
                 color={colors.textSecondary}
                 opticalCenter
                 accessible={false}

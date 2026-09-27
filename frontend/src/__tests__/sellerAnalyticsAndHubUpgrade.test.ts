@@ -1,6 +1,7 @@
 import { describe, it, expect } from 'vitest';
 import * as fs from 'fs';
 import * as path from 'path';
+import { formatDateRange } from '../utils/dateFormat';
 
 describe('Seller Hub and Analytics Upgrade Verification', () => {
   const sellerHubPath = path.resolve(__dirname, '../screens/SellerHubScreen.tsx');
@@ -264,6 +265,33 @@ describe('Seller Hub and Analytics Upgrade Verification', () => {
 
       const extremeHigh = evaluatePosition(1000);
       expect(extremeHigh.posPct).toBe(94);
+    });
+
+    it('renders the sold-comparables freshness window in the market spectrum', () => {
+      // R33: the analytics endpoint emits dateFrom/dateTo on the
+      // comparables payload; the muted spectrum subtitle must surface
+      // them via the shared range formatter.
+      const detailPath = path.resolve(__dirname, '../components/seller/analytics/ListingAnalyticsDetail.tsx');
+      const detail = fs.readFileSync(detailPath, 'utf8');
+      expect(detail).toContain('formatDateRange');
+      expect(detail).toContain('comps.dateFrom');
+      expect(detail).toContain('comps.dateTo');
+      expect(detail).toContain("'comps.verifiedSalesWindow'");
+    });
+
+    it('formats the comps freshness window without inventing data', () => {
+      // Past-year dates force year display — deterministic regardless of now.
+      expect(formatDateRange('2020-03-02T10:00:00Z', '2020-04-18T10:00:00Z', 'en-GB'))
+        .toBe('2 Mar 2020 – 18 Apr 2020');
+      // Single comp / same-day bounds collapse to one date, not a
+      // degenerate "2 Mar – 2 Mar" range.
+      expect(formatDateRange('2020-03-02T10:00:00Z', '2020-03-02T15:00:00Z', 'en-GB'))
+        .toBe('2 Mar 2020');
+      // Missing endpoints degrade: one-sided renders the usable date,
+      // neither → '' so the caption is omitted entirely.
+      expect(formatDateRange(null, '2020-04-18T10:00:00Z', 'en-GB')).toBe('18 Apr 2020');
+      expect(formatDateRange(null, null)).toBe('');
+      expect(formatDateRange('not-a-date', undefined)).toBe('');
     });
 
     it('accurately evaluates SLA dispatch deadlines and urgency tiers (StockX / Shopify SLA standard)', () => {

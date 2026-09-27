@@ -32,6 +32,7 @@
     "check:domain-imports": "node scripts/check-mockdata-imports.mjs",
     "check:mockdata-boundary": "node scripts/check-mockdata-boundary.mjs",
     "check:golden-parity": "node scripts/check-golden-parity.mjs",
+    "check:icons": "node scripts/check-icon-grammar.mjs",
     "check:ssl-pins": "node scripts/validate-ssl-pins.mjs",
     "visual:capture": "bash scripts/capture-baselines.sh",
     "visual:compare": "reg-suit compare",

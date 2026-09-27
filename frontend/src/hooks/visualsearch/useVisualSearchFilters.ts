@@ -1,4 +1,4 @@
-import { useState, useCallback, useMemo } from 'react';
+import { useState, useCallback, useMemo, useRef } from 'react';
 import type { Listing } from '../../domain';
 import { useBackendData } from '../../context/BackendDataContext';
 import type { VisualSearchFilterPayload } from '../../components/visualsearch/visualSearchTypes';
@@ -8,16 +8,77 @@ import type { VisualSearchFilterPayload } from '../../components/visualsearch/vi
 // Also owns the derived category rail data, brand suggestions, the filter
 // payload sent to the backend, and the client-side cached-listings fallback
 // filter (mirrors BrowseScreen logic).
+/** The complete refinement-field snapshot the request payload is built
+ *  from — kept in a ref so payload builders read the values that were
+ *  committed most recently, not the render their closure came from. */
+interface VisualSearchFilterSnapshot {
+  description: string;
+  selectedCategory: string | null;
+  brand: string;
+  minPrice: string;
+  maxPrice: string;
+  selectedColor: string | null;
+  selectedStyle: string | null;
+}
+
+const EMPTY_FILTER_SNAPSHOT: VisualSearchFilterSnapshot = {
+  description: '',
+  selectedCategory: null,
+  brand: '',
+  minPrice: '',
+  maxPrice: '',
+  selectedColor: null,
+  selectedStyle: null };
+
 export function useVisualSearchFilters() {
   const { listings } = useBackendData();
 
-  const [description, setDescription] = useState('');
-  const [selectedCategory, setSelectedCategory] = useState<string | null>(null);
-  const [brand, setBrand] = useState('');
-  const [minPrice, setMinPrice] = useState('');
-  const [maxPrice, setMaxPrice] = useState('');
-  const [selectedColor, setSelectedColor] = useState<string | null>(null);
-  const [selectedStyle, setSelectedStyle] = useState<string | null>(null);
+  const [description, setDescriptionState] = useState('');
+  const [selectedCategory, setSelectedCategoryState] = useState<string | null>(null);
+  const [brand, setBrandState] = useState('');
+  const [minPrice, setMinPriceState] = useState('');
+  const [maxPrice, setMaxPriceState] = useState('');
+  const [selectedColor, setSelectedColorState] = useState<string | null>(null);
+  const [selectedStyle, setSelectedStyleState] = useState<string | null>(null);
+
+  // ── Payload source-of-truth (P1-3) ──
+  // buildFilterPayload/filterCachedListings read this ref, not render
+  // state. Every setter writes it SYNCHRONOUSLY before scheduling the
+  // state update, so a re-search dispatched from a stale closure — e.g.
+  // "Clear filters" calling a runSearch captured before the clear — still
+  // builds the payload for the filters the user actually sees. This is
+  // the same convention the crop path uses for regionRef in
+  // useVisualSearchResults: the committed value lives in a ref precisely
+  // because a captured async entry point can outlive its render.
+  const filtersRef = useRef<VisualSearchFilterSnapshot>({ ...EMPTY_FILTER_SNAPSHOT });
+  const setDescription = useCallback((v: string) => {
+    filtersRef.current.description = v;
+    setDescriptionState(v);
+  }, []);
+  const setSelectedCategory = useCallback((v: string | null) => {
+    filtersRef.current.selectedCategory = v;
+    setSelectedCategoryState(v);
+  }, []);
+  const setBrand = useCallback((v: string) => {
+    filtersRef.current.brand = v;
+    setBrandState(v);
+  }, []);
+  const setMinPrice = useCallback((v: string) => {
+    filtersRef.current.minPrice = v;
+    setMinPriceState(v);
+  }, []);
+  const setMaxPrice = useCallback((v: string) => {
+    filtersRef.current.maxPrice = v;
+    setMaxPriceState(v);
+  }, []);
+  const setSelectedColor = useCallback((v: string | null) => {
+    filtersRef.current.selectedColor = v;
+    setSelectedColorState(v);
+  }, []);
+  const setSelectedStyle = useCallback((v: string | null) => {
+    filtersRef.current.selectedStyle = v;
+    setSelectedStyleState(v);
+  }, []);
 
   // Derive available categories from listings for refinement chips.
   const availableCategories = useMemo(() => {
@@ -50,23 +111,24 @@ export function useVisualSearchFilters() {
   }, [listings]);
 
   const buildFilterPayload = useCallback((): VisualSearchFilterPayload => {
-    const minPriceNum = minPrice.trim() ? Number(minPrice) : undefined;
-    const maxPriceNum = maxPrice.trim() ? Number(maxPrice) : undefined;
+    const f = filtersRef.current;
+    const minPriceNum = f.minPrice.trim() ? Number(f.minPrice) : undefined;
+    const maxPriceNum = f.maxPrice.trim() ? Number(f.maxPrice) : undefined;
     return {
-      query: description.trim() || undefined,
-      category: selectedCategory ?? undefined,
-      brand: brand.trim() || undefined,
+      query: f.description.trim() || undefined,
+      category: f.selectedCategory ?? undefined,
+      brand: f.brand.trim() || undefined,
       minPrice: typeof minPriceNum === 'number' && !Number.isNaN(minPriceNum) ? minPriceNum : undefined,
       maxPrice: typeof maxPriceNum === 'number' && !Number.isNaN(maxPriceNum) ? maxPriceNum : undefined,
       // F08: facets are retrieval parameters sent to the backend so the
       // candidate set is narrowed server-side before ranking.
       facets:
-        selectedColor || selectedStyle
-          ? { color: selectedColor ?? undefined, style: selectedStyle ?? undefined }
+        f.selectedColor || f.selectedStyle
+          ? { color: f.selectedColor ?? undefined, style: f.selectedStyle ?? undefined }
           : undefined,
       sort: 'similarity' as const,
       limit: 48 };
-  }, [description, selectedCategory, brand, minPrice, maxPrice, selectedColor, selectedStyle]);
+  }, []);
 
   // Client-side fallback filter over cached listings — mirrors BrowseScreen logic.
   const filterCachedListings = useCallback(
@@ -76,8 +138,8 @@ export function useVisualSearchFilters() {
       const b = (payload.brand ?? '').trim().toLowerCase();
       const min = payload.minPrice;
       const max = payload.maxPrice;
-      const colorFilter = selectedColor?.toLowerCase() ?? '';
-      const styleFilter = selectedStyle?.toLowerCase() ?? '';
+      const colorFilter = filtersRef.current.selectedColor?.toLowerCase() ?? '';
+      const styleFilter = filtersRef.current.selectedStyle?.toLowerCase() ?? '';
 
       return listings.filter((listing) => {
         if (cat && (listing.category ?? '').toLowerCase() !== cat) return false;
@@ -96,7 +158,7 @@ export function useVisualSearchFilters() {
         return true;
       });
     },
-    [listings, selectedColor, selectedStyle]
+    [listings]
   );
 
   const hasActiveFilters =
@@ -110,14 +172,18 @@ export function useVisualSearchFilters() {
 
   // Clears every refinement field. Shared by "Clear filters" and the
   // remove-photo reset — neither side effects (haptics, re-search) live here.
+  // The ref is reset synchronously BEFORE the state updates are scheduled,
+  // so a runSearch invoked from a pre-clear closure still dispatches the
+  // cleared payload (P1-3 — the stale-closure fix, mirroring regionRef).
   const clearFields = useCallback(() => {
-    setDescription('');
-    setSelectedCategory(null);
-    setBrand('');
-    setMinPrice('');
-    setMaxPrice('');
-    setSelectedColor(null);
-    setSelectedStyle(null);
+    filtersRef.current = { ...EMPTY_FILTER_SNAPSHOT };
+    setDescriptionState('');
+    setSelectedCategoryState(null);
+    setBrandState('');
+    setMinPriceState('');
+    setMaxPriceState('');
+    setSelectedColorState(null);
+    setSelectedStyleState(null);
   }, []);
 
   return {

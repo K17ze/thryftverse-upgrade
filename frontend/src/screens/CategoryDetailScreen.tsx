@@ -18,6 +18,7 @@ import { AnimatedPressable } from '../components/AnimatedPressable';
 import { EmptyState } from '../components/EmptyState';
 import { FlagshipScreen, FlagshipHeader } from '../components/flagship';
 import { PinterestMasonryGrid } from '../components/discover/PinterestMasonryGrid';
+import { DISCOVERY_GRID_PADDING } from '../components/discovery/unifiedDiscoveryStyles';
 import { SkeletonLoader } from '../components/SkeletonLoader';
 import { openProductDetail } from '../platform/product/openProductDetail';
 import { Space, Typography, Control, Stroke, Radius } from '../theme/designTokens';
@@ -158,7 +159,7 @@ export default function CategoryDetailScreen() {
         content: {
           flex: 1 },
         summary: {
-          paddingHorizontal: Space.md,
+          paddingHorizontal: DISCOVERY_GRID_PADDING,
           paddingTop: Space.xs,
           paddingBottom: Space.sm,
           gap: Space.xs },
@@ -168,7 +169,7 @@ export default function CategoryDetailScreen() {
           fontSize: TypographyV2.body.size,
           lineHeight: TypographyV2.body.lineHeight },
         categoryRail: {
-          paddingHorizontal: Space.md,
+          paddingHorizontal: DISCOVERY_GRID_PADDING,
           paddingBottom: Space.sm,
           gap: Space.sm },
         categoryChip: {
@@ -188,7 +189,7 @@ export default function CategoryDetailScreen() {
         filterBar: {
           paddingBottom: Space.sm },
         filterRow: {
-          paddingHorizontal: Space.md,
+          paddingHorizontal: DISCOVERY_GRID_PADDING,
           gap: Space.sm,
           alignItems: 'center' },
         filterPill: {
@@ -210,7 +211,7 @@ export default function CategoryDetailScreen() {
           color: colors.textPrimary,
           fontFamily: Typography.family.semibold },
         sortMenu: {
-          marginHorizontal: Space.md,
+          marginHorizontal: DISCOVERY_GRID_PADDING,
           marginBottom: Space.sm,
           borderRadius: Radius.md,
           overflow: 'hidden',
@@ -240,7 +241,7 @@ export default function CategoryDetailScreen() {
           flexDirection: 'row',
           flexWrap: 'wrap',
           gap: Space.sm,
-          paddingHorizontal: Space.md },
+          paddingHorizontal: DISCOVERY_GRID_PADDING },
         loadingColumn: {
           width: '48%',
           marginBottom: Space.md },

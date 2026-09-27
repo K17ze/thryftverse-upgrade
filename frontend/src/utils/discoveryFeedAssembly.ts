@@ -50,6 +50,14 @@ const HERO_ASPECT_THRESHOLD = 1.2;
  */
 const HERO_MIN_GAP = 8;
 
+/**
+ * Canonical column count for the discovery feed. The assembler's span
+ * decisions (full-width heroes, editorial breaks) are authored against this
+ * value — the renderer MUST use the same count or heroes demote to
+ * fractional-width orphans. Depop/Pinterest phone density is 2.
+ */
+export const DISCOVERY_FEED_COLUMNS = 2;
+
 export interface DiscoverySupplementalContent {
   /** Published, server-ranked Looks. */
   looks?: LookApiItem[];
@@ -80,10 +88,19 @@ export function assembleDiscoveryFeed(
   const chapters = buildCreatorChapters(looks, posters, moodboards, numColumns);
   if (listings.length === 0) return chapters.flat();
 
+  // Within-page dedupe — the serve contract does not guarantee unique ids
+  // across sources; a duplicated listing must never render twice.
+  const seenListingIds = new Set<string>();
+  const uniqueListings = listings.filter((listing) => {
+    if (seenListingIds.has(listing.id)) return false;
+    seenListingIds.add(listing.id);
+    return true;
+  });
+
   const listingUnits: ListingFeedUnit[] = [];
   let listingsSinceHero = HERO_MIN_GAP; // allow the first eligible listing to be a hero
 
-  listings.forEach((listing) => {
+  uniqueListings.forEach((listing) => {
     const aspectRatio = resolveListingMediaAspectRatio(listing);
     const isLandscape = aspectRatio >= HERO_ASPECT_THRESHOLD;
     const canBeHero = isLandscape && listingsSinceHero >= HERO_MIN_GAP;

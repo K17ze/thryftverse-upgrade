@@ -12,7 +12,17 @@
  * - Category IS required for activation
  * - At least one image IS required for activation
  * - Title, description, price are universally required
+ *
+ * Per-category condition + attribute rules live in
+ * lib/categoryAttributes.ts (R30/R31) — validateListingActivation consults
+ * that registry in addition to the required-field policy below.
  */
+
+import {
+  validateListingAttributes,
+  type AttributeValidationError,
+  type ListingAttributes,
+} from './categoryAttributes.js';
 
 export type ListingFieldKey =
   | 'title'
@@ -263,6 +273,12 @@ export interface ListingFieldValues {
   images?: string[] | null;
   shippingMethod?: string | null;
   shippingPayer?: string | null;
+  /**
+   * Structured category attributes (listings.attributes JSONB). Optional:
+   * surfaces that cannot carry attributes omit the key entirely — required
+   * attributes are only enforced once a map is supplied.
+   */
+  attributes?: ListingAttributes | null;
 }
 
 function isFieldPresent(field: ListingFieldKey, values: ListingFieldValues): boolean {
@@ -297,6 +313,13 @@ function isFieldPresent(field: ListingFieldKey, values: ListingFieldValues): boo
 export interface ListingValidationResult {
   valid: boolean;
   missingRequired: ListingFieldKey[];
+  /**
+   * Category-attribute registry violations (R30/R31): a canonical
+   * condition the category disallows (e.g. 'New with tags' on
+   * electronics), missing required attributes, undeclared keys, or
+   * constraint violations. Empty when the values satisfy the registry.
+   */
+  attributeErrors: AttributeValidationError[];
 }
 
 /**
@@ -308,8 +331,15 @@ export function validateListingActivation(values: ListingFieldValues): ListingVa
   const missingRequired = policy.requiredForActivation.filter(
     (field) => !isFieldPresent(field, values),
   );
+  const attributeValidation = validateListingAttributes(
+    values.category,
+    values.attributes ?? undefined,
+    values.condition,
+    values.subcategory,
+  );
   return {
-    valid: missingRequired.length === 0,
+    valid: missingRequired.length === 0 && attributeValidation.ok,
     missingRequired,
+    attributeErrors: attributeValidation.errors,
   };
 }

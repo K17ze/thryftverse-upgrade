@@ -29,6 +29,9 @@ import { TypographyV2 } from '../../theme/typography.v2';
 import { useHaptic } from '../../hooks/useHaptic';
 import { useReducedMotion } from '../../hooks/useReducedMotion';
 import { useToast } from '../../context/ToastContext';
+import { useNavigation } from '@react-navigation/native';
+import type { NativeStackNavigationProp } from '@react-navigation/native-stack';
+import type { RootStackParamList } from '../../navigation/types';
 import { useStore } from '../../store/useStore';
 import { KeyboardStickyView } from '../../platform/keyboard/KeyboardProvider';
 import { FlagshipState } from '../flagship/FlagshipState';
@@ -489,6 +492,7 @@ export function LookCommentsSheet({
   const styles = React.useMemo(() => createStyles(colors), [colors]);
   const haptic = useHaptic();
   const { show } = useToast();
+  const navigation = useNavigation<NativeStackNavigationProp<RootStackParamList>>();
   const scrollTargetIdRef = useRef<string | null>(null);
   const [comments, setComments] = useState<LookCommentApiItem[]>([]);
   const [status, setStatus] = useState<LoadStatus>('idle');
@@ -800,6 +804,18 @@ export function LookCommentsSheet({
     setMenuComment(null);
   }, [menuComment, handleDelete]);
 
+  const handleMenuReport = useCallback(() => {
+    if (!menuComment) return;
+    const commentId = menuComment.id;
+    setMenuComment(null);
+    onClose();
+    navigation.navigate('Report', {
+      type: 'ugc',
+      ugcSubjectType: 'look_comment',
+      targetId: commentId,
+    });
+  }, [menuComment, navigation, onClose]);
+
   // ── Render ─────────────────────────────────────────────────────────
 
   const renderItem = useCallback(
@@ -1070,6 +1086,12 @@ export function LookCommentsSheet({
               <Pressable style={styles.menuItem} onPress={handleMenuCopy} accessibilityRole="button" accessibilityLabel="Copy comment text" accessibilityHint="Copies text to clipboard">
                 <Ionicons name="copy-outline" size={20} color={colors.textPrimary} />
                 <Text style={styles.menuItemText}>Copy text</Text>
+              </Pressable>
+            )}
+            {menuComment && currentUserId !== menuComment.authorId && isAuthenticated && (
+              <Pressable style={styles.menuItem} onPress={handleMenuReport} accessibilityRole="button" accessibilityLabel="Report comment" accessibilityHint="Reports this comment for review">
+                <Ionicons name="flag-outline" size={20} color={colors.textPrimary} />
+                <Text style={styles.menuItemText}>Report</Text>
               </Pressable>
             )}
             {menuComment && currentUserId === menuComment.authorId && isAuthenticated && (

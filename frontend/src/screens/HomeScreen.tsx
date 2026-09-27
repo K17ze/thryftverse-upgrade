@@ -40,7 +40,6 @@ import { useViewabilityPlayback } from '../hooks/useViewabilityPlayback';
 // Phase 3: Removed SyncStatusPill (status indicator clutter reduced)
 import { useConnectivity } from '../hooks/useConnectivity';
 import { toHomeDiscoveryItemVM, type HomeDiscoveryItemVM } from '../presentation/homeDiscoveryViewModel';
-import { getBackendSyncStatus } from '../utils/syncStatus';
 import { preloadCriticalImages } from '../utils/imagePreloader';
 import { AppButton } from '../components/ui/AppButton';
 import { Space, Control, Radius, FontFamily } from '../theme/designTokens';
@@ -99,7 +98,7 @@ export default function HomeScreen() {
   const haptic = useHaptic();
   const reducedMotionEnabled = useReducedMotion();
   const { spring } = useMotionConfig();
-  const { listings, source, isSyncing, lastError, refreshListings, loadMoreListings, hasMore, isLoadingMore } = useBackendData();
+  const { listings, isSyncing, lastError, refreshListings } = useBackendData();
   const followingFeed = useFollowingFeed();
   const forYouFeed = useForYouFeed();
   const { isOffline } = useConnectivity();
@@ -368,16 +367,11 @@ export default function HomeScreen() {
     }, [loadFeedLooks]),
   );
 
-  const feedStatus = React.useMemo(
-    () =>
-      getBackendSyncStatus({
-        isSyncing,
-        source,
-        hasError: Boolean(lastError) }),
-    [isSyncing, lastError, source],
-  );
-
-  const showFeedLoadingSkeleton = isSyncing && !lastError;
+  // Skeleton belongs only to the empty first-load state. A background sync
+  // (55s poll, app-resume, pull-to-refresh) must never collapse an already
+  // populated feed into skeleton — content stays visible while fresh data
+  // loads underneath (F-home-skeleton).
+  const showFeedLoadingSkeleton = isSyncing && !lastError && forYouFeed.listings.length === 0 && followingFeed.listings.length === 0;
 
   const gridTileWidth = React.useMemo(
     // FlashList numColumns=2 gives each column windowWidth/2.
@@ -416,9 +410,23 @@ export default function HomeScreen() {
     return i === FEATURED_RHYTHM[pos % FEATURED_RHYTHM.length] - 1;
   }, []);
 
+  // Within-page dedupe helper — serves can repeat an id across sources;
+  // a duplicated listing must never render twice in the grid.
+  const dedupeListings = React.useCallback(
+    <T extends { id: string }>(items: T[]): T[] => {
+      const seen = new Set<string>();
+      return items.filter((item) => {
+        if (seen.has(item.id)) return false;
+        seen.add(item.id);
+        return true;
+      });
+    },
+    [],
+  );
+
   // Following feed: transform following listings into discovery VMs
   const followingExploreData = React.useMemo<HomeDiscoveryItemVM[]>(() => {
-    return followingFeed.listings.map((listing) =>
+    return dedupeListings(followingFeed.listings).map((listing) =>
       toHomeDiscoveryItemVM(listing, {
         isSaved: wishlist.includes(listing.id),
         currency: currencyCode,
@@ -426,11 +434,11 @@ export default function HomeScreen() {
     ).map((vm, index) => ({
       ...vm,
       featured: computeFeatured(index) }));
-  }, [followingFeed.listings, wishlist, followedSellerIdsSet, computeFeatured]);
+  }, [followingFeed.listings, wishlist, followedSellerIdsSet, computeFeatured, dedupeListings]);
 
   // For You feed: transform personalised recommendations into discovery VMs
   const forYouExploreData = React.useMemo<HomeDiscoveryItemVM[]>(() => {
-    return forYouFeed.listings.map((listing) =>
+    return dedupeListings(forYouFeed.listings).map((listing) =>
       toHomeDiscoveryItemVM(listing, {
         isSaved: wishlist.includes(listing.id),
         currency: currencyCode,
@@ -438,7 +446,7 @@ export default function HomeScreen() {
     ).map((vm, index) => ({
       ...vm,
       featured: computeFeatured(index) }));
-  }, [forYouFeed.listings, wishlist, followedSellerIdsSet, computeFeatured]);
+  }, [forYouFeed.listings, wishlist, followedSellerIdsSet, computeFeatured, dedupeListings]);
 
   // For You mode uses personalised recommendations. When the feed is empty
   // or errored, we do NOT silently substitute general listings. The empty/
@@ -621,10 +629,11 @@ export default function HomeScreen() {
         scrollEventThrottle={16}
         viewabilityConfig={playbackViewabilityConfig}
         onViewableItemsChanged={handleViewableItemsChanged}
-        onEndReached={() => {
-          if (hasMore && !isLoadingMore) void loadMoreListings();
-        }}
-        onEndReachedThreshold={0.5}
+        // No onEndReached: the rendered feeds (For You recommendations,
+        // Following) are complete lists — the recommendation endpoint has
+        // no cursor and Following composes all followed sellers upfront.
+        // Paginating the unseen `listings` store would fetch data nothing
+        // renders, and a "Loading more" footer would lie.
         ListHeaderComponent={
           <HomeFeedHeader
             feedMode={feedMode}
@@ -660,11 +669,9 @@ export default function HomeScreen() {
           />
         }
         ListFooterComponent={
-          isLoadingMore ? (
-            <View style={{ paddingVertical: Space.md, alignItems: 'center' }}>
-              <Text style={{ color: colors.textMuted, fontSize: TypographyV2.meta.size }} maxFontSizeMultiplier={1.8}>Loading more...</Text>
-            </View>
-          ) : !hasMore && feedGridData.length > 0 ? (
+          // The feed is genuinely finite — an end marker is honest; a
+          // "loading more" affordance is not.
+          feedGridData.length > 0 ? (
             <View style={{ alignItems: 'center', paddingVertical: Space.lg, gap: Space.sm }}>
               <View style={{ width: 40, height: StyleSheet.hairlineWidth, backgroundColor: colors.border }} />
               <Text style={{ color: colors.textMuted, fontSize: TypographyV2.meta.size, fontFamily: TypographyV2.meta.fontFamily }} maxFontSizeMultiplier={1.8}>

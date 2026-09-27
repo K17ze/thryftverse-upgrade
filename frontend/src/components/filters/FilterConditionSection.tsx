@@ -1,9 +1,9 @@
 import React from 'react';
-import { ScrollView } from 'react-native';
+import { View } from 'react-native';
 import { useAppTheme } from '../../theme/ThemeContext';
-import { AppSegmentControl } from '../ui/AppSegmentControl';
 import { useTaxonomy } from '../../context/TaxonomyContext';
 import { FilterSection } from './FilterSection';
+import { FilterOptionRow } from './FilterOptionRow';
 import type { ConditionOption } from './filterTypes';
 import { createFilterStyles } from './filterStyles';
 
@@ -14,8 +14,9 @@ interface Props {
   onChange: (next: ConditionOption) => void;
 }
 
-// Condition section — horizontal segmented control fed by the taxonomy
-// conditions, prefixed with "Any".
+// Condition section — single-select radio list fed by the taxonomy
+// conditions, prefixed with "Any". Same row grammar as sort; the collapsed
+// header echoes the chosen condition.
 function FilterConditionSectionBase({ expanded, onToggle, value, onChange }: Props) {
   const { colors } = useAppTheme();
   const styles = React.useMemo(() => createFilterStyles(colors), [colors]);
@@ -35,18 +36,21 @@ function FilterConditionSectionBase({ expanded, onToggle, value, onChange }: Pro
       expanded={expanded}
       onToggle={onToggle}
       count={value !== 'Any' ? 1 : 0}
+      summary={value !== 'Any' ? value : undefined}
     >
-      <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.hScroll}>
-        <AppSegmentControl
-          options={conditionOptions}
-          value={value}
-          onChange={onChange}
-          optionStyle={styles.chip}
-          optionActiveStyle={styles.chipActive}
-          optionTextStyle={styles.chipText}
-          optionTextActiveStyle={styles.chipTextActive}
-        />
-      </ScrollView>
+      <View style={styles.optionList}>
+        {conditionOptions.map((option, index) => (
+          <FilterOptionRow
+            key={option.value}
+            role="radio"
+            label={option.label}
+            selected={option.value === value}
+            onPress={() => onChange(option.value)}
+            showDivider={index < conditionOptions.length - 1}
+            accessibilityLabel={option.accessibilityLabel}
+          />
+        ))}
+      </View>
     </FilterSection>
   );
 }

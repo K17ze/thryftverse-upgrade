@@ -25,6 +25,7 @@ import {
   rejectActionProposal,
 } from '../support/actionBroker.js';
 import type { ProjectedSupportContext, SupportEntryContext } from '../support/contracts.js';
+import { supportAgentTurnQueue } from '../lib/queues.js';
 
 type NotificationInput = {
   userId: string;
@@ -321,6 +322,26 @@ export const registerSupportRoutes = ({
       [],
       body.attachments ? { attachments: body.attachments } : {},
     );
+
+    // Trigger an AI support turn when the assistant still owns the
+    // conversation. The job is idempotent (jobId = message id) and the
+    // handler re-checks ownership_state, so a concurrent human takeover
+    // is safe. Enqueue failure must not fail the message write — the
+    // thread is already durable; the sweep/human desk is the backstop.
+    if (conversation.ownershipState === 'ai_active') {
+      supportAgentTurnQueue
+        .add(
+          'support-agent-turn',
+          { conversationId: id, customerMessageId: message.id },
+          { jobId: `support-turn-${message.id}` },
+        )
+        .catch((err) => {
+          request.log.warn(
+            { conversationId: id, messageId: message.id, err },
+            'support agent turn enqueue failed',
+          );
+        });
+    }
 
     reply.code(201);
     return { ok: true, message };

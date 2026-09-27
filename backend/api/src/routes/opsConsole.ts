@@ -68,6 +68,10 @@ import {
   CHILDREN_RISK_FACTORS,
   OFCOM_PRIORITY_OFFENCES,
 } from '../lib/ofcomRiskAssessment.js';
+import {
+  getDomainCostTelemetry,
+  CostTelemetryWindowSchema,
+} from '../lib/costTelemetry.js';
 
 // ── Ops Console Route Registry ──────────────────────────────────────────
 //
@@ -850,6 +854,29 @@ export const registerOpsConsoleRoutes = ({ app }: OpsRouteDependencies) => {
     });
 
     return { ok: true, ...verification };
+  });
+
+  // ── Per-domain cost telemetry (R107) ─────────────────────────────────
+  //
+  // Read-only aggregation over the existing AI/promotion cost ledgers
+  // (ai_usage_events, agent_runs, support_agent_runs, fraud_scoring_ledger,
+  // promotion_charges, …). Spend is ops/finance visibility → 'ledger.read'.
+
+  app.get('/ops/v1/cost-telemetry', async (request, reply) => {
+    const guard = await requireOpsPermission(request, reply, 'ledger.read');
+    if (!guard) return null;
+
+    const querySchema = z.object({
+      window: CostTelemetryWindowSchema.optional(),
+    });
+    const parsed = querySchema.safeParse(request.query);
+    if (!parsed.success) {
+      reply.code(400);
+      return { ok: false, error: 'Invalid query', details: parsed.error.flatten() };
+    }
+
+    const report = await getDomainCostTelemetry(db, { window: parsed.data.window });
+    return { ok: true, ...report };
   });
 
   // ── Break-glass session ──────────────────────────────────────────────

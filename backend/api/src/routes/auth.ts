@@ -37,13 +37,15 @@ import {
   verifyTotp,
 } from '../lib/totp.js';
 import { resolveClientIp } from '../lib/compliance.js';
-import { checkFraudNonBlocking } from '../lib/fraudDetection.js';
+import { checkFraudNonBlocking, generateDeviceFingerprint } from '../lib/fraudDetection.js';
 import { isProtectedChangeHoldActive } from '../lib/accountTakeoverService.js';
 import { recordUserSignup } from '../lib/metrics.js';
 import { attributeSignupToReferralCode } from '../lib/referrals.js';
 import {
   evaluateRisk,
+  recordEntityLink,
   recordExecution,
+  type EntityLinkInput,
   type RiskDecision,
 } from '../lib/riskDecision.js';
 import {
@@ -560,6 +562,73 @@ async function resolveUserFromSocialIdentity(identity: VerifiedSocialIdentity, d
   }
 }
 
+/**
+ * DPIA / legitimate-interest reference recorded on entity links written by
+ * the auth surface. Matches the legal-basis phrasing used by retention_policy
+ * seed rows (migration 175).
+ */
+const AUTH_ENTITY_LINK_LEGAL_BASIS =
+  'Legitimate interest — fraud prevention and account security (UK-GDPR Art. 6(1)(f))';
+
+/**
+ * FR-06: populate the tokenised entity-link graph on successful auth events.
+ *
+ * Node-ref conventions (tokenised — no raw identifiers land in the graph):
+ * - account → the user id (`usr_…` public token)
+ * - device  → the SHA-256 request-environment fingerprint the fraud rule
+ *             engine already clusters on (generateDeviceFingerprint)
+ * - IP      → the entity_links node-type enum has no dedicated ip type, so
+ *             IP observations are tokenised as `address` nodes with an
+ *             `ip:<sha256>` ref. Shared-IP clustering then fans out from a
+ *             single node via getEntityLinks.
+ *
+ * Fail-open by contract: the graph is a surveillance projection, never on
+ * the auth critical path. A link-write failure is logged, never thrown.
+ */
+function recordAuthEntityLinks(
+  db: Pool,
+  logger: { warn: (obj: object, msg: string) => void },
+  input: {
+    userId: string;
+    ip: string;
+    headers: Record<string, string | string[] | undefined>;
+    linkSource: 'signup' | 'login';
+  }
+): void {
+  const deviceRef = generateDeviceFingerprint(input.headers, input.ip).hash;
+  const ipRef = `ip:${crypto.createHash('sha256').update(input.ip).digest('hex')}`;
+
+  const links: EntityLinkInput[] = [
+    {
+      nodeAType: 'account',
+      nodeARef: input.userId,
+      nodeBType: 'device',
+      nodeBRef: deviceRef,
+      linkType: 'shares_device',
+      linkSource: input.linkSource,
+      legalBasis: AUTH_ENTITY_LINK_LEGAL_BASIS,
+    },
+    {
+      nodeAType: 'account',
+      nodeARef: input.userId,
+      nodeBType: 'address',
+      nodeBRef: ipRef,
+      linkType: 'shares_ip',
+      linkSource: input.linkSource,
+      legalBasis: AUTH_ENTITY_LINK_LEGAL_BASIS,
+    },
+  ];
+
+  for (const link of links) {
+    recordEntityLink(db, link).catch((err) =>
+      logger.warn(
+        { err, userId: input.userId, linkType: link.linkType },
+        'Failed to record auth entity link'
+      )
+    );
+  }
+}
+
 // ── Dependencies ───────────────────────────────────────────────────────
 
 type AuthRouteDependencies = {
@@ -714,6 +783,15 @@ export const registerAuthRoutes = ({ app, db, redis, fraudShadowService, ipReput
 
       const user = createResult.rows[0];
       recordUserSignup('email');
+
+      // FR-06: entity-graph links for the new account. Fail-open — a
+      // link-write failure must never break signup.
+      recordAuthEntityLinks(db, request.log, {
+        userId: user.id,
+        ip: requestIp,
+        headers: requestHeaders,
+        linkSource: 'signup',
+      });
 
       // Referral attribution — best-effort; an unknown/self code never
       // blocks signup.
@@ -963,6 +1041,16 @@ export const registerAuthRoutes = ({ app, db, redis, fraudShadowService, ipReput
           ipAddress: request.ip,
         }
       );
+
+      // FR-06: entity-graph links for the authenticated account. Fail-open —
+      // a link-write failure must never break login. Runs only after the
+      // password and any 2FA challenge have been verified.
+      recordAuthEntityLinks(db, request.log, {
+        userId: user.id,
+        ip: request.ip,
+        headers: request.headers as Record<string, string | string[] | undefined>,
+        linkSource: 'login',
+      });
 
       return {
         ok: true,

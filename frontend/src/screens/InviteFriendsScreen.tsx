@@ -68,7 +68,7 @@ export default function InviteFriendsScreen({ navigation }: Props) {
     return () => { mounted = false; };
   }, [currentUser?.id]);
 
-  const inviteLink = referralCode ? `https://thryftverse.app/invite/${referralCode}` : null;
+  const inviteLink = referralCode ? `https://thryftverse.com/invite/${referralCode}` : null;
 
   // Fetch referral stats from backend. Per AGENTS.md §6 (truthful UI), a
   // backend failure must NOT silently show fabricated zeros — the screen

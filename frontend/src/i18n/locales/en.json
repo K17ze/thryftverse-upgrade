@@ -228,7 +228,21 @@
       "privacyData": "Privacy & data",
       "paymentsPayouts": "Payments & payouts",
       "sellerTools": "Seller tools",
-      "aboutSupport": "About & support"
+      "aboutSupport": "About & support",
+      "sync": "Sync"
+    },
+    "sync": {
+      "title": "Sync issues",
+      "pendingOnlyBody": "Actions you took while offline will sync when you're back online.",
+      "failedBody": "{count} action(s) couldn't be synced after several attempts. Retry them or discard them — discarding permanently drops the change.",
+      "retry": "Retry failed",
+      "discard": "Discard failed",
+      "discardConfirmTitle": "Discard failed actions?",
+      "discardConfirmBody": "{count} action(s) will be permanently dropped. This can't be undone.",
+      "discardConfirm": "Discard",
+      "dismiss": "Not now",
+      "deadLetterToast": "{count} offline action(s) couldn't be synced",
+      "review": "Review"
     },
     "rows": {
       "verification": "Verification",
@@ -305,6 +319,9 @@
       "aboutThryftverse": "About Thryftverse",
       "runtimeSmokeTest": "Runtime smoke test",
       "runtimeSmokeTestSubtitle": "Diagnostic checks for local runtime",
+      "syncTitle": "Offline actions",
+      "syncPending": "{count} waiting to sync",
+      "syncFailed": "{count} failed",
       "deleteAccount": "Delete account",
       "deleteAccountSubtitle": "Permanently remove your account and data",
       "editProfileAccount": "Edit profile & account",
@@ -987,6 +1004,7 @@
       "sold": "SOLD",
       "listingsCount": "{{count}} listings",
       "editOrder": "Edit",
+      "reorderTitle": "Arrange your shop",
       "done": "Done",
       "pin": "Pin to profile",
       "unpin": "Unpin from profile",
@@ -1129,6 +1147,7 @@
       "openPosterStudio": "Open Poster Studio",
       "posterStudioHint": "Create posters, looks, and moodboard collages",
       "editorial": "Editorial: {{title}}",
+      "editorialHint": "Read the full story",
       "collection": "Collection: {{title}}",
       "collectionHint": "Opens the collection detail",
       "featuredCollection": "Featured collection: {{title}}",
@@ -1175,7 +1194,14 @@
       "errorApproveTitle": "Could not approve",
       "errorApproveMessage": "The request could not be approved.",
       "errorRejectTitle": "Could not reject",
-      "errorRejectMessage": "The request could not be rejected."
+      "errorRejectMessage": "The request could not be rejected.",
+      "status": {
+        "pending": "Pending",
+        "approved": "Approved",
+        "rejected": "Rejected",
+        "expired": "Expired",
+        "superseded": "Superseded"
+      }
     },
     "cancel": {
       "cancelling": "Cancelling…",
@@ -1201,6 +1227,29 @@
     },
     "tokens": {
       "usage": "{{input}} in · {{output}} out"
+    },
+    "trace": {
+      "toggle": "View run details for {{botName}}",
+      "loadError": "Couldn't load the run trace",
+      "retry": "Retry",
+      "empty": "No steps recorded for this run",
+      "approvalLine": "{{tool}} · {{status}}",
+      "status": {
+        "pending": "Pending",
+        "running": "Running",
+        "succeeded": "Succeeded",
+        "failed": "Failed",
+        "skipped": "Skipped"
+      },
+      "step": {
+        "modelCall": "Model call",
+        "toolCall": "Tool call",
+        "retrieval": "Memory recall",
+        "guardrail": "Guardrail",
+        "approval": "Approval",
+        "retry": "Retry",
+        "handoff": "Handoff"
+      }
     }
   },
   "liveStreamViewer": {
@@ -1240,13 +1289,18 @@
       "reconnect": "Reconnect",
       "goBack": "Go back"
     },
+    "removed": {
+      "title": "Removed from this stream",
+      "subtitle": "The host removed you from this live session."
+    },
     "ended": {
       "title": "Stream Ended",
       "subtitle": "Thanks for watching",
       "viewers": "Viewers",
       "lotsSold": "Lots Sold",
       "totalSales": "Total Sales",
-      "done": "Done"
+      "done": "Done",
+      "watchReplay": "Watch replay"
     },
     "scheduled": {
       "title": "Not live yet",
@@ -1261,6 +1315,9 @@
       "connecting": "Connecting to stream...",
       "a11yLabel": "Live video"
     },
+    "session": {
+      "reconnecting": "Reconnecting…"
+    },
     "seller": {
       "following": "Following",
       "follow": "Follow"
@@ -1270,7 +1327,8 @@
     },
     "chat": {
       "seller": "Seller",
-      "placeholder": "Send a message…"
+      "placeholder": "Send a message…",
+      "mutedPlaceholder": "The host muted you in this chat"
     },
     "product": {
       "bids": "bids"
@@ -1324,7 +1382,8 @@
     "replay": {
       "justEnded": "Just ended",
       "hoursAgo": "{{count}}h ago",
-      "daysAgo": "{{count}}d ago"
+      "daysAgo": "{{count}}d ago",
+      "processing": "Recording processing"
     },
     "upcoming": {
       "waiting": "waiting",
@@ -1347,10 +1406,61 @@
       "subtitle": "Check your connection and try again.",
       "loadFailed": "Failed to load live sessions"
     },
+    "refreshFailed": {
+      "title": "Couldn't refresh",
+      "body": "Showing the latest sessions we have."
+    },
     "empty": {
       "title": "No live sessions right now",
       "subtitle": "Check back soon.",
       "goToSellerHub": "Go to Seller Hub"
+    }
+  },
+  "liveReplay": {
+    "header": {
+      "title": "Replay"
+    },
+    "error": {
+      "title": "Couldn't load this replay",
+      "subtitle": "Check your connection and try again.",
+      "retry": "Retry",
+      "goBack": "Go back"
+    },
+    "notFound": {
+      "title": "Replay not found",
+      "subtitle": "This stream may have been removed."
+    },
+    "notEnded": {
+      "title": "Not ended yet",
+      "subtitle": "This show hasn't started — there's no replay to watch."
+    },
+    "stillLive": {
+      "title": "Still live",
+      "subtitle": "This stream is live right now — the replay is available after it ends.",
+      "watchLive": "Watch live"
+    },
+    "processing": {
+      "title": "Recording is processing",
+      "subtitle": "Replays are usually ready shortly after a stream ends.",
+      "checkAgain": "Check again"
+    },
+    "noRecording": {
+      "title": "No replay available",
+      "subtitle": "This stream wasn't recorded."
+    },
+    "playbackError": {
+      "title": "Couldn't play this replay",
+      "subtitle": "The recording failed to load.",
+      "retry": "Retry"
+    },
+    "meta": {
+      "justEnded": "Just ended",
+      "hoursAgo": "Ended {{count}}h ago",
+      "daysAgo": "Ended {{count}}d ago"
+    },
+    "moreReplays": {
+      "title": "More replays",
+      "a11y": "More past streams"
     }
   },
   "conversationalSearch": {
@@ -1449,7 +1559,7 @@
       "noSessionsRunning": "No agent sessions running",
       "sessionsRunning": "{{count}} agent session(s) running",
       "activity": "Agent activity",
-      "activitySub": "Local log of agent actions and approvals"
+      "activitySub": "Server record of agent runs and approvals"
     },
     "connect": {
       "cancel": "Cancel",
@@ -1672,6 +1782,7 @@
     "header": {
       "title": "Report",
       "reportAccount": "Report account",
+      "reportContent": "Report content",
       "reportGroup": "Report group",
       "reportListing": "Report listing",
       "subtitle": "Reports are confidential"
@@ -1959,6 +2070,96 @@
       "processing": "Processing",
       "loadError": "Couldn't load this image.",
       "retry": "Try again"
+    }
+  },
+  "visualSearch": {
+    "frame": {
+      "action": "Frame",
+      "actionLabel": "Frame the object",
+      "actionHint": "Opens a crop view to frame the item you want to match",
+      "title": "Frame the object",
+      "hint": "Drag the frame or its corners around the item you want to match",
+      "cancelHint": "Closes without changing the search",
+      "reset": "Reset",
+      "resetHint": "Expands the frame back to the whole image",
+      "confirm": "Search this area",
+      "areaLabel": "Crop area",
+      "areaHint": "Drag to move the crop area",
+      "cornerHint": "Drag to resize the crop area",
+      "cornerTopLeft": "Crop handle, top left",
+      "cornerTopRight": "Crop handle, top right",
+      "cornerBottomLeft": "Crop handle, bottom left",
+      "cornerBottomRight": "Crop handle, bottom right",
+      "value": "Crop area {{x}} percent from the left, {{y}} percent from the top, {{width}} percent wide, {{height}} percent tall"
+    }
+  },
+  "walletFx": {
+    "title": "Exchange",
+    "balancesTitle": "Currency balances",
+    "balancesExchange": "Exchange",
+    "balancesError": "Couldn't load currency balances.",
+    "retry": "Retry",
+    "youSend": "You send",
+    "youReceive": "You receive",
+    "availableBalance": "Available {{currency}} balance",
+    "available": "Available: {{amount}}",
+    "insufficient": "This amount exceeds your {{currency}} balance.",
+    "amountPlaceholder": "0.00",
+    "fetchingQuote": "Fetching live quote…",
+    "quoteFailed": "Couldn't fetch quote.",
+    "fee": "Fee ({{bps}} bps)",
+    "rateLabel": "Rate",
+    "rateAsOf": "Rate as of",
+    "referenceRateAsOf": "Reference rate as of",
+    "valid": "Valid {{time}}",
+    "expired": "Expired",
+    "refresh": "Refresh",
+    "swap": "Swap currencies",
+    "swapHint": "Swaps the send and receive currencies",
+    "reviewTitle": "Exchange summary",
+    "reviewHint": "Your {{source}} pocket is debited and your {{target}} pocket credited instantly at the locked rate.",
+    "ctaReview": "Review exchange",
+    "ctaConfirm": "Confirm",
+    "ctaBack": "Back to edit",
+    "ctaDone": "Done",
+    "authTitle": "Authenticate to continue",
+    "authWaiting": "Waiting for biometric verification…",
+    "authBody": "Verify with Face ID, Touch ID, or fingerprint to authorise this exchange.",
+    "authReason": "Authenticate to exchange currency",
+    "authRetry": "Authenticate",
+    "authCancel": "Cancel",
+    "executingTitle": "Exchanging…",
+    "executingBody": "Debiting {{source}} and crediting your {{target}} balance.",
+    "receiptTitle": "Exchange complete",
+    "receiptBody": "Exchanged {{sent}} to {{received}}",
+    "receiptSent": "You sent",
+    "receiptReceived": "You received",
+    "receiptRate": "Rate",
+    "receiptFee": "Fee",
+    "receiptTx": "Transaction",
+    "receiptTimestamp": "Timestamp",
+    "errorTitle": "Exchange failed",
+    "errorTryAgain": "Try again",
+    "errorCancel": "Cancel",
+    "errorGeneric": "Unable to exchange right now.",
+    "errorDropped": "The connection dropped while exchanging. Try again — the same request will resume safely, or check your wallet history.",
+    "errorBalanceLoad": "We could not load your currency balances.",
+    "quoteExpiredInline": "Quote expired — fetching a fresh rate.",
+    "signInRequired": "Sign in to exchange currencies.",
+    "stepAmount": "Amount",
+    "stepReview": "Review",
+    "stepAuth": "Auth",
+    "stepDone": "Done",
+    "a11y": {
+      "exchangeHint": "Opens the currency exchange screen",
+      "currencyFrom": "Send currency",
+      "currencyTo": "Receive currency",
+      "selectCurrency": "Select {{currency}}",
+      "amountInput": "Amount in {{currency}}",
+      "retryQuote": "Retry quote fetch",
+      "refreshRate": "Refresh exchange rate",
+      "retryAuth": "Retry biometric authentication",
+      "cancelAuth": "Cancel authentication"
     }
   }
 }

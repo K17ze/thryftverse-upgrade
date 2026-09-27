@@ -9,6 +9,7 @@ import { PinterestMasonryGrid } from '../discover/PinterestMasonryGrid';
 import { RefreshIndicator } from '../RefreshIndicator';
 import { friendlyBackendError } from '../../services/listingMapper';
 import { openProductDetail } from '../../platform/product/openProductDetail';
+import { DISCOVERY_GRID_PADDING } from '../discovery/unifiedDiscoveryStyles';
 import { Space } from '../../theme/designTokens';
 import type { ThemeColors } from '../../theme/ThemeContext';
 import type { Listing } from '../../domain';
@@ -70,8 +71,17 @@ export function BrowseResults({
   const navigation = useNavigation<any>();
 
   const renderBrowseLoadingState = () => (
-    <View style={styles.loadingStateWrap}>
-      <MasonrySkeleton numColumns={gridDensity === 'compact' ? 3 : 2} itemCount={gridDensity === 'compact' ? 9 : 6} horizontalPadding={Space.md} gap={3} />
+    // Plain flex wrapper — MasonrySkeleton owns its own edge padding, so a
+    // padded/wrap container here would double-inset the loading frame.
+    <View style={{ flex: 1 }}>
+      {/* Skeleton mirrors the live grid's column count AND gutter so the
+          loading → populated transition has no geometry shift. */}
+      <MasonrySkeleton
+        numColumns={gridDensity === 'compact' ? 3 : 2}
+        itemCount={gridDensity === 'compact' ? 9 : 6}
+        horizontalPadding={DISCOVERY_GRID_PADDING}
+        gap={gridDensity === 'compact' ? Space.xs + 2 : 3}
+      />
     </View>
   );
 
@@ -108,7 +118,7 @@ export function BrowseResults({
           onItemSaveLongPress={onItemSaveLongPress}
           isItemSaved={isItemSaved}
           gap={gridDensity === 'compact' ? Space.xs + 2 : 3}
-          horizontalPadding={Space.md}
+          horizontalPadding={DISCOVERY_GRID_PADDING}
           testIDPrefix="golden-browse-product-card"
           firstItemTestID="golden-browse-first-product"
           enableImagePrefetch

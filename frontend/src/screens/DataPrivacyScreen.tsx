@@ -199,7 +199,7 @@ export default function DataPrivacyScreen({ navigation }: Props) {
             icon="document"
             title="Cookie policy"
             subtitle="How we use cookies and local storage"
-            onPress={() => void handleOpenExternal('https://thryftverse.app/cookies')}
+            onPress={() => void handleOpenExternal('https://thryftverse.com/cookies')}
             isFirst
             isLast
           />
@@ -236,13 +236,13 @@ export default function DataPrivacyScreen({ navigation }: Props) {
           <SettingsRow
             icon="lock"
             title="Privacy Policy"
-            onPress={() => void handleOpenExternal('https://thryftverse.app/privacy')}
+            onPress={() => void handleOpenExternal('https://thryftverse.com/privacy')}
             isFirst
           />
           <SettingsRow
             icon="document"
             title="Terms of Service"
-            onPress={() => void handleOpenExternal('https://thryftverse.app/terms')}
+            onPress={() => void handleOpenExternal('https://thryftverse.com/terms')}
             isLast
           />
         </SettingsSection>

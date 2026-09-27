@@ -164,7 +164,10 @@ async function computeSearchResults(
       // Reach demotion: a 'limited' seller's listings keep 30% of their
       // ranked distribution (sellerReach.ts); 'suspended' rows are excluded
       // by the WHERE clause entirely.
-      orderBy = `ts_rank_cd(l.search_vector, websearch_to_tsquery('simple', $1)) * ${reachRankMultiplierExpr('u')} DESC, l.created_at DESC, l.id DESC`;
+      // f_unaccent on the query side matches the folded search_vector and
+      // trigram expression indexes from migration 327 — "cafe" must reach
+      // the "café" lexeme (R26). ASCII queries fold to themselves.
+      orderBy = `ts_rank_cd(l.search_vector, websearch_to_tsquery('simple', f_unaccent($1))) * ${reachRankMultiplierExpr('u')} DESC, l.created_at DESC, l.id DESC`;
       break;
   }
 
@@ -194,7 +197,7 @@ async function computeSearchResults(
         l.price_gbp::text,
         l.image_url,
         l.created_at::text,
-        ts_rank_cd(l.search_vector, websearch_to_tsquery('simple', $1))::text AS rank_score,
+        ts_rank_cd(l.search_vector, websearch_to_tsquery('simple', f_unaccent($1)))::text AS rank_score,
         u.username AS seller_username,
         l.brand,
         l.size,
@@ -205,11 +208,11 @@ async function computeSearchResults(
       ${extraJoins.join('\n      ')}
       WHERE l.status = 'active'
         AND (
-          l.search_vector @@ websearch_to_tsquery('simple', $1)
-          OR POSITION(lower($1) IN lower(COALESCE(l.brand, ''))) > 0
-          OR POSITION(lower($1) IN lower(COALESCE(l.category, ''))) > 0
-          OR POSITION(lower($1) IN lower(COALESCE(l.size, ''))) > 0
-          OR POSITION(lower($1) IN lower(COALESCE(l.condition, ''))) > 0
+          l.search_vector @@ websearch_to_tsquery('simple', f_unaccent($1))
+          OR POSITION(f_unaccent(lower($1)) IN f_unaccent(lower(COALESCE(l.brand, '')))) > 0
+          OR POSITION(f_unaccent(lower($1)) IN f_unaccent(lower(COALESCE(l.category, '')))) > 0
+          OR POSITION(f_unaccent(lower($1)) IN f_unaccent(lower(COALESCE(l.size, '')))) > 0
+          OR POSITION(f_unaccent(lower($1)) IN f_unaccent(lower(COALESCE(l.condition, '')))) > 0
         )
         ${reachExcludedSql('u')}
         ${filterClause}
@@ -279,10 +282,10 @@ async function computeSearchResults(
   const useTrgmFallback = q.trim().length >= TRGM_MIN_QUERY_LENGTH;
   const trgmClause = useTrgmFallback
     ? `
-          OR l.title % $1
-          OR similarity(l.title, $1) > ${TRGM_TITLE_THRESHOLD}
-          OR l.brand % $1
-          OR similarity(COALESCE(l.brand, ''), $1) > ${TRGM_BRAND_THRESHOLD}`
+          OR f_unaccent(l.title) % f_unaccent($1)
+          OR similarity(f_unaccent(l.title), f_unaccent($1)) > ${TRGM_TITLE_THRESHOLD}
+          OR f_unaccent(COALESCE(l.brand, '')) % f_unaccent($1)
+          OR similarity(f_unaccent(COALESCE(l.brand, '')), f_unaccent($1)) > ${TRGM_BRAND_THRESHOLD}`
     : '';
 
   // For relevance sort, rank trigram hits by their best title/brand
@@ -291,7 +294,7 @@ async function computeSearchResults(
   // caller's ordering unchanged.
   const fallbackOrderBy =
     sort === 'relevance' && useTrgmFallback
-      ? `GREATEST(similarity(l.title, $1), similarity(COALESCE(l.brand, ''), $1)) * ${reachRankMultiplierExpr('u')} DESC, l.created_at DESC, l.id DESC`
+      ? `GREATEST(similarity(f_unaccent(l.title), f_unaccent($1)), similarity(f_unaccent(COALESCE(l.brand, '')), f_unaccent($1))) * ${reachRankMultiplierExpr('u')} DESC, l.created_at DESC, l.id DESC`
       : orderBy;
 
   const fallback = await dbPool.query<{
@@ -317,12 +320,12 @@ async function computeSearchResults(
       ${extraJoins.join('\n      ')}
       WHERE l.status = 'active'
         AND (
-          POSITION(lower($1) IN lower(l.title)) > 0
-          OR POSITION(lower($1) IN lower(l.description)) > 0
-          OR POSITION(lower($1) IN lower(COALESCE(l.brand, ''))) > 0
-          OR POSITION(lower($1) IN lower(COALESCE(l.category, ''))) > 0
-          OR POSITION(lower($1) IN lower(COALESCE(l.size, ''))) > 0
-          OR POSITION(lower($1) IN lower(COALESCE(l.condition, ''))) > 0${trgmClause}
+          POSITION(f_unaccent(lower($1)) IN f_unaccent(lower(l.title))) > 0
+          OR POSITION(f_unaccent(lower($1)) IN f_unaccent(lower(l.description))) > 0
+          OR POSITION(f_unaccent(lower($1)) IN f_unaccent(lower(COALESCE(l.brand, '')))) > 0
+          OR POSITION(f_unaccent(lower($1)) IN f_unaccent(lower(COALESCE(l.category, '')))) > 0
+          OR POSITION(f_unaccent(lower($1)) IN f_unaccent(lower(COALESCE(l.size, '')))) > 0
+          OR POSITION(f_unaccent(lower($1)) IN f_unaccent(lower(COALESCE(l.condition, '')))) > 0${trgmClause}
         )
         ${reachExcludedSql('u')}
         ${filterClause}

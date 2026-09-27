@@ -95,10 +95,36 @@ export async function appendDomainEvent(
 export async function claimDomainOutboxBatch(
   db: Pool,
   limit = 50,
+  staleProcessingLeaseMs = 10 * 60 * 1000,
 ): Promise<DomainOutboxEvent[]> {
   const client = await db.connect();
   try {
     await client.query('BEGIN');
+    // Reap claims whose worker died between claim and complete/fail —
+    // `locked_at` is the lease. Rows past it return to 'pending' for retry,
+    // or dead-letter once they hit the same attempt ceiling as
+    // failDomainOutboxEvent, so a crash-looping event cannot spin forever.
+    // Handlers must be idempotent: a slow-but-alive worker can still have
+    // its claim reclaimed once the lease expires.
+    await client.query(
+      `UPDATE domain_outbox
+       SET status = CASE WHEN attempts >= 10 THEN 'dead' ELSE 'pending' END,
+           available_at = CASE
+             WHEN attempts >= 10 THEN available_at
+             ELSE NOW()
+           END,
+           locked_at = NULL,
+           last_error = CASE
+             WHEN attempts >= 10
+               THEN 'processing lease expired; attempt ceiling reached'
+             ELSE last_error
+           END,
+           updated_at = NOW()
+       WHERE status = 'processing'
+         AND locked_at IS NOT NULL
+         AND locked_at < NOW() - ($2 * INTERVAL '1 millisecond')`,
+      [Math.max(1, Math.min(200, limit)), Math.max(1_000, staleProcessingLeaseMs)],
+    );
     const result = await client.query<DomainOutboxRow>(
       `WITH claimable AS (
          SELECT id

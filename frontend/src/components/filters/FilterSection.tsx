@@ -16,13 +16,17 @@ interface Props {
    *  badge that appears only while count > 0 (matches the original brand /
    *  size / condition / price headers). Omit for plain headings. */
   count?: number;
+  /** Current single-select value echoed next to the chevron while the
+   *  section is collapsed, so the closed header still communicates state
+   *  (e.g. 'Newest' on sort, 'New with tags' on condition). */
+  summary?: string;
   children?: React.ReactNode;
 }
 
 // Collapsible section header shared by every filter domain section.
 // Progressive disclosure per 2026 mobile filter UX — children render only
 // while expanded, matching the original conditional render exactly.
-function FilterSectionBase({ sectionKey, title, expanded, onToggle, count, children }: Props) {
+function FilterSectionBase({ sectionKey, title, expanded, onToggle, count, summary, children }: Props) {
   const { colors } = useAppTheme();
   const styles = React.useMemo(() => createFilterStyles(colors), [colors]);
 
@@ -47,7 +51,14 @@ function FilterSectionBase({ sectionKey, title, expanded, onToggle, count, child
         ) : (
           <Text style={styles.sectionHeading}>{title}</Text>
         )}
-        <Ionicons name={expanded ? 'chevron-up' : 'chevron-down'} size={18} color={colors.textMuted} aria-hidden={true} />
+        <View style={styles.sectionHeaderMeta}>
+          {!expanded && summary ? (
+            <Text style={styles.sectionHeaderValue} numberOfLines={1}>
+              {summary}
+            </Text>
+          ) : null}
+          <Ionicons name={expanded ? 'chevron-up' : 'chevron-down'} size={18} color={colors.textMuted} aria-hidden={true} />
+        </View>
       </Pressable>
       {expanded && children}
     </>

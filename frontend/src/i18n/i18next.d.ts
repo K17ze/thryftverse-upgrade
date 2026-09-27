@@ -32,6 +32,7 @@ declare module 'i18next' {
       agentLedger: (typeof flattenedResources)['agentLedger'];
       liveStreamViewer: (typeof flattenedResources)['liveStreamViewer'];
       liveShopping: (typeof flattenedResources)['liveShopping'];
+      liveReplay: (typeof flattenedResources)['liveReplay'];
       conversationalSearch: (typeof flattenedResources)['conversationalSearch'];
       aiAgent: (typeof flattenedResources)['aiAgent'];
       algorithm: (typeof flattenedResources)['algorithm'];
@@ -41,6 +42,8 @@ declare module 'i18next' {
       coOwn: (typeof flattenedResources)['coOwn'];
       stateCopy: (typeof flattenedResources)['stateCopy'];
       creator: (typeof flattenedResources)['creator'];
+      visualSearch: (typeof flattenedResources)['visualSearch'];
+      walletFx: (typeof flattenedResources)['walletFx'];
     };
   }
 }

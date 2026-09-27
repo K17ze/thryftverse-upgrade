@@ -370,8 +370,10 @@ export interface MoodboardSourcePickerProps {
    */
   onAddLook?: (lookId: string) => void | Promise<void>;
   importHook: MoodboardImportController;
-  /** Board refresh callback — fired after an item lands on the board. */
-  onItemAdded: () => void | Promise<void>;
+  /** Board refresh callback — fired after an item lands on the board. The
+   *  return is ignored — `Promise<unknown>` so `board.reconcileBoard`
+   *  (which reports whether the re-fetch succeeded) can be passed directly. */
+  onItemAdded: () => void | Promise<unknown>;
 }
 
 export function MoodboardSourcePicker({

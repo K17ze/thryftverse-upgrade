@@ -163,6 +163,17 @@ describe('direct-listing-detail flagship closure (spec 04_DIRECT)', () => {
       // Owner layer: the >=2 gate lives in itemDetailDerived.
       expect(derived).toContain('sampleSize >= 2');
     });
+
+    it('surfaces the comps freshness window when the API provides it', () => {
+      // R33: the endpoint emits dateFrom/dateTo (first/last sale in the
+      // evidence set). The derived row must render them via the shared
+      // range formatter and degrade to the plain count label when the
+      // window is absent — never a fabricated range.
+      expect(derived).toContain('formatDateRange');
+      expect(derived).toContain('soldComps.dateFrom');
+      expect(derived).toContain('soldComps.dateTo');
+      expect(derived).toContain("'comps.similarSoldWindow'");
+    });
   });
 
   // ── §7 Engagement summary ──

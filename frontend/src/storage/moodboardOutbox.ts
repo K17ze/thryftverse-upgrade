@@ -8,8 +8,12 @@
  * outbox rows to that endpoint and reconciles the local cache.
  *
  * Lifecycle:
- *   1. Editor calls `enqueueMoodboardOperation()` with the operation payload.
- *      The row is persisted to `mutation_outbox` as `pending`.
+ *   1. Editor calls `enqueueMoodboardOperationBatch()` with the whole
+ *      command's ops — they are inserted in ONE SQLite transaction, so a
+ *      mid-batch failure rolls back and no partial command survives to
+ *      drain later (S21-04). `enqueueMoodboardOperation()` is the
+ *      single-op convenience wrapper. Rows persist to `mutation_outbox`
+ *      as `pending`.
  *   2. `drainMoodboardOutbox()` reads pending moodboard rows in `seq` order
  *      and pushes each to the operations endpoint.
  *   3. On `applied`/`duplicate` — the row is removed and the local cache is
@@ -38,30 +42,57 @@ interface MoodboardOutboxRow {
   attemptCount: number;
 }
 
-/**
- * Enqueue a moodboard operation into the durable outbox. The row is
- * persisted immediately to SQLite so it survives app kills.
- */
-export async function enqueueMoodboardOperation(input: {
+export interface EnqueueMoodboardOperationInput {
   operationId: string;
   boardId: string;
   /** Must match the backend `submitOperationSchema` enum or the op is rejected. */
   operation: MoodboardOperationType;
   payload: Record<string, unknown>;
   baseRev: number;
-}): Promise<void> {
-  if (!isDbAvailable()) return;
+}
+
+const INSERT_OPERATION_SQL = `INSERT OR REPLACE INTO mutation_outbox
+   (operation_id, entity_type, entity_id, operation, payload_json, base_rev, state, attempt_count, last_error)
+ VALUES (?, 'moodboard', ?, ?, ?, ?, 'pending', 0, NULL);`;
+
+/**
+ * Enqueue a moodboard operation into the durable outbox. The row is
+ * persisted immediately to SQLite so it survives app kills.
+ */
+export async function enqueueMoodboardOperation(
+  input: EnqueueMoodboardOperationInput,
+): Promise<void> {
+  return enqueueMoodboardOperationBatch([input]);
+}
+
+/**
+ * Atomically enqueue an entire command batch of moodboard operations.
+ *
+ * Every op is inserted inside ONE SQLite transaction (S21-04): a mid-batch
+ * failure rolls the transaction back so NO durable prefix survives — a
+ * command's ops are either all queued (and drain together on reconnect) or
+ * none are. Callers can therefore trust a 'failed' outcome to mean "nothing
+ * will apply later" instead of discovering an orphaned prefix at drain time.
+ */
+export async function enqueueMoodboardOperationBatch(
+  inputs: EnqueueMoodboardOperationInput[],
+): Promise<void> {
+  if (!isDbAvailable() || inputs.length === 0) return;
   const db = await getDb();
-  db.execute(
-    `INSERT OR REPLACE INTO mutation_outbox
-       (operation_id, entity_type, entity_id, operation, payload_json, base_rev, state, attempt_count, last_error)
-     VALUES (?, 'moodboard', ?, ?, ?, ?, 'pending', 0, NULL);`,
-    input.operationId,
-    input.boardId,
-    input.operation,
-    JSON.stringify(input.payload),
-    input.baseRev,
-  );
+  // op-sqlite's transaction wraps the callback in BEGIN/COMMIT and rolls
+  // back on a thrown error — the same pattern the migration runner uses.
+  await db.transaction(() => {
+    for (const input of inputs) {
+      db.execute(
+        INSERT_OPERATION_SQL,
+        input.operationId,
+        input.boardId,
+        input.operation,
+        JSON.stringify(input.payload),
+        input.baseRev,
+      );
+    }
+  });
 }
 
 /**

@@ -1100,7 +1100,14 @@
       "errorApproveTitle": "Tidak dapat menyetujui",
       "errorApproveMessage": "Permintaan tidak dapat disetujui.",
       "errorRejectTitle": "Tidak dapat menolak",
-      "errorRejectMessage": "Permintaan tidak dapat ditolak."
+      "errorRejectMessage": "Permintaan tidak dapat ditolak.",
+      "status": {
+        "pending": "Menunggu",
+        "approved": "Disetujui",
+        "rejected": "Ditolak",
+        "expired": "Kedaluwarsa",
+        "superseded": "Digantikan"
+      }
     },
     "cancel": {
       "cancelling": "Membatalkan…",
@@ -1126,6 +1133,29 @@
     },
     "tokens": {
       "usage": "{{input}} masuk · {{output}} keluar"
+    },
+    "trace": {
+      "toggle": "Lihat detail run untuk {{botName}}",
+      "loadError": "Tidak dapat memuat jejak run",
+      "retry": "Coba lagi",
+      "empty": "Tidak ada langkah tercatat untuk run ini",
+      "approvalLine": "{{tool}} · {{status}}",
+      "status": {
+        "pending": "Menunggu",
+        "running": "Berjalan",
+        "succeeded": "Berhasil",
+        "failed": "Gagal",
+        "skipped": "Dilewati"
+      },
+      "step": {
+        "modelCall": "Panggilan model",
+        "toolCall": "Panggilan alat",
+        "retrieval": "Pemanggilan memori",
+        "guardrail": "Guardrail",
+        "approval": "Persetujuan",
+        "retry": "Coba ulang",
+        "handoff": "Serah terima"
+      }
     }
   },
   "liveStreamViewer": {
@@ -1362,7 +1392,7 @@
       "noSessionsRunning": "Tidak ada sesi agen yang berjalan",
       "sessionsRunning": "{{count}} sesi agen berjalan",
       "activity": "Aktivitas agen",
-      "activitySub": "Log lokal tindakan dan persetujuan agen"
+      "activitySub": "Catatan server atas run dan persetujuan agen"
     },
     "connect": {
       "cancel": "Batal",

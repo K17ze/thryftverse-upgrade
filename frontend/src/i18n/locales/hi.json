@@ -1100,7 +1100,14 @@
       "errorApproveTitle": "अनुमोदित नहीं किया जा सका",
       "errorApproveMessage": "अनुरोध अनुमोदित नहीं किया जा सका।",
       "errorRejectTitle": "अस्वीकृत नहीं किया जा सका",
-      "errorRejectMessage": "अनुरोध अस्वीकृत नहीं किया जा सका।"
+      "errorRejectMessage": "अनुरोध अस्वीकृत नहीं किया जा सका।",
+      "status": {
+        "pending": "लंबित",
+        "approved": "स्वीकृत",
+        "rejected": "अस्वीकृत",
+        "expired": "समाप्त",
+        "superseded": "प्रतिस्थापित"
+      }
     },
     "cancel": {
       "cancelling": "रद्द कर रहे हैं…",
@@ -1126,6 +1133,29 @@
     },
     "tokens": {
       "usage": "{{input}} इन · {{output}} आउट"
+    },
+    "trace": {
+      "toggle": "{{botName}} के लिए रन विवरण देखें",
+      "loadError": "रन ट्रेस लोड नहीं हो सका",
+      "retry": "पुनः प्रयास",
+      "empty": "इस रन के लिए कोई चरण दर्ज नहीं है",
+      "approvalLine": "{{tool}} · {{status}}",
+      "status": {
+        "pending": "लंबित",
+        "running": "चल रहा है",
+        "succeeded": "सफल",
+        "failed": "विफल",
+        "skipped": "छोड़ा गया"
+      },
+      "step": {
+        "modelCall": "मॉडल कॉल",
+        "toolCall": "टूल कॉल",
+        "retrieval": "मेमोरी रिकॉल",
+        "guardrail": "गार्डरेल",
+        "approval": "स्वीकृति",
+        "retry": "पुनः प्रयास",
+        "handoff": "हैंडऑफ़"
+      }
     }
   },
   "liveStreamViewer": {
@@ -1362,7 +1392,7 @@
       "noSessionsRunning": "कोई एजेंट सत्र चल रहा नहीं",
       "sessionsRunning": "{{count}} एजेंट सत्र चल रहे",
       "activity": "एजेंट गतिविधि",
-      "activitySub": "एजेंट क्रियाओं और स्वीकृतियों की लोकल लॉग"
+      "activitySub": "एजेंट रन और स्वीकृतियों का सर्वर रिकॉर्ड"
     },
     "connect": {
       "cancel": "रद्द करें",

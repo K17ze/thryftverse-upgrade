@@ -15,6 +15,11 @@ import {
   LIVE_LOT_ANTI_SNIPE_WINDOW_MS,
   sweepDueLiveLots,
 } from "./liveLotEngine.js";
+import { moderateListingText } from "../lib/moderation/moderationService.js";
+import { scanMessageForScamPatterns } from "../lib/messageScamScanner.js";
+import { recordConsumerReport } from "../lib/safetyCaseService.js";
+import { writeAuditEvent } from "../lib/immutableAudit.js";
+import { createRuntimeId } from "../lib/workerHelpers.js";
 
 /**
  * Signature of the notification queueing seam — mirrors `queueUserNotification`
@@ -70,6 +75,7 @@ type LiveShoppingChatMessageRow = {
   message: string;
   type: string;
   is_seller: boolean;
+  moderation_state: string;
   created_at: string;
 };
 
@@ -188,6 +194,10 @@ const setCurrentLotSchema = z.object({
   lotNumber: z.number().int().min(0),
 });
 
+const viewerModerationSchema = z.object({
+  userId: z.string().min(2).max(200),
+});
+
 const placeBidSchema = z.object({
   amount: z.coerce.number().positive().max(1_000_000),
   clientBidId: z.string().uuid().optional(),
@@ -268,6 +278,90 @@ const liveSessionTopic = (sessionId: string) => `live.session:${sessionId}`;
 
 const activeViewersBySession = new Map<string, Set<string>>();
 
+// ── Host viewer moderation ───────────────────────────────────────────
+//
+// Per-stream moderation state lives on live_shopping_sessions.metadata
+// (JSONB, migration 113) under `viewerModeration.muted` — a map of
+// userId → { mutedAt, mutedBy }. No live-shopping participant/member
+// table exists, and the state is small and session-scoped, so the
+// metadata column holds it without a new migration. persistSession's
+// ON CONFLICT clause never touches metadata, so moderation state survives
+// start/end lifecycle writes.
+//
+// Semantics:
+//   mute   — the viewer cannot send chat messages in this stream and
+//            cannot obtain a new viewer token (a kicked-and-muted viewer
+//            stays out). Reversible via unmute.
+//   kick   — ejects the viewer now: they are dropped from the in-memory
+//            viewer set and a live.viewer.kicked event tells connected
+//            clients to remove them. A kicked viewer may rejoin with a
+//            fresh viewer token unless they are also muted.
+//   unmute — clears the mute entry; chat and rejoin are restored.
+//
+// Every action is host-or-admin only (fail-closed 403), the host can
+// never be a target, and each action lands on the immutable audit chain
+// (principalType 'consumer') plus the session realtime topic so all
+// connected clients converge on the new state.
+
+type LiveViewerMuteEntry = {
+  mutedAt: string;
+  mutedBy: string;
+};
+
+const readMutedViewers = (
+  row: LiveShoppingSessionRow,
+): Record<string, LiveViewerMuteEntry> => {
+  const metadata = row.metadata;
+  if (!metadata || typeof metadata !== "object") return {};
+  const moderation = (metadata as Record<string, unknown>).viewerModeration;
+  if (!moderation || typeof moderation !== "object") return {};
+  const muted = (moderation as Record<string, unknown>).muted;
+  if (!muted || typeof muted !== "object") return {};
+  return muted as Record<string, LiveViewerMuteEntry>;
+};
+
+const isSessionHostOrAdmin = (
+  row: LiveShoppingSessionRow,
+  userId: string,
+  request: FastifyRequest,
+): boolean => row.host_user_id === userId || request.authUser?.role === "admin";
+
+/**
+ * Fire-and-forget audit write for host viewer moderation. The immutable
+ * audit chain is the durable record; a write failure is logged for ops
+ * follow-up but must never fail the moderation action itself.
+ */
+const auditViewerModeration = (
+  db: Pool,
+  input: {
+    action: "live_stream.viewer_muted" | "live_stream.viewer_unmuted" | "live_stream.viewer_kicked";
+    sessionId: string;
+    actorUserId: string;
+    targetUserId: string;
+  },
+): void => {
+  void writeAuditEvent(db, {
+    principalType: "consumer",
+    principalId: input.actorUserId,
+    action: input.action,
+    resourceType: "live_session",
+    resourceId: input.sessionId,
+    reason: `host moderation on viewer ${input.targetUserId}`,
+    outcome: "success",
+    retentionClass: "standard",
+  }).catch((error) => {
+    logger.warn(
+      {
+        err: error,
+        action: input.action,
+        sessionId: input.sessionId,
+        targetUserId: input.targetUserId,
+      },
+      "[streaming] viewer moderation audit write failed",
+    );
+  });
+};
+
 const fetchCurrentLotRow = async (
   db: Pool,
   sessionId: string,
@@ -308,6 +402,7 @@ const mapChatRow = (row: LiveShoppingChatMessageRow) => ({
   message: row.message,
   type: row.type,
   isSeller: row.is_seller,
+  moderationState: row.moderation_state ?? 'visible',
   createdAt: row.created_at,
 });
 
@@ -1001,6 +1096,18 @@ export const registerStreamingRoutes = ({
       };
     }
 
+    // A muted viewer cannot (re-)enter the room — kick+mute is the host's
+    // "remove and keep out" combination. Checked after the not-live gate so
+    // pre-live semantics stay unchanged for everyone else.
+    if (role === "viewer" && !isHost && readMutedViewers(row)[userId]) {
+      reply.code(403);
+      return {
+        ok: false,
+        error: "You have been removed from this stream",
+        code: "STREAM_VIEWER_MUTED",
+      };
+    }
+
     const displayName = request.authUser?.userId ?? userId;
     const provider = getStreamProvider();
     const result = await provider.generateToken({
@@ -1126,27 +1233,94 @@ export const registerStreamingRoutes = ({
       // messages are flagged with isSeller so the UI can badge them.
       const isHost = row.host_user_id === userId;
 
+      // UGC safety (Apple 1.2): a user blocked in either direction by the
+      // host cannot participate in the room's chat.
+      if (!isHost) {
+        const blockCheck = await db.query<{ id: string }>(
+          `SELECT id FROM user_blocks
+           WHERE (blocker_id = $1 AND blocked_id = $2)
+              OR (blocker_id = $2 AND blocked_id = $1)
+           LIMIT 1`,
+          [userId, row.host_user_id],
+        );
+        if (blockCheck.rowCount) {
+          reply.code(403);
+          return {
+            ok: false,
+            error: "You cannot chat in this stream",
+            code: "STREAM_CHAT_BLOCKED",
+          };
+        }
+
+        // Host moderation: a viewer muted in this stream cannot send chat.
+        // The host's own sends skip every viewer gate (isHost branch above).
+        if (readMutedViewers(row)[userId]) {
+          reply.code(403);
+          return {
+            ok: false,
+            error: "You have been muted in this stream",
+            code: "STREAM_CHAT_MUTED",
+          };
+        }
+      }
+
+      // Deterministic scam-pattern gate — same classifier as DMs so live
+      // chat cannot be used to move payments off-platform.
+      const scamScan = scanMessageForScamPatterns(message);
+      if (scamScan.severity === "high") {
+        reply.code(400);
+        return {
+          ok: false,
+          error: "This message contains patterns associated with scams. Please keep payments on the platform.",
+          code: "STREAM_CHAT_SCAM_PATTERN",
+        };
+      }
+
+      // Provider text moderation: 'rejected' never persists; 'review'
+      // persists quarantined (visible to the sender, filtered from the room)
+      // so a human reviewer sees the flagged text in context.
+      const moderation = await moderateListingText(`live_chat_${sessionId}`, message);
+      if (moderation.status === "rejected") {
+        reply.code(422);
+        return {
+          ok: false,
+          error: "Message rejected by content moderation",
+          code: "MODERATION_REJECTED",
+          labels: moderation.labels,
+        };
+      }
+      const moderationState = moderation.status === "review" ? "quarantined" : "visible";
+
       const messageId = randomUUID();
       const userName = request.authUser?.userId ?? userId;
       const isSeller = isHost;
 
       const result = await db.query<LiveShoppingChatMessageRow>(
         `INSERT INTO live_shopping_chat_messages
-           (id, session_id, user_id, user_name, message, type, is_seller)
-         VALUES ($1, $2, $3, $4, $5, 'message', $6)
+           (id, session_id, user_id, user_name, message, type, is_seller, moderation_state)
+         VALUES ($1, $2, $3, $4, $5, 'message', $6, $7)
          RETURNING *`,
-        [messageId, sessionId, userId, userName, message, isSeller],
+        [messageId, sessionId, userId, userName, message, isSeller, moderationState],
       );
 
       const chatMessage = mapChatRow(result.rows[0]);
 
-      void publishRealtimeEvent({
-        topic: liveSessionTopic(sessionId),
-        type: "live.chat.message",
-        payload: { message: chatMessage },
-        seq: true,
-        version: 1,
-      });
+      // Quarantined messages are not broadcast to the room — they exist for
+      // review but must not reach viewers before that review completes.
+      if (moderationState === "visible") {
+        void publishRealtimeEvent({
+          topic: liveSessionTopic(sessionId),
+          type: "live.chat.message",
+          payload: { message: chatMessage },
+          seq: true,
+          version: 1,
+        });
+      } else {
+        logger.warn(
+          { sessionId, messageId, labels: moderation.labels },
+          "Live chat message quarantined for review",
+        );
+      }
 
       reply.code(201);
       return { ok: true, message: chatMessage };
@@ -1157,23 +1331,323 @@ export const registerStreamingRoutes = ({
   app.get("/streaming/sessions/:sessionId/chat", async (request) => {
     const { sessionId } = sessionIdParamsSchema.parse(request.params);
     const { limit, before } = chatQuerySchema.parse(request.query ?? {});
+    const viewerId = request.authUser?.userId ?? null;
+
+    // For signed-in viewers, hide messages where a block exists between the
+    // viewer and the author in either direction — the same predicate the
+    // send path enforces between sender and host.
+    const blockFilter = viewerId
+      ? `AND NOT EXISTS (
+           SELECT 1 FROM user_blocks ub
+           WHERE (ub.blocker_id = ${"$v"} AND ub.blocked_id = m.user_id)
+              OR (ub.blocker_id = m.user_id AND ub.blocked_id = ${"$v"})
+         )`
+      : '';
+    const baseSelect = `SELECT m.* FROM live_shopping_chat_messages m
+            WHERE m.session_id = $1
+              AND m.moderation_state = 'visible'`;
 
     const result = await db.query<LiveShoppingChatMessageRow>(
       before
-        ? `SELECT * FROM live_shopping_chat_messages
-            WHERE session_id = $1 AND created_at < $2
-            ORDER BY created_at DESC
+        ? `${baseSelect} AND m.created_at < $2 ${blockFilter.replaceAll('$v', '$4')}
+            ORDER BY m.created_at DESC
             LIMIT $3`
-        : `SELECT * FROM live_shopping_chat_messages
-            WHERE session_id = $1
-            ORDER BY created_at DESC
+        : `${baseSelect} ${blockFilter.replaceAll('$v', '$3')}
+            ORDER BY m.created_at DESC
             LIMIT $2`,
-      before ? [sessionId, before, limit] : [sessionId, limit],
+      before
+        ? viewerId ? [sessionId, before, limit, viewerId] : [sessionId, before, limit]
+        : viewerId ? [sessionId, limit, viewerId] : [sessionId, limit],
     );
 
     const messages = result.rows.map(mapChatRow).reverse();
     return { ok: true, messages };
   });
+
+  // ── Live chat: report a message ──
+  // UGC report path bridged into the safety case graph — the subject is the
+  // message, so severity>=3 reports can auto-limit the author's reach.
+  app.post(
+    "/streaming/sessions/:sessionId/chat/:messageId/report",
+    async (request, reply) => {
+      const reporterId = resolveAuthenticatedUserId(request);
+      const { sessionId, messageId } = z
+        .object({
+          sessionId: z.string().min(2).max(200),
+          messageId: z.string().min(2).max(200),
+        })
+        .parse(request.params);
+      const payload = z
+        .object({
+          reason: z.enum([
+            'spam', 'harassment', 'scam_fraud', 'inappropriate_content',
+            'off_platform_payment', 'impersonation', 'other',
+          ]),
+          details: z.string().trim().max(2000).optional(),
+          idempotencyKey: z.string().min(2).optional(),
+        })
+        .parse(request.body ?? {});
+
+      const messageResult = await db.query<LiveShoppingChatMessageRow>(
+        `SELECT * FROM live_shopping_chat_messages
+         WHERE id = $1 AND session_id = $2
+         LIMIT 1`,
+        [messageId, sessionId],
+      );
+      const target = messageResult.rows[0];
+      if (!target) {
+        reply.code(404);
+        return { ok: false, error: "Chat message not found", code: "STREAM_CHAT_MESSAGE_NOT_FOUND" };
+      }
+      if (target.user_id === reporterId) {
+        reply.code(400);
+        return { ok: false, error: "You cannot report your own message", code: "STREAM_CHAT_REPORT_SELF" };
+      }
+
+      const { reportId: effectiveReportId, duplicated } = await recordConsumerReport(db, {
+        kind: 'live_chat',
+        reportId: createRuntimeId('lcrpt'),
+        reporterId,
+        subjectId: messageId,
+        reason: payload.reason,
+        details: payload.details ?? null,
+        evidenceMessageId: messageId,
+        idempotencyKey: payload.idempotencyKey ?? null,
+        subjectSnapshot: {
+          sessionId,
+          authorUserId: target.user_id,
+          messageExcerpt: target.message.slice(0, 280),
+        },
+      });
+
+      reply.code(duplicated ? 200 : 201);
+      return { ok: true, reportId: effectiveReportId, duplicated };
+    },
+  );
+
+  // ── Host viewer moderation: list muted viewers ──
+  // Host/admin only — the host console needs the muted set to offer
+  // "Unmute" on viewers already silenced in this stream.
+  app.get(
+    "/streaming/sessions/:sessionId/moderation/viewers",
+    async (request, reply) => {
+      const userId = resolveAuthenticatedUserId(request);
+      const { sessionId } = sessionIdParamsSchema.parse(request.params);
+
+      const row = await fetchSessionRow(db, sessionId);
+      if (!row) {
+        throw createApiError("STREAM_NOT_FOUND", `Stream session ${sessionId} not found`);
+      }
+      if (!isSessionHostOrAdmin(row, userId, request)) {
+        reply.code(403);
+        return {
+          ok: false,
+          error: "Forbidden: only the host can view stream moderation state",
+          code: "FORBIDDEN",
+        };
+      }
+
+      const muted = Object.entries(readMutedViewers(row)).map(
+        ([mutedUserId, entry]) => ({
+          userId: mutedUserId,
+          mutedAt: entry?.mutedAt ?? null,
+          mutedBy: entry?.mutedBy ?? null,
+        }),
+      );
+      return { ok: true, muted };
+    },
+  );
+
+  // ── Host viewer moderation: mute a viewer ──
+  // The viewer can keep watching but cannot send chat in this stream and
+  // cannot obtain a new viewer token (a kick + mute keeps them out).
+  // Idempotent — re-muting refreshes the entry.
+  app.post(
+    "/streaming/sessions/:sessionId/moderation/mute",
+    async (request, reply) => {
+      const userId = resolveAuthenticatedUserId(request);
+      const { sessionId } = sessionIdParamsSchema.parse(request.params);
+      const { userId: targetUserId } = viewerModerationSchema.parse(request.body);
+
+      const row = await fetchSessionRow(db, sessionId);
+      if (!row) {
+        throw createApiError("STREAM_NOT_FOUND", `Stream session ${sessionId} not found`);
+      }
+      if (!isSessionHostOrAdmin(row, userId, request)) {
+        reply.code(403);
+        return {
+          ok: false,
+          error: "Forbidden: only the host can mute viewers",
+          code: "FORBIDDEN",
+        };
+      }
+      if (targetUserId === row.host_user_id) {
+        reply.code(400);
+        return {
+          ok: false,
+          error: "The host cannot be moderated in their own stream",
+          code: "CANNOT_MODERATE_HOST",
+        };
+      }
+
+      // Atomic per-key JSONB write — concurrent host/admin actions merge
+      // instead of a read-modify-write losing one of them.
+      await db.query(
+        `UPDATE live_shopping_sessions
+           SET metadata = jsonb_set(
+                 COALESCE(metadata, '{}'::jsonb),
+                 ARRAY['viewerModeration', 'muted', $2],
+                 $3::jsonb,
+                 true)
+         WHERE id = $1`,
+        [
+          sessionId,
+          targetUserId,
+          JSON.stringify({
+            mutedAt: new Date().toISOString(),
+            mutedBy: userId,
+          } satisfies LiveViewerMuteEntry),
+        ],
+      );
+
+      void publishRealtimeEvent({
+        topic: liveSessionTopic(sessionId),
+        type: "live.viewer.muted",
+        payload: { sessionId, userId: targetUserId },
+        seq: true,
+        version: 1,
+      });
+      auditViewerModeration(db, {
+        action: "live_stream.viewer_muted",
+        sessionId,
+        actorUserId: userId,
+        targetUserId,
+      });
+
+      return { ok: true, userId: targetUserId, muted: true };
+    },
+  );
+
+  // ── Host viewer moderation: unmute a viewer ──
+  // Idempotent — unmuting a viewer who is not muted is a no-op.
+  app.post(
+    "/streaming/sessions/:sessionId/moderation/unmute",
+    async (request, reply) => {
+      const userId = resolveAuthenticatedUserId(request);
+      const { sessionId } = sessionIdParamsSchema.parse(request.params);
+      const { userId: targetUserId } = viewerModerationSchema.parse(request.body);
+
+      const row = await fetchSessionRow(db, sessionId);
+      if (!row) {
+        throw createApiError("STREAM_NOT_FOUND", `Stream session ${sessionId} not found`);
+      }
+      if (!isSessionHostOrAdmin(row, userId, request)) {
+        reply.code(403);
+        return {
+          ok: false,
+          error: "Forbidden: only the host can unmute viewers",
+          code: "FORBIDDEN",
+        };
+      }
+
+      await db.query(
+        `UPDATE live_shopping_sessions
+           SET metadata = COALESCE(metadata, '{}'::jsonb)
+                 #- ARRAY['viewerModeration', 'muted', $2]
+         WHERE id = $1`,
+        [sessionId, targetUserId],
+      );
+
+      void publishRealtimeEvent({
+        topic: liveSessionTopic(sessionId),
+        type: "live.viewer.unmuted",
+        payload: { sessionId, userId: targetUserId },
+        seq: true,
+        version: 1,
+      });
+      auditViewerModeration(db, {
+        action: "live_stream.viewer_unmuted",
+        sessionId,
+        actorUserId: userId,
+        targetUserId,
+      });
+
+      return { ok: true, userId: targetUserId, muted: false };
+    },
+  );
+
+  // ── Host viewer moderation: kick a viewer ──
+  // Ejects the viewer from the live room now. The kick is deliberately not
+  // persisted: a kicked viewer may rejoin with a fresh viewer token unless
+  // they are also muted (viewer-token issuance denies muted users — see
+  // the /token route). The live.viewer.kicked event is how connected
+  // clients learn to eject the viewer; the viewer-count event keeps the
+  // broadcast count honest when the kicked user was in the live set.
+  app.post(
+    "/streaming/sessions/:sessionId/moderation/kick",
+    async (request, reply) => {
+      const userId = resolveAuthenticatedUserId(request);
+      const { sessionId } = sessionIdParamsSchema.parse(request.params);
+      const { userId: targetUserId } = viewerModerationSchema.parse(request.body);
+
+      const row = await fetchSessionRow(db, sessionId);
+      if (!row) {
+        throw createApiError("STREAM_NOT_FOUND", `Stream session ${sessionId} not found`);
+      }
+      if (!isSessionHostOrAdmin(row, userId, request)) {
+        reply.code(403);
+        return {
+          ok: false,
+          error: "Forbidden: only the host can remove viewers",
+          code: "FORBIDDEN",
+        };
+      }
+      if (targetUserId === row.host_user_id) {
+        reply.code(400);
+        return {
+          ok: false,
+          error: "The host cannot be removed from their own stream",
+          code: "CANNOT_MODERATE_HOST",
+        };
+      }
+
+      const viewers = activeViewersBySession.get(sessionId);
+      const wasPresent = viewers?.delete(targetUserId) ?? false;
+      if (viewers && viewers.size === 0) {
+        activeViewersBySession.delete(sessionId);
+      }
+
+      void publishRealtimeEvent({
+        topic: liveSessionTopic(sessionId),
+        type: "live.viewer.kicked",
+        payload: { sessionId, userId: targetUserId },
+        seq: true,
+        version: 1,
+      });
+      if (wasPresent) {
+        void publishRealtimeEvent({
+          topic: liveSessionTopic(sessionId),
+          type: "live.viewer_count.update",
+          payload: { count: viewers?.size ?? 0 },
+          seq: true,
+          version: 1,
+        });
+      }
+      auditViewerModeration(db, {
+        action: "live_stream.viewer_kicked",
+        sessionId,
+        actorUserId: userId,
+        targetUserId,
+      });
+
+      return {
+        ok: true,
+        userId: targetUserId,
+        kicked: true,
+        viewerCount: viewers?.size ?? 0,
+      };
+    },
+  );
 
   // ── Current lot: host sets the current lot ──
   app.put("/streaming/sessions/:sessionId/current-lot", async (request, reply) => {

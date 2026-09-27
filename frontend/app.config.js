@@ -191,50 +191,63 @@ module.exports = function ({ config }) {
    * EAS Update code signing.
    *
    * Code signing ensures that OTA updates cannot be tampered with in transit
-   * or on the update server. The client verifies the signature against a
-   * public key embedded in the binary before applying the update.
+   * or on the update server. The client verifies the signature against the
+   * certificate embedded in the binary before applying the update.
    *
    * Key generation (run once, outside the repo):
    *   eas update:configure-code-signing --key-output-directory ../keys
    *
    * This produces:
-   *   - keys/update-certificate.pem  (public cert — committed to repo, safe)
-   *   - keys/private-key.pem         (private key — NEVER committed, set as
-   *                                   EAS secret: EXPO_PUBLIC_OTA_CODE_SIGNING_KEY)
+   *   - keys/update-certificate.pem  (public cert — committed to repo, safe;
+   *                                  embedded in the binary via
+   *                                  updates.codeSigningCertificate below)
+   *   - keys/private-key.pem         (private key — NEVER committed and NEVER
+   *                                  inlined into a bundle; held as the EAS
+   *                                  secret EXPO_PUBLIC_OTA_CODE_SIGNING_KEY
+   *                                  and passed to the gated publish step as
+   *                                  `eas update --private-key-path <file>` —
+   *                                  see .github/workflows/release-train.yml)
    *
-   * The signing key is injected at build time via the
-   * EXPO_PUBLIC_OTA_CODE_SIGNING_KEY environment variable. Code signing is
-   * only enabled when the key is present, so local dev builds without the
-   * key continue to work. Set the key as an EAS secret:
-   *   eas secret:create --scope project --name EXPO_PUBLIC_OTA_CODE_SIGNING_KEY --value <key>
+   * The certificate's presence — not the private key's — decides whether a
+   * binary can verify signed updates, so code signing is enabled whenever the
+   * cert exists on a non-dev build. The private key is only needed at publish
+   * time and is deliberately not required here.
    */
-  const otaCodeSigningKey = readEnv('EXPO_PUBLIC_OTA_CODE_SIGNING_KEY');
-  const hasOtaCodeSigning = Boolean(otaCodeSigningKey) && !isDevBuild;
-
-  // F18 — OTA signing must fail closed on release profiles. A production EAS
-  // build without the signing key would silently ship a binary that applies
-  // unsigned OTA updates; refuse the build instead. Local `expo start`
-  // (buildProfile undefined) and dev/preview profiles are unaffected.
   const { existsSync } = require('node:fs');
   const { join } = require('node:path');
-  if (buildProfile === 'production' && !otaCodeSigningKey) {
+  const otaCodeSigningKey = readEnv('EXPO_PUBLIC_OTA_CODE_SIGNING_KEY');
+  const otaCertPresent = existsSync(join(__dirname, OTA_CERT_PATH));
+  const hasOtaCodeSigning = otaCertPresent && !isDevBuild;
+
+  // F18 — OTA signing must fail closed on release profiles. A production EAS
+  // build without the embedded certificate would silently ship a binary that
+  // accepts unsigned OTA updates for its entire lifetime; refuse the build
+  // instead. Local `expo start` (buildProfile undefined) and dev profiles are
+  // unaffected.
+  if (buildProfile === 'production' && !otaCertPresent) {
     throw new Error(
-      '[app.config] EAS production build requires EXPO_PUBLIC_OTA_CODE_SIGNING_KEY. ' +
-        'Set it as an EAS secret: eas secret:create --scope project --name EXPO_PUBLIC_OTA_CODE_SIGNING_KEY --value <key>. ' +
-        'Refusing to produce an unsigned release binary.',
+      `[app.config] EAS production build requires ${OTA_CERT_PATH} (the OTA ` +
+        'code-signing certificate embedded in the binary). Generate the pair: ' +
+        'eas update:configure-code-signing --key-output-directory keys ' +
+        '(commit update-certificate.pem; keep private-key.pem out of the repo ' +
+        'and store it as the EAS secret EXPO_PUBLIC_OTA_CODE_SIGNING_KEY). ' +
+        'Refusing to produce a binary that cannot verify signed updates.',
     );
   }
-  if (hasOtaCodeSigning && !existsSync(join(__dirname, OTA_CERT_PATH))) {
+  // Half-provisioned state: a private key exists but its certificate was
+  // never committed — publishes would be signed yet no binary could verify
+  // them. Fail loudly rather than shipping an unverifiable update channel.
+  if (otaCodeSigningKey && !otaCertPresent) {
     throw new Error(
-      `[app.config] OTA code signing is enabled but ${OTA_CERT_PATH} is missing. ` +
+      `[app.config] EXPO_PUBLIC_OTA_CODE_SIGNING_KEY is set but ${OTA_CERT_PATH} is missing. ` +
         'Generate the pair: eas update:configure-code-signing --key-output-directory keys ' +
         '(commit the certificate, keep private-key.pem out of the repo).',
     );
   }
-  if (buildProfile === 'preview' && !otaCodeSigningKey) {
+  if (buildProfile === 'preview' && !otaCertPresent) {
     console.warn(
-      '[app.config] preview build without EXPO_PUBLIC_OTA_CODE_SIGNING_KEY — ' +
-        'OTA updates on this binary are unsigned. Production requires the key.',
+      `[app.config] preview build without ${OTA_CERT_PATH} — ` +
+        'OTA updates on this binary are unsigned. Production requires the certificate.',
     );
   }
 
@@ -340,9 +353,11 @@ module.exports = function ({ config }) {
       // published update. Otherwise a stale update on the development channel
       // overrides local changes and real-time iteration breaks.
       ...(isDevBuild ? { enabled: false } : {}),
-      // EAS Update code signing — enabled when the signing key is present.
-      // The certificate (public) is committed; the private key comes from
-      // the EXPO_PUBLIC_OTA_CODE_SIGNING_KEY env var / EAS secret.
+      // EAS Update code signing — enabled when the certificate is present.
+      // The certificate (public) is committed and embedded in the binary;
+      // the private key is a publish-time input passed to the gated release
+      // workflow via `eas update --private-key-path` (EAS secret
+      // EXPO_PUBLIC_OTA_CODE_SIGNING_KEY).
       ...(hasOtaCodeSigning
         ? {
           codeSigningCertificate: OTA_CERT_PATH,

@@ -2,7 +2,6 @@ import React from 'react';
 import { View, Text, StyleSheet, ScrollView, Pressable, useWindowDimensions } from 'react-native';
 import { FlashList } from '@shopify/flash-list';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
-import { Ionicons } from '@expo/vector-icons';
 import { RouteProp, useNavigation, useRoute } from '@react-navigation/native';
 import { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import { useAppTheme } from '../theme/ThemeContext';
@@ -19,6 +18,8 @@ import { fetchUserListingsFromApi, type ListingApiItem } from '../services/listi
 import { CachedImage } from '../components/CachedImage';
 import { getListingCoverUri } from '../utils/media';
 import { AppButton } from '../components/ui/AppButton';
+import { AppIcon } from '../components/common/AppIcon';
+import { IconSize, type IoniconsGlyphName } from '../theme/iconTokens';
 import { AppInput } from '../components/ui/AppInput';
 import { AnimatedPressable } from '../components/AnimatedPressable';
 import { Space, Radius, DockConstants, Control, Stroke, LetterSpacing } from '../theme/designTokens';
@@ -370,7 +371,7 @@ export default function CreateCoOwnScreen() {
         </View>
         {selected && (
           <View style={[styles.selectedTick, { backgroundColor: colors.brand }]}>
-            <Ionicons name="checkmark" size={12} color={colors.background} />
+            <AppIcon name="checkmark" size={IconSize.micro} color="background" accessible={false} />
           </View>
         )}
       </AnimatedPressable>
@@ -484,7 +485,7 @@ export default function CreateCoOwnScreen() {
                   retry — not silently downgraded to email tier. */}
               {issuerTier === 'unavailable' && (
                 <View style={[styles.kycGateCard, { backgroundColor: colors.surfaceAlt, borderColor: colors.border }]}>
-                  <Ionicons name="cloud-offline-outline" size={20} color={colors.warningText} />
+                  <AppIcon name="cloud-offline-outline" size={IconSize.md} color="warningText" accessible={false} />
                   <View style={styles.kycGateBody}>
                     <Text style={[styles.kycGateTitle, { color: colors.textPrimary }]}>
                       Verification status unavailable
@@ -507,7 +508,7 @@ export default function CreateCoOwnScreen() {
               )}
               {issuerTier !== 'loading' && issuerTier !== 'unavailable' && !canIssue && (
                 <View style={[styles.kycGateCard, { backgroundColor: colors.surfaceAlt, borderColor: colors.border }]}>
-                  <Ionicons name="lock-closed-outline" size={20} color={colors.warningText} />
+                  <AppIcon name="lock-closed-outline" size={IconSize.md} color="warningText" accessible={false} />
                   <View style={styles.kycGateBody}>
                     <Text style={[styles.kycGateTitle, { color: colors.textPrimary }]}>
                       Identity verification required
@@ -684,10 +685,11 @@ export default function CreateCoOwnScreen() {
                     scaleValue={0.96}
                     hapticFeedback="light"
                   >
-                    <Ionicons
+                    <AppIcon
                       name={custodyInsured ? 'checkmark-circle' : 'ellipse-outline'}
                       size={18}
-                      color={custodyInsured ? colors.brand : colors.textMuted}
+                      color={custodyInsured ? 'brand' : 'textMuted'}
+                      accessible={false}
                     />
                     <Text style={[styles.insuranceToggleText, { color: custodyInsured ? colors.textPrimary : colors.textSecondary }]}>
                       Insured
@@ -816,7 +818,7 @@ export default function CreateCoOwnScreen() {
               {/* Liability summary */}
               <View style={[styles.recourseSummaryCard, { backgroundColor: colors.surface, borderColor: colors.border }]}>
                 <View style={styles.recourseLiabilityRow}>
-                  <Ionicons name="checkmark-done" size={20} color={colors.brand} />
+                  <AppIcon name="checkmark-done" size={IconSize.md} color="brand" accessible={false} />
                   <View style={styles.recourseLiabilityBody}>
                     <Text style={[styles.recourseLiabilityLabel, { color: colors.textMuted }]}>
                       Personal liability
@@ -854,9 +856,9 @@ export default function CreateCoOwnScreen() {
                   { icon: 'search-outline', text: 'Prove authenticity when requested by a unit holder' },
                   { icon: 'hand-right-outline', text: 'Produce the physical item on demand within 14 days' },
                   { icon: 'cash-outline', text: 'Repay the total traded value if you fail any obligation' },
-                ] as Array<{ icon: React.ComponentProps<typeof Ionicons>['name']; text: string }>).map((ob, i) => (
+                ] as Array<{ icon: IoniconsGlyphName; text: string }>).map((ob, i) => (
                   <View key={i} style={[styles.recourseObligationRow, i < 3 && { borderBottomColor: colors.borderSubtle }]}>
-                    <Ionicons name={ob.icon} size={16} color={colors.textMuted} />
+                    <AppIcon name={ob.icon} size={IconSize.sm} color="textMuted" accessible={false} />
                     <Text style={[styles.recourseObligationText, { color: colors.textSecondary }]}>
                       {ob.text}
                     </Text>
@@ -884,7 +886,7 @@ export default function CreateCoOwnScreen() {
                   },
                 ]}>
                   {recourseAccepted && (
-                    <Ionicons name="checkmark" size={14} color={colors.background} />
+                    <AppIcon name="checkmark" size={IconSize.xs} color="background" accessible={false} />
                   )}
                 </View>
                 <Text style={[styles.recourseAcceptText, { color: colors.textPrimary }]}>
@@ -901,7 +903,7 @@ export default function CreateCoOwnScreen() {
         {stage === 'review' ? (
           <AppButton
             title={isSubmitting ? 'Issuing...' : 'Issue Co-Own'}
-            icon={<Ionicons name="speedometer-outline" size={16} color={colors.background} />}
+            icon={<AppIcon name="speedometer-outline" size={IconSize.sm} color="background" accessible={false} />}
             onPress={() => void issueCoOwn()}
             variant="primary"
             size="lg"
@@ -913,7 +915,7 @@ export default function CreateCoOwnScreen() {
         ) : stage === 'recourse' ? (
           <AppButton
             title={isSubmitting ? 'Signing...' : 'Sign & finish'}
-            icon={<Ionicons name="checkmark-done" size={16} color={colors.background} />}
+            icon={<AppIcon name="checkmark-done" size={IconSize.sm} color="background" accessible={false} />}
             onPress={() => void signAndFinish()}
             variant="primary"
             size="lg"
@@ -925,7 +927,7 @@ export default function CreateCoOwnScreen() {
         ) : (
           <AppButton
             title="Next step"
-            icon={<Ionicons name="arrow-forward" size={18} color={colors.background} />}
+            icon={<AppIcon name="arrow-forward" size={18} color="background" accessible={false} />}
             onPress={handleNext}
             variant="primary"
             size="lg"

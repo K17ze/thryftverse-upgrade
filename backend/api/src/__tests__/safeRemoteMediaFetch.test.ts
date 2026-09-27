@@ -99,6 +99,75 @@ describe('safeFetchMediaBuffer — SSRF protection', () => {
   });
 
   // -------------------------------------------------------------------------
+  // 1b. Unusual IP representations — review-security SSRF P1
+  //
+  // IPv4-mapped IPv6 literals are IP literals: they skip DNS entirely, so the
+  // blocklist must canonicalize EVERY numeric form — hex pair tails
+  // (::ffff:7f00:1), expanded form (0:0:0:0:0:ffff:7f00:1), compatible
+  // (::7f00:1), and tunnelled (6to4/Teredo) embeddings — before range checks.
+  // -------------------------------------------------------------------------
+
+  describe('unusual IP representations', () => {
+    const mappedBlocked: Array<[string, string]> = [
+      ['http://[::ffff:7f00:1]/', 'IPv4-mapped hex tail → 127.0.0.1'],
+      ['http://[::ffff:7f00:0001]/', 'IPv4-mapped padded hex tail → 127.0.0.1'],
+      ['http://[::ffff:127.0.0.1]/', 'IPv4-mapped dotted tail → 127.0.0.1'],
+      ['http://[0:0:0:0:0:ffff:7f00:1]/', 'expanded IPv4-mapped → 127.0.0.1'],
+      ['http://[::FFFF:7F00:1]/', 'uppercase IPv4-mapped → 127.0.0.1'],
+      ['http://[::7f00:1]/', 'IPv4-compatible → 127.0.0.1'],
+      ['http://[::ffff:a00:1]/', 'IPv4-mapped → 10.0.0.1'],
+      ['http://[::ffff:a9fe:a9fe]/', 'IPv4-mapped → 169.254.169.254 metadata'],
+      ['http://[2002:7f00:1::]/', '6to4 tunnel → 127.0.0.1'],
+      ['http://[2002:a9fe:a9fe::]/', '6to4 tunnel → 169.254.169.254'],
+      [
+        'http://[2001:0000:4136:e38e:0000:0000:80ff:fffe]/',
+        'Teredo XOR-embedded → 127.0.0.1',
+      ],
+      ['http://2130706433/', 'decimal integer → 127.0.0.1'],
+      ['http://0x7f000001/', 'hex integer → 127.0.0.1'],
+      ['http://0177.0.0.1/', 'octal octet → 127.0.0.1'],
+      ['http://127.1/', 'short dotted → 127.0.0.1'],
+    ];
+
+    for (const [url, label] of mappedBlocked) {
+      it(`returns null for ${label} (${url})`, async () => {
+        const result = await safeFetchMediaBuffer(url);
+        expect(result).toBeNull();
+        // Literal forms must be refused without any network activity.
+        expect(fetchSpy).not.toHaveBeenCalled();
+      });
+    }
+
+    it('returns null when a redirect hop targets a mapped-hex loopback', async () => {
+      // The exact review vector: a public URL redirects to
+      // http://[::ffff:7f00:1]/ — the hop must revalidate to 127.0.0.1 and
+      // refuse before connecting.
+      fetchSpy.mockResolvedValueOnce(
+        new Response(null, {
+          status: 302,
+          headers: { location: 'http://[::ffff:7f00:1]/' },
+        }),
+      );
+
+      const result = await safeFetchMediaBuffer('http://example.com/img.png');
+      expect(result).toBeNull();
+      expect(fetchSpy).toHaveBeenCalledTimes(1);
+    });
+
+    it('still allows a public IPv4-mapped literal (canonicalized connect)', async () => {
+      // ::ffff:5db8:d822 = 93.184.216.34 (public) — canonicalization must
+      // not over-block; the fetch proceeds against the unwrapped address.
+      fetchSpy.mockResolvedValueOnce(
+        new Response(MINIMAL_PNG, { status: 200 }),
+      );
+
+      const result = await safeFetchMediaBuffer('http://[::ffff:5db8:d822]/img.png');
+      expect(result).not.toBeNull();
+      expect(fetchSpy).toHaveBeenCalledTimes(1);
+    });
+  });
+
+  // -------------------------------------------------------------------------
   // 2. Non-http schemes
   // -------------------------------------------------------------------------
 

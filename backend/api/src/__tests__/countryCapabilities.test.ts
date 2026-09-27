@@ -84,8 +84,14 @@ test('resolveCountryCapabilities falls back to GLOBAL template for non-target co
   assert.equal(capabilities.countryCluster, 'GLOBAL');
   assert.equal(capabilities.currency.defaultCurrency, 'USD');
   assert.deepEqual(capabilities.postage.carriers, []);
+  // Public gateway lists never include oneze_internal — it is an internal
+  // settlement rail (1ZE closed-loop ledger), not a selectable provider.
   assert.deepEqual(capabilities.payments.gatewaysByChannel.commerce, ['stripe_americas']);
-  assert.deepEqual(capabilities.payouts.gatewayPriority, ['stripe_americas', 'mollie_eu', 'wise_global']);
+  assert.deepEqual(capabilities.payments.internalRailsByChannel.commerce, ['oneze_internal']);
+  // wise_global is deliberately never advertised: isGatewayConfigured
+  // returns false for it until a certified Wise adapter exists (PAY-14), and
+  // the GLOBAL template never prioritized it.
+  assert.deepEqual(capabilities.payouts.gatewayPriority, ['stripe_americas', 'mollie_eu']);
 });
 
 test('resolveCountryCapabilities applies channel and payment policy nuances by cluster', () => {

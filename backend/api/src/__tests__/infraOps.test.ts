@@ -19,11 +19,18 @@ test('parseRealtimeTopics normalizes both string and array payloads', () => {
   assert.deepEqual(fromArray, ['notifications.user:u1', 'system']);
 });
 
-test('publishRealtimeEvent returns zero when no clients are connected', () => {
-  const delivered = publishRealtimeEvent({
+test('publishRealtimeEvent resolves to zero delivered when no clients are connected', async () => {
+  // publishRealtimeEvent is async — the returned Promise must be awaited to
+  // observe the real delivery count, not compared to a number.
+  // seq:false isolates the Redis-backed per-topic sequence transport
+  // (realtimeSequence INCR): with no Redis in the test environment the
+  // sequence lookup would wait on the offline command queue. The assertion
+  // under test is the delivery count, not sequence allocation.
+  const delivered = await publishRealtimeEvent({
     topic: 'auctions.market',
     type: 'auction.bid.created',
     payload: { auctionId: 'a_1' },
+    seq: false,
   });
 
   assert.equal(delivered, 0);

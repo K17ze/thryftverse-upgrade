@@ -17,6 +17,17 @@
  *     order_parcel_events row (event_type 'handoff_asserted'). It is
  *     evidence, not truth — the canonical order status is NEVER mutated
  *     here; carrier webhooks remain the source of truth for shipping.
+ *
+ *   POST /orders/:orderId/fulfilment/carrier-exception
+ *     Operator-recorded carrier failure report — 'lost' or 'damaged'
+ *     (event_type CHECK widened by migration 325). These are discrete
+ *     carrier facts, not flavours of a failed delivery attempt. The order
+ *     status mapping mirrors applyOrderParcelEvent's 'delivery_failed'
+ *     branch exactly: 'shipped' → 'delivery_failed' (the honest coarse
+ *     state — the parcel cannot complete delivery as expected but may
+ *     still recover), 'paid' records evidence without a transition, and
+ *     delivered/terminal orders reject. The buyer is notified through the
+ *     canonical notification queue.
  */
 import { z } from 'zod';
 import type { FastifyInstance } from 'fastify';
@@ -33,6 +44,29 @@ import {
 } from '../lib/countryCapabilities.js';
 import { createShipment } from '../lib/shippingProvider.js';
 import { emitOrderCommerceCard } from '../lib/orderChatCards.js';
+
+/** workerRuntime owns the canonical notification queue. Imported lazily —
+ *  the module instantiates the Redis singleton at load time, which must not
+ *  run in unit tests that never queue a notification (pattern:
+ *  routes/streaming.ts). */
+type QueueUserNotificationFn = (input: {
+  userId: string;
+  title: string;
+  body: string;
+  payload?: Record<string, unknown>;
+  metadata?: Record<string, unknown>;
+  eventType?: string;
+  actorUserId?: string;
+  imageUrl?: string;
+  route?: Record<string, unknown>;
+  idempotencyKey?: string;
+  forcePush?: boolean;
+}) => Promise<string | null>;
+
+const queueUserNotificationLazy: QueueUserNotificationFn = async (input) => {
+  const mod = await import('../lib/workerRuntime.js');
+  return mod.queueUserNotification(input);
+};
 
 type OrderRow = {
   id: string;
@@ -114,6 +148,9 @@ export interface OrderFulfilmentRouteDeps {
   createShipmentFn?: typeof createShipment;
   /** Injectable for tests — defaults to the real commerce-card emitter. */
   emitOrderCommerceCardFn?: typeof emitOrderCommerceCard;
+  /** Injectable for tests — defaults to the canonical notification queue
+   *  (lazy-imported workerRuntime.queueUserNotification). */
+  queueUserNotificationFn?: QueueUserNotificationFn;
 }
 
 export function registerOrderFulfilmentRoutes({
@@ -121,6 +158,7 @@ export function registerOrderFulfilmentRoutes({
   db,
   createShipmentFn = createShipment,
   emitOrderCommerceCardFn = emitOrderCommerceCard,
+  queueUserNotificationFn = queueUserNotificationLazy,
 }: OrderFulfilmentRouteDeps): void {
   // ─── POST /orders/:orderId/shipping-label ──────────────────────────────────
   app.post('/orders/:orderId/shipping-label', async (request, reply) => {
@@ -521,6 +559,201 @@ export function registerOrderFulfilmentRoutes({
       return { ok: false, error: 'Unable to record handoff assertion' };
     } finally {
       client.release();
+    }
+  });
+
+  // ─── POST /orders/:orderId/fulfilment/carrier-exception ──────────────────
+  // An operator records a carrier-reported 'lost' or 'damaged' parcel —
+  // discrete carrier facts (audit R40), persisted as their own event_type
+  // (migration 325) rather than collapsing into a generic delivery failure.
+  //
+  // Order-status mapping: the orders.status enum has no lost/damaged state,
+  // so the event folds into 'delivery_failed' — the fitting coarse state
+  // (migration 313: "carrier attempted/lost the parcel; may still recover").
+  // The transition rule mirrors applyOrderParcelEvent's delivery_failed
+  // branch exactly: only 'shipped' advances; 'paid' is anomalous evidence
+  // recorded without a transition; a later carrier scan can still
+  // re-advance the order. Escrow is unaffected — the sweep only pays
+  // 'delivered' orders.
+  app.post('/orders/:orderId/fulfilment/carrier-exception', async (request, reply) => {
+    const paramsSchema = z.object({ orderId: z.string().min(4).max(64) });
+    const bodySchema = z.object({
+      eventType: z.enum(['lost', 'damaged']),
+      provider: z.string().min(1).max(64).optional(),
+      providerEventId: z.string().min(3).max(180).optional(),
+      trackingNumber: z.string().min(1).max(128).optional(),
+      occurredAt: z.string().datetime().optional(),
+      note: z.string().max(500).optional(),
+    });
+    const { orderId } = paramsSchema.parse(request.params);
+    const body = bodySchema.parse(request.body ?? {});
+    const userId = request.authUser?.userId;
+    const isAdmin = request.authUser?.role === 'admin';
+
+    if (!userId) {
+      reply.code(401);
+      return { ok: false, error: 'Authentication required' };
+    }
+
+    // Operator-recorded carrier truth — a buyer or seller assertion about
+    // a lost/damaged parcel goes through support/returns, not this path.
+    if (!isAdmin) {
+      reply.code(403);
+      return {
+        ok: false,
+        error: 'Only an operator can record a carrier exception for this order',
+        code: 'FORBIDDEN',
+      };
+    }
+
+    const client = await db.connect();
+    let notifyBuyerId: string | null = null;
+    try {
+      await client.query('BEGIN');
+
+      if (!(await orderParcelEventsAvailable(client))) {
+        await client.query('ROLLBACK');
+        reply.code(503);
+        return {
+          ok: false,
+          error: 'Order parcel event tables are unavailable. Run migrations first.',
+        };
+      }
+
+      const orderResult = await client.query<OrderRow>(ORDER_SELECT, [orderId]);
+      const order = orderResult.rows[0];
+      if (!order) {
+        await client.query('ROLLBACK');
+        reply.code(404);
+        return { ok: false, error: 'Order not found', code: 'ORDER_NOT_FOUND' };
+      }
+
+      // The parcel must plausibly be in carrier hands. 'delivered'/
+      // 'completed' orders claiming damage are item-condition disputes
+      // (returns/SNAD), not carrier parcel events; 'returned'/'refunded'/
+      // 'cancelled' are terminal for the shipment.
+      if (!['paid', 'shipped', 'delivery_failed'].includes(order.status)) {
+        await client.query('ROLLBACK');
+        reply.code(409);
+        return {
+          ok: false,
+          error: `Carrier exceptions can only be recorded while the parcel is in the fulfilment window (status: ${order.status})`,
+          code: 'ORDER_INVALID_STATE',
+          status: order.status,
+        };
+      }
+
+      const provider = body.provider ?? order.shipping_provider ?? 'carrier_exception';
+      // Deterministic dedupe when the caller has no carrier event id — a
+      // second 'lost' report on the same order replays, never duplicates.
+      const providerEventId = body.providerEventId ?? `carrier_${body.eventType}:${order.id}`;
+      const inserted = await client.query<{
+        occurred_at: string;
+        received_at: string;
+      }>(
+        `INSERT INTO order_parcel_events (
+           order_id, provider, event_type, provider_event_id, tracking_id,
+           occurred_at, payload
+         )
+         VALUES ($1, $2, $3, $4, $5, COALESCE($6::timestamptz, NOW()), $7::jsonb)
+         ON CONFLICT (provider, provider_event_id)
+           WHERE provider_event_id IS NOT NULL
+         DO NOTHING
+         RETURNING occurred_at::text, received_at::text`,
+        [
+          order.id,
+          provider,
+          body.eventType,
+          providerEventId,
+          body.trackingNumber ?? order.tracking_number ?? null,
+          body.occurredAt ?? null,
+          toJsonString({
+            reportedBy: userId,
+            note: body.note ?? null,
+            carrierEventType: body.eventType,
+            source: 'carrier_exception',
+          }),
+        ],
+      );
+
+      const recorded = (inserted.rowCount ?? 0) > 0;
+      let occurredAt = inserted.rows[0]?.occurred_at ?? null;
+      if (!recorded) {
+        // Idempotent replay — serve the originally recorded event time.
+        const existing = await client.query<{ occurred_at: string | null; received_at: string }>(
+          `SELECT occurred_at::text, received_at::text
+           FROM order_parcel_events
+           WHERE provider = $1 AND provider_event_id = $2
+           LIMIT 1`,
+          [provider, providerEventId],
+        );
+        occurredAt = existing.rows[0]?.occurred_at ?? existing.rows[0]?.received_at ?? null;
+      }
+
+      // Order status: 'shipped' → 'delivery_failed' only (mirrors
+      // applyOrderParcelEvent — 'paid' stays; the parcel was never provably
+      // in carrier hands, so the event is evidence, not a transition).
+      let status = order.status;
+      if (order.status === 'shipped') {
+        const updated = await client.query<{ status: string }>(
+          `UPDATE orders
+           SET status = 'delivery_failed', updated_at = NOW()
+           WHERE id = $1 AND status = 'shipped'
+           RETURNING status`,
+          [order.id],
+        );
+        status = updated.rows[0]?.status ?? order.status;
+      }
+
+      // Buyer hears about a recorded carrier failure only while the parcel
+      // is genuinely in carrier hands — a 'paid' order's pre-dispatch
+      // exception is evidence for ops, not a buyer-facing fact yet.
+      notifyBuyerId = recorded && status === 'delivery_failed' ? order.buyer_id : null;
+
+      await client.query('COMMIT');
+      return {
+        ok: true,
+        orderId: order.id,
+        eventType: body.eventType,
+        recorded,
+        duplicate: !recorded,
+        occurredAt,
+        status,
+      };
+    } catch (error) {
+      try {
+        await client.query('ROLLBACK');
+      } catch {
+        // Client may already be released.
+      }
+      request.log.error({ err: error, orderId }, 'Carrier exception recording failed');
+      reply.code(500);
+      return { ok: false, error: 'Unable to record carrier exception' };
+    } finally {
+      client.release();
+      if (notifyBuyerId) {
+        await queueUserNotificationFn({
+          userId: notifyBuyerId,
+          title: body.eventType === 'lost' ? 'Parcel reported lost' : 'Parcel reported damaged',
+          body: body.eventType === 'lost'
+            ? 'The carrier reported your parcel as lost. Funds stay held while this is resolved.'
+            : 'The carrier reported your parcel was damaged in transit. Funds stay held while this is resolved.',
+          eventType: `order_parcel_${body.eventType}`,
+          payload: {
+            event: `order_parcel_${body.eventType}`,
+            orderId,
+            eventType: body.eventType,
+          },
+          route: { screen: 'OrderDetail', params: { orderId } },
+          idempotencyKey: `order_parcel_${body.eventType}_buyer_${orderId}`,
+          metadata: { source: 'carrier_exception' },
+        }).catch((notificationError) => {
+          request.log.warn(
+            { err: notificationError, orderId, eventType: body.eventType },
+            'Failed to queue buyer carrier-exception notification',
+          );
+        });
+      }
     }
   });
 }

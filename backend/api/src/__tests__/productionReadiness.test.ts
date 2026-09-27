@@ -13,6 +13,8 @@ function productionEnvironment(
     APP_URL: "https://api.thryftverse.test",
     DATABASE_URL: "postgresql://service:password@db.internal/thryftverse",
     REDIS_URL: "rediss://redis.internal:6379",
+    REDIS_QUEUE_URL: "rediss://redis-queue.internal:6379",
+    REDIS_CACHE_URL: "rediss://redis-cache.internal:6379",
     KEY_SERVICE_URL: "https://keys.internal",
     KEY_SERVICE_CLIENT_TOKEN: "k".repeat(40),
     KEY_SERVICE_ADMIN_TOKEN: "a".repeat(40),
@@ -47,6 +49,9 @@ function productionEnvironment(
     EASYSHIP_API_KEY: "easyship_test",
     EASYSHIP_WEBHOOK_SECRET: "easyship_webhook_test",
     ALERTING_WEBHOOK_URLS: "https://alerts.thryftverse.test/hooks/ops",
+    ENCRYPTION_KEY: "e".repeat(48),
+    MODERATION_PROVIDER: "sightengine",
+    MEILISEARCH_URL: "https://search.internal:7700",
     ...overrides,
   };
 }
@@ -172,5 +177,42 @@ test("production readiness rejects disabled media processing or publication gate
   );
   assert.ok(
     errors.some((error) => error.includes("MEDIA_PUBLICATION_GATE_ENABLED")),
+  );
+});
+
+test("production readiness requires a shared search backend unless explicitly opted out", () => {
+  const missing = collectProductionReadinessErrors(
+    productionEnvironment({ MEILISEARCH_URL: "" }),
+  );
+  assert.ok(
+    missing.some((error) => error.includes("MEILISEARCH_URL is required")),
+  );
+
+  // Elasticsearch does not satisfy the gate — the adapter is a placeholder
+  // that serves the in-memory index.
+  const placeholderOnly = collectProductionReadinessErrors(
+    productionEnvironment({
+      MEILISEARCH_URL: "",
+      ELASTICSEARCH_URL: "https://es.internal:9200",
+    }),
+  );
+  assert.ok(
+    placeholderOnly.some((error) => error.includes("MEILISEARCH_URL is required")),
+  );
+
+  // Explicit single-instance opt-out is allowed and warned, not blocked.
+  const optedOut = collectProductionReadinessErrors(
+    productionEnvironment({
+      MEILISEARCH_URL: "",
+      SEARCH_ALLOW_IN_MEMORY: "true",
+    }),
+  );
+  assert.ok(
+    !optedOut.some((error) => error.includes("MEILISEARCH_URL is required")),
+  );
+
+  assert.deepEqual(
+    collectProductionReadinessErrors(productionEnvironment()),
+    [],
   );
 });

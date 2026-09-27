@@ -432,3 +432,20 @@ describe('Search error and retry behaviour', () => {
     expect(mockSearchUsers).toHaveBeenCalledTimes(2);
   });
 });
+
+describe('shouldAutoScrollOnIncomingMessage — F-chat-anchor', () => {
+  it('scrolls when the reader is already at the bottom', async () => {
+    const { shouldAutoScrollOnIncomingMessage } = await import('../utils/chatScrollAnchor');
+    expect(shouldAutoScrollOnIncomingMessage({ isAtBottom: true, isOwnMessage: false })).toBe(true);
+  });
+
+  it('scrolls for our own echo even when scrolled up', async () => {
+    const { shouldAutoScrollOnIncomingMessage } = await import('../utils/chatScrollAnchor');
+    expect(shouldAutoScrollOnIncomingMessage({ isAtBottom: false, isOwnMessage: true })).toBe(true);
+  });
+
+  it('does not yank a reader viewing history for incoming messages', async () => {
+    const { shouldAutoScrollOnIncomingMessage } = await import('../utils/chatScrollAnchor');
+    expect(shouldAutoScrollOnIncomingMessage({ isAtBottom: false, isOwnMessage: false })).toBe(false);
+  });
+});

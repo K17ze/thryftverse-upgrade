@@ -1,4 +1,4 @@
-import { Pool } from 'pg';
+import { Pool, type PoolClient } from 'pg';
 import { config } from '../config.js';
 
 /**
@@ -81,6 +81,41 @@ export function databasePoolSnapshot(pool: Pool = db): DatabasePoolSnapshot {
 
 export async function assertDatabaseConnectivity(pool: Pool = db): Promise<void> {
   await pool.query('SELECT 1');
+}
+
+/**
+ * Runs `fn` inside a transaction with `app.current_user_id` set via
+ * `set_config(..., is_local=true)` — the GUC the RLS policies in migration
+ * 121 read. Callers pass the acting user, so every user-scoped query in `fn`
+ * is additionally constrained at the database layer once RLS enforcement is
+ * enabled on the serving role.
+ *
+ * Parameterised `set_config` keeps the user id out of the SQL text — no
+ * string interpolation, no injection surface. The transaction rolls back on
+ * error and the connection is always released.
+ *
+ * Note: the serving role currently holds BYPASSRLS, so this is defence in
+ * depth + forward compatibility, not the sole isolation boundary — callers
+ * must still include explicit actor predicates in their queries.
+ */
+export async function withActorContext<T>(
+  pool: Pool,
+  userId: string,
+  fn: (client: PoolClient) => Promise<T>,
+): Promise<T> {
+  const client = await pool.connect();
+  try {
+    await client.query('BEGIN');
+    await client.query(`SELECT set_config('app.current_user_id', $1, true)`, [userId]);
+    const result = await fn(client);
+    await client.query('COMMIT');
+    return result;
+  } catch (error) {
+    await client.query('ROLLBACK').catch(() => undefined);
+    throw error;
+  } finally {
+    client.release();
+  }
 }
 
 export async function closeDb() {

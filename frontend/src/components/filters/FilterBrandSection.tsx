@@ -4,6 +4,7 @@ import { Ionicons } from '@expo/vector-icons';
 import { useAppTheme } from '../../theme/ThemeContext';
 import { AppButton } from '../ui/AppButton';
 import { FilterSection } from './FilterSection';
+import { FilterOptionRow } from './FilterOptionRow';
 import { createFilterStyles } from './filterStyles';
 
 /** A selectable brand row — `keywords` carry the taxonomy synonyms/display
@@ -22,7 +23,7 @@ interface Props {
   onToggleBrand: (brand: string) => void;
 }
 
-// Brand section — searchable chip cloud backed by the curated brand
+// Brand section — searchable checkbox list backed by the curated brand
 // taxonomy. Selected brands pin to the top so they stay visible while
 // searching; the collapsed window shows the first 8.
 function FilterBrandSectionBase({ expanded, onToggle, brandOptions, selectedBrands, onToggleBrand }: Props) {
@@ -87,6 +88,25 @@ function FilterBrandSectionBase({ expanded, onToggle, brandOptions, selectedBran
           ) : null}
         </View>
       ) : null}
+      {visibleBrandOptions.length > 0 ? (
+        <View style={styles.optionList}>
+          {visibleBrandOptions.map((option, index) => (
+            <FilterOptionRow
+              key={option.name}
+              role="checkbox"
+              label={option.name}
+              selected={selectedBrands.includes(option.name)}
+              onPress={() => onToggleBrand(option.name)}
+              showDivider={index < visibleBrandOptions.length - 1}
+              accessibilityLabel={`Toggle brand filter ${option.name}`}
+            />
+          ))}
+        </View>
+      ) : (
+        <Text style={styles.emptySectionText}>
+          {isFiltering ? `No brands match "${query.trim()}".` : 'No brands in this category yet.'}
+        </Text>
+      )}
       {!isFiltering && brandOptions.length > 8 ? (
         <View style={styles.seeAllRow}>
           <AppButton
@@ -100,30 +120,6 @@ function FilterBrandSectionBase({ expanded, onToggle, brandOptions, selectedBran
           />
         </View>
       ) : null}
-      <View style={styles.wrapContainer}>
-        {visibleBrandOptions.length > 0 ? (
-          visibleBrandOptions.map((option) => {
-            const isActive = selectedBrands.includes(option.name);
-            return (
-              <AppButton
-                key={option.name}
-                title={option.name}
-                variant="secondary"
-                size="sm"
-                style={[styles.chip, isActive && styles.chipActive]}
-                titleStyle={[styles.chipText, isActive && styles.chipTextActive]}
-                onPress={() => onToggleBrand(option.name)}
-                accessibilityLabel={`Toggle brand filter ${option.name}`}
-                accessibilityState={{ selected: isActive }}
-              />
-            );
-          })
-        ) : (
-          <Text style={styles.emptySectionText}>
-            {isFiltering ? `No brands match "${query.trim()}".` : 'No brands in this category yet.'}
-          </Text>
-        )}
-      </View>
     </FilterSection>
   );
 }

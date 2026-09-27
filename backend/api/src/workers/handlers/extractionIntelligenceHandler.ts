@@ -11,8 +11,10 @@
  *
  * Security fixes (per flagship report §11):
  * - Media is resolved through catalog_import_media for the run's item.
- * - Download uses redirect:'manual' with private-IP rejection, HTTPS-only,
- *   content-type validation, redirect depth limit, and streaming size check.
+ * - Download goes through the shared pinned transport
+ *   (lib/safeRemoteMediaFetch.ts): DNS-validated + pinned connection,
+ *   HTTPS-only, per-hop redirect revalidation, one whole-request deadline,
+ *   streaming byte cap, and magic-byte content validation.
  * - Model identity is server-owned; the worker uses the model bundle from
  *   the run row, never from the job payload alone.
  *
@@ -36,6 +38,7 @@ import { logger } from '../../lib/logger.js';
 import { extractionIntelligenceService } from '../../domain/catalogImports/extractionIntelligenceService.js';
 import type { ExtractionOutcome, CandidateSourceModule, CandidateValidationState } from '../../domain/catalogImports/extractionIntelligenceTypes.js';
 import { runCandidatePipeline } from '../../lib/extraction/candidatePipeline.js';
+import { fetchPinnedRemoteMedia } from '../../lib/safeRemoteMediaFetch.js';
 
 // ---------------------------------------------------------------------------
 // Job payload (mirrors ImporterExtractionJobData from queues.ts)
@@ -58,137 +61,55 @@ const MAX_IMAGE_BYTES = 50 * 1024 * 1024;
 const MAX_REDIRECTS = 3;
 
 // ---------------------------------------------------------------------------
-// SSRF protections
+// Image download — shared SSRF-pinned transport
 // ---------------------------------------------------------------------------
 
 /**
- * Check if a hostname resolves to a private/loopback/link-local IP.
- * Rejects RFC1918 (10.x, 172.16-31.x, 192.168.x), loopback (127.x),
- * link-local (169.254.x), and IPv6 equivalents.
+ * Download an image through the shared pinned/deadline-aware transport
+ * (`fetchPinnedRemoteMedia`) — the same implementation the catalogue
+ * importer and Rekognition provider use. This replaces the handler's own
+ * fetch loop, which resolved only hostname literals (no DNS validation or
+ * connect pinning), cleared its timeout once headers arrived, and buffered
+ * via `arrayBuffer()` with no streaming cap (audit: "independent weaker
+ * media fetchers").
  *
- * This is a hostname-level check. For full protection, DNS rebinding
- * mitigation would pin the resolved IP for the actual fetch. This check
- * covers the common SSRF vectors (AWS metadata, internal services).
+ * The shared transport resolves DNS once, blocklist-checks the answer,
+ * pins the TCP connection to the validated addresses, revalidates every
+ * redirect hop, applies ONE deadline across DNS + headers + body, and
+ * streams the body into a bounded buffer — a stall or oversized stream can
+ * never hang or exhaust the worker.
+ *
+ * Inputs are verified own-store media URLs (media_assets.canonical_url /
+ * original_object_url), but the full SSRF policy still applies: a canonical
+ * URL that resolves to a blocked address is refused, and HTTPS is required
+ * as before.
  */
-function isPrivateHostname(hostname: string): boolean {
-  // Normalize: strip brackets from IPv6, lowercase.
-  const host = hostname.toLowerCase().replace(/^\[|\]$/g, '');
-
-  // IPv4 checks.
-  const ipv4Parts = host.split('.').map(Number);
-  if (ipv4Parts.length === 4 && ipv4Parts.every((p) => p >= 0 && p <= 255)) {
-    const [a, b] = ipv4Parts;
-    if (a === 10) return true;                    // 10.0.0.0/8
-    if (a === 172 && b >= 16 && b <= 31) return true; // 172.16.0.0/12
-    if (a === 192 && b === 168) return true;       // 192.168.0.0/16
-    if (a === 127) return true;                    // 127.0.0.0/8 (loopback)
-    if (a === 169 && b === 254) return true;       // 169.254.0.0/16 (link-local)
-    if (a === 0) return true;                      // 0.0.0.0/8
-    return false;
-  }
-
-  // IPv6 checks.
-  if (host === '::1' || host === '::') return true;           // loopback
-  if (host.startsWith('fc') || host.startsWith('fd')) return true; // ULA
-  if (host.startsWith('fe80')) return true;                    // link-local
-  if (host.startsWith('::ffff:')) {
-    // IPv4-mapped IPv6 — extract the IPv4 part and re-check.
-    const v4 = host.slice('::ffff:'.length);
-    return isPrivateHostname(v4);
-  }
-
-  return false;
-}
-
-/**
- * Validate a URL for safe fetching. Rejects:
- * - Non-HTTPS protocols (in production, media URLs must be HTTPS).
- * - Private/loopback/link-local hostnames (SSRF mitigation).
- * - URLs without a hostname.
- */
-function isUrlSafe(url: string): boolean {
-  try {
-    const parsed = new URL(url);
-    if (parsed.protocol !== 'https:') return false;
-    if (!parsed.hostname) return false;
-    if (isPrivateHostname(parsed.hostname)) return false;
-    return true;
-  } catch {
-    return false;
-  }
-}
-
-// ---------------------------------------------------------------------------
-// Image download with SSRF protections
-// ---------------------------------------------------------------------------
-
-/**
- * Download an image with bounded timeout, streaming size check, content-type
- * validation, and SSRF protections. Uses redirect:'manual' and revalidates
- * each redirect target with a depth limit.
- */
-async function downloadImage(url: string, redirectDepth = 0): Promise<Buffer | null> {
-  // SSRF check: reject non-HTTPS and private IPs.
-  if (!isUrlSafe(url)) {
-    logger.warn({ url }, 'extractionWorker.url_rejected_ssrf');
+async function downloadImage(url: string): Promise<Buffer | null> {
+  const result = await fetchPinnedRemoteMedia({
+    url,
+    maxBytes: MAX_IMAGE_BYTES,
+    maxRedirects: MAX_REDIRECTS,
+    timeoutMs: DOWNLOAD_TIMEOUT_MS,
+    allowHttp: false,
+  });
+  if (!result.ok) {
+    // `message` is log-safe (host/path only, never the full URL).
+    logger.warn(
+      { code: result.code, message: result.message },
+      'extractionWorker.download_rejected',
+    );
     return null;
   }
-
-  // Redirect depth limit.
-  if (redirectDepth > MAX_REDIRECTS) {
-    logger.warn({ url, redirectDepth }, 'extractionWorker.redirect_depth_exceeded');
+  // Content type is decided by magic bytes, not the response header — an
+  // unrecognised payload is not usable image input for the pipeline.
+  if (result.sniffedContentType === null) {
+    logger.warn(
+      { contentTypeHeader: result.contentTypeHeader },
+      'extractionWorker.non_image_content_type',
+    );
     return null;
   }
-
-  try {
-    const controller = new AbortController();
-    const timer = setTimeout(() => controller.abort(), DOWNLOAD_TIMEOUT_MS);
-
-    const response = await fetch(url, {
-      signal: controller.signal,
-      redirect: 'manual',
-    });
-    clearTimeout(timer);
-
-    // Handle redirects manually with revalidation.
-    if (response.status >= 300 && response.status < 400) {
-      const location = response.headers.get('location');
-      if (location) {
-        try {
-          const target = new URL(location, url);
-          return downloadImage(target.href, redirectDepth + 1);
-        } catch {
-          return null;
-        }
-      }
-      return null;
-    }
-
-    if (!response.ok) return null;
-
-    // Validate content-type is an image.
-    const contentType = response.headers.get('content-type') ?? '';
-    if (!contentType.startsWith('image/')) {
-      logger.warn({ url, contentType }, 'extractionWorker.non_image_content_type');
-      return null;
-    }
-
-    // Check content-length before buffering.
-    const contentLength = parseInt(response.headers.get('content-length') ?? '0', 10);
-    if (contentLength > MAX_IMAGE_BYTES) {
-      logger.warn({ url, contentLength }, 'extractionWorker.oversized_content_length');
-      return null;
-    }
-
-    // Buffer the body with a post-buffer size check (catches missing
-    // content-length headers).
-    const arrayBuffer = await response.arrayBuffer();
-    const buffer = Buffer.from(arrayBuffer);
-    if (buffer.length === 0 || buffer.length > MAX_IMAGE_BYTES) return null;
-    return buffer;
-  } catch {
-    return null;
-  }
+  return result.buffer;
 }
 
 // ---------------------------------------------------------------------------

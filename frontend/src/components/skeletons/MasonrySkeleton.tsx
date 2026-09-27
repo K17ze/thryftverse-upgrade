@@ -2,6 +2,7 @@ import React from 'react';
 import { View, StyleSheet, useWindowDimensions } from 'react-native';
 import { SkeletonLoader } from '../SkeletonLoader';
 import { Space, AspectRatio, Radius } from '../../theme/designTokens';
+import { DISCOVERY_GRID_PADDING } from '../discovery/unifiedDiscoveryStyles';
 import { useAppTheme } from '../../theme/ThemeContext';
 
 interface Props {
@@ -23,6 +24,10 @@ const HEIGHT_PATTERN_BASELINE = 175;
 /** Number of category pill placeholders in the skeleton bar. */
 const CATEGORY_PILL_COUNT = 8;
 
+/** Hero crop — matches unifiedDiscoveryStyles.heroWrap (3:2 edge-to-edge
+ *  editorial media), not a rounded inset card. */
+const HERO_ASPECT_RATIO = 3 / 2;
+
 /**
  * MasonrySkeleton — loading frame for the heterogeneous Discovery feed.
  *
@@ -41,8 +46,10 @@ const CATEGORY_PILL_COUNT = 8;
 export function MasonrySkeleton({
   numColumns = 2,
   itemCount = 6,
-  horizontalPadding = Space.md,
-  gap = 3,
+  // Defaults mirror PinterestMasonryGrid's geometry — 8pt edge rail, 6pt
+  // gutter — so the loading frame lands on the same silhouette.
+  horizontalPadding = DISCOVERY_GRID_PADDING,
+  gap = Space.xs + 2,
 }: Props) {
   const { width: screenWidth } = useWindowDimensions();
   const { colors } = useAppTheme();
@@ -56,11 +63,13 @@ export function MasonrySkeleton({
     (h) => baseHeight + (h - HEIGHT_PATTERN_BASELINE),
   );
 
-  // Reserve the first unit as a full-width hero (landscape skeleton), then a
-  // context-break eyebrow, then the masonry columns — mirroring the real
-  // feed's first viewport. This is what makes the skeleton match the final
-  // silhouette instead of a uniform catalogue grid.
-  const heroHeight = Math.round((screenWidth - horizontalPadding * 2) / AspectRatio.landscape);
+  // Reserve the first unit as a full-width hero (edge-to-edge 3:2 editorial
+  // media — the real hero bleeds to the screen edge, so no horizontal inset
+  // and no corner radius), then a context-break eyebrow, then the masonry
+  // columns — mirroring the real feed's first viewport. This is what makes
+  // the skeleton match the final silhouette instead of a uniform catalogue
+  // grid.
+  const heroHeight = Math.round(screenWidth / HERO_ASPECT_RATIO);
   const remainingCount = Math.max(0, itemCount - 1);
 
   const columns: { height: number; index: number }[][] = Array.from({ length: numColumns }, () => []);
@@ -82,17 +91,22 @@ export function MasonrySkeleton({
             <SkeletonLoader
               key={i}
               width={i === 0 ? 56 : 72}
-              height={24}
+              height={28}
               borderRadius={Radius.full}
             />
           ))}
         </View>
       </View>
 
-      {/* Full-width hero skeleton — matches the hero listing row. */}
-      <View style={{ paddingHorizontal: horizontalPadding }}>
-        <SkeletonLoader width="100%" height={heroHeight} borderRadius={Radius.lg} />
-        <SkeletonLoader width="45%" height={12} borderRadius={Radius.sm} style={{ marginTop: Space.sm }} />
+      {/* Full-width hero skeleton — edge-to-edge media, square corners,
+          with the title + meta echoed over the lower-left scrim position
+          (same overlay geometry as the real heroWrap). */}
+      <View style={styles.heroWrap}>
+        <SkeletonLoader width="100%" height={heroHeight} borderRadius={0} />
+        <View style={styles.heroOverlay} pointerEvents="none">
+          <SkeletonLoader width="55%" height={14} borderRadius={Radius.sm} />
+          <SkeletonLoader width="35%" height={10} borderRadius={Radius.sm} style={{ marginTop: 6 }} />
+        </View>
       </View>
 
       {/* Context-break eyebrow skeleton — a quiet full-width line. */}
@@ -123,14 +137,23 @@ const styles = StyleSheet.create({
     flex: 1,
   },
   categoryBar: {
-    paddingHorizontal: Space.md,
-    paddingVertical: Space.sm,
+    paddingHorizontal: DISCOVERY_GRID_PADDING,
+    paddingVertical: Space.xs,
     borderBottomWidth: StyleSheet.hairlineWidth,
   },
   categoryPillRow: {
     flexDirection: 'row',
     gap: Space.xs,
     alignItems: 'center',
+  },
+  heroWrap: {
+    marginTop: Space.xs,
+  },
+  heroOverlay: {
+    position: 'absolute',
+    left: Space.md,
+    right: Space.md,
+    bottom: Space.smMd,
   },
   grid: {
     flexDirection: 'row',

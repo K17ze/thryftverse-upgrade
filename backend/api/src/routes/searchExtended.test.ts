@@ -54,7 +54,7 @@ function rows<T extends QueryResultRow>(r: T[]): QueryResult<T> {
 
 const isFtsQuery = (text: string) => text.includes("l.search_vector @@");
 const isFallbackQuery = (text: string) =>
-  text.includes("POSITION(lower($1) IN lower(l.title))");
+  text.includes("POSITION(f_unaccent(lower($1)) IN f_unaccent(lower(l.title)))");
 const isMediaQuery = (text: string) => text.includes("FROM listing_images");
 
 function fakeDb(matcher: (text: string) => QueryResult | undefined) {
@@ -115,17 +115,20 @@ test("typo query falls back to trgm similarity and discloses the reason", async 
   assert.equal(body.items[0].title, LISTING_ROW.title);
 
   const fallbackSql = db.fallbackCalls()[0]?.text ?? "";
-  assert.match(fallbackSql, /l\.title % \$1/);
-  assert.match(fallbackSql, /similarity\(l\.title, \$1\) > 0\.2/);
-  assert.match(fallbackSql, /l\.brand % \$1/);
-  assert.match(fallbackSql, /similarity\(COALESCE\(l\.brand, ''\), \$1\) > 0\.25/);
+  // Accent-folding predicates (migration 327): the query text and columns
+  // both pass through f_unaccent so "cafe" matches "café" and the folded
+  // trigram expression indexes serve the scan.
+  assert.match(fallbackSql, /f_unaccent\(l\.title\) % f_unaccent\(\$1\)/);
+  assert.match(fallbackSql, /similarity\(f_unaccent\(l\.title\), f_unaccent\(\$1\)\) > 0\.2/);
+  assert.match(fallbackSql, /f_unaccent\(COALESCE\(l\.brand, ''\)\) % f_unaccent\(\$1\)/);
+  assert.match(fallbackSql, /similarity\(f_unaccent\(COALESCE\(l\.brand, ''\)\), f_unaccent\(\$1\)\) > 0\.25/);
   // Substring clauses are preserved alongside the trigram ones.
-  assert.match(fallbackSql, /POSITION\(lower\(\$1\) IN lower\(l\.title\)\) > 0/);
+  assert.match(fallbackSql, /POSITION\(f_unaccent\(lower\(\$1\)\) IN f_unaccent\(lower\(l\.title\)\)\) > 0/);
   // Same visibility/scope filters as the primary query.
   assert.match(fallbackSql, /l\.status = 'active'/);
   // Relevance sort ranks by best title/brand similarity, demoted by the
   // seller-reach multiplier for 'limited' sellers.
-  assert.match(fallbackSql, /ORDER BY GREATEST\(similarity\(l\.title, \$1\), similarity\(COALESCE\(l\.brand, ''\), \$1\)\) \* CASE COALESCE\(u\.reach_state, 'normal'\)/);
+  assert.match(fallbackSql, /ORDER BY GREATEST\(similarity\(f_unaccent\(l\.title\), f_unaccent\(\$1\)\), similarity\(f_unaccent\(COALESCE\(l\.brand, ''\)\), f_unaccent\(\$1\)\)\) \* CASE COALESCE\(u\.reach_state, 'normal'\)/);
 });
 
 test("2-char query stays substring-only and keeps the ilike fallback reason", async () => {
@@ -167,7 +170,7 @@ test("non-relevance sort keeps the caller's ORDER BY in the trgm fallback", asyn
 
   const fallbackSql = db.fallbackCalls()[0]?.text ?? "";
   // Trigram matching still applies to WHERE…
-  assert.match(fallbackSql, /l\.title % \$1/);
+  assert.match(fallbackSql, /f_unaccent\(l\.title\) % f_unaccent\(\$1\)/);
   // …but ordering stays the requested price sort, not similarity.
   assert.match(fallbackSql, /ORDER BY l\.price_gbp ASC, l\.id DESC/);
   assert.ok(!fallbackSql.includes("GREATEST(similarity"));

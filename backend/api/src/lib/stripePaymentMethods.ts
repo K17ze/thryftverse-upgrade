@@ -1,8 +1,17 @@
 import crypto from 'node:crypto';
 import type { Pool, PoolClient } from 'pg';
 import Stripe from 'stripe';
+import { recordEntityLink } from './riskDecision.js';
 
 type Queryable = Pick<Pool, 'query'> | Pick<PoolClient, 'query'>;
+
+/**
+ * DPIA / legitimate-interest reference recorded on payment-instrument entity
+ * links. Matches the legal-basis phrasing used by retention_policy seed rows
+ * (migration 175).
+ */
+const ENTITY_LINK_LEGAL_BASIS =
+  'Legitimate interest — fraud prevention (UK-GDPR Art. 6(1)(f))';
 
 export interface StripeCustomerBinding {
   userId: string;
@@ -211,6 +220,8 @@ export async function syncStripePaymentMethodProjections(input: {
   userId: string;
   customerId: string;
   hmacSecret: string;
+  /** Optional logger for fail-open entity-graph write failures. */
+  logger?: { warn: (obj: object, msg: string) => void };
 }): Promise<ProviderPaymentMethodProjection[]> {
   const [customer, methods] = await Promise.all([
     input.stripe.customers.retrieve(input.customerId),
@@ -318,6 +329,31 @@ export async function syncStripePaymentMethodProjections(input: {
         walletType ?? null,
       ]
     );
+
+    // FR-06: account↔payment_instrument entity link. The Stripe card
+    // fingerprint is the provider's stable cross-customer token for the same
+    // underlying card — the correct cluster key for shared instruments.
+    // `pm_*` ids are per-customer attachments, so they are only a fallback.
+    // Never raw PAN. Fail-open: the graph is a surveillance projection and
+    // must never break the payment-method sync.
+    try {
+      await recordEntityLink(input.db, {
+        nodeAType: 'account',
+        nodeARef: input.userId,
+        nodeBType: 'payment_instrument',
+        nodeBRef: method.card.fingerprint
+          ? `stripe_card_fp:${method.card.fingerprint}`
+          : `stripe_pm:${method.id}`,
+        linkType: 'shares_payment_instrument',
+        linkSource: 'transaction',
+        legalBasis: ENTITY_LINK_LEGAL_BASIS,
+      });
+    } catch (err) {
+      input.logger?.warn(
+        { err, userId: input.userId },
+        'Failed to record payment-instrument entity link'
+      );
+    }
   }
 
   if (providerIds.length === 0) {

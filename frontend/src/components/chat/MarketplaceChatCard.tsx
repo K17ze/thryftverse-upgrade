@@ -1,7 +1,8 @@
 import React, { useState, useEffect, useCallback, useMemo } from 'react';
 import { View, Text, StyleSheet } from 'react-native';
-import { Ionicons } from '@expo/vector-icons';
 import { Space, Radius, Typography, Stroke, FontFamily } from '../../theme/designTokens';
+import { IconSize, type IoniconsGlyphName } from '../../theme/iconTokens';
+import { AppIcon } from '../common/AppIcon';
 import { TypographyV2 } from '../../theme/typography.v2';
 import { useAppTheme, type ThemeColors } from '../../theme/ThemeContext';
 import { useFormattedPrice } from '../../hooks/useFormattedPrice';
@@ -114,7 +115,7 @@ function formatCountdown(msRemaining: number): string {
   return `${seconds}s`;
 }
 
-function getExpiryTone(msRemaining: number, colors: ThemeColors): { color: string; icon: keyof typeof Ionicons.glyphMap } {
+function getExpiryTone(msRemaining: number, colors: ThemeColors): { color: string; icon: IoniconsGlyphName } {
   if (msRemaining <= 0) return { color: colors.textMuted, icon: 'time-outline' };
   if (msRemaining <= 60 * 60 * 1000) return { color: colors.dangerText, icon: 'timer-outline' };
   if (msRemaining <= 12 * 60 * 60 * 1000) return { color: colors.warningText, icon: 'timer-outline' };
@@ -228,7 +229,7 @@ export function MarketplaceChatCard({
               <CachedImage uri={offer.itemImage} style={styles.offerItemThumb} contentFit="cover" />
             ) : (
               <View style={[styles.offerItemThumb, styles.offerItemThumbFallback]}>
-                <Ionicons name="shirt-outline" size={16} color={colors.textMuted} />
+                <AppIcon name="shirt-outline" size={IconSize.sm} color={colors.textMuted} />
               </View>
             )}
             <View style={styles.offerItemMeta}>
@@ -255,7 +256,7 @@ export function MarketplaceChatCard({
               )}
             </View>
             {onViewListing && (
-              <Ionicons name="chevron-forward" size={16} color={colors.textMuted} />
+              <AppIcon concept="chevron-right" size={IconSize.sm} color={colors.textMuted} />
             )}
           </AnimatedPressable>
         )}
@@ -273,7 +274,7 @@ export function MarketplaceChatCard({
             </Text>
             {showCountdown && (
               <View style={[styles.offerUrgencyChip, { backgroundColor: `${tone.color}14` }]}>
-                <Ionicons name={tone.icon} size={11} color={tone.color} />
+                <AppIcon name={tone.icon} size={IconSize.micro} color={tone.color} />
                 <Text style={[styles.offerUrgencyText, { color: tone.color }]}>
                   {formatCountdown(msRemaining)}
                 </Text>
@@ -301,7 +302,7 @@ export function MarketplaceChatCard({
         {/* Status Indicators */}
         {status === 'accepted' && (
           <View style={[styles.offerStatusBanner, styles.offerStatusAccepted]}>
-            <Ionicons name="checkmark-circle" size={16} color={colors.successText} />
+            <AppIcon name="checkmark-circle" size={IconSize.sm} color={colors.successText} />
             <View style={styles.offerStatusTextWrap}>
               <Text style={[styles.offerStatusTitle, { color: colors.successText }]}>
                 {t('offers.accepted')}
@@ -329,7 +330,7 @@ export function MarketplaceChatCard({
 
         {status === 'declined' && (
           <View style={[styles.offerStatusBanner, styles.offerStatusDeclined]}>
-            <Ionicons name="close-circle-outline" size={16} color={colors.dangerText} />
+            <AppIcon name="closeCircle" size={IconSize.sm} color={colors.dangerText} />
             <View style={styles.offerStatusTextWrap}>
               <Text style={[styles.offerStatusTitle, { color: colors.dangerText }]}>
                 {t('offers.declined')}
@@ -357,7 +358,7 @@ export function MarketplaceChatCard({
 
         {status === 'expired' && (
           <View style={[styles.offerStatusBanner, styles.offerStatusExpired]}>
-            <Ionicons name="time-outline" size={16} color={colors.textMuted} />
+            <AppIcon name="clock" size={IconSize.sm} color={colors.textMuted} />
             <View style={styles.offerStatusTextWrap}>
               <Text style={[styles.offerStatusTitle, { color: colors.textMuted }]}>
                 {t('offers.expired')}
@@ -388,7 +389,7 @@ export function MarketplaceChatCard({
             withdraw for sellers). */}
         {isPending && (isMe || viewerAuthoredPending) && (
           <View style={styles.offerWaitingRow}>
-            <Ionicons name="paper-plane-outline" size={13} color={colors.textSecondary} />
+            <AppIcon name="paper-plane-outline" size={13} color={colors.textSecondary} />
             <Text style={styles.offerWaitingText}>
               {waitingLabel ?? 'Offer sent · Waiting for response'}
             </Text>
@@ -492,11 +493,11 @@ export function MarketplaceChatCard({
           {/* Seller / Trust row */}
           {listing.sellerUsername && (
             <View style={styles.shareSellerRow}>
-              <Ionicons name="person-circle-outline" size={14} color={colors.textSecondary} />
+              <AppIcon name="person-circle-outline" size={IconSize.xs} color={colors.textSecondary} />
               <Text style={styles.shareSellerText}>@{listing.sellerUsername}</Text>
               {listing.sellerRating && (
                 <View style={styles.shareRatingChip}>
-                  <Ionicons name="star" size={10} color={colors.warningText} />
+                  <AppIcon name="star" variant="filled" size={IconSize.micro} color={colors.warningText} />
                   <Text style={styles.shareRatingText}>{listing.sellerRating.toFixed(1)}</Text>
                 </View>
               )}
@@ -515,7 +516,7 @@ export function MarketplaceChatCard({
               accessibilityLabel={`View ${listing.title}`}
             >
               <Text style={styles.sharePrimaryText}>View item</Text>
-              <Ionicons name="arrow-forward" size={13} color={colors.textInverse} />
+              <AppIcon name="arrow-forward" size={13} color={colors.textInverse} />
             </AnimatedPressable>
 
             {onMakeOffer && !listing.isSold && (
@@ -546,7 +547,7 @@ export function MarketplaceChatCard({
       <View style={styles.purchaseReceiptCard}>
         <View style={styles.purchaseReceiptHeader}>
           <View style={[styles.receiptIconCircle, { backgroundColor: `${colors.success}18` }]}>
-            <Ionicons name="checkmark" size={16} color={colors.successText} />
+            <AppIcon name="checkmark" size={IconSize.sm} color={colors.successText} />
           </View>
           <View style={styles.receiptTitleWrap}>
             <Text style={styles.receiptTitle}>{headerTitle}</Text>
@@ -565,7 +566,7 @@ export function MarketplaceChatCard({
             accessibilityHint="Opens the order receipt"
           >
             <Text style={styles.receiptActionText}>View order receipt</Text>
-            <Ionicons name="chevron-forward" size={13} color={colors.brand} />
+            <AppIcon concept="chevron-right" size={13} color={colors.brand} />
           </AnimatedPressable>
         )}
       </View>
@@ -577,7 +578,7 @@ export function MarketplaceChatCard({
     return (
       <View style={styles.safetyCard}>
         <View style={styles.safetyIconSquircle}>
-          <Ionicons name="shield-checkmark" size={16} color={colors.brand} />
+          <AppIcon name="shield-checkmark" size={IconSize.sm} color={colors.brand} />
         </View>
         <View style={styles.safetyContent}>
           <Text style={styles.safetyHeadline}>ThryftVerse Buyer Protection</Text>
@@ -612,7 +613,7 @@ export function MarketplaceChatCard({
       <View style={styles.systemPillWrap}>
         <View style={styles.systemPill}>
           {systemVerified && (
-            <Ionicons name="shield-checkmark" size={11} color={colors.brand} style={{ marginRight: 4 }} />
+            <AppIcon name="shield-checkmark" size={IconSize.micro} color={colors.brand} style={{ marginRight: 4 }} />
           )}
           <Text style={styles.systemPillText}>
             {text || systemTitle}

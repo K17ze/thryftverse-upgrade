@@ -361,12 +361,14 @@ export default function AppNavigator() {
       <Stack.Screen name="NotificationPreferences" getComponent={() => require('../screens/NotificationPreferencesScreen').default} />
       <Stack.Screen name="AIAgentIntegration" getComponent={() => require('../screens/AIAgentIntegrationScreen').default} />
       <Stack.Screen name="AgentLedger" getComponent={() => require('../screens/AgentLedgerScreen').default} />
+      <Stack.Screen name="AgentMemory" getComponent={() => require('../screens/AgentMemoryScreen').default} />
 
       {/* ── Wallet & Payments ── */}
       <Stack.Screen name="Wallet" getComponent={withScreenErrorBoundary(() => require('../screens/WalletScreen').default, 'Wallet')} />
       {/* Wallet V3 — focused money-movement destinations */}
       <Stack.Screen name="SellerEarnings" getComponent={() => require('../screens/SellerEarningsScreen').default} />
       <Stack.Screen name="WalletConvert" getComponent={() => require('../screens/WalletConvertScreen').default} />
+      <Stack.Screen name="WalletExchange" getComponent={() => require('../screens/WalletExchangeScreen').default} />
       <Stack.Screen name="WalletHistory" getComponent={() => require('../screens/WalletHistoryScreen').default} />
       <Stack.Screen name="MyOrders" getComponent={() => require('../screens/MyOrdersScreen').default} />
 
@@ -458,6 +460,7 @@ export default function AppNavigator() {
       {/* Live shopping — live commerce */}
       <Stack.Screen name="LiveShopping" getComponent={() => require('../screens/LiveShoppingHomeScreen').default} />
       <Stack.Screen name="LiveStreamViewer" getComponent={() => require('../screens/LiveStreamViewerScreen').LiveStreamViewerScreen} options={{ headerShown: false }} />
+      <Stack.Screen name="LiveStreamReplay" getComponent={() => require('../screens/LiveStreamReplayScreen').LiveStreamReplayScreen} options={{ headerShown: false }} />
       <Stack.Screen name="LiveStreamSeller" getComponent={() => require('../screens/LiveStreamSellerScreen').LiveStreamSellerScreen} options={{ headerShown: false }} />
 
       {/* ── Seller Tools ── (AI listing, bulk, inventory, KYC) */}
@@ -476,6 +479,10 @@ export default function AppNavigator() {
       {/* Galleria collection detail — accessible from HomeStack and GalleriaScreen */}
       <Stack.Screen name="GalleriaCollectionDetail" getComponent={() => require('../screens/GalleriaCollectionDetailScreen').default} />
 
+      {/* Editorial article reader — the real destination behind editorial
+          teasers on UnifiedDiscovery and the Galleria (S21-02). */}
+      <Stack.Screen name="GalleriaEditorial" getComponent={() => require('../screens/GalleriaEditorialScreen').default} />
+
       {/* ── Discovery & Editorial ── (galleria, algorithm, moodboards, explore, AI search) */}
       <Stack.Screen name="UnifiedDiscovery" getComponent={() => require('../screens/UnifiedDiscoveryScreen').default} options={{ headerShown: false }} />
       <Stack.Screen name="Galleria" getComponent={() => require('../screens/GalleriaScreen').default} />
@@ -490,6 +497,10 @@ export default function AppNavigator() {
       {__DEV__ && (
         <Stack.Screen name="RuntimeSmokeTest" getComponent={() => require('../screens/RuntimeSmokeTestScreen').default} />
       )}
+
+      {/* Model artifact registry — operator surface gated server-side by admin
+          auth; entry point lives in Settings → Advanced (developer mode). */}
+      <Stack.Screen name="ModelRegistry" getComponent={() => require('../screens/ModelRegistryScreen').default} />
     </Stack.Navigator>
     {/* Ambient upload progress — a thin top-edge bar (IG pattern) visible on
         every screen while creator uploads are in flight, including after the

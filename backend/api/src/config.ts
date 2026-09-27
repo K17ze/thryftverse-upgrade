@@ -293,7 +293,7 @@ export const config = {
   // ── WebAuthn / Passkeys (AUTH-017) ────────────────────────────────────
   // The RP name shown to users in the passkey prompt. The RP ID is derived
   // from the app URL's hostname. In production, set WEBAUTHN_RP_ID to the
-  // naked domain (e.g. "thryftverse.app") and WEBAUTHN_ORIGINS to the
+  // naked domain (e.g. "thryftverse.com") and WEBAUTHN_ORIGINS to the
   // allowed origins (comma-separated, including the mobile app's origin
   // if using app links).
   webauthnRpName: process.env.WEBAUTHN_RP_NAME?.trim() || 'ThryftVerse',
@@ -309,6 +309,7 @@ export const config = {
   authExposeDevelopmentArtifacts: asBoolean(process.env.AUTH_EXPOSE_DEVELOPMENT_ARTIFACTS, false),
   authEmailFrom: process.env.AUTH_EMAIL_FROM?.trim() || null,
   resendApiKey: process.env.RESEND_API_KEY?.trim() || null,
+  brevoApiKey: process.env.BREVO_API_KEY?.trim() || null,
   openAiApiKey: process.env.OPENAI_API_KEY?.trim() || null,
   openAiBaseUrl: process.env.OPENAI_BASE_URL?.trim() || 'https://api.openai.com/v1',
   openAiAgentDefaultModel: process.env.OPENAI_AGENT_DEFAULT_MODEL?.trim() || 'gpt-5.6-terra',
@@ -329,6 +330,24 @@ export const config = {
     process.env.OPENAI_OUTPUT_COST_MICROUSD_PER_MILLION_TOKENS,
     0
   ),
+  /**
+   * Platform-wide daily AI spend cap in micro-USD (R113). 0 = disabled
+   * — an unconfigured budget is honestly reported as "no cap", never
+   * silently treated as infinite.
+   */
+  aiDailyBudgetMicrousd: asNumber(process.env.AI_DAILY_BUDGET_MICROUSD, 0),
+  /**
+   * Micro-USD reserved against the daily budget at admission time, per
+   * admitted request (audit: concurrent-burst overshoot). The reservation
+   * is taken atomically inside the quota Lua script, then reconciled
+   * against the real provider cost when the usage event is recorded —
+   * overshoot is bounded by (actual − reservation) per in-flight request
+   * rather than by the full cost of every concurrent request.
+   * 0 = derive from the configured pricing rates (a nominal input-token
+   * estimate + OPENAI_AGENT_MAX_OUTPUT_TOKENS). Explicitly set this when
+   * real workloads are consistently larger than the derived estimate.
+   */
+  aiSpendReservationMicrousd: asNumber(process.env.AI_SPEND_RESERVATION_MICROUSD, 0),
   apiSecurityAdminToken: requiredSecret('API_SECURITY_ADMIN_TOKEN', 'local-security-admin-token'),
   apiInternalServiceToken: requiredSecret('API_INTERNAL_SERVICE_TOKEN', 'local-internal-service-token'),
   apiEnableMockWebhooks: asBoolean(process.env.API_ENABLE_MOCK_WEBHOOKS, false),
@@ -501,7 +520,7 @@ export const config = {
     || process.env.SHIPPING_EASYSHIP_WEBHOOK_SECRET?.trim()
     || null,
   shippingFallbackLabelBaseUrl:
-    process.env.SHIPPING_FALLBACK_LABEL_BASE_URL?.trim() || 'https://thryftverse.app/mock-shipping',
+    process.env.SHIPPING_FALLBACK_LABEL_BASE_URL?.trim() || 'https://thryftverse.com/mock-shipping',
   dailyPayoutVelocityLimitGbp: asNumber(process.env.DAILY_PAYOUT_VELOCITY_LIMIT_GBP, 2000),
   payoutManualReviewThresholdGbp: asNumber(process.env.PAYOUT_MANUAL_REVIEW_THRESHOLD_GBP, 500),
   reconciliationScheduleUtcHour: asNumber(process.env.RECONCILIATION_SCHEDULE_UTC_HOUR, 2),
@@ -557,12 +576,20 @@ export const config = {
   coOwnAlertEvaluatorIntervalMs: asNumber(process.env.COOWN_ALERT_EVALUATOR_INTERVAL_MS, 60_000),
   coOwnDripExecutionIntervalMs: asNumber(process.env.COOWN_DRIP_EXECUTION_INTERVAL_MS, 300_000),
   onezeReconcileIntervalMs: asNumber(process.env.ONEZE_RECONCILE_INTERVAL_MS, 60 * 60 * 1000),
-  onezeFxSyncEnabled: asBoolean(process.env.ONEZE_FX_SYNC_ENABLED, false),
-  onezeFxSyncIntervalMs: asNumber(process.env.ONEZE_FX_SYNC_INTERVAL_MS, 24 * 60 * 60 * 1000),
+  onezeFxSyncEnabled: asBoolean(process.env.ONEZE_FX_SYNC_ENABLED, true),
+  onezeFxSyncIntervalMs: asNumber(process.env.ONEZE_FX_SYNC_INTERVAL_MS, 300_000),
   onezeFxProviderUrl:
     process.env.ONEZE_FX_PROVIDER_URL?.trim() || 'https://api.exchangerate.host/latest',
   onezeFxProviderApiKey: process.env.ONEZE_FX_PROVIDER_API_KEY?.trim() || null,
   onezeFxProviderBaseCurrency: process.env.ONEZE_FX_PROVIDER_BASE_CURRENCY?.trim().toUpperCase() || 'USD',
+  fxQuoteTtlSeconds: asNumber(process.env.FX_QUOTE_TTL_SECONDS, 60),
+  fxSpreadBps: asNumber(process.env.FX_SPREAD_BPS, 50),
+  /**
+   * Escape hatch for quote creation while the provider feed is degraded:
+   * when true, createFxQuote persists quotes resolved from stale rates
+   * (flagged rate_stale) instead of rejecting them with FX_RATE_STALE/503.
+   */
+  fxAllowStaleQuotes: asBoolean(process.env.FX_ALLOW_STALE_QUOTES, false),
   onezeAutoAdjustEnabled: asBoolean(process.env.ONEZE_AUTO_ADJUST_ENABLED, false),
   onezeAutoAdjustIntervalMs: asNumber(process.env.ONEZE_AUTO_ADJUST_INTERVAL_MS, 60 * 60 * 1000),
   onezeAutoAdjustStepBps: asNumber(process.env.ONEZE_AUTO_ADJUST_STEP_BPS, 50),
@@ -588,7 +615,13 @@ export const config = {
     process.env.ONEZE_ATTESTATION_SIGNING_KEY_ID?.trim() || 'v1',
   // ── Meilisearch — full-text search ─────────────────────────────────
   meilisearchUrl: process.env.MEILISEARCH_URL?.trim() || 'http://localhost:7700',
-  meilisearchApiKey: process.env.MEILISEARCH_API_KEY?.trim() || '',
+  // Canonical var is MEILISEARCH_KEY (used by searchAdapter/searchSync/
+  // vectorSearch/meilisearchConfig); MEILISEARCH_API_KEY kept as a legacy
+  // fallback so existing deploys keep working.
+  meilisearchApiKey:
+    process.env.MEILISEARCH_KEY?.trim() ||
+    process.env.MEILISEARCH_API_KEY?.trim() ||
+    '',
   meilisearchIndexPrefix: process.env.MEILISEARCH_INDEX_PREFIX?.trim() || 'thryftverse_',
   // ── Content moderation ─────────────────────────────────────────────
   moderationProvider: process.env.MODERATION_PROVIDER?.trim() || 'mock',

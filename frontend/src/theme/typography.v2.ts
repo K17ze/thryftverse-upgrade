@@ -268,6 +268,39 @@ export function typographyV2Style(role: TypographyV2RoleName): import('react-nat
 }
 
 /**
+ * Dynamic-type ceiling grammar — the ONE policy for `maxFontSizeMultiplier`.
+ *
+ * Caps exist because fixed-height chrome (tab rows, chips, badges, meta
+ * lines) clips or truncates when text scales unboundedly — large-text
+ * safety is intentional, so caps are never removed, only named. Ad-hoc
+ * literals (1.2/1.35/1.4/1.6/…) are forbidden in new code: pick the tier
+ * that matches the text's role.
+ *
+ * | Tier      | Cap | Use                                                        |
+ * |-----------|-----|------------------------------------------------------------|
+ * | utility   | 1.3 | Compact text inside fixed chrome: segment/tab labels,      |
+ * |           |     | chip labels, badge text, counts, meta/caption lines,       |
+ * |           |     | status captions. Decorative/metadata copy only — never     |
+ * |           |     | money, totals, or action labels.                            |
+ * | heading   | 1.5 | Section headings, editorial/display titles — more room to   |
+ * |           |     | scale than chrome, still bounded so headers never overflow. |
+ * | content   | 2   | Body and readable content — near-full accessibility         |
+ * |           |     | scaling where the surface can reflow.                        |
+ * | financial | 2   | Functional money and action content: checkout amounts,     |
+ * |           |     | fee lines, totals, and payment/action labels. WCAG          |
+ * |           |     | resize-text expects 200% — these surfaces MUST reflow      |
+ * |           |     | (minHeight + wrap) instead of capping the user's text.    |
+ */
+export const MAX_FONT_SCALE = {
+  utility: 1.3,
+  heading: 1.5,
+  content: 2,
+  financial: 2,
+} as const;
+
+export type MaxFontScaleTier = keyof typeof MAX_FONT_SCALE;
+
+/**
  * Migration map from legacy `Type` keys to canonical TypographyV2 roles.
  * Used by the codemod/lint rule to report forbidden old tokens.
  */

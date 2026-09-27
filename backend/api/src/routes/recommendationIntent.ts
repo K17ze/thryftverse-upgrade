@@ -202,6 +202,31 @@ export function registerRecommendationIntentRoutes({
       );
       const mutationId = Number(mutationResult.rows[0].mutation_id);
 
+      // Authoritative reversal of item suppression (S21-03): an item-scope
+      // restore ('usual'/'add') retracts the user's committed
+      // `not_interested` interactions for the listing in the same
+      // transaction as the mutation write, so the undo cannot be lost to a
+      // later retrieval. The interaction rows only ever feed a *derived*
+      // exclusion in the recommendation path (plus the negative training
+      // signal the user has now retracted), so deletion — not a tombstone —
+      // is the correct retraction. `report_content` rows are deliberately
+      // preserved: a report is a trust-and-safety record with its own
+      // lifecycle, not feed taste. A hide write that commits after this
+      // delete is still superseded at read time — the recommendation route
+      // treats a restore mutation timestamped at-or-after the newest hide as
+      // winning, and NOW() is transaction-start, so the reversal also wins
+      // the undo-vs-in-flight-hide ordering race.
+      if (
+        body.scope === 'item'
+        && (body.direction === 'usual' || body.direction === 'add')
+      ) {
+        await client.query(
+          `DELETE FROM interactions
+           WHERE user_id = $1 AND listing_id = $2 AND action = 'not_interested'`,
+          [userId, body.targetId],
+        );
+      }
+
       if (body.scope === 'topic') {
         if (body.direction === 'remove') {
           await client.query(

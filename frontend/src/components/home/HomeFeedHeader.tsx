@@ -9,7 +9,7 @@ import { OfflineBanner } from '../OfflineBanner';
 import { SyncRetryBanner } from '../SyncRetryBanner';
 import { useAppTheme, type ThemeColors } from '../../theme/ThemeContext';
 import { Space, Radius, FontFamily, Control } from '../../theme/designTokens';
-import { TypographyV2 } from '../../theme/typography.v2';
+import { TypographyV2, MAX_FONT_SCALE } from '../../theme/typography.v2';
 import { RadiusRoleValue } from '../../theme/surfaceRadiusRules';
 import { useHaptic } from '../../hooks/useHaptic';
 import type { DynamicSignalChip } from '../../services/algorithmicSignalsService';
@@ -198,11 +198,11 @@ export function HomeFeedHeader({
                 : `Following feed${followingListingsCount > 0 ? `, ${followingListingsCount} listings` : ''}`}
               accessibilityState={{ selected: isSelected }}
             >
-              <Text style={[styles.feedTabLabel, isSelected && styles.feedTabLabelActive]} numberOfLines={1} maxFontSizeMultiplier={1.4}>
+              <Text style={[styles.feedTabLabel, isSelected && styles.feedTabLabelActive]} numberOfLines={1} maxFontSizeMultiplier={MAX_FONT_SCALE.utility}>
                 {label}
               </Text>
               {option === 'following' && followingListingsCount > 0 ? (
-                <Text style={[styles.feedTabCount, isSelected && styles.feedTabCountActive]} maxFontSizeMultiplier={1.5}>
+                <Text style={[styles.feedTabCount, isSelected && styles.feedTabCountActive]} maxFontSizeMultiplier={MAX_FONT_SCALE.utility}>
                   {followingListingsCount}
                 </Text>
               ) : null}
@@ -227,11 +227,7 @@ export function HomeFeedHeader({
           return (
             <AnimatedPressable
               key={`signal-${signal.id}-${signal.filterKey}`}
-              style={[
-                styles.signalChip,
-                active && styles.signalChipActive,
-                signal.isPersonalized && !active && styles.signalChipPersonalized,
-              ]}
+              style={[styles.signalChip, active && styles.signalChipActive]}
               onPress={() => onSelectSignal(signal)}
               activeOpacity={0.85}
               hitSlop={8}
@@ -242,7 +238,7 @@ export function HomeFeedHeader({
               {signal.isPersonalized && signal.kind !== 'all' ? (
                 <View style={[styles.signalDot, active && styles.signalDotActive]} />
               ) : null}
-              <Text style={[styles.signalChipText, active && styles.signalChipTextActive]} maxFontSizeMultiplier={2}>
+              <Text style={[styles.signalChipText, active && styles.signalChipTextActive]} maxFontSizeMultiplier={MAX_FONT_SCALE.utility}>
                 {signal.label}
               </Text>
             </AnimatedPressable>
@@ -257,10 +253,10 @@ export function HomeFeedHeader({
           generic product grid. */}
       {newHomeFeedEnabled ? (
         <View style={styles.editorialHeader}>
-          <Text style={styles.editorialEyebrow} numberOfLines={1} maxFontSizeMultiplier={2}>
+          <Text style={styles.editorialEyebrow} numberOfLines={1} maxFontSizeMultiplier={MAX_FONT_SCALE.utility}>
             Fresh today
           </Text>
-          <Text style={styles.editorialTitle} numberOfLines={1} maxFontSizeMultiplier={2}>
+          <Text style={styles.editorialTitle} numberOfLines={1} maxFontSizeMultiplier={MAX_FONT_SCALE.heading}>
             New listings from sellers you follow
           </Text>
         </View>
@@ -277,7 +273,12 @@ export function HomeFeedHeader({
         <OfflineBanner onRetry={onRetry} />
       ) : hasSyncError ? (
         <SyncRetryBanner
-          message="Sync is unavailable. Showing cached items."
+          // Honest copy: a 'cache' source means the last successfully
+          // loaded page is being kept after a failed refresh — it is not
+          // a persisted offline cache (F-home-banner-truth).
+          message={feedDataLength > 0
+            ? "Couldn't refresh — showing your last loaded items."
+            : "Couldn't load the feed."}
           onRetry={onRetry}
           isRetrying={isSyncing || isRefreshing}
           telemetryContext="home_feed_sync"
@@ -286,7 +287,7 @@ export function HomeFeedHeader({
       ) : forYouIsDegraded ? (
         <View style={styles.degradedRow}>
           <Ionicons name="information-circle-outline" size={16} color={colors.textSecondary} accessible={false} />
-          <Text style={styles.degradedText} maxFontSizeMultiplier={1.5}>
+          <Text style={styles.degradedText} maxFontSizeMultiplier={MAX_FONT_SCALE.utility}>
             Showing baseline listings — personalised feed is temporarily unavailable.
           </Text>
         </View>
@@ -439,17 +440,18 @@ const createStyles = (colors: ThemeColors) => StyleSheet.create({
     gap: Space.xs,
     alignItems: 'center' },
   signalChip: {
-    paddingHorizontal: Space.md,
-    paddingVertical: Space.sm,
+    // Compact explore-chip grammar — same as the upgraded UnifiedDiscovery
+    // and DiscoverScene category chips: ~28pt chrome, hairline outline,
+    // dark fill ONLY for the selected chip; personalisation via the brand
+    // dot, never a second fill.
+    paddingHorizontal: Space.smMd,
+    paddingVertical: 6,
     borderRadius: RadiusRoleValue.pillAvatar,
     borderWidth: StyleSheet.hairlineWidth,
     borderColor: colors.borderSubtle,
     flexDirection: 'row',
     alignItems: 'center',
     gap: 5 },
-  signalChipPersonalized: {
-    borderColor: colors.borderSubtle,
-    backgroundColor: colors.surfaceAlt },
   signalChipActive: {
     backgroundColor: colors.textPrimary,
     borderColor: colors.textPrimary },
@@ -461,10 +463,11 @@ const createStyles = (colors: ThemeColors) => StyleSheet.create({
   signalDotActive: {
     backgroundColor: colors.background },
   signalChipText: {
-    fontSize: TypographyV2.meta.size,
-    lineHeight: TypographyV2.meta.lineHeight,
+    fontSize: TypographyV2.caption.size,
+    lineHeight: TypographyV2.caption.lineHeight,
     fontFamily: FontFamily.medium,
-    color: colors.textSecondary },
+    color: colors.textSecondary,
+    letterSpacing: TypographyV2.caption.letterSpacing },
   signalChipTextActive: {
     color: colors.background },
   // New home feed editorial header

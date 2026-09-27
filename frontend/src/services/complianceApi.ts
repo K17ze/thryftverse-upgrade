@@ -112,3 +112,126 @@ export async function fetchAgeAssurance(
     `/compliance/age-assurance/${encodeURIComponent(userId)}`
   );
 }
+
+/* ─── Legal documents & consents ─── */
+
+export type LegalDocumentType =
+  | 'terms_of_service'
+  | 'privacy_policy'
+  | 'risk_disclosure'
+  | 'kyc_terms'
+  | 'consent_notice';
+
+export interface LegalDocument {
+  id: string;
+  docType: LegalDocumentType;
+  version: string;
+  locale: string;
+  title: string;
+  contentUrl: string | null;
+  contentHash: string | null;
+  isActive: boolean;
+  effectiveAt: string;
+  retiredAt: string | null;
+  metadata: Record<string, unknown>;
+  createdAt: string;
+}
+
+/**
+ * List active legal documents of a given type, newest effective first
+ * (mirrors the backend ORDER BY effective_at DESC).
+ * GET /compliance/consents/documents — authenticated.
+ */
+export async function fetchActiveLegalDocuments(
+  docType: LegalDocumentType,
+  limit = 20
+): Promise<LegalDocument[]> {
+  const response = await fetchJson<{ ok: true; items: LegalDocument[] }>(
+    `/compliance/consents/documents?docType=${encodeURIComponent(docType)}&activeOnly=true&limit=${limit}`
+  );
+  return response.items;
+}
+
+export interface AcceptedConsent {
+  userId: string;
+  documentId: string;
+  accepted: boolean;
+  acceptedAt: string;
+  ipAddress: string | null;
+}
+
+/**
+ * Record the user's acceptance of a legal document.
+ * POST /compliance/consents/accept — authenticated; `userId` must match the
+ * bearer-token user (the backend's actor-context check rejects mismatches).
+ * The server 404s unless the document is active AND verified (public
+ * content URL + full SHA-256 content hash).
+ */
+export async function acceptLegalDocument(
+  userId: string,
+  documentId: string,
+  evidence?: Record<string, unknown>
+): Promise<AcceptedConsent> {
+  const response = await fetchJson<{ ok: true; consent: AcceptedConsent }>(
+    '/compliance/consents/accept',
+    {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        userId,
+        documentId,
+        accepted: true,
+        ...(evidence ? { evidence } : {}),
+      }),
+    }
+  );
+  return response.consent;
+}
+
+/** Thrown when no verified, currently-effective risk disclosure document
+ *  exists server-side — the consent endpoint would 404, so we fail before
+ *  posting and let the UI say the disclosure isn't published yet. */
+export class RiskDisclosureUnavailableError extends Error {
+  constructor() {
+    super('The risk disclosure document is not available yet. Try again shortly.');
+    this.name = 'RiskDisclosureUnavailableError';
+  }
+}
+
+/**
+ * Mirrors the server-side accept gate in POST /compliance/consents/accept:
+ * the document must be active, in effect, carry a public content URL and a
+ * full SHA-256 content hash (not a placeholder).
+ */
+function isConsentableDocument(doc: LegalDocument, nowMs: number): boolean {
+  if (!doc.isActive) return false;
+  if (!doc.contentUrl) return false;
+  if (!doc.contentHash || !/^sha256:[a-f0-9]{64}$/i.test(doc.contentHash)) return false;
+  if (/placeholder/i.test(doc.contentHash)) return false;
+  const effectiveMs = Date.parse(doc.effectiveAt);
+  if (Number.isFinite(effectiveMs) && effectiveMs > nowMs) return false;
+  if (doc.retiredAt) {
+    const retiredMs = Date.parse(doc.retiredAt);
+    if (Number.isFinite(retiredMs) && retiredMs <= nowMs) return false;
+  }
+  return true;
+}
+
+/**
+ * Resolve the currently-effective verified `risk_disclosure` legal document
+ * and record the user's consent against it. This is the server-side source
+ * of truth behind `evaluateMarketEligibility('co-own')` — the local
+ * `riskDisclosureAccepted` flag is only a UX cache.
+ */
+export async function acceptActiveRiskDisclosure(
+  userId: string,
+  evidence?: Record<string, unknown>
+): Promise<{ consent: AcceptedConsent; document: LegalDocument }> {
+  const documents = await fetchActiveLegalDocuments('risk_disclosure');
+  const document = documents.find((doc) => isConsentableDocument(doc, Date.now()));
+  if (!document) {
+    throw new RiskDisclosureUnavailableError();
+  }
+  const consent = await acceptLegalDocument(userId, document.id, evidence);
+  return { consent, document };
+}

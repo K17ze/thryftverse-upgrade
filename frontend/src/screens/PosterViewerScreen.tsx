@@ -1367,6 +1367,16 @@ export default function PosterViewerScreen() {
         // race each other during presentation.
         onArchive={() => { setMoreMenuVisible(false); setTimeout(() => { void handleArchive(); }, 250); }}
         onDelete={() => { setMoreMenuVisible(false); setTimeout(() => { void handleDelete(); }, 250); }}
+        onReport={activeStory ? () => {
+          setMoreMenuVisible(false);
+          setTimeout(() => {
+            navigation.navigate('Report', {
+              type: 'ugc',
+              ugcSubjectType: 'poster',
+              targetId: activeStory.id,
+            });
+          }, 250);
+        } : undefined}
       />
         </Reanimated.View>
       </GestureDetector>

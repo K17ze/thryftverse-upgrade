@@ -7,6 +7,7 @@ import {
 import type { DisplayReadyListing } from './listingMapper';
 import type { ListingMediaRecord } from '../contracts/listingMedia';
 import type { SupportedCurrencyCode } from '../constants/currencies';
+import type { ListingAttributes } from './categoryAttributes';
 
 export interface ListingSeller {
   id: string;
@@ -99,6 +100,9 @@ export interface Listing {
   sustainabilityGrade?: 'A' | 'B' | 'C' | 'D' | null;
   materialComposition?: string | null;
   weightKg?: number | null;
+  /** Structured per-category specifics (listings.attributes) — schema in
+   *  services/categoryAttributes.ts. Null when the seller authored none. */
+  attributes?: ListingAttributes | null;
 }
 
 interface ApiListingRow {
@@ -136,6 +140,7 @@ interface ApiListingRow {
   sustainabilityGrade?: 'A' | 'B' | 'C' | 'D' | null;
   materialComposition?: string | null;
   weightKg?: number | null;
+  attributes?: ListingAttributes | null;
 }
 
 interface ApiListingsResponse {
@@ -278,6 +283,20 @@ export interface VisualSearchFacets {
   styles: VisualSearchFacetBucket[];
 }
 
+/**
+ * R24 region-of-interest: normalised [0,1] fractions of the query image
+ * describing the rect the user framed around the object to match.
+ * Backend contract (routes/visualSearch.ts): each edge is a [0,1]
+ * fraction, minimum 0.04 linear size, and the rect must fit inside the
+ * image bounds.
+ */
+export interface VisualSearchRegion {
+  x: number;
+  y: number;
+  width: number;
+  height: number;
+}
+
 export interface VisualSearchResult {
   listings: DisplayReadyListing[];
   source: 'api' | 'fallback';
@@ -294,6 +313,13 @@ export interface VisualSearchResult {
     fallbackReason?: string;
     embedderConfigured: boolean;
     searchEngineVersion?: string;
+    /**
+     * R24: 'region' only when a supplied region rect was actually applied
+     * to feature extraction; 'whole_image' otherwise (no region, or a
+     * degenerate region that fell back). Never claims 'region' for a crop
+     * that did not run.
+     */
+    queryScope?: 'whole_image' | 'region';
   };
   /** F08: Per-facet-value candidate counts from the retrieval scope. */
   facets?: VisualSearchFacets;
@@ -337,6 +363,13 @@ export async function visualSearch(params: {
     color?: string;
     style?: string;
   };
+  /**
+   * R24: region-of-interest crop the user confirmed on the query image.
+   * Forwarded verbatim to the backend, which crops feature extraction to
+   * that rect and reports `retrievalMeta.queryScope: 'region'`. Sent only
+   * when the user actually framed an area — never synthesised.
+   */
+  region?: VisualSearchRegion;
   sort?: 'newest' | 'price_asc' | 'price_desc' | 'similarity';
   limit?: number;
   /**
@@ -357,6 +390,7 @@ export async function visualSearch(params: {
         fallbackReason?: string;
         embedderConfigured: boolean;
         searchEngineVersion?: string;
+        queryScope?: 'whole_image' | 'region';
       };
       note?: string;
       facets?: VisualSearchFacets;
@@ -376,6 +410,7 @@ export async function visualSearch(params: {
         minPrice: params.minPrice,
         maxPrice: params.maxPrice,
         facets: params.facets,
+        region: params.region,
         sort: params.sort ?? 'similarity',
         limit: params.limit ?? 48,
       }),
@@ -431,6 +466,9 @@ export interface ListingCreateBody {
   shippingPayer?: string;
   materialComposition?: string;
   weightKg?: number;
+  /** Structured per-category specifics — validated server-side against the
+   *  category-attribute registry (R30/R31). */
+  attributes?: ListingAttributes;
   attachmentOrder?: string[];
   removedAttachmentIds?: string[];
   media?: ListingMediaCommand[];
@@ -476,6 +514,7 @@ export interface ListingApiItem {
   sustainabilityGrade?: 'A' | 'B' | 'C' | 'D' | null;
   materialComposition?: string | null;
   weightKg?: number | null;
+  attributes?: ListingAttributes | null;
 }
 
 export interface ListingSoldComparables {

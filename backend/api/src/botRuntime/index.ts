@@ -420,7 +420,13 @@ export async function executeBotCommand(
     stream?: boolean; // optional: stream AI agent responses via realtime events
     runId?: string; // optional: durable agent_runs id — enables tool/approval loading
   }
-): Promise<{ messageId: string | null; botId: string | null; text: string | null }> {
+): Promise<{
+  messageId: string | null;
+  botId: string | null;
+  text: string | null;
+  /** True when the agent paused on a durable approval checkpoint. */
+  waitingForApproval?: boolean;
+}> {
   const installs = await listActiveBotInstalls(client, input.conversationId);
 
   // If a specific bot is targeted, only consider that bot
@@ -518,6 +524,7 @@ export async function executeBotCommand(
       agentConfig: install.agentConfig,
       conversationHistory,
       runtimeData,
+      runId: input.runId,
     };
 
     let result: BotHandlerResult;
@@ -526,6 +533,9 @@ export async function executeBotCommand(
       userRemaining: number;
       conversationRemaining: number;
       resetsAt: string;
+      budgetExceeded: boolean;
+      reservedMicrousd: number;
+      spendKey: string;
     } | null = null;
     try {
       if (install.runtimeMode === 'ai') {
@@ -538,18 +548,32 @@ export async function executeBotCommand(
       }
 
       if (aiQuota && !aiQuota.allowed) {
-        result = {
-          text: `${install.botName} has reached its hourly usage limit for this account or conversation. Try again at the start of the next hour.`,
-          shouldReply: true,
-          confidence: 1.0,
-          explanation: `Agent invocation was blocked by the per-hour quota guard (user remaining: ${aiQuota.userRemaining}, conversation remaining: ${aiQuota.conversationRemaining}). No provider request was made.`,
-          metadata: {
-            agentQuotaBlocked: true,
-            userRemaining: aiQuota.userRemaining,
-            conversationRemaining: aiQuota.conversationRemaining,
-            resetsAt: aiQuota.resetsAt,
-          },
-        };
+        result = aiQuota.budgetExceeded
+          ? {
+              // R113: platform daily AI budget exhausted — an honest,
+              // distinct message from the per-hour rate quota.
+              text: `${install.botName} is unavailable right now — today's AI usage budget has been reached. Please try again tomorrow.`,
+              shouldReply: true,
+              confidence: 1.0,
+              explanation: 'Agent invocation was blocked by the platform daily AI spend budget. No provider request was made.',
+              metadata: {
+                agentQuotaBlocked: true,
+                budgetExceeded: true,
+                resetsAt: aiQuota.resetsAt,
+              },
+            }
+          : {
+              text: `${install.botName} has reached its hourly usage limit for this account or conversation. Try again at the start of the next hour.`,
+              shouldReply: true,
+              confidence: 1.0,
+              explanation: `Agent invocation was blocked by the per-hour quota guard (user remaining: ${aiQuota.userRemaining}, conversation remaining: ${aiQuota.conversationRemaining}). No provider request was made.`,
+              metadata: {
+                agentQuotaBlocked: true,
+                userRemaining: aiQuota.userRemaining,
+                conversationRemaining: aiQuota.conversationRemaining,
+                resetsAt: aiQuota.resetsAt,
+              },
+            };
       } else if (openAiAgent) {
         // Resolve the bot's bound provider connection (if any) — the
         // credential decides which provider account pays for this run. A
@@ -618,6 +642,7 @@ export async function executeBotCommand(
       const failed = result.metadata?.agentError === true;
       try {
         const { recordAiUsageEvent } = await import('../lib/aiUsage.js');
+        const { redis } = await import('../lib/redis.js');
         await recordAiUsageEvent(client, {
           id: createRuntimeId('aiuse'),
           userId: input.actorUserId,
@@ -631,7 +656,18 @@ export async function executeBotCommand(
             : null,
           status: quotaBlocked ? 'quota_blocked' : failed ? 'failed' : 'succeeded',
           usage: normalizedUsage,
-          errorCode: quotaBlocked ? 'AI_HOURLY_QUOTA_EXCEEDED' : failed ? 'AI_EXECUTION_FAILED' : null,
+          errorCode: quotaBlocked
+            ? (aiQuota?.budgetExceeded ? 'AI_DAILY_BUDGET_EXCEEDED' : 'AI_HOURLY_QUOTA_EXCEEDED')
+            : failed ? 'AI_EXECUTION_FAILED' : null,
+          // Reconcile the admission reservation: settle to the real
+          // provider cost on success, refund on failure. A denied
+          // admission holds no reservation (reservedMicrousd = 0).
+          spendReservation: aiQuota?.allowed
+            ? {
+                reservedMicrousd: aiQuota.reservedMicrousd,
+                spendKey: aiQuota.spendKey,
+              }
+            : null,
           metadata: {
             userRemaining: aiQuota?.userRemaining ?? null,
             conversationRemaining: aiQuota?.conversationRemaining ?? null,
@@ -642,7 +678,7 @@ export async function executeBotCommand(
             needsHumanReview: result.needsHumanReview ?? false,
             confidenceSignals: result.metadata?.confidenceSignals ?? null,
           },
-        });
+        }, redis);
       } catch (usageError) {
         await logBotAuditEvent(client, {
           botId: install.botId,
@@ -753,7 +789,12 @@ export async function executeBotCommand(
       },
     });
 
-    return { messageId: botMessage.id, botId: install.botId, text: result.text };
+    return {
+      messageId: botMessage.id,
+      botId: install.botId,
+      text: result.text,
+      waitingForApproval: result.metadata?.waitingForApproval === true,
+    };
   }
 
   return { messageId: null, botId: null, text: null };
@@ -947,10 +988,29 @@ export async function processAgentRun(
       runId,
     });
 
+    if (result.waitingForApproval) {
+      // The agent paused on a durable approval checkpoint. The run is NOT
+      // terminal — the approval decision endpoint re-queues it once the
+      // actor decides. Guarded on 'running' for the same cancel-safety
+      // reason as the terminal writes below.
+      await db.query(
+        `UPDATE agent_runs SET status = 'waiting_for_approval' WHERE id = $1 AND status = 'running'`,
+        [runId]
+      );
+      await logBotAuditEvent(db, {
+        botId: run.bot_id,
+        conversationId: run.conversation_id,
+        actorUserId: run.actor_user_id,
+        eventType: 'run_waiting_approval',
+        metadata: { runId },
+      });
+      return;
+    }
+
     // Guarded on status='running': a run cancelled mid-execution must stay
     // cancelled — a late completion must not resurrect it.
-    await db.query(
-      `UPDATE agent_runs SET status = 'succeeded', completed_at = NOW(), result_message_id = $2, result_text = $3 WHERE id = $1 AND status = 'running'`,
+    const succeeded = await db.query<{ id: string }>(
+      `UPDATE agent_runs SET status = 'succeeded', completed_at = NOW(), result_message_id = $2, result_text = $3 WHERE id = $1 AND status = 'running' RETURNING id`,
       [runId, result.messageId, result.text]
     );
 
@@ -964,6 +1024,26 @@ export async function processAgentRun(
         resultMessageId: result.messageId,
       },
     });
+
+    // Post-run memory extraction — a second, cheaper model pass distills
+    // durable user facts/preferences from the completed exchange. Runs
+    // inside the worker (never the request path) and is strictly
+    // best-effort: extraction failure must not fail a completed run, and
+    // extractRunMemories itself skips when the user disabled memory.
+    if (succeeded.rowCount) {
+      try {
+        const { extractRunMemories } = await import('../lib/agentMemory.js');
+        const { withActorContext } = await import('../db/pool.js');
+        await withActorContext(db, run.actor_user_id, (client) =>
+          extractRunMemories(client, { runId }),
+        );
+      } catch (memErr) {
+        logger.warn(
+          { runId, err: memErr instanceof Error ? memErr.message : String(memErr) },
+          'processAgentRun — memory extraction failed (non-fatal)',
+        );
+      }
+    }
   } catch (error) {
     const errorMessage = error instanceof Error ? error.message.slice(0, 500) : 'unknown error';
     // Guarded on status='running': a run cancelled mid-execution must stay
@@ -1009,5 +1089,23 @@ export async function sweepStaleAgentRuns(
      RETURNING id`,
     [staleThresholdMinutes]
   );
-  return result.rowCount ?? 0;
+
+  // Approval abandonment: a run parked on 'waiting_for_approval' whose
+  // pending checkpoints have all expired can never resume — expire it so
+  // the ledger reflects a terminal outcome instead of waiting forever.
+  const abandoned = await db.query(
+    `UPDATE agent_runs r
+     SET status = 'timed_out',
+         completed_at = COALESCE(completed_at, NOW()),
+         error_message = 'approval checkpoint expired — run timed out waiting'
+     WHERE r.status = 'waiting_for_approval'
+       AND NOT EXISTS (
+         SELECT 1 FROM agent_approval_requests a
+         WHERE a.run_id = r.id
+           AND a.status = 'pending'
+           AND (a.expires_at IS NULL OR a.expires_at > NOW())
+       )`,
+  );
+
+  return (result.rowCount ?? 0) + (abandoned.rowCount ?? 0);
 }

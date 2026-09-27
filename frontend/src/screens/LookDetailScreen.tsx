@@ -29,7 +29,8 @@ import {
   useCreatorFollow,
   useLookDetailActions,
   useLookMedia,
-  useLookInspect } from '../hooks/lookdetail';
+  useLookInspect,
+  useLookTagHydration } from '../hooks/lookdetail';
 import { LookDetailNavBar } from '../components/lookdetail/LookDetailNavBar';
 import { LookDetailHero } from '../components/lookdetail/LookDetailHero';
 import { LookDetailInfoSection } from '../components/lookdetail/LookDetailInfoSection';
@@ -122,7 +123,17 @@ export default function LookDetailScreen() {
 
   const [commentsVisible, setCommentsVisible] = useState(false);
 
-  const tags: HydratedLookTag[] = (look?.tags ?? []) as HydratedLookTag[];
+  // R63: hydrate each tag's listingId with live price/sold state via the
+  // shared listing-detail query cache — the tag must never present a stale
+  // baked-in snapshot as live.
+  const tags: HydratedLookTag[] = useLookTagHydration(look?.tags ?? []);
+
+  // The inspect sheet snapshots the tag at tap time — re-resolve it against
+  // the hydrated array so a sale that landed between render and tap is
+  // still reflected honestly.
+  const liveInspectTag = inspectTag
+    ? tags.find((t) => t.id === inspectTag.id) ?? inspectTag
+    : null;
 
   const captionText = look?.caption || look?.title || '';
 
@@ -367,7 +378,7 @@ export default function LookDetailScreen() {
       />
 
       <LookInspectSheet
-        tag={inspectTag}
+        tag={liveInspectTag}
         lookId={look.id}
         formatPrice={formatFromFiat}
         onClose={closeInspect}

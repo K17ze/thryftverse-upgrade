@@ -4,9 +4,7 @@ import { useAppTheme, type ThemeColors } from '../../theme/ThemeContext';
 import { Space, Radius, FontFamily, Control } from '../../theme/designTokens';
 import { TypographyV2 } from '../../theme/typography.v2';
 import { AnimatedPressable } from '../AnimatedPressable';
-import { AppIcon } from '../common/AppIcon';
 import { SellerThumbRail, type SellerThumbRailItem } from './SellerThumbRail';
-import { IconSize } from '../../theme/iconTokens';
 
 export interface SellerClosetModuleProps {
   savedCount: number;
@@ -18,8 +16,8 @@ export interface SellerClosetModuleProps {
 
 /**
  * SellerClosetModule — saved-pieces rail on the Seller Hub overview.
- * Shares the exact header grammar, View all control and honest empty-row
- * treatment with SellerListingsModule — one system, two sections.
+ * Plain typographic header ("Closet · N saved" + View all) and an honest
+ * empty row — shares the exact grammar with SellerListingsModule.
  */
 export const SellerClosetModule: React.FC<SellerClosetModuleProps> = ({
   savedCount,
@@ -37,13 +35,6 @@ export const SellerClosetModule: React.FC<SellerClosetModuleProps> = ({
     <View style={styles.container}>
       <View style={styles.headerRow}>
         <View style={styles.titleWrap}>
-          <AppIcon
-            concept="bookmark"
-            size={IconSize.xs}
-            color="textSecondary"
-            opticalCenter
-            accessible={false}
-          />
           <Text style={styles.sectionTitle}>Closet</Text>
           <Text style={styles.countCaption}>{savedCount} saved</Text>
         </View>
@@ -74,13 +65,6 @@ export const SellerClosetModule: React.FC<SellerClosetModuleProps> = ({
         </ScrollView>
       ) : (
         <View style={styles.emptyRow}>
-          <AppIcon
-            concept="bookmark"
-            size={IconSize.sm}
-            color="textMuted"
-            opticalCenter
-            accessible={false}
-          />
           <Text style={styles.emptyText}>Save pieces you love</Text>
         </View>
       )}
@@ -95,13 +79,14 @@ function createStyles(colors: ThemeColors) {
     },
     headerRow: {
       flexDirection: 'row',
-      alignItems: 'center',
+      alignItems: 'baseline',
       justifyContent: 'space-between',
       marginHorizontal: Space.md,
+      marginBottom: Space.xxs,
     },
     titleWrap: {
       flexDirection: 'row',
-      alignItems: 'center',
+      alignItems: 'baseline',
       gap: Space.sm,
       flexShrink: 1,
     },
@@ -115,6 +100,7 @@ function createStyles(colors: ThemeColors) {
       fontSize: TypographyV2.caption.size,
       fontFamily: FontFamily.regular,
       color: colors.textMuted,
+      fontVariant: ['tabular-nums'],
     },
     viewAllHit: {
       minHeight: Control.hit,
@@ -126,10 +112,8 @@ function createStyles(colors: ThemeColors) {
       color: colors.brand,
     },
     emptyRow: {
-      flexDirection: 'row',
-      alignItems: 'center',
-      gap: Space.sm,
       minHeight: Control.hit,
+      justifyContent: 'center',
       marginHorizontal: Space.md,
     },
     emptyText: {

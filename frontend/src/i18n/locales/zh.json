@@ -1100,7 +1100,14 @@
       "errorApproveTitle": "无法批准",
       "errorApproveMessage": "无法批准该请求。",
       "errorRejectTitle": "无法拒绝",
-      "errorRejectMessage": "无法拒绝该请求。"
+      "errorRejectMessage": "无法拒绝该请求。",
+      "status": {
+        "pending": "待处理",
+        "approved": "已批准",
+        "rejected": "已拒绝",
+        "expired": "已过期",
+        "superseded": "已被取代"
+      }
     },
     "cancel": {
       "cancelling": "取消中…",
@@ -1126,6 +1133,29 @@
     },
     "tokens": {
       "usage": "输入 {{input}} · 输出 {{output}}"
+    },
+    "trace": {
+      "toggle": "查看 {{botName}} 的运行详情",
+      "loadError": "无法加载运行轨迹",
+      "retry": "重试",
+      "empty": "此次运行没有记录的步骤",
+      "approvalLine": "{{tool}} · {{status}}",
+      "status": {
+        "pending": "待处理",
+        "running": "运行中",
+        "succeeded": "成功",
+        "failed": "失败",
+        "skipped": "已跳过"
+      },
+      "step": {
+        "modelCall": "模型调用",
+        "toolCall": "工具调用",
+        "retrieval": "记忆检索",
+        "guardrail": "护栏",
+        "approval": "审批",
+        "retry": "重试",
+        "handoff": "移交"
+      }
     }
   },
   "liveStreamViewer": {
@@ -1362,7 +1392,7 @@
       "noSessionsRunning": "没有正在运行的 Agent 会话",
       "sessionsRunning": "{{count}} 个 Agent 会话正在运行",
       "activity": "Agent 活动",
-      "activitySub": "Agent 操作和审批的本地日志"
+      "activitySub": "服务器端的代理运行与审批记录"
     },
     "connect": {
       "cancel": "取消",

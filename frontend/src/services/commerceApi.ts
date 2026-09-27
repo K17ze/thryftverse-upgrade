@@ -330,6 +330,11 @@ export interface OrderParcelEvent {
     | 'collection_confirmed'
     | 'delivery_failed'
     | 'returned'
+    // Discrete carrier-reported failures (migration 325). Webhook-ingested
+    // rows may still carry event_type 'delivery_failed' with the discrete
+    // kind on payload.carrierEventType — see resolveParcelFailureKind.
+    | 'lost'
+    | 'damaged'
     // Seller-asserted drop-off for integrated-label orders — NOT carrier
     // evidence. Written by POST /orders/:id/fulfilment/handoff-assertion.
     | 'handoff_asserted';
@@ -1185,6 +1190,11 @@ export interface ListingAnalyticsComparables {
   minPrice: number | null;
   medianPrice: number | null;
   maxPrice: number | null;
+  /** First sale date in the comp set — freshness window start. Optional:
+   * older API responses may omit the window entirely. */
+  dateFrom?: string | null;
+  /** Last sale date in the comp set — freshness window end. */
+  dateTo?: string | null;
 }
 
 export interface ListingPriceHistoryEvent {

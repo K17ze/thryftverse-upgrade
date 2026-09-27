@@ -1,6 +1,8 @@
 import React from 'react';
 import { View } from 'react-native';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useAppTheme } from '../../theme/ThemeContext';
+import { Space } from '../../theme/designTokens';
 import { AppButton } from '../ui/AppButton';
 import { createFilterStyles } from './filterStyles';
 
@@ -15,13 +17,17 @@ interface Props {
   onApply: () => void;
 }
 
-// Sticky bottom action — Reset + Apply side by side.
+// Sticky bottom dock content — text Reset beside the primary Apply. Reset
+// stays chromeless (transparent, no border): the filled Apply is the only
+// contained control in the dock. Positioning lives with the caller (the
+// sheet's dock wrapper); this owns the row + safe-area-aware padding.
 function FilterFooterBase({ resetDisabled, onReset, applyLabel, applyDisabled, onApply }: Props) {
   const { colors } = useAppTheme();
   const styles = React.useMemo(() => createFilterStyles(colors), [colors]);
+  const insets = useSafeAreaInsets();
 
   return (
-    <View style={styles.footer}>
+    <View style={[styles.footer, { paddingBottom: Math.max(insets.bottom, Space.md) }]}>
       <AppButton
         style={[styles.resetBtn, resetDisabled && styles.resetBtnDisabled]}
         title="Reset"

@@ -74,7 +74,7 @@ function LookInspectSheetImpl({ tag, lookId, formatPrice, onClose, onViewDetails
                     {tag.isSold ? (
                       <Text style={styles.inspectSold}>Sold</Text>
                     ) : typeof tag.price === 'number' ? (
-                      <Text style={styles.inspectPrice}>{formatPrice(tag.price, 'GBP')}</Text>
+                      <Text style={styles.inspectPrice}>{formatPrice(tag.price, (tag.currency as SupportedCurrencyCode | undefined) ?? 'GBP')}</Text>
                     ) : null}
                     {tag.label && tag.title && (
                       <Text style={styles.inspectLabel}>{tag.label}</Text>

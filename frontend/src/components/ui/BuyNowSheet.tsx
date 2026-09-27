@@ -4,8 +4,9 @@ import {
   Text,
   StyleSheet,
   Pressable } from 'react-native';
-import { Ionicons } from '@expo/vector-icons';
 import { BottomSheet } from '../BottomSheet';
+import { AppIcon } from '../common/AppIcon';
+import { IconSize } from '../../theme/iconTokens';
 import { AppButton } from './AppButton';
 import { CachedImage } from '../CachedImage';
 import { Meta, Body, Headline } from './Text';
@@ -275,7 +276,7 @@ export function BuyNowSheet({
             />
           ) : (
             <View style={styles.itemThumbPlaceholder}>
-              <Ionicons name="image-outline" size={20} color={colors.textMuted} />
+              <AppIcon name="image-outline" size={IconSize.md} color="textMuted" />
             </View>
           )}
           <View style={styles.itemHeaderText}>
@@ -318,7 +319,7 @@ export function BuyNowSheet({
                 accessibilityRole="alert"
                 accessibilityLiveRegion="polite"
               >
-                <Ionicons name="alert-circle-outline" size={14} color={colors.dangerText} accessible={false} />
+                <AppIcon name="alert-circle-outline" size={IconSize.xs} color="dangerText" accessible={false} />
                 <Text style={styles.errorText}>{error.message}</Text>
               </View>
             )}
@@ -328,19 +329,19 @@ export function BuyNowSheet({
                 user acknowledges the irreversible nature before acting. */}
             <View style={styles.commitmentBlock}>
               <View style={styles.commitmentRow}>
-                <Ionicons name="information-circle-outline" size={14} color={colors.textSecondary} />
+                <AppIcon name="information-circle-outline" size={IconSize.xs} color="textSecondary" />
                 <Text style={styles.commitmentText}>
                   This is a binding purchase at the fixed price.
                 </Text>
               </View>
               <View style={styles.commitmentRow}>
-                <Ionicons name="time-outline" size={14} color={colors.textSecondary} />
+                <AppIcon name="time-outline" size={IconSize.xs} color="textSecondary" />
                 <Text style={styles.commitmentText}>
                   Payment is due promptly after the auction ends.
                 </Text>
               </View>
               <View style={styles.commitmentRow}>
-                <Ionicons name="lock-closed-outline" size={14} color={colors.textSecondary} />
+                <AppIcon name="lock-closed-outline" size={IconSize.xs} color="textSecondary" />
                 <Text style={styles.commitmentText}>
                   You cannot cancel a Buy Now after it is confirmed.
                 </Text>
@@ -374,7 +375,7 @@ export function BuyNowSheet({
         {stage === 'submitting' && (
           <View style={styles.centerStage}>
             <View style={styles.submittingSpinnerWrap}>
-              <Ionicons name="hourglass-outline" size={40} color={colors.brand} />
+              <AppIcon name="hourglass-outline" size={IconSize.hero} color="brand" />
             </View>
             <Text style={styles.submittingText}>Confirming Buy Now...</Text>
             <Text style={styles.submittingDetail}>This may take a moment.</Text>
@@ -385,7 +386,7 @@ export function BuyNowSheet({
         {stage === 'success' && (
           <View style={styles.centerStage}>
             <View style={styles.successIcon}>
-              <Ionicons name="checkmark-circle" size={56} color={colors.successText} />
+              <AppIcon name="checkmark-circle" size={IconSize.display} color="successText" />
             </View>
             <Text style={styles.successTitle}>Auction won with Buy Now</Text>
             <Text style={styles.successDetail}>
@@ -411,10 +412,10 @@ export function BuyNowSheet({
             accessibilityLiveRegion="polite"
           >
             <View style={styles.errorIconSmall}>
-              <Ionicons
+              <AppIcon
                 name={error.isAmbiguous ? 'cloud-offline-outline' : 'alert-circle-outline'}
-                size={24}
-                color={error.isAmbiguous ? colors.warningText : colors.dangerText}
+                size={IconSize.lg}
+                color={error.isAmbiguous ? 'warningText' : 'dangerText'}
               />
             </View>
             <Text style={styles.errorTitle}>{error.message}</Text>

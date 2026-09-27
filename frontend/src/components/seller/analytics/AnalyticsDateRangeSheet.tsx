@@ -3,7 +3,7 @@ import { View, Text, Pressable, StyleSheet } from 'react-native';
 import { BottomSheet } from '../../BottomSheet';
 import { AppDatePicker } from '../../primitives/AppDatePicker';
 import { useAppTheme } from '../../../theme/ThemeContext';
-import { Space, Radius, Control, Stroke, FontFamily } from '../../../theme/designTokens';
+import { Space, Radius, Control, FontFamily } from '../../../theme/designTokens';
 import { TypographyV2 } from '../../../theme/typography.v2';
 import { haptics } from '../../../utils/haptics';
 import { validateCustomRange } from './useSellerAnalytics';
@@ -45,7 +45,7 @@ export function AnalyticsDateRangeSheet({
   triggerRef,
 }: AnalyticsDateRangeSheetProps) {
   const { colors } = useAppTheme();
-  const styles = useMemo(() => createStyles(colors), [colors]);
+  const styles = useMemo(() => createStyles(), []);
 
   // Recomputed on each sheet open — a session spanning midnight must not
   // pin "today" (maxDate) to yesterday. `visible` is the correct dep.
@@ -164,7 +164,6 @@ export function AnalyticsDateRangeSheet({
           <Pressable
             style={({ pressed }) => [
               styles.cancelButton,
-              { borderColor: colors.border },
               pressed && { opacity: 0.6 },
             ]}
             onPress={onDismiss}
@@ -202,7 +201,7 @@ export function AnalyticsDateRangeSheet({
   );
 }
 
-function createStyles(colors: ReturnType<typeof useAppTheme>['colors']) {
+function createStyles() {
   return StyleSheet.create({
     sheetContent: {
       paddingHorizontal: Space.md,
@@ -253,11 +252,13 @@ function createStyles(colors: ReturnType<typeof useAppTheme>['colors']) {
       gap: Space.sm,
       marginTop: Space.xs,
     },
+    // Chromeless secondary action — the filled Apply is the only contained
+    // control in the dock (house Reset/Apply grammar).
     cancelButton: {
       flex: 1,
       paddingVertical: Space.sm + 2,
       borderRadius: Radius.md,
-      borderWidth: Stroke.standard,
+      backgroundColor: 'transparent',
       alignItems: 'center',
       minHeight: Control.hit,
       justifyContent: 'center',

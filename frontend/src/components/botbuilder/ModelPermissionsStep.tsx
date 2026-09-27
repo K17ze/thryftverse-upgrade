@@ -14,12 +14,16 @@ import { ChoiceList } from './ChoiceList';
 import { CapabilityRow } from './CapabilityRow';
 import { RISK_DOT, SUPPORTED_MODELS, type PlannedRiskGroup } from './botBuilderTypes';
 import type { BotBuilderStyles } from './botBuilderStyles';
+import type { ProviderConnectionInfo } from '../../services/botsApi';
 
 // ── Step 4: Model & permissions (collapsible, advanced) ──
 
 export function ModelPermissionsStep({
   modelId,
   onModelIdChange,
+  providerConnectionId,
+  onProviderConnectionChange,
+  providerConnections,
   conversationContext,
   onToggleConversationContext,
   maxTurns,
@@ -34,6 +38,9 @@ export function ModelPermissionsStep({
   styles }: {
   modelId: ChatAgentConfig['model'];
   onModelIdChange: (value: ChatAgentConfig['model']) => void;
+  providerConnectionId: string | null;
+  onProviderConnectionChange: (value: string | null) => void;
+  providerConnections: ProviderConnectionInfo[];
   conversationContext: boolean;
   onToggleConversationContext: () => void;
   maxTurns: number;
@@ -70,6 +77,34 @@ export function ModelPermissionsStep({
           Agents run on the server runtime. This deployment supports the models listed here.
         </Text>
       </View>
+
+      {providerConnections.length > 0 ? (
+        <>
+          <Text style={[styles.fieldLabel, { color: colors.textSecondary }]}>Provider key</Text>
+          <ChoiceList
+            options={[
+              {
+                value: '',
+                label: 'Platform key',
+                detail: 'Runs on ThryftVerse infrastructure and billing',
+              },
+              ...providerConnections.map((connection) => ({
+                value: connection.id,
+                label: connection.label,
+                detail: `${connection.provider} · ${connection.maskedKey}`,
+              })),
+            ]}
+            selected={providerConnectionId ?? ''}
+            onSelect={(value) => onProviderConnectionChange(value || null)}
+          />
+          <View style={styles.caution}>
+            <AppIcon name="key-outline" size={IconSize.sm} color="textSecondary" opticalCenter accessible={false} />
+            <Text style={styles.cautionText}>
+              Your own key is billed by that provider. Only OpenAI-compatible connections can run agents.
+            </Text>
+          </View>
+        </>
+      ) : null}
 
       <Text style={[styles.fieldLabel, { color: colors.textSecondary }]}>History limit</Text>
       <CapabilityRow

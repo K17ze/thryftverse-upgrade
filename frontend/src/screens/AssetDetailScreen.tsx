@@ -28,6 +28,11 @@ import {
   type MarketHistoryItem,
 } from '../services/marketApi';
 import { parseApiError } from '../lib/apiClient';
+import { OFFLINE_WRITE_QUEUED_CODE } from '../lib/offlineQueue';
+import {
+  acceptActiveRiskDisclosure,
+  RiskDisclosureUnavailableError,
+} from '../services/complianceApi';
 import { useToast } from '../context/ToastContext';
 import {
   useCoOwnAssetQuery,
@@ -152,6 +157,9 @@ export default function AssetDetailScreen() {
     side: 'buy' | 'sell';
     limitPrice?: number;
   } | null>(null);
+  // Consent POST in flight — disables the acknowledge control so a
+  // double-tap can't submit twice while the server records consent.
+  const [riskAckSubmitting, setRiskAckSubmitting] = React.useState(false);
   const [candleRange, setCandleRange] = React.useState<CoOwnCandleRange>('1W');
   const [chartType, setChartType] = React.useState<CoOwnChartType>('candle');
   const [showVolume, setShowVolume] = React.useState(false);
@@ -866,22 +874,64 @@ export default function AssetDetailScreen() {
 
   // Active-choice risk acknowledgment (FCA decision-points pattern):
   // the disclosure sheet renders an explicit "I understand — continue"
-  // control while unacknowledged. Accepting records the flag and resumes
-  // the pending trade intent through the education gate when needed.
-  const handleAcknowledgeRisk = () => {
-    updateCoOwnCompliance({ riskDisclosureAccepted: true });
-    closeSheet('riskDisclosure');
-    if (pendingTradeSide) {
-      if (!coOwnCompliance.educationCompleted) {
-        openSheet('guide');
-        return;
-      }
-      navigation.navigate('Trade', {
+  // control while unacknowledged. Accepting records server-side consent
+  // (POST /compliance/consents/accept against the active verified
+  // risk_disclosure legal document) — that user_consents row is what
+  // satisfies the backend RISK_DISCLOSURE_REQUIRED eligibility gate; the
+  // local flag is only a UX cache. On failure the flag stays unset, the
+  // sheet stays open, and the pending trade intent is preserved.
+  const handleAcknowledgeRisk = async () => {
+    if (riskAckSubmitting) return;
+    const userId = currentUser?.id;
+    if (!userId) {
+      requireAuth('purchase');
+      return;
+    }
+    setRiskAckSubmitting(true);
+    try {
+      const { document } = await acceptActiveRiskDisclosure(userId, {
         assetId: asset.id,
-        side: pendingTradeSide.side,
-        limitPrice: pendingTradeSide.limitPrice,
+        surface: 'asset_detail_risk_disclosure',
       });
-      setPendingTradeSide(null);
+      updateCoOwnCompliance({
+        riskDisclosureAccepted: true,
+        riskDisclosureDocumentId: document.id,
+        riskDisclosureVersion: document.version,
+      });
+      closeSheet('riskDisclosure');
+      if (pendingTradeSide) {
+        if (!coOwnCompliance.educationCompleted) {
+          openSheet('guide');
+          return;
+        }
+        navigation.navigate('Trade', {
+          assetId: asset.id,
+          side: pendingTradeSide.side,
+          limitPrice: pendingTradeSide.limitPrice,
+        });
+        setPendingTradeSide(null);
+      }
+    } catch (error) {
+      const parsed = parseApiError(
+        error,
+        'Could not record your acknowledgment. Check your connection and try again.'
+      );
+      if (parsed.code === OFFLINE_WRITE_QUEUED_CODE) {
+        // The consent write was queued for automatic replay — the honest
+        // state is "not yet recorded", so the local flag stays unset and
+        // the sheet stays open. The user can retry or leave; the server
+        // will record consent when the queue flushes.
+        show(parsed.message, 'info');
+      } else {
+        show(
+          error instanceof RiskDisclosureUnavailableError
+            ? error.message
+            : 'Could not record your acknowledgment. Check your connection and try again.',
+          'error'
+        );
+      }
+    } finally {
+      setRiskAckSubmitting(false);
     }
   };
 
@@ -1256,6 +1306,7 @@ export default function AssetDetailScreen() {
         dossierSheetVisible={dossierSheetVisible}
         prospectusSheetVisible={prospectusSheetVisible}
         riskAcknowledged={coOwnCompliance.riskDisclosureAccepted}
+        riskAcknowledging={riskAckSubmitting}
         onAcknowledgeRisk={handleAcknowledgeRisk}
         priceAlertVisible={priceAlertVisible}
         alertTargetPrice={alertTargetPrice}

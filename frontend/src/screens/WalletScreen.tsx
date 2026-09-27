@@ -25,6 +25,7 @@ import { AddMoneySheet } from '../components/wallet/AddMoneySheet';
 import { WalletBalanceHero } from '../components/wallet/WalletBalanceHero';
 import { WalletActionRow } from '../components/wallet/WalletActionRow';
 import { WalletSubBalanceSection } from '../components/wallet/WalletSubBalanceSection';
+import { WalletCurrencyBalances } from '../components/wallet/WalletCurrencyBalances';
 import { WalletActivitySection } from '../components/wallet/WalletActivitySection';
 import { WalletDisclosureSection } from '../components/wallet/WalletDisclosureSection';
 import {
@@ -95,6 +96,9 @@ export default function WalletScreen({ navigation }: Props) {
   // Add money is handled by the extracted AddMoneySheet (spec 17).
   // Convert is handled by the dedicated WalletConvertScreen (Phase 3.1).
   const [addMoneyVisible, setAddMoneyVisible] = useState(false);
+  // Multi-currency pockets refetch signal — bumped by pull-to-refresh so
+  // WalletCurrencyBalances reloads alongside the canonical wallet data.
+  const [currencyBalancesToken, setCurrencyBalancesToken] = useState(0);
   // ── Privacy eye (spec 17 viewport 1) ──
   const [balanceHidden, setBalanceHidden] = useState(false);
 
@@ -105,6 +109,12 @@ export default function WalletScreen({ navigation }: Props) {
     haptics.tap();
     setAddMoneyVisible(true);
   }, []);
+
+  // Pull-to-refresh also refetches the multi-currency pockets.
+  const handleRefreshAll = React.useCallback(() => {
+    handleRefresh();
+    setCurrencyBalancesToken((n) => n + 1);
+  }, [handleRefresh]);
 
   // ── Privacy eye toggle (spec 17 viewport 1) ──
   const handleTogglePrivacy = React.useCallback(() => {
@@ -232,7 +242,7 @@ export default function WalletScreen({ navigation }: Props) {
         refreshControl={
           <RefreshControl
             refreshing={refreshing}
-            onRefresh={handleRefresh}
+            onRefresh={handleRefreshAll}
             tintColor={colors.textSecondary}
           />
         }
@@ -283,6 +293,10 @@ export default function WalletScreen({ navigation }: Props) {
         {/* ── Balance breakdown — flat hairline-separated rows (spec 17 viewport 2),
                or the withdrawable-only row when no sub-balances exist ── */}
         <WalletSubBalanceSection balance={balance} withdrawable={withdrawable} />
+
+        {/* ── Multi-currency pockets + Exchange affordance (hidden when only
+               the default fiat pocket exists) ── */}
+        <WalletCurrencyBalances userId={currentUser?.id} reloadToken={currencyBalancesToken} />
 
         {/* ── Transaction history (spec 17 viewport 2: latest activity) ── */}
         <WalletActivitySection onViewActivity={handleViewActivity} />

@@ -97,6 +97,7 @@ export interface UserCountryCapabilities {
     stableCoinEnabled: boolean;
     methodTypes: CapabilityPaymentMethodType[];
     gatewaysByChannel: Record<CapabilityPaymentChannel, CapabilityPaymentGatewayId[]>;
+    internalRailsByChannel: Record<CapabilityPaymentChannel, CapabilityPaymentGatewayId[]>;
   };
   payouts: {
     defaultCurrency: string;

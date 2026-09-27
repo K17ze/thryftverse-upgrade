@@ -110,6 +110,9 @@ const EVENT_TYPE_CARD_MAP: Record<NotificationEventType, NotificationCardType> =
   order_delivered: 'order',
   order_refunded: 'order',
   order_dispatch_sla_breach: 'order',
+  order_delivery_failed: 'order',
+  order_parcel_lost: 'order',
+  order_parcel_damaged: 'order',
   resolution_opened: 'resolution',
   resolution_status_changed: 'resolution',
   review_received: 'review',
@@ -151,6 +154,8 @@ const EVENT_TYPE_CARD_MAP: Record<NotificationEventType, NotificationCardType> =
   'support.case_resolved': 'resolution',
   coown_buyout_accepted: 'order',
   coown_verification_responded: 'order',
+  coown_price_alert_triggered: 'order',
+  coown_drip_receipt: 'order',
   ops_alert: 'generic',
   safety_outcome: 'generic',
   generic: 'generic', // resolved further by objectRef below
@@ -444,6 +449,9 @@ export const FILTER_EVENT_TYPES: Record<Exclude<NotificationFilter, 'all' | 'unr
     'order_delivered',
     'order_refunded',
     'order_dispatch_sla_breach',
+    'order_delivery_failed',
+    'order_parcel_lost',
+    'order_parcel_damaged',
     'payout_processed',
     'refund_completed',
     'payment_failed',
@@ -456,6 +464,14 @@ export const FILTER_EVENT_TYPES: Record<Exclude<NotificationFilter, 'all' | 'unr
     'offer_expired',
     'offer_cancelled',
     'smart_sell_decision',
+    // Co-own financial events render as 'order' cards — the commerce
+    // bucket is the filter grouping they belong to (no co-own filter
+    // exists). Includes the earlier-registered co-own types so the whole
+    // family is reachable from one filter.
+    'coown_buyout_accepted',
+    'coown_verification_responded',
+    'coown_price_alert_triggered',
+    'coown_drip_receipt',
   ],
   new_item: ['new_listing_from_followed_seller', 'saved_search_match', 'live_started'],
   review: ['review_received', 'review_response_received', 'review_moderated'],

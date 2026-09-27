@@ -40,6 +40,14 @@ interface OfflineQueueState {
   removeFromQueue: (id: string) => void;
   flushQueue: (fetchImplementation: (url: RequestInfo | URL, init?: RequestInit) => Promise<Response>) => Promise<void>;
   clearQueue: () => void;
+  /** Requeue a terminal failure for another flush cycle. */
+  retryDeadLetter: (id: string) => void;
+  /** Drop a terminal failure the user has acknowledged. */
+  dismissDeadLetter: (id: string) => void;
+  /** Requeue every dead-lettered request. */
+  retryAllDeadLetters: () => void;
+  /** Drop every dead-lettered request. */
+  clearDeadLetters: () => void;
 }
 
 /**
@@ -73,6 +81,11 @@ function backoffDelay(retryCount: number): number {
   const capped = Math.min(delay, MAX_DELAY);
   return Math.round(capped * 0.5 + Math.random() * capped * 0.5);
 }
+
+/** Fetch implementation captured from the most recent flushQueue call so
+ *  user-initiated retries can attempt delivery immediately instead of
+ *  waiting for the next connectivity change or app launch. */
+let lastFlushFetch: ((url: RequestInfo | URL, init?: RequestInit) => Promise<Response>) | null = null;
 
 export const useOfflineQueue = create<OfflineQueueState>()(
   persist(
@@ -140,7 +153,47 @@ export const useOfflineQueue = create<OfflineQueueState>()(
 
       clearQueue: () => set({ queue: [] }),
 
+      retryDeadLetter: (id) => {
+        set((state) => {
+          const item = state.deadLetterQueue.find((req) => req.id === id);
+          if (!item) return state;
+          return {
+            deadLetterQueue: state.deadLetterQueue.filter((req) => req.id !== id),
+            queue: [...state.queue, { ...item, retryCount: 0, lastAttemptAt: undefined }],
+          };
+        });
+        if (lastFlushFetch) {
+          void get().flushQueue(lastFlushFetch);
+        }
+      },
+
+      dismissDeadLetter: (id) => {
+        set((state) => ({
+          deadLetterQueue: state.deadLetterQueue.filter((req) => req.id !== id),
+        }));
+      },
+
+      retryAllDeadLetters: () => {
+        set((state) => ({
+          deadLetterQueue: [],
+          queue: [
+            ...state.queue,
+            ...state.deadLetterQueue.map((req) => ({
+              ...req,
+              retryCount: 0,
+              lastAttemptAt: undefined,
+            })),
+          ],
+        }));
+        if (lastFlushFetch) {
+          void get().flushQueue(lastFlushFetch);
+        }
+      },
+
+      clearDeadLetters: () => set({ deadLetterQueue: [] }),
+
       flushQueue: async (fetchImplementation) => {
+        lastFlushFetch = fetchImplementation;
         const { queue, isProcessing, removeFromQueue } = get();
 
         if (isProcessing || queue.length === 0) return;
@@ -234,7 +287,7 @@ export const useOfflineQueue = create<OfflineQueueState>()(
                 }));
               }
             }
-          } catch (error) {
+          } catch {
             // Network failure during fetch: keep in queue with incremented retry
             const nextRetryCount = req.retryCount + 1;
             if (nextRetryCount > MAX_RETRIES) {
@@ -266,7 +319,9 @@ export const useOfflineQueue = create<OfflineQueueState>()(
     {
       name: 'thryftverse-offline-queue',
       storage: createJSONStorage(() => AsyncStorage),
-      partialize: (state) => ({ queue: state.queue }), // Only persist the queue array
+      // Persist dead letters too — a terminal failure must survive restart so
+      // the user can still see and recover it, per the offline contract.
+      partialize: (state) => ({ queue: state.queue, deadLetterQueue: state.deadLetterQueue }),
     }
   )
 );
@@ -277,3 +332,6 @@ export const useOfflineQueue = create<OfflineQueueState>()(
  * to re-render only when the count changes.
  */
 export const selectPendingCount = (state: OfflineQueueState): number => state.queue.length;
+
+/** Number of terminally-failed mutations awaiting user review. */
+export const selectDeadLetterCount = (state: OfflineQueueState): number => state.deadLetterQueue.length;

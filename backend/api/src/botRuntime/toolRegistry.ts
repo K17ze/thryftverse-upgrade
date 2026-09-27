@@ -138,28 +138,3 @@ export function evaluateToolPolicy(
 
   return { decision: 'allow', reason: 'Tool is allowed' };
 }
-
-/**
- * Execute a tool call with a placeholder result.
- * This is a test-only stub — real tool execution will be implemented
- * in future phases with proper domain service integration.
- */
-export function executeToolStub(
-  toolName: string,
-  _args: Record<string, unknown>
-): { result: string; success: boolean } {
-  switch (toolName) {
-    case 'search_listings':
-      return { result: 'No listings found matching the query.', success: true };
-    case 'read_conversation':
-      return { result: 'No recent messages available in playground mode.', success: true };
-    case 'draft_reply':
-      return { result: 'Draft reply prepared but not sent (playground mode).', success: true };
-    case 'get_listing_details':
-      return { result: 'Listing not found in playground mode.', success: true };
-    case 'check_price_history':
-      return { result: 'No price history available in playground mode.', success: true };
-    default:
-      return { result: `Tool '${toolName}' is not implemented in playground mode.`, success: false };
-  }
-}

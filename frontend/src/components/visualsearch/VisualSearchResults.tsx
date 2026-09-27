@@ -3,6 +3,7 @@ import { View, Text, RefreshControl } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { useAppTheme } from '../../theme/ThemeContext';
 import { Space, Radius } from '../../theme/designTokens';
+import { DISCOVERY_GRID_PADDING } from '../discovery/unifiedDiscoveryStyles';
 import { AppButton } from '../ui/AppButton';
 import { EmptyState } from '../EmptyState';
 import { PinterestMasonryGrid } from '../discover/PinterestMasonryGrid';
@@ -141,7 +142,7 @@ function VisualSearchResultsBase({
       onItemSaveToggle={onItemSaveToggle}
       onItemSaveLongPress={onItemSaveLongPress}
       isItemSaved={isItemSaved}
-      horizontalPadding={Space.md}
+      horizontalPadding={DISCOVERY_GRID_PADDING}
       refreshControl={
         <RefreshControl
           refreshing={refreshing}

@@ -8,7 +8,7 @@ import Reanimated, {
 import { AnimatedPressable } from '../AnimatedPressable';
 import { useMotionConfig } from '../../hooks/useMotionConfig';
 import { Radius, Space } from '../../theme/designTokens';
-import { TypographyV2 } from '../../theme/typography.v2';
+import { TypographyV2, MAX_FONT_SCALE } from '../../theme/typography.v2';
 import { useAppTheme } from '../../theme/ThemeContext';
 
 export interface AppSegmentOption<T extends string> {
@@ -138,7 +138,7 @@ export function AppSegmentControl<T extends string>({
                 isActive && { color: option.activeTextColor ?? colors.textPrimary },
                 isActive && optionTextActiveStyle,
               ]}
-              maxFontSizeMultiplier={1.3}
+              maxFontSizeMultiplier={MAX_FONT_SCALE.utility}
             >
               {option.label}
             </Text>

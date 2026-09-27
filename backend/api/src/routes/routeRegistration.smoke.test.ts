@@ -110,6 +110,7 @@ function extractRouteLiterals(source: string): Array<{ method: string; path: str
 
 const AUCTION_LIFETIME_ROUTES = [
   "GET /users/me/auction-bids/lookup-by-key/:idempotencyKey",
+  "GET /auctions/:auctionId/payment-status",
   "POST /auctions/:auctionId/cancel",
   "POST /auctions/:auctionId/payment",
   "POST /auctions/:auctionId/second-chance/accept",
@@ -227,7 +228,7 @@ test("PUT /chat/conversations/:id/preferences reaches the handler", async () => 
 
 // ── Auction lifecycle (static guards) ───────────────────────────────
 
-test("registerAuctionLifecycleRoutes defines exactly the six expected routes", () => {
+test("registerAuctionLifecycleRoutes defines exactly the seven expected routes", () => {
   const source = readFileSync(path.join(here, "auctions.ts"), "utf-8");
   const start = source.indexOf("export const registerAuctionLifecycleRoutes");
   assert.ok(start > -1, "registerAuctionLifecycleRoutes export is missing from auctions.ts");
@@ -240,7 +241,7 @@ test("registerAuctionLifecycleRoutes defines exactly the six expected routes", (
   assert.deepEqual(
     [...defined].sort(),
     [...AUCTION_LIFETIME_ROUTES].sort(),
-    "lifecycle registrar must not define routes beyond the six lifecycle endpoints",
+    "lifecycle registrar must not define routes beyond the seven lifecycle endpoints",
   );
 });
 

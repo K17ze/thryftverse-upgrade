@@ -18,9 +18,12 @@ interface LiveChatComposerProps {
   value: string;
   onChangeText: (text: string) => void;
   onSend: () => void;
+  /** Host muted this viewer (live.viewer.muted) — the server rejects their
+   *  sends, so the composer disables honestly instead of failing on send. */
+  muted?: boolean;
 }
 
-export function LiveChatComposer({ value, onChangeText, onSend }: LiveChatComposerProps) {
+export function LiveChatComposer({ value, onChangeText, onSend, muted = false }: LiveChatComposerProps) {
   const { colors } = useAppTheme();
   const insets = useSafeAreaInsets();
   const styles = useMemo(() => createStyles(colors), [colors]);
@@ -29,22 +32,25 @@ export function LiveChatComposer({ value, onChangeText, onSend }: LiveChatCompos
   return (
     <View style={[styles.composerRow, { paddingBottom: insets.bottom || Space.sm }]}>
       <TextInput
-        style={[styles.composerInput, { color: colors.scrimTextPrimary, borderColor: colors.scrimTextTertiary }]}
-        placeholder={t('chat.placeholder')}
+        style={[styles.composerInput, { color: colors.scrimTextPrimary, borderColor: colors.scrimTextTertiary }, muted && { opacity: 0.5 }]}
+        placeholder={muted ? t('chat.mutedPlaceholder') : t('chat.placeholder')}
         placeholderTextColor={colors.scrimTextTertiary}
         value={value}
         onChangeText={onChangeText}
         onSubmitEditing={onSend}
         returnKeyType="send"
+        editable={!muted}
         accessibilityLabel="Chat message input"
+        accessibilityState={{ disabled: muted }}
       />
       <AnimatedPressable
         onPress={onSend}
-        disabled={!value.trim()}
-        style={[styles.iconHit, !value.trim() && { opacity: 0.4 }]}
+        disabled={muted || !value.trim()}
+        style={[styles.iconHit, (muted || !value.trim()) && { opacity: 0.4 }]}
         hapticFeedback="light"
         accessibilityRole="button"
         accessibilityLabel="Send message"
+        accessibilityState={{ disabled: muted }}
       >
         <AppIcon name="send" size={IconSize.md} color="scrimTextPrimary" accessible={false} />
       </AnimatedPressable>

@@ -50,6 +50,11 @@ export async function performUserErasure(
   await client.query('DELETE FROM recommendation_feedback WHERE user_id = $1', [userId]);
   await client.query('DELETE FROM notification_devices WHERE user_id = $1', [userId]);
 
+  // Agent memory (migration 339): erasure anonymizes the users row rather
+  // than deleting it, so the FK cascade never fires — delete explicitly.
+  await client.query('DELETE FROM agent_memories WHERE user_id = $1', [userId]);
+  await client.query('DELETE FROM agent_memory_settings WHERE user_id = $1', [userId]);
+
   await client.query(
     `
       UPDATE notification_events
@@ -251,6 +256,19 @@ export async function performUserErasure(
         image_url = NULL,
         updated_at = NOW()
       WHERE seller_id = $1
+    `,
+    [userId]
+  );
+
+  // Media embeddings (migration 145) — model-versioned embedding rows keyed
+  // by media_asset_id. The FK to media_assets is ON DELETE CASCADE, but the
+  // asset rows are soft-deleted below rather than hard-deleted, so the
+  // cascade never fires and these rows must be deleted explicitly. They are
+  // derived from the user's media and carry no retention basis.
+  await client.query(
+    `
+      DELETE FROM media_embeddings
+      WHERE media_asset_id IN (SELECT id FROM media_assets WHERE owner_id = $1)
     `,
     [userId]
   );

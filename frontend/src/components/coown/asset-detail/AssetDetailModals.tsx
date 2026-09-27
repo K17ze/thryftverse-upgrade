@@ -1,7 +1,8 @@
 import React from 'react';
 import { View, Text, StyleSheet, Pressable, ScrollView, Linking } from 'react-native';
-import { Ionicons } from '@expo/vector-icons';
 import { useAppTheme } from '../../../theme/ThemeContext';
+import { IconSize } from '../../../theme/iconTokens';
+import { AppIcon } from '../../common/AppIcon';
 import { Space, PressScale, Control } from '../../../theme/designTokens';
 import { TypographyV2 } from '../../../theme/typography.v2';
 import { BottomSheet } from '../../BottomSheet';
@@ -90,6 +91,9 @@ export interface AssetDetailModalsProps {
   /** Wave A: Whether the viewer has acknowledged the risk disclosure.
    *  Forwarded to CoOwnRiskDisclosure when onAcknowledgeRisk is set. */
   riskAcknowledged?: boolean;
+  /** While the consent POST is in flight — disables the acknowledge
+   *  control so a double-tap can't submit twice. */
+  riskAcknowledging?: boolean;
   /** Wave A: Marks the risk disclosure as acknowledged. */
   onAcknowledgeRisk?: () => void;
 }
@@ -141,6 +145,7 @@ export const AssetDetailModals = React.memo(function AssetDetailModals({
   onOpenRiskDisclosure,
   onOpenProspectus,
   riskAcknowledged,
+  riskAcknowledging,
   onAcknowledgeRisk,
 }: AssetDetailModalsProps) {
   const { colors } = useAppTheme();
@@ -211,13 +216,14 @@ export const AssetDetailModals = React.memo(function AssetDetailModals({
             accessibilityLabel="Close risk disclosure"
             accessibilityRole="button"
           >
-            <Ionicons name="close" size={22} color={colors.textSecondary} />
+            <AppIcon name="close" size={IconSize.lg} color="textSecondary" accessible={false} />
           </Pressable>
         </View>
         <ScrollView style={styles.riskDisclosureSheetScroll} contentContainerStyle={styles.riskDisclosureSheetContent}>
           <CoOwnRiskDisclosure
             disclosures={asset.riskDisclosures ?? null}
             acknowledged={riskAcknowledged}
+            acknowledging={riskAcknowledging}
             onAcknowledge={onAcknowledgeRisk}
             onReportIssue={() => {
               onCloseSheet('riskDisclosure');
@@ -247,7 +253,7 @@ export const AssetDetailModals = React.memo(function AssetDetailModals({
             accessibilityLabel="Close asset dossier"
             accessibilityRole="button"
           >
-            <Ionicons name="close" size={22} color={colors.textSecondary} />
+            <AppIcon name="close" size={IconSize.lg} color="textSecondary" accessible={false} />
           </Pressable>
         </View>
         <ScrollView style={styles.riskDisclosureSheetScroll} contentContainerStyle={styles.riskDisclosureSheetContent}>
@@ -279,7 +285,7 @@ export const AssetDetailModals = React.memo(function AssetDetailModals({
             accessibilityLabel="Close asset prospectus"
             accessibilityRole="button"
           >
-            <Ionicons name="close" size={22} color={colors.textSecondary} />
+            <AppIcon name="close" size={IconSize.lg} color="textSecondary" accessible={false} />
           </Pressable>
         </View>
         <ScrollView style={styles.riskDisclosureSheetScroll} contentContainerStyle={styles.riskDisclosureSheetContent}>
@@ -470,7 +476,7 @@ function CoOwnAssetDossierSheetContent({
               accessibilityRole="link"
               accessibilityLabel={doc.accessibilityLabel}
             >
-              <Ionicons name="document-text-outline" size={12} color={colors.brand} />
+              <AppIcon name="document-text-outline" size={IconSize.micro} color="brand" accessible={false} />
               <Text style={[dossierStyles.docChipText, { color: colors.brand }]} numberOfLines={1}>
                 {doc.label}
               </Text>
@@ -585,7 +591,7 @@ function CoOwnAssetDossierSheetContent({
           <Text style={[dossierStyles.diligenceLinkText, { color: colors.brand }]}>
             View asset prospectus
           </Text>
-          <Ionicons name="chevron-forward" size={14} color={colors.brand} />
+          <AppIcon name="chevron-forward" size={IconSize.xs} color="brand" accessible={false} />
         </Pressable>
       ) : null}
 
@@ -600,7 +606,7 @@ function CoOwnAssetDossierSheetContent({
         <Text style={[dossierStyles.diligenceLinkText, { color: colors.brand }]}>
           Risk disclosure
         </Text>
-        <Ionicons name="chevron-forward" size={14} color={colors.brand} />
+        <AppIcon name="chevron-forward" size={IconSize.xs} color="brand" accessible={false} />
       </Pressable>
 
       {/* Full due diligence link — navigates to the due diligence screen */}
@@ -614,7 +620,7 @@ function CoOwnAssetDossierSheetContent({
         <Text style={[dossierStyles.diligenceLinkText, { color: colors.brand }]}>
           Full due diligence
         </Text>
-        <Ionicons name="chevron-forward" size={14} color={colors.brand} />
+        <AppIcon name="chevron-forward" size={IconSize.xs} color="brand" accessible={false} />
       </Pressable>
     </View>
   );

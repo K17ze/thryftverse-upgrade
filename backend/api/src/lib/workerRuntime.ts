@@ -51,6 +51,12 @@ import {
   roundTo,
   toJsonString,
 } from './workerHelpers.js';
+import { applyWalletLedgerDelta } from './walletMoneyPath.js';
+
+// Canonical wallet mutation lives in walletMoneyPath.ts (multi-currency
+// pockets + wallet_ledger.currency stamping). Re-exported here so worker
+// handlers keep importing a single worker-runtime module.
+export { applyWalletLedgerDelta };
 
 /**
  * Logger used by the copied helpers in place of the Fastify `app.log`.
@@ -471,6 +477,22 @@ export async function getLedgerAccountBalance(
   return Number(result.rows[0]?.balance ?? '0');
 }
 
+/**
+ * SEP21-FIN-C compatibility path — ONLY for auction intents minted before
+ * the canonical order binding existed (payment_intents.order_id IS NULL).
+ * Order-bound auction intents never reach this helper: their capture posts
+ * through `postCommerceOrderLedgerEntries` inside settlePaymentIntent().
+ *
+ * Accounting corrections vs the pre-fix version:
+ *  - Currency-correct: every entry posts GBP amounts into GBP accounts.
+ *    The old version credited a seller `ize_wallet` account denominated IZE
+ *    while writing GBP-defaulted entries — an account/entry currency split.
+ *  - Held, not released: escrow retains the seller-net amount until the
+ *    canonical delivery/protection-hold release (releaseCommerceOrderEscrowToSeller
+ *    keys on source_id = orderId, which is why sourceId defaults to the order).
+ *    The old version debited ALL of escrow to the seller at payment time, so a
+ *    refund/dispute before delivery had no held funds to draw on.
+ */
 export async function postAuctionSettlementLedgerEntries(
   client: DbQueryable,
   input: {
@@ -479,6 +501,8 @@ export async function postAuctionSettlementLedgerEntries(
     sellerId: string;
     winningBidGbp: number;
     platformFeeGbp: number;
+    /** Canonical order the capture settled against — ledger sourceId. */
+    orderId?: string;
   }
 ): Promise<void> {
   const winningBidGbp = roundTo(Math.max(0, input.winningBidGbp), 2);
@@ -488,20 +512,15 @@ export async function postAuctionSettlementLedgerEntries(
   }
 
   const sellerNetGbp = roundTo(Math.max(0, winningBidGbp - platformFeeGbp), 2);
-  const sourceId = `auction:${input.auctionId}`;
+  // Keyed by the order when known so refund/release lookups that scan
+  // source_id = orderId reconcile against these legs.
+  const sourceId = input.orderId ?? `auction:${input.auctionId}`;
 
   const buyerSpendAccountId = await ensureLedgerAccount(
     client,
     'user',
     input.buyerId,
     'buyer_spend'
-  );
-  const sellerPayableAccountId = await ensureLedgerAccount(
-    client,
-    'user',
-    input.sellerId,
-    'ize_wallet',
-    'IZE'
   );
   const escrowAccountId = await ensureLedgerAccount(
     client,
@@ -516,18 +535,23 @@ export async function postAuctionSettlementLedgerEntries(
     'platform_revenue'
   );
 
+  // Buyer charge → escrow hold (full winning bid, GBP).
   await appendLedgerEntry(client, {
     accountId: buyerSpendAccountId,
     counterpartyAccountId: escrowAccountId,
     direction: 'debit',
     amountGbp: winningBidGbp,
+    currency: 'GBP',
     sourceType: 'order_payment',
     sourceId,
     lineType: 'auction_buyer_charge',
     metadata: {
       auctionId: input.auctionId,
+      orderId: input.orderId ?? null,
       buyerId: input.buyerId,
       sellerId: input.sellerId,
+      sellerEscrowHeldGbp: sellerNetGbp,
+      releasePolicy: 'parcel_delivery_confirmation',
     },
   });
 
@@ -536,56 +560,36 @@ export async function postAuctionSettlementLedgerEntries(
     counterpartyAccountId: buyerSpendAccountId,
     direction: 'credit',
     amountGbp: winningBidGbp,
+    currency: 'GBP',
     sourceType: 'order_payment',
     sourceId,
     lineType: 'auction_buyer_charge',
     metadata: {
       auctionId: input.auctionId,
+      orderId: input.orderId ?? null,
       buyerId: input.buyerId,
       sellerId: input.sellerId,
+      sellerEscrowHeldGbp: sellerNetGbp,
+      releasePolicy: 'parcel_delivery_confirmation',
     },
   });
 
-  if (sellerNetGbp > 0) {
-    await appendLedgerEntry(client, {
-      accountId: escrowAccountId,
-      counterpartyAccountId: sellerPayableAccountId,
-      direction: 'debit',
-      amountGbp: sellerNetGbp,
-      sourceType: 'order_payment',
-      sourceId,
-      lineType: 'auction_seller_payable_credit',
-      metadata: {
-        auctionId: input.auctionId,
-        sellerId: input.sellerId,
-      },
-    });
-
-    await appendLedgerEntry(client, {
-      accountId: sellerPayableAccountId,
-      counterpartyAccountId: escrowAccountId,
-      direction: 'credit',
-      amountGbp: sellerNetGbp,
-      sourceType: 'order_payment',
-      sourceId,
-      lineType: 'auction_seller_payable_credit',
-      metadata: {
-        auctionId: input.auctionId,
-        sellerId: input.sellerId,
-      },
-    });
-  }
-
+  // Platform charge is recognised at capture (same timing as the canonical
+  // commerce path); the seller-net remainder stays held in escrow until
+  // delivery confirmation releases it to seller_payable (GBP).
   if (platformFeeGbp > 0) {
     await appendLedgerEntry(client, {
       accountId: escrowAccountId,
       counterpartyAccountId: platformRevenueAccountId,
       direction: 'debit',
       amountGbp: platformFeeGbp,
+      currency: 'GBP',
       sourceType: 'order_payment',
       sourceId,
       lineType: 'auction_platform_fee_credit',
       metadata: {
+        auctionId: input.auctionId,
+        orderId: input.orderId ?? null,
         component: 'auction_platform_charge',
       },
     });
@@ -595,10 +599,13 @@ export async function postAuctionSettlementLedgerEntries(
       counterpartyAccountId: escrowAccountId,
       direction: 'credit',
       amountGbp: platformFeeGbp,
+      currency: 'GBP',
       sourceType: 'order_payment',
       sourceId,
       lineType: 'auction_platform_fee_credit',
       metadata: {
+        auctionId: input.auctionId,
+        orderId: input.orderId ?? null,
         component: 'auction_platform_charge',
       },
     });
@@ -649,35 +656,63 @@ export async function loadMintOperationById(
 
 // ─── Wallet helpers ────────────────────────────────────────────────────────
 
+const WALLET_ROW_SELECT = `
+  id,
+  user_id,
+  oneze_balance_units,
+  fiat_balance_minor,
+  fiat_currency,
+  version,
+  created_at::text,
+  updated_at::text
+`;
+
 export async function ensureWallet(
   client: DbQueryable,
   userId: string,
   fiatCurrency = DEFAULT_WALLET_FIAT_CURRENCY
 ): Promise<WalletRow> {
-  const result = await client.query<WalletRow>(
-    `
-      INSERT INTO wallets (
-        id,
-        user_id,
-        fiat_currency
-      )
-      VALUES ($1, $2, $3)
-      ON CONFLICT (user_id)
-      DO UPDATE SET user_id = EXCLUDED.user_id
-      RETURNING
-        id,
-        user_id,
-        oneze_balance_units,
-        fiat_balance_minor,
-        fiat_currency,
-        version,
-        created_at::text,
-        updated_at::text
-    `,
-    [createRuntimeId('wal'), userId, fiatCurrency.toUpperCase()]
+  // SELECT ... FOR UPDATE takes the same wallet row lock the old
+  // INSERT ... ON CONFLICT DO UPDATE did — but without writing a dead tuple
+  // on every call (DO UPDATE SET user_id = EXCLUDED.user_id produced a new
+  // row version per invocation, bloating the wallets table on every money
+  // path). Mirrors the canonical implementation in src/index.ts.
+  const existing = await client.query<WalletRow>(
+    `SELECT ${WALLET_ROW_SELECT} FROM wallets WHERE user_id = $1 FOR UPDATE`,
+    [userId]
   );
 
-  const wallet = result.rows[0];
+  let wallet = existing.rows[0];
+  if (!wallet) {
+    const inserted = await client.query<WalletRow>(
+      `
+        INSERT INTO wallets (
+          id,
+          user_id,
+          fiat_currency
+        )
+        VALUES ($1, $2, $3)
+        ON CONFLICT (user_id)
+        DO NOTHING
+        RETURNING ${WALLET_ROW_SELECT}
+      `,
+      [createRuntimeId('wal'), userId, fiatCurrency.toUpperCase()]
+    );
+    wallet = inserted.rows[0];
+    if (!wallet) {
+      // A concurrent insert committed between our SELECT and our speculative
+      // INSERT — re-read the winner's row under the lock.
+      const reloaded = await client.query<WalletRow>(
+        `SELECT ${WALLET_ROW_SELECT} FROM wallets WHERE user_id = $1 FOR UPDATE`,
+        [userId]
+      );
+      wallet = reloaded.rows[0];
+    }
+  }
+
+  if (!wallet) {
+    throw createApiError('WALLET_NOT_FOUND', 'Unable to ensure wallet', { userId });
+  }
 
   const walletLedgerCountResult = await client.query<{ count: string }>(
     `
@@ -731,125 +766,7 @@ export async function ensureWallet(
   return syncedResult.rows[0] ?? wallet;
 }
 
-async function loadWalletForUpdate(client: DbQueryable, walletId: string): Promise<WalletRow> {
-  const result = await client.query<WalletRow>(
-    `
-      SELECT
-        id,
-        user_id,
-        oneze_balance_units,
-        fiat_balance_minor,
-        fiat_currency,
-        version,
-        created_at::text,
-        updated_at::text
-      FROM wallets
-      WHERE id = $1
-      LIMIT 1
-      FOR UPDATE
-    `,
-    [walletId]
-  );
 
-  const wallet = result.rows[0];
-  if (!wallet) {
-    throw createApiError('WALLET_NOT_FOUND', 'Wallet not found', { walletId });
-  }
-
-  return wallet;
-}
-
-export async function applyWalletLedgerDelta(
-  client: DbQueryable,
-  input: {
-    walletId: string;
-    txId: string;
-    asset: '1ZE' | 'FIAT';
-    amount: number;
-    kind: string;
-    refType?: string;
-    refId?: string;
-    anchorValueInInr?: number;
-    metadata?: Record<string, unknown>;
-  }
-): Promise<number> {
-  if (!Number.isSafeInteger(input.amount)) {
-    throw createApiError('WALLET_AMOUNT_INVALID', 'Wallet ledger amount must be an integer unit');
-  }
-
-  const wallet = await loadWalletForUpdate(client, input.walletId);
-  const currentBalance = Number(
-    input.asset === '1ZE' ? wallet.oneze_balance_units : wallet.fiat_balance_minor
-  );
-  const nextBalance = currentBalance + input.amount;
-
-  if (nextBalance < 0) {
-    throw createApiError('WALLET_INSUFFICIENT_BALANCE', 'Wallet balance is insufficient for this operation', {
-      walletId: input.walletId,
-      asset: input.asset,
-      currentBalance,
-      attemptedDelta: input.amount,
-    });
-  }
-
-  if (input.asset === '1ZE') {
-    await client.query(
-      `
-        UPDATE wallets
-        SET
-          oneze_balance_units = $2,
-          version = version + 1,
-          updated_at = NOW()
-        WHERE id = $1
-      `,
-      [input.walletId, nextBalance]
-    );
-  } else {
-    await client.query(
-      `
-        UPDATE wallets
-        SET
-          fiat_balance_minor = $2,
-          version = version + 1,
-          updated_at = NOW()
-        WHERE id = $1
-      `,
-      [input.walletId, nextBalance]
-    );
-  }
-
-  await client.query(
-    `
-      INSERT INTO wallet_ledger (
-        wallet_id,
-        tx_id,
-        asset,
-        amount,
-        balance_after,
-        kind,
-        ref_type,
-        ref_id,
-        anchor_value_in_inr,
-        metadata
-      )
-      VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10::jsonb)
-    `,
-    [
-      input.walletId,
-      input.txId,
-      input.asset,
-      input.amount,
-      nextBalance,
-      input.kind,
-      input.refType ?? null,
-      input.refId ?? null,
-      input.anchorValueInInr ?? null,
-      toJsonString(input.metadata ?? {}),
-    ]
-  );
-
-  return nextBalance;
-}
 
 async function ensureWalletSegments(client: DbQueryable, wallet: WalletRow): Promise<WalletSegmentRow> {
   const seededPurchasedUnits = Math.max(0, Number(wallet.oneze_balance_units));

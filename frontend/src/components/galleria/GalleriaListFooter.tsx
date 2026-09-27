@@ -16,10 +16,14 @@ import { MASONRY_GAP, MASONRY_PADDING } from './galleriaLayout';
 export function GalleriaListFooter({
   loading,
   remainingEditorials,
-  onPosterStudioPress }: {
+  onPosterStudioPress,
+  onEditorialPress }: {
   loading: boolean;
   remainingEditorials: GalleriaEditorial[];
   onPosterStudioPress: () => void;
+  /** Opens the piece's article screen (S21-02). Optional — rows stay
+   *  non-interactive when no reader destination is wired. */
+  onEditorialPress?: (editorial: GalleriaEditorial) => void;
 }) {
   const styles = useGalleriaStyles();
   const { t } = useAppTranslation('galleria');
@@ -42,6 +46,7 @@ export function GalleriaListFooter({
               editorial={ed}
               isLast={idx === remainingEditorials.length - 1}
               size={idx === 0 ? 'large' : 'standard'}
+              onPress={onEditorialPress ? () => onEditorialPress(ed) : undefined}
             />
           ))}
         </>

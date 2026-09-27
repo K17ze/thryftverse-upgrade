@@ -182,14 +182,14 @@ export default function SellerAnalyticsScreen() {
         contentContainerStyle={styles.scrollContent}
         refreshControl={<RefreshControl refreshing={isRefreshing} onRefresh={onRefresh} tintColor={colors.brand} />}
       >
-        {/* ── Period Selector — segmented control with custom range ── */}
-        <View style={styles.periodSegmentControl}>
+        {/* ── Period selector — hairline tabs with custom range ── */}
+        <View style={styles.periodRow}>
           {PRESET_OPTIONS.map((opt) => {
             const isActive = period === opt.key;
             return (
               <AnimatedPressable
                 key={opt.key}
-                style={[styles.periodSegmentOption, isActive && styles.periodSegmentOptionActive]}
+                style={styles.periodTab}
                 onPress={() => {
                   haptics.tap();
                   setPeriod(opt.key);
@@ -202,19 +202,21 @@ export default function SellerAnalyticsScreen() {
               >
                 <Text
                   style={[
-                    styles.periodSegmentText,
+                    styles.periodTabText,
                     { color: isActive ? colors.textPrimary : colors.textMuted },
-                    isActive && styles.periodSegmentTextActive,
                   ]}
                 >
                   {opt.label}
                 </Text>
+                {isActive ? (
+                  <View style={[styles.periodTabIndicator, { backgroundColor: colors.textPrimary }]} />
+                ) : null}
               </AnimatedPressable>
             );
           })}
           <View ref={customTriggerRef} collapsable={false}>
             <AnimatedPressable
-              style={[styles.periodSegmentOption, isCustom && styles.periodSegmentOptionActive]}
+              style={styles.periodTab}
               onPress={() => {
                 haptics.tap();
                 setRangeSheetVisible(true);
@@ -227,13 +229,15 @@ export default function SellerAnalyticsScreen() {
             >
               <Text
                 style={[
-                  styles.periodSegmentText,
+                  styles.periodTabText,
                   { color: isCustom ? colors.textPrimary : colors.textMuted },
-                  isCustom && styles.periodSegmentTextActive,
                 ]}
               >
                 Custom
               </Text>
+              {isCustom ? (
+                <View style={[styles.periodTabIndicator, { backgroundColor: colors.textPrimary }]} />
+              ) : null}
             </AnimatedPressable>
           </View>
         </View>

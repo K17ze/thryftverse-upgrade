@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { View, Text, StyleSheet, Pressable } from 'react-native';
+import { View, Text, StyleSheet, Pressable, ActivityIndicator } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { useAppTheme } from '../../theme/ThemeContext';
 import { Space, Radius } from '../../theme/designTokens';
@@ -21,6 +21,10 @@ export interface CoOwnRiskDisclosureProps {
   /** Wave A: when provided and not yet acknowledged, renders a
    *  bottom-pinned "I understand — continue" confirmation. */
   onAcknowledge?: () => void;
+  /** While the consent write is in flight, the acknowledge control is
+   *  disabled and shows a spinner — the acknowledgment is only real once
+   *  the server has recorded it. */
+  acknowledging?: boolean;
 }
 
 const DEFAULT_RISKS = [
@@ -47,7 +51,7 @@ function buildRisks(disclosures: CoOwnRiskDisclosures | null | undefined): strin
   return structured.length > 0 ? structured : DEFAULT_RISKS;
 }
 
-export function CoOwnRiskDisclosure({ disclosures, risks, onReportIssue, acknowledged, onAcknowledge }: CoOwnRiskDisclosureProps) {
+export function CoOwnRiskDisclosure({ disclosures, risks, onReportIssue, acknowledged, onAcknowledge, acknowledging }: CoOwnRiskDisclosureProps) {
   const { colors } = useAppTheme();
   const haptic = useHaptic();
   const reducedMotion = useReducedMotion();
@@ -132,17 +136,23 @@ export function CoOwnRiskDisclosure({ disclosures, risks, onReportIssue, acknowl
         ) : (
           <Pressable
             onPress={onAcknowledge}
+            disabled={acknowledging === true}
             style={({ pressed }) => [
               styles.acknowledgeBtn,
               { backgroundColor: colors.brand },
-              pressed && { opacity: 0.85 },
+              (pressed || acknowledging === true) && { opacity: 0.85 },
             ]}
             accessibilityRole="button"
             accessibilityLabel="I understand — continue"
+            accessibilityState={{ disabled: acknowledging === true, busy: acknowledging === true }}
           >
-            <Text style={[styles.acknowledgeBtnText, { color: colors.textInverse }]} maxFontSizeMultiplier={1.3}>
-              I understand — continue
-            </Text>
+            {acknowledging === true ? (
+              <ActivityIndicator size="small" color={colors.textInverse} />
+            ) : (
+              <Text style={[styles.acknowledgeBtnText, { color: colors.textInverse }]} maxFontSizeMultiplier={1.3}>
+                I understand — continue
+              </Text>
+            )}
           </Pressable>
         )
       ) : null}

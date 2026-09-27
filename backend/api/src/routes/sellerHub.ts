@@ -1273,6 +1273,9 @@ export const registerSellerHubRoutes = ({ app, readDb, db }: SellerHubRouteDepen
             state = 'applied';
             appliedFields = editResult.appliedFields;
             currentStatus = editResult.currentStatus;
+            // A moderation hold can land the listing on 'risk_pending'
+            // mid-edit — surface the landing status on the receipt.
+            newStatus = editResult.newStatus;
             appliedCount += 1;
           } else if (editResult.status === 'rejected') {
             state = 'rejected';

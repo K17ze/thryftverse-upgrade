@@ -49,10 +49,37 @@ _registry = ModelRegistry()
 _fraud_registry = FraudModelRegistry()
 
 
+# Environment detection — prod deployments set ENV=production (compose) or
+# NODE_ENV=production (platforms that reuse the Node convention). In
+# production the shared-secret tokens below are MANDATORY: silently falling
+# back to the committed dev defaults would leave admin/model endpoints
+# guessable by anyone who has read this repository.
+_DEPLOY_ENV = (
+    os.environ.get("ENV") or os.environ.get("NODE_ENV") or "development"
+).strip().lower()
+_IS_PRODUCTION = _DEPLOY_ENV in {"production", "prod"}
+
+
+def _expected_token(name: str, dev_default: str) -> str | None:
+    """Resolve a shared-secret token. Returns None when the variable is
+    required (production) but absent — callers must fail closed."""
+    value = (os.environ.get(name) or "").strip()
+    if value:
+        return value
+    if _IS_PRODUCTION:
+        return None
+    return dev_default
+
+
 def require_decision_service(
     x_decision_service_token: str | None = Header(default=None),
 ) -> None:
-    expected = os.environ.get("DECISION_SERVICE_TOKEN", "local-decision-service-token")
+    expected = _expected_token("DECISION_SERVICE_TOKEN", "local-decision-service-token")
+    if expected is None:
+        raise HTTPException(
+            status_code=503,
+            detail="DECISION_SERVICE_TOKEN is not configured.",
+        )
     if not x_decision_service_token or not hmac.compare_digest(
         x_decision_service_token,
         expected,
@@ -64,7 +91,12 @@ def require_admin(
     x_admin_service_token: str | None = Header(default=None),
 ) -> None:
     """Admin-only guard for shadow model load/unload operations."""
-    expected = os.environ.get("ADMIN_SERVICE_TOKEN", "local-admin-token")
+    expected = _expected_token("ADMIN_SERVICE_TOKEN", "local-admin-token")
+    if expected is None:
+        raise HTTPException(
+            status_code=503,
+            detail="ADMIN_SERVICE_TOKEN is not configured.",
+        )
     if not x_admin_service_token or not hmac.compare_digest(
         x_admin_service_token,
         expected,
@@ -72,13 +104,40 @@ def require_admin(
         raise HTTPException(status_code=403, detail="Admin credential required.")
 
 
+def _serving_state(registry: ModelRegistry) -> str:
+    """Honest serving state (audit: "ML health truthful champion capability").
+
+    Three states, reporting what actually answers user traffic:
+      - "heuristic_baseline" — the deterministic heuristic champion serves
+        alone; no trained artifact is loaded.
+      - "shadow_loaded"      — a trained challenger artifact is loaded but
+        only observes/scores in parallel; the heuristic champion still
+        produces every user-facing response.
+      - "serving_champion"   — a trained model is the serving champion.
+        Unreachable while the champion is the heuristic ranker; a loaded
+        shadow must never be reported as this.
+    """
+    if registry.champion.is_trained:
+        return "serving_champion"
+    if registry.shadow_loaded:
+        return "shadow_loaded"
+    return "heuristic_baseline"
+
+
 @app.get("/health")
 def health() -> dict[str, object]:
     return {
         "ok": True,
         "service": "thryftverse-decision-baseline-service",
-        "capability_level": "trained_model" if _registry.shadow_loaded else "heuristic_baseline",
-        "trained_models": _registry.shadow_loaded,
+        # capability_level describes the SERVING state, not the presence of
+        # a loaded artifact — see _serving_state.
+        "capability_level": _serving_state(_registry),
+        "serving_champion_model_id": _registry.champion.model_id,
+        "serving_champion_version": _registry.champion.model_version,
+        "serving_champion_trained": _registry.champion.is_trained,
+        # A trained model is only "serving" when it is the champion. A
+        # loaded shadow is observation-only and does not make this True.
+        "trained_models": _registry.champion.is_trained,
         "shadow_model_loaded": _registry.shadow_loaded,
         "shadow_model_version": _registry.shadow_version,
         "recommendation_policy_version": POLICY_VERSION,
@@ -156,6 +215,9 @@ def shadow_unload(
 @app.get("/shadow/status")
 def shadow_status() -> dict[str, object]:
     return {
+        "capability_level": _serving_state(_registry),
+        "serving_champion_model_id": _registry.champion.model_id,
+        "serving_champion_trained": _registry.champion.is_trained,
         "shadow_model_loaded": _registry.shadow_loaded,
         "shadow_model_version": _registry.shadow_version,
         "champion_policy_version": POLICY_VERSION,

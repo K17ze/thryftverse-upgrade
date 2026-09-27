@@ -74,6 +74,8 @@ export default function VisualSearchScreen({ navigation, route }: Props) {
     results,
     facetCounts,
     refreshing,
+    region,
+    applyRegion,
     runSearch,
     handleRefresh,
     resetResults,
@@ -126,9 +128,14 @@ export default function VisualSearchScreen({ navigation, route }: Props) {
 
   const handleClearFilters = useCallback(() => {
     haptic.light();
+    // clearFields resets the payload source-of-truth ref synchronously, so
+    // this runSearch — even a closure captured before the clear rendered —
+    // builds the cleared payload. The previous setTimeout re-dispatch still
+    // invoked the pre-clear runSearch whose buildFilterPayload was closed
+    // over the pre-clear filter state (P1-3).
     clearFields();
     if (imageUri) {
-      setTimeout(() => void runSearch(), 0);
+      void runSearch();
     }
   }, [haptic, clearFields, imageUri, runSearch]);
 
@@ -179,6 +186,8 @@ export default function VisualSearchScreen({ navigation, route }: Props) {
             onRemove={handleRemoveImage}
             onRetake={handleRetake}
             onReplace={openGallery}
+            region={region}
+            onApplyRegion={applyRegion}
           />
           <VisualSearchRefinementBar
             description={description}

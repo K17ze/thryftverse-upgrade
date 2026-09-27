@@ -1,5 +1,4 @@
 import React from 'react';
-import { Platform } from 'react-native';
 import { createNativeStackNavigator } from '@react-navigation/native-stack';
 import type { ExploreTabParamList } from '../types';
 
@@ -10,14 +9,14 @@ const pushScreenOptions = {
   gestureEnabled: true,
 };
 
+// FilterScreen renders its own sheet chrome (overlay, snap points,
+// pan-to-dismiss). A native formSheet/modal produced double chrome and two
+// competing drag gestures — transparentModal hands the whole presentation
+// to the screen's own sheet, matching the root stack's Filter registration.
 const filterScreenOptions = {
-  presentation: Platform.select({
-    ios: 'formSheet' as const,
-    android: 'modal' as const,
-    default: 'modal' as const,
-  }),
+  presentation: 'transparentModal' as const,
   headerShown: false,
-  gestureEnabled: true,
+  gestureEnabled: false,
 };
 
 /**

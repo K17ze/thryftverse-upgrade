@@ -6,8 +6,9 @@ import {
   Pressable,
   ActivityIndicator,
   Switch } from 'react-native';
-import { Ionicons } from '@expo/vector-icons';
 import { BottomSheet } from '../BottomSheet';
+import { AppIcon } from '../common/AppIcon';
+import { IconSize } from '../../theme/iconTokens';
 import { AppButton } from './AppButton';
 import { AppInput } from './AppInput';
 import { CachedImage } from '../CachedImage';
@@ -498,7 +499,7 @@ export function BidSheet({
             />
           ) : (
             <View style={styles.itemThumbPlaceholder}>
-              <Ionicons name="image-outline" size={20} color={themed.textMuted} />
+              <AppIcon name="image-outline" size={IconSize.md} color={themed.textMuted} />
             </View>
           )}
           <View style={styles.itemHeaderText}>
@@ -620,9 +621,9 @@ export function BidSheet({
               if (bidGbp <= 0) return null;
               return (
                 <View style={[styles.confidenceRow, { backgroundColor: wouldLead ? themed.successSubtle : themed.dangerSubtle }]}>
-                  <Ionicons
+                  <AppIcon
                     name={wouldLead ? 'checkmark-circle-outline' : 'alert-circle-outline'}
-                    size={14}
+                    size={IconSize.xs}
                     color={wouldLead ? themed.success : themed.danger}
                   />
                   <Text style={[styles.confidenceText, { color: wouldLead ? themed.success : themed.danger }]}>
@@ -638,7 +639,7 @@ export function BidSheet({
                 accessibilityRole="alert"
                 accessibilityLiveRegion="polite"
               >
-                <Ionicons name="alert-circle-outline" size={14} color={themed.danger} accessible={false} />
+                <AppIcon name="alert-circle-outline" size={IconSize.xs} color={themed.danger} accessible={false} />
                 <Text style={styles.errorText}>{error.message}</Text>
               </View>
             )}
@@ -716,19 +717,19 @@ export function BidSheet({
                 committing to an irreversible action. */}
             <View style={styles.commitmentBlock}>
               <View style={styles.commitmentRow}>
-                <Ionicons name="information-circle-outline" size={14} color={themed.textSecondary} />
+                <AppIcon name="information-circle-outline" size={IconSize.xs} color={themed.textSecondary} />
                 <Text style={styles.commitmentText}>
                   Bids are binding once accepted.
                 </Text>
               </View>
               <View style={styles.commitmentRow}>
-                <Ionicons name="time-outline" size={14} color={themed.textSecondary} />
+                <AppIcon name="time-outline" size={IconSize.xs} color={themed.textSecondary} />
                 <Text style={styles.commitmentText}>
                   If you win, payment is due promptly after the auction ends.
                 </Text>
               </View>
               <View style={styles.commitmentRow}>
-                <Ionicons name="lock-closed-outline" size={14} color={themed.textSecondary} />
+                <AppIcon name="lock-closed-outline" size={IconSize.xs} color={themed.textSecondary} />
                 <Text style={styles.commitmentText}>
                   You cannot cancel a bid after it is submitted.
                 </Text>
@@ -741,7 +742,7 @@ export function BidSheet({
                 accessibilityRole="alert"
                 accessibilityLiveRegion="polite"
               >
-                <Ionicons name="alert-circle-outline" size={14} color={themed.danger} accessible={false} />
+                <AppIcon name="alert-circle-outline" size={IconSize.xs} color={themed.danger} accessible={false} />
                 <Text style={styles.errorText}>{error.message}</Text>
               </View>
             )}
@@ -773,7 +774,7 @@ export function BidSheet({
         {stage === 'submitting' && (
           <View style={styles.centerStage}>
             <View style={styles.submittingSpinnerWrap}>
-              <Ionicons name="hourglass-outline" size={40} color={themed.brand} />
+              <AppIcon name="hourglass-outline" size={IconSize.hero} color={themed.brand} />
             </View>
             <Text style={styles.submittingText}>Submitting your bid...</Text>
             <Text style={styles.submittingDetail}>This may take a moment.</Text>
@@ -801,7 +802,7 @@ export function BidSheet({
         {stage === 'success' && (
           <View style={styles.centerStage}>
             <View style={styles.successIcon}>
-              <Ionicons name="checkmark-circle" size={56} color={themed.success} />
+              <AppIcon name="checkmark-circle" size={IconSize.display} color={themed.success} />
             </View>
             <Text style={styles.successTitle}>Bid placed</Text>
             <Text style={styles.successDetail}>
@@ -823,7 +824,7 @@ export function BidSheet({
         {stage === 'recoverable_conflict' && error && error.kind === 'buy_now_review_required' && (
           <View style={styles.stageContent}>
             <View style={styles.conflictIconRow}>
-              <Ionicons name="information-circle-outline" size={28} color={themed.brand} />
+              <AppIcon name="information-circle-outline" size={IconSize.xl} color={themed.brand} />
             </View>
             <Text style={styles.conflictHeading}>Consider Buy Now</Text>
             <Text style={styles.conflictExplanation}>{error.message}</Text>
@@ -863,7 +864,7 @@ export function BidSheet({
         {stage === 'error' && error && (
           <View style={styles.stageContent}>
             <View style={styles.errorIconSmall}>
-              <Ionicons name="alert-circle-outline" size={24} color={themed.danger} />
+              <AppIcon name="alert-circle-outline" size={IconSize.lg} color={themed.danger} />
             </View>
             <Text style={styles.errorTitle}>{error.message}</Text>
             <View style={styles.actions}>

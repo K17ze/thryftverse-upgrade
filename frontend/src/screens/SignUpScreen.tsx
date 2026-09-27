@@ -559,14 +559,14 @@ export default function SignUpScreen() {
                     I agree to the{' '}
                     <Text
                       style={styles.termsLink}
-                      onPress={() => void Linking.openURL('https://thryftverse.app/terms')}
+                      onPress={() => void Linking.openURL('https://thryftverse.com/terms')}
                     >
                       Terms of Service
                     </Text>
                     {' '}and{' '}
                     <Text
                       style={styles.termsLink}
-                      onPress={() => void Linking.openURL('https://thryftverse.app/privacy')}
+                      onPress={() => void Linking.openURL('https://thryftverse.com/privacy')}
                     >
                       Privacy Policy
                     </Text>

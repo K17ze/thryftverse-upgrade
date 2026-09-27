@@ -46,12 +46,19 @@ test('channel gateway resolution honors requested override and capability defaul
   const fromCapability = resolveChannelGateway(india, 'co-own', undefined, 'stripe_americas');
   assert.equal(fromCapability, 'razorpay_in');
 
+  // A channel with NO gateways at all — public or internal — must fall back
+  // and stay permissive. Both maps are cleared: commerce carries the
+  // oneze_internal internal rail, which is still a valid configured gateway.
   const noGatewayConfig = {
     ...india,
     payments: {
       ...india.payments,
       gatewaysByChannel: {
         ...india.payments.gatewaysByChannel,
+        commerce: [],
+      },
+      internalRailsByChannel: {
+        ...india.payments.internalRailsByChannel,
         commerce: [],
       },
     },

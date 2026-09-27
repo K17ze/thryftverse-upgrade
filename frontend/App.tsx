@@ -28,7 +28,7 @@ import * as Notifications from 'expo-notifications';
 import { View, ActivityIndicator, Text, TextInput, Alert, AppState } from 'react-native';
 import { ReducedMotionConfig, ReduceMotion } from 'react-native-reanimated';
 import { ActiveTheme, Colors, DARK_COLORS, LIGHT_COLORS } from './src/constants/colors';
-import { ToastProvider } from './src/context/ToastContext';
+import { ToastProvider, useToast } from './src/context/ToastContext';
 import { TabScrollProvider } from './src/context/TabScrollContext';
 import { CurrencyProvider } from './src/context/CurrencyContext';
 import { BackendDataProvider } from './src/context/BackendDataContext';
@@ -38,7 +38,7 @@ import { TaxonomyProvider } from './src/context/TaxonomyContext';
 import { ToastContainer, PushSoftAskOverlay } from './src/components/Toast';
 import { UpdateManager } from './src/platform/updates';
 import { AppErrorBoundary, initSentry, installGlobalErrorHandler, ObserveRoot, markInteractive, Sentry, registerSentryNavigationContainer } from './src/platform/monitoring';
-import { registerAppNavigationRef } from './src/platform/monitoring/appNavigation';
+import { registerAppNavigationRef, getAppNavigationRef } from './src/platform/monitoring/appNavigation';
 import { KeyboardProvider } from './src/platform/keyboard';
 import { ServerStateProvider, useMobileQueryLifecycle } from './src/platform/server';
 import { RealtimeProvider } from './src/platform/realtime';
@@ -60,7 +60,8 @@ import { initChatOutboxDrain, drainChatOutbox } from './src/services/chatOutbox'
 import { initOutboxDrain } from './src/storage/outboxClient';
 import { runSync, type SyncDomain } from './src/storage/syncEngine';
 import { parseApiError } from './src/lib/apiClient';
-import { useOfflineQueue } from './src/lib/offlineQueue';
+import { useOfflineQueue, selectDeadLetterCount } from './src/lib/offlineQueue';
+import { useAppTranslation } from './src/i18n/useAppTranslation';
 import { getStoredProfileMedia } from './src/preferences/profileMediaPreferences';
 import { getStoredAuthSnapshot } from './src/preferences/authSnapshot';
 import { getStoredSettingsPreferences } from './src/preferences/settingsPreferences';
@@ -243,6 +244,40 @@ function runSyncListingDraft(): void {
 /** Renders nothing — hosts the notifications realtime subscription. */
 function NotificationRealtimeBridge() {
   useNotificationRealtime();
+  return null;
+}
+
+/**
+ * Renders nothing — announces when an offline write lands in the dead-letter
+ * queue. Dead letters persisted from a previous session are surfaced durably
+ * in Settings instead, so the toast only fires on a *new* terminal failure
+ * during this session.
+ */
+function OfflineDeadLetterWatcher() {
+  const { show } = useToast();
+  const { t } = useAppTranslation('settings');
+  const deadLetterCount = useOfflineQueue(selectDeadLetterCount);
+  const previousCountRef = React.useRef<number | null>(null);
+
+  React.useEffect(() => {
+    const previous = previousCountRef.current;
+    previousCountRef.current = deadLetterCount;
+    if (previous === null || deadLetterCount <= previous) {
+      return;
+    }
+    show(t('sync.deadLetterToast', { count: deadLetterCount }), 'error', {
+      action: {
+        label: t('sync.review'),
+        onPress: () => {
+          const ref = getAppNavigationRef();
+          if (ref?.isReady()) {
+            ref.navigate('Settings');
+          }
+        },
+      },
+    });
+  }, [deadLetterCount, show, t]);
+
   return null;
 }
 
@@ -824,6 +859,9 @@ export default function App() {
               {/* Realtime consumer for notifications.user:{id} — must live
                   inside RealtimeProvider so it can reach the WS client. */}
               <NotificationRealtimeBridge />
+              {/* Announces terminally-failed offline writes; the durable
+                  retry/discard surface lives in Settings → Sync issues. */}
+              <OfflineDeadLetterWatcher />
               <UpdateManager />
             </ToastProvider>
             </RealtimeProvider>

@@ -45,8 +45,8 @@ export function TransactionSheet({
   snapPoint = 0.6 }: TransactionSheetProps) {
   const { colors } = useAppTheme();
   const styles = React.useMemo(() => createStyles(colors), [colors]);
-  const confirmColor = confirmAction.destructive ? colors.dangerText : colors.brand;
-  const confirmTextColor = confirmAction.destructive ? colors.textInverse : colors.textInverse;
+  const confirmColor = confirmAction.destructive ? colors.danger : colors.brand;
+  const confirmTextColor = colors.textInverse;
 
   return (
     <BottomSheet

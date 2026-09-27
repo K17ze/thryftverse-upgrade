@@ -329,6 +329,23 @@ export function collectProductionReadinessErrors(
     );
   }
 
+  // Durable shared search. The in-memory index is process-local: results
+  // diverge across replicas and the index is wiped on restart, so it must
+  // never silently serve production traffic. ELASTICSEARCH_URL does not
+  // satisfy this — the Elasticsearch adapter is a placeholder that serves
+  // the in-memory index.
+  if (!valueOf(environment, "MEILISEARCH_URL")) {
+    if (isTruthy(valueOf(environment, "SEARCH_ALLOW_IN_MEMORY"))) {
+      console.warn(
+        "[search] SEARCH_ALLOW_IN_MEMORY=true — serving the process-local in-memory index in production. Results are per-replica and reset on restart; /search/health reports this as degraded.",
+      );
+    } else {
+      errors.push(
+        "MEILISEARCH_URL is required in production for a shared search index — set SEARCH_ALLOW_IN_MEMORY=true only to opt into the process-local index for single-instance deployments",
+      );
+    }
+  }
+
   const alertUrls =
     valueOf(environment, "ALERTING_WEBHOOK_URLS") ||
     valueOf(environment, "ALERTING_WEBHOOK_URL");

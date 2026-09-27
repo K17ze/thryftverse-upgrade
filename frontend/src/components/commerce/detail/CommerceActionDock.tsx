@@ -36,6 +36,9 @@ export interface CommerceActionDockProps {
    *  checkout and new offers with 409 SELLER_AWAY anyway). May be null
    *  while the trust query loads; absence never implies "not away". */
   seller?: SellerTrustSummary | null;
+  /** Viewer blocked this seller — no purchase/offer/enquiry affordance
+   *  may render (all fail server-side). */
+  isSellerBlocked?: boolean;
   formattedPrice: string;
   formattedOriginal: string | null;
   hasDiscount: boolean;
@@ -52,6 +55,7 @@ export function CommerceActionDock({
   capabilities,
   commerce,
   seller,
+  isSellerBlocked = false,
   formattedPrice,
   formattedOriginal,
   hasDiscount,
@@ -163,6 +167,27 @@ export function CommerceActionDock({
           </Text>
         }
         subtitle="This seller's account is currently restricted"
+        primaryAction={{
+          label: t('product.browseSimilar'),
+          onPress: onBrowseSimilar,
+        }}
+      />
+    );
+  }
+
+  // ── Seller blocked by viewer — no purchase affordance ──
+  // The viewer's own block decision is a client-side truth (store). Buy,
+  // offer, enquire and message all fail server-side for blocked users,
+  // so the dock shows the relationship state instead of dead CTAs.
+  if (isSellerBlocked) {
+    return (
+      <CommerceDetailStateDock
+        stateBadge={
+          <Text style={[styles.dockStateBadge, { color: colors.textSecondary }]} maxFontSizeMultiplier={2}>
+            Blocked
+          </Text>
+        }
+        subtitle="You blocked this seller"
         primaryAction={{
           label: t('product.browseSimilar'),
           onPress: onBrowseSimilar,

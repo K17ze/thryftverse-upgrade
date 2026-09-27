@@ -1,6 +1,6 @@
-import { Platform, StyleSheet } from 'react-native';
+import { StyleSheet } from 'react-native';
 import type { ThemeColors } from '../../theme/ThemeContext';
-import { Typography, Radius, Space, Stroke, Control, LetterSpacing } from '../../theme/designTokens';
+import { Typography, Radius, Space, Stroke, Control, LetterSpacing, DockConstants } from '../../theme/designTokens';
 import { TypographyV2 } from '../../theme/typography.v2';
 
 // Shared stylesheet for the filter sheet and every extracted section
@@ -11,24 +11,27 @@ export function createFilterStyles(colors: ThemeColors) {
   return StyleSheet.create({
   handleContainer: {
     alignItems: 'center',
-    paddingVertical: Space.sm + Space.xs },
+    paddingTop: Space.sm + Space.xxs,
+    paddingBottom: Space.sm },
+  // iOS grabber geometry — 36×5pt, fully rounded. Fill is set by the header
+  // (border in dark, 20% black in light) matching the house BottomSheet.
   handle: {
-    width: Space.xl + Space.xs,
-    height: Space.xs,
-    borderRadius: Radius.sm,
+    width: 36,
+    height: 5,
+    borderRadius: Radius.full,
     backgroundColor: colors.borderSubtle },
 
   header: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
-    paddingHorizontal: Space.lg,
-    paddingBottom: Space.md },
+    paddingHorizontal: Space.md,
+    paddingBottom: Space.sm },
   headerTitleRow: {
     flexDirection: 'row',
     alignItems: 'center',
     gap: Space.xs + 2 },
-  headerTitle: { fontSize: TypographyV2.priceList.size, fontFamily: TypographyV2.priceList.fontFamily, color: colors.textPrimary, letterSpacing: TypographyV2.priceList.letterSpacing },
+  headerTitle: { fontSize: TypographyV2.sectionTitle.size, fontFamily: TypographyV2.sectionTitle.fontFamily, color: colors.textPrimary, letterSpacing: TypographyV2.sectionTitle.letterSpacing },
   activeCountBadge: {
     minWidth: Space.lg + 2,
     height: Space.lg + 2,
@@ -41,15 +44,15 @@ export function createFilterStyles(colors: ThemeColors) {
     fontSize: TypographyV2.meta.size,
     fontFamily: Typography.family.bold,
     color: colors.textInverse },
-  clearBtn: {
-    minHeight: Control.chromeCompact,
-    borderRadius: Radius.xl,
-    paddingHorizontal: Space.sm,
-    borderWidth: 0,
-    backgroundColor: 'transparent' },
-  clearText: { color: colors.brand, fontSize: TypographyV2.bodyStrong.size, fontFamily: TypographyV2.bodyStrong.fontFamily },
+  // Transparent 44pt close target — visible shape is the ~22pt glyph only.
+  closeBtn: {
+    width: Control.hit,
+    height: Control.hit,
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginRight: -Space.sm },
   statusRow: {
-    paddingHorizontal: Space.lg,
+    paddingHorizontal: Space.md,
     paddingBottom: Space.sm,
     flexDirection: 'row',
     alignItems: 'center',
@@ -60,7 +63,7 @@ export function createFilterStyles(colors: ThemeColors) {
     fontSize: TypographyV2.meta.size,
     fontFamily: TypographyV2.meta.fontFamily },
   contextActionRow: {
-    marginHorizontal: Space.lg,
+    marginHorizontal: Space.md,
     marginBottom: Space.sm,
     flexDirection: 'row',
     alignItems: 'center',
@@ -85,7 +88,7 @@ export function createFilterStyles(colors: ThemeColors) {
 
   // Filter presets — flat canvas, no card container (hairline separators only)
   presetsWrap: {
-    marginHorizontal: Space.lg,
+    marginHorizontal: Space.md,
     marginBottom: Space.sm,
     paddingVertical: Space.sm + 2,
     paddingHorizontal: 0,
@@ -173,7 +176,7 @@ export function createFilterStyles(colors: ThemeColors) {
     flexDirection: 'row',
     alignItems: 'center',
     gap: Space.sm,
-    marginHorizontal: Space.lg,
+    marginHorizontal: Space.md,
     marginBottom: Space.sm,
     paddingVertical: Space.sm + 2,
     paddingHorizontal: Space.md + 2,
@@ -187,31 +190,29 @@ export function createFilterStyles(colors: ThemeColors) {
     color: colors.brand },
 
   syncRetryBanner: {
-    marginHorizontal: Space.lg,
+    marginHorizontal: Space.md,
     marginBottom: Space.sm,
     backgroundColor: colors.surface },
   syncRetryBtn: {
     backgroundColor: colors.surface },
 
-  scrollContent: { paddingTop: Space.sm, paddingBottom: Space.xxl + Space.xs + Space.xs },
+  // Bottom padding clears the floating action dock so the last section is
+  // never obscured at the resting detent.
+  scrollContent: { paddingTop: Space.xs, paddingBottom: DockConstants.singleActionHeight },
   loadingStateWrap: {
-    paddingHorizontal: Space.xl,
+    paddingHorizontal: Space.md,
     gap: Space.xl + 2 },
   loadingSection: {
     gap: Space.sm },
-  loadingChipRow: {
-    flexDirection: 'row',
-    gap: Space.sm + 2 },
-  loadingChipWrap: {
-    flexDirection: 'row',
-    flexWrap: 'wrap',
-    gap: Space.sm + 2 },
+  loadingRowsWrap: {
+    gap: Space.lg + Space.xs,
+    paddingVertical: Space.sm },
 
   sectionHeading: {
     fontSize: TypographyV2.body.size,
     fontFamily: TypographyV2.body.fontFamily,
     color: colors.textPrimary,
-    paddingHorizontal: Space.xl,
+    paddingHorizontal: Space.md,
     marginBottom: 0,
     letterSpacing: TypographyV2.body.letterSpacing },
   sectionHeaderRow: {
@@ -224,9 +225,17 @@ export function createFilterStyles(colors: ThemeColors) {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
-    paddingRight: Space.xl,
+    paddingRight: Space.md,
     paddingVertical: Space.md,
     minHeight: Control.hit },
+  sectionHeaderValue: {
+    fontSize: TypographyV2.meta.size,
+    fontFamily: TypographyV2.meta.fontFamily,
+    color: colors.textMuted },
+  sectionHeaderMeta: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: Space.sm },
   sectionCountBadge: {
     minWidth: Space.md + 2,
     height: Space.md + 2,
@@ -240,12 +249,13 @@ export function createFilterStyles(colors: ThemeColors) {
     fontFamily: Typography.family.bold,
     color: colors.textSecondary },
   seeAllRow: {
-    paddingHorizontal: Space.xl,
-    marginBottom: Space.sm },
+    paddingHorizontal: Space.md,
+    minHeight: Control.hit,
+    justifyContent: 'center' },
   brandSearchWrap: {
     flexDirection: 'row',
     alignItems: 'center',
-    marginHorizontal: Space.xl,
+    marginHorizontal: Space.md,
     marginBottom: Space.sm,
     height: Space.xl + Space.xs + 2,
     borderRadius: Radius.lg,
@@ -275,158 +285,125 @@ export function createFilterStyles(colors: ThemeColors) {
     backgroundColor: 'transparent' },
   seeAllText: { color: colors.brand, fontSize: TypographyV2.body.size, fontFamily: TypographyV2.body.fontFamily },
 
-  hScroll: { paddingHorizontal: Space.xl, gap: Space.sm },
-
-  wrapContainer: {
-    flexDirection: 'row',
-    flexWrap: 'wrap',
-    paddingHorizontal: Space.xl,
-    gap: Space.sm },
-
   emptySectionText: {
-    paddingHorizontal: Space.xl,
+    paddingHorizontal: Space.md,
     fontSize: TypographyV2.meta.size,
     fontFamily: TypographyV2.meta.fontFamily,
     color: colors.textMuted,
     fontStyle: 'italic' },
 
-  chip: {
-    minHeight: Control.chrome,
-    paddingHorizontal: Space.md - 2,
-    borderRadius: Radius.full,
-    backgroundColor: 'transparent',
-    borderWidth: Stroke.hairline,
-    borderColor: colors.border },
-  sizeChip: { minWidth: Space.xxl + Space.sm, alignItems: 'center' },
-  mySizeChip: {
-    borderColor: colors.brand,
-    borderWidth: Stroke.standard + Stroke.hairline },
-  mySizeMarkedChip: {
-    borderWidth: Stroke.standard + Stroke.hairline,
-    borderColor: colors.brand },
-  mySizesRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    paddingHorizontal: Space.xl,
-    marginBottom: Space.sm,
-    gap: Space.sm },
-  mySizesLabel: {
-    fontSize: TypographyV2.meta.size,
-    fontFamily: TypographyV2.meta.fontFamily,
-    color: colors.textSecondary },
-  mySizesScroll: {
-    gap: Space.xs + 2 },
-  saveSizesRow: {
-    paddingHorizontal: Space.md + Space.xs,
-    marginTop: Space.sm + 2,
-    marginBottom: Space.xs },
-  saveSizesBtn: {
-    alignSelf: 'flex-start',
-    minHeight: Control.chromeCompact,
-    borderRadius: Radius.xl,
-    borderWidth: Stroke.hairline,
-    borderColor: colors.brand,
-    backgroundColor: 'transparent' },
-  saveSizesBtnText: {
-    color: colors.brand,
-    fontSize: TypographyV2.meta.size,
-    fontFamily: TypographyV2.meta.fontFamily },
-  chipActive: { backgroundColor: colors.textPrimary, borderColor: colors.textPrimary },
-
-  chipText: { fontSize: TypographyV2.body.size, fontFamily: TypographyV2.body.fontFamily, color: colors.textPrimary },
-  chipTextActive: { color: colors.background, fontFamily: TypographyV2.body.fontFamily },
-
-  // ── Sustainability toggle ──
-  sustainableRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    paddingHorizontal: Space.md + Space.xs,
-    paddingVertical: Space.sm,
-    minHeight: Control.hit },
-  sustainableLabelWrap: {
+  // ── Option rows / quiet grid cells (FilterOptionRow) ──
+  // The sheet's single option grammar: hairline-separated rows, label as the
+  // object, brand check (radio) or hairline checkbox square (multi). No
+  // fills, no pills, no boxed options.
+  optionList: {
+    marginHorizontal: Space.md,
+    borderTopWidth: Stroke.hairline,
+    borderTopColor: colors.border },
+  optionGridRow: { flexDirection: 'row' },
+  optionRow: {
     flexDirection: 'row',
     alignItems: 'center',
     gap: Space.sm,
-    flex: 1 },
-  sustainableTextWrap: {
-    flexDirection: 'column' },
-  sustainableTitle: {
-    fontSize: TypographyV2.bodyStrong.size,
-    fontFamily: TypographyV2.bodyStrong.fontFamily,
-    letterSpacing: TypographyV2.body.letterSpacing },
-  sustainableCaption: {
-    fontSize: TypographyV2.meta.size,
-    fontFamily: TypographyV2.meta.fontFamily,
-    marginTop: Space.xs / 4 },
-  sustainableToggle: {
-    width: Control.hit,
-    height: Space.lg + 2,
-    borderRadius: Radius.full,
-    borderWidth: Stroke.standard,
-    justifyContent: 'center',
-    padding: Space.xs / 2 },
-  sustainableToggleThumb: {
-    width: Space.md + Space.xs,
-    height: Space.md + Space.xs,
-    borderRadius: Radius.full },
+    minHeight: Control.hit,
+    paddingVertical: Space.xs },
+  optionCell: {
+    flex: 1,
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: Space.xs + 2,
+    minHeight: Control.hit,
+    paddingVertical: Space.xs,
+    paddingRight: Space.sm },
+  optionDivider: {
+    borderBottomWidth: Stroke.hairline,
+    borderBottomColor: colors.border },
+  optionCellDivider: {
+    borderLeftWidth: Stroke.hairline,
+    borderLeftColor: colors.border,
+    paddingLeft: Space.md },
+  optionText: {
+    flex: 1,
+    fontSize: TypographyV2.body.size,
+    fontFamily: TypographyV2.body.fontFamily,
+    color: colors.textPrimary },
+  optionTextSelected: { fontFamily: TypographyV2.bodyStrong.fontFamily },
+  optionCheckSlot: {
+    width: Space.lg,
+    alignItems: 'flex-end' },
+  optionCheckbox: {
+    width: Space.lg - 2,
+    height: Space.lg - 2,
+    borderRadius: Radius.sm,
+    borderWidth: Stroke.hairline,
+    borderColor: colors.border,
+    alignItems: 'center',
+    justifyContent: 'center' },
+  optionCheckboxSelected: { borderColor: colors.brand },
+  optionQuietAction: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: Space.xs + 2,
+    marginHorizontal: Space.md,
+    marginTop: Space.sm + 2,
+    minHeight: Control.hit },
+  optionQuietActionText: {
+    fontSize: TypographyV2.body.size,
+    fontFamily: TypographyV2.body.fontFamily,
+    color: colors.brand },
 
   sectionDivider: {
     height: Stroke.hairline,
     backgroundColor: colors.border,
     marginVertical: Space.md + Space.xs,
-    marginHorizontal: Space.md + Space.xs },
+    marginHorizontal: Space.md },
 
+  // Floating action dock — rendered outside the sheet's transformed view,
+  // pinned to the screen's bottom edge by FilterScreen's dock wrapper. The
+  // sheet surface and dock share one material (surfaceElevated); separation
+  // is a single hairline, not a second fill.
   footer: {
-    position: 'absolute',
-    bottom: 0, left: 0, right: 0,
     flexDirection: 'row',
     alignItems: 'center',
     gap: Space.sm,
-    paddingHorizontal: Space.md + Space.xs,
+    paddingHorizontal: Space.md,
     paddingTop: Space.md - 2,
-    paddingBottom: Platform.OS === 'ios' ? Space.xl : Space.lg - 2,
-    backgroundColor: colors.background,
+    paddingBottom: Space.md,
+    backgroundColor: colors.surfaceElevated,
     borderTopWidth: Stroke.hairline,
     borderTopColor: colors.border },
   resetBtn: {
-    borderRadius: Radius.xl,
-    borderWidth: Stroke.hairline,
-    borderColor: colors.border,
+    borderRadius: Radius.md,
+    borderWidth: 0,
     backgroundColor: 'transparent',
     minHeight: Space.xxl + Space.xs,
-    paddingHorizontal: Space.lg },
-  resetBtnDisabled: {
-    opacity: 0.4 },
+    paddingHorizontal: Space.md },
+  resetBtnDisabled: { opacity: 0.4 },
   resetBtnText: {
     color: colors.textSecondary,
     fontSize: TypographyV2.body.size,
     fontFamily: TypographyV2.body.fontFamily,
     letterSpacing: LetterSpacing.wide },
-  resetBtnTextDisabled: {
-    color: colors.textMuted },
+  resetBtnTextDisabled: { color: colors.textMuted },
   applyBtn: {
     flex: 1,
     minHeight: Space.xxl + Space.xs,
     borderRadius: Radius.xl },
-  applyBtnDisabled: {
-    opacity: 0.6 },
+  applyBtnDisabled: { opacity: 0.6 },
   applyBtnText: {
     color: colors.textPrimary,
     fontSize: TypographyV2.body.size,
     fontFamily: TypographyV2.body.fontFamily,
     letterSpacing: LetterSpacing.wide },
-  applyBtnTextDisabled: {
-    color: colors.textMuted },
+  applyBtnTextDisabled: { color: colors.textMuted },
 
   // ── Price range ──
   priceRangeRow: {
     flexDirection: 'row',
     alignItems: 'center',
-    paddingHorizontal: Space.xl,
+    paddingHorizontal: Space.md,
     gap: Space.sm },
-  priceInputWrap: {
-    flex: 1 },
+  priceInputWrap: { flex: 1 },
   priceInputLabel: {
     fontSize: TypographyV2.meta.size,
     fontFamily: TypographyV2.meta.fontFamily,
@@ -451,7 +428,7 @@ export function createFilterStyles(colors: ThemeColors) {
     fontSize: TypographyV2.meta.size,
     fontFamily: TypographyV2.meta.fontFamily,
     color: colors.dangerText,
-    paddingHorizontal: Space.xl,
+    paddingHorizontal: Space.md,
     marginTop: Space.sm } });
 }
 

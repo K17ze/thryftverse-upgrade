@@ -2,14 +2,17 @@
  * LiveSellerLivePhase — the on-air surface for the seller: header with
  * end-stream control, the camera stage (published feed once LiveKit
  * publishing is live, honest captions otherwise), the lot command slot,
- * and the read-only viewer chat.
+ * and the viewer chat with long-press host moderation (mute/unmute/kick —
+ * enforced server-side per stream).
  */
 
-import React, { useCallback, useRef } from 'react';
+import React, { useCallback, useEffect, useRef, useState } from 'react';
 import {
   View,
   Text,
   FlatList,
+  Pressable,
+  Alert,
   ActivityIndicator,
   useWindowDimensions } from 'react-native';
 import { useAppTheme } from '../../theme/ThemeContext';
@@ -22,7 +25,13 @@ import { LiveBadge } from '../live/LiveBadge';
 import type { BroadcastSession } from '../live/liveBroadcastApi';
 import type { LiveKitConnectionState, LiveKitVideoTrack } from '../../platform/streaming/useLiveKitRoom';
 import type { BroadcastPublishState } from '../../hooks/livestream/useSellerBroadcast';
-import type { LiveStreamChatMessage } from '../../services/liveShoppingApi';
+import {
+  fetchLiveStreamMutedViewers,
+  moderateLiveStreamViewer,
+  type LiveStreamChatMessage } from '../../services/liveShoppingApi';
+import { useToast } from '../../context/ToastContext';
+import { useStore } from '../../store/useStore';
+import { t } from '../../i18n';
 import { formatClock } from './liveSellerUtils';
 import { useSellerStyles } from './liveSellerStyles';
 
@@ -62,6 +71,77 @@ export function LiveSellerLivePhase({
   const { height: SCREEN_HEIGHT } = useWindowDimensions();
   const styles = useSellerStyles();
   const chatListRef = useRef<FlatList<LiveStreamChatMessage>>(null);
+  const { show } = useToast();
+  const hostUserId = useStore((s) => s.currentUser?.id ?? null);
+
+  // ── Host viewer moderation ──
+  // Long-press on a viewer chat row opens the moderation sheet (mute /
+  // unmute / remove). The muted set is seeded from the backend so a host
+  // resuming a session still sees who is silenced; server enforces every
+  // action regardless of what this surface shows.
+  const sessionId = session?.roomId ?? null;
+  const [mutedViewerIds, setMutedViewerIds] = useState<ReadonlySet<string>>(new Set());
+
+  useEffect(() => {
+    if (!sessionId) return;
+    let cancelled = false;
+    fetchLiveStreamMutedViewers(sessionId).then((res) => {
+      if (cancelled || !res.ok) return;
+      setMutedViewerIds(new Set(res.muted.map((m) => m.userId)));
+    });
+    return () => {
+      cancelled = true;
+    };
+  }, [sessionId]);
+
+  const runViewerAction = useCallback((
+    item: LiveStreamChatMessage,
+    action: 'mute' | 'unmute' | 'kick',
+  ) => {
+    const name = item.userName || item.userId;
+    void moderateLiveStreamViewer(item.streamId, action, item.userId).then((res) => {
+      if (!res.ok) {
+        show(t('liveModeration.failedToast'), 'error');
+        return;
+      }
+      if (action === 'mute') {
+        setMutedViewerIds((prev) => new Set(prev).add(item.userId));
+        show(t('liveModeration.mutedToast', { name }), 'success');
+      } else if (action === 'unmute') {
+        setMutedViewerIds((prev) => {
+          const next = new Set(prev);
+          next.delete(item.userId);
+          return next;
+        });
+        show(t('liveModeration.unmutedToast', { name }), 'success');
+      } else {
+        show(t('liveModeration.kickedToast', { name }), 'success');
+      }
+    });
+  }, [show]);
+
+  const openViewerActions = useCallback((item: LiveStreamChatMessage) => {
+    const name = item.userName || item.userId;
+    const isMuted = mutedViewerIds.has(item.userId);
+    Alert.alert(
+      t('liveModeration.actionsTitle'),
+      name,
+      [
+        {
+          text: isMuted
+            ? t('liveModeration.unmuteAction')
+            : t('liveModeration.muteAction'),
+          onPress: () => runViewerAction(item, isMuted ? 'unmute' : 'mute'),
+        },
+        {
+          text: t('liveModeration.kickAction'),
+          style: 'destructive',
+          onPress: () => runViewerAction(item, 'kick'),
+        },
+        { text: t('liveModeration.cancelAction'), style: 'cancel' },
+      ],
+    );
+  }, [mutedViewerIds, runViewerAction]);
 
   // Stage caption — every publish state is stated truthfully; nothing
   // claims the camera is broadcasting when it is not.
@@ -78,23 +158,41 @@ export function LiveSellerLivePhase({
 
   const renderChatMessage = useCallback(({ item }: { item: LiveStreamChatMessage }) => {
     const isSystem = item.type === 'system' || item.type === 'bid' || item.type === 'purchase';
-    return (
-      <View style={[styles.chatRow, { borderBottomColor: colors.border }]}>
-        {isSystem ? (
+    if (isSystem) {
+      return (
+        <View style={[styles.chatRow, { borderBottomColor: colors.border }]}>
           <Text style={[styles.chatSystemText, { color: colors.textMuted }]} numberOfLines={2}>
             {item.message}
           </Text>
-        ) : (
-          <Text style={styles.chatLine} numberOfLines={2}>
-            <Text style={[styles.chatSender, { color: colors.textMuted }]}>
-              {item.userName}{'  '}
-            </Text>
-            <Text style={[styles.chatText, { color: colors.textPrimary }]}>{item.message}</Text>
+        </View>
+      );
+    }
+    // Host moderation: only viewer messages are actionable — the host's own
+    // rows (isSeller) and system rows never expose the sheet.
+    const moderatable = !item.isSeller && item.userId !== hostUserId;
+    const isMuted = mutedViewerIds.has(item.userId);
+    return (
+      <Pressable
+        style={[styles.chatRow, { borderBottomColor: colors.border }]}
+        onLongPress={moderatable ? () => openViewerActions(item) : undefined}
+        accessibilityRole={moderatable ? 'button' : 'text'}
+        accessibilityLabel={`${item.userName}: ${item.message}`}
+        accessibilityHint={moderatable ? t('liveModeration.a11yHint') : undefined}
+      >
+        <Text style={styles.chatLine} numberOfLines={2}>
+          <Text style={[styles.chatSender, { color: colors.textMuted }]}>
+            {item.userName}{'  '}
           </Text>
-        )}
-      </View>
+          {isMuted ? (
+            <Text style={[styles.chatMutedTag, { color: colors.textMuted }]}>
+              {t('liveModeration.mutedTag')}{'  '}
+            </Text>
+          ) : null}
+          <Text style={[styles.chatText, { color: colors.textPrimary }]}>{item.message}</Text>
+        </Text>
+      </Pressable>
     );
-  }, [colors, styles]);
+  }, [colors, styles, hostUserId, mutedViewerIds, openViewerActions]);
 
   return (
     <FlagshipScreen
@@ -176,7 +274,8 @@ export function LiveSellerLivePhase({
         {/* Lot command — flat panel, status + real actions */}
         {lotPanel}
 
-        {/* Chat — flat list with hairlines, read-only for the host */}
+        {/* Chat — flat list with hairlines; long-press a viewer row for
+            host moderation (mute/unmute/remove) */}
         <FlatList
           ref={chatListRef}
           data={messages}

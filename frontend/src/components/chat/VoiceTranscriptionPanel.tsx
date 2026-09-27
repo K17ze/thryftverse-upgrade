@@ -5,8 +5,9 @@ import {
   StyleSheet,
   Pressable,
   ActivityIndicator } from 'react-native';
-import { Ionicons } from '@expo/vector-icons';
 import { Space, Radius } from '../../theme/designTokens';
+import { IconSize } from '../../theme/iconTokens';
+import { AppIcon } from '../common/AppIcon';
 import { TypographyV2 } from '../../theme/typography.v2';
 import { useAppTheme, type ThemeColors } from '../../theme/ThemeContext';
 import { useHaptic } from '../../hooks/useHaptic';
@@ -184,7 +185,7 @@ export function VoiceTranscriptionPanel({
         accessibilityLabel="Show transcript for this voice message"
         accessibilityHint="Requests an automatic transcription. The text is derived, not the sender's own words."
       >
-        <Ionicons name="document-text-outline" size={13} color={colors.textMuted} />
+        <AppIcon name="document" size={13} color={colors.textMuted} />
         <Text style={styles.triggerText}>Transcript</Text>
       </Pressable>
     );
@@ -194,11 +195,11 @@ export function VoiceTranscriptionPanel({
     return (
       <View style={styles.container}>
         <View style={styles.row}>
-          <Ionicons name="information-circle-outline" size={14} color={colors.textMuted} />
+          <AppIcon name="info" size={IconSize.xs} color={colors.textMuted} />
           <Text style={styles.mutedText}>Transcription not available for this audio format</Text>
         </View>
         <Pressable onPress={handleCollapse} hitSlop={8} accessibilityRole="button" accessibilityLabel="Close transcript">
-          <Ionicons name="close" size={16} color={colors.textMuted} />
+          <AppIcon name="close" size={IconSize.sm} color={colors.textMuted} />
         </Pressable>
       </View>
     );
@@ -208,11 +209,11 @@ export function VoiceTranscriptionPanel({
     return (
       <View style={styles.container}>
         <View style={styles.row}>
-          <Ionicons name="alert-circle-outline" size={14} color={colors.dangerText} />
+          <AppIcon name="alert" size={IconSize.xs} color={colors.dangerText} />
           <Text style={styles.errorText} numberOfLines={2}>{error ?? 'Transcription failed'}</Text>
         </View>
         <Pressable onPress={handleCollapse} hitSlop={8} accessibilityRole="button" accessibilityLabel="Close transcript">
-          <Ionicons name="close" size={16} color={colors.textMuted} />
+          <AppIcon name="close" size={IconSize.sm} color={colors.textMuted} />
         </Pressable>
       </View>
     );
@@ -222,7 +223,7 @@ export function VoiceTranscriptionPanel({
     return (
       <View style={styles.container}>
         <View style={styles.row}>
-          <Ionicons name="alert-circle-outline" size={14} color={colors.warningText} />
+          <AppIcon name="alert" size={IconSize.xs} color={colors.warningText} />
           <Text style={styles.warningText} numberOfLines={2}>{error ?? 'Temporarily unavailable'}</Text>
         </View>
         <View style={styles.actions}>
@@ -230,7 +231,7 @@ export function VoiceTranscriptionPanel({
             <Text style={styles.retryText}>Retry</Text>
           </Pressable>
           <Pressable onPress={handleCollapse} hitSlop={8} accessibilityRole="button" accessibilityLabel="Close transcript">
-            <Ionicons name="close" size={16} color={colors.textMuted} />
+            <AppIcon name="close" size={IconSize.sm} color={colors.textMuted} />
           </Pressable>
         </View>
       </View>
@@ -247,7 +248,7 @@ export function VoiceTranscriptionPanel({
           </Text>
         </View>
         <Pressable onPress={handleCollapse} hitSlop={8} accessibilityRole="button" accessibilityLabel="Close transcript">
-          <Ionicons name="close" size={16} color={colors.textMuted} />
+          <AppIcon name="close" size={IconSize.sm} color={colors.textMuted} />
         </Pressable>
       </View>
     );
@@ -269,9 +270,9 @@ export function VoiceTranscriptionPanel({
           accessibilityRole="button"
           accessibilityLabel="Mark transcription as accurate"
         >
-          <Ionicons
+          <AppIcon
             name="thumbs-up-outline"
-            size={14}
+            size={IconSize.xs}
             color={userRating === 'good' ? colors.brand : colors.textMuted}
           />
         </Pressable>
@@ -282,14 +283,14 @@ export function VoiceTranscriptionPanel({
           accessibilityRole="button"
           accessibilityLabel="Mark transcription as inaccurate"
         >
-          <Ionicons
+          <AppIcon
             name="thumbs-down-outline"
-            size={14}
+            size={IconSize.xs}
             color={userRating === 'bad' ? colors.dangerText : colors.textMuted}
           />
         </Pressable>
         <Pressable onPress={handleCollapse} hitSlop={8} accessibilityRole="button" accessibilityLabel="Close transcript">
-          <Ionicons name="close" size={16} color={colors.textMuted} />
+          <AppIcon name="close" size={IconSize.sm} color={colors.textMuted} />
         </Pressable>
       </View>
     </View>

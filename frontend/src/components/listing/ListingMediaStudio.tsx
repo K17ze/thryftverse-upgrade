@@ -6,6 +6,7 @@ import {
   useWindowDimensions,
   Pressable } from 'react-native';
 import { AppIcon } from '../common/AppIcon';
+import { IconSize } from '../../theme/iconTokens';
 import { Image as ExpoImage } from 'expo-image';
 import * as FileSystem from 'expo-file-system/legacy';
 import { useAppTheme } from '../../theme/ThemeContext';
@@ -128,11 +129,11 @@ const VideoPosterThumb = React.memo(function VideoPosterThumb({
             transition={150}
           />
           <View style={styles.thumbPlayBadge} pointerEvents="none">
-            <AppIcon name="play" variant="filled" size={11} color="scrimTextPrimary" accessible={false} />
+            <AppIcon name="play" variant="filled" size={IconSize.micro} color="scrimTextPrimary" accessible={false} />
           </View>
         </>
       ) : (
-        <AppIcon name="videocam" variant="filled" size={22} color="textMuted" accessible={false} />
+        <AppIcon name="videocam" variant="filled" size={IconSize.lg} color="textMuted" accessible={false} />
       )}
     </View>
   );
@@ -296,7 +297,7 @@ export function ListingMediaStudio({
           accessibilityRole="button"
           accessibilityLabel="Add photos from library"
         >
-          <AppIcon name="image-outline" size={28} color="textMuted" accessible={false} style={styles.emptyGlyph} />
+          <AppIcon name="image-outline" size={IconSize.xl} color="textMuted" accessible={false} style={styles.emptyGlyph} />
           <Text style={styles.emptyLabel}>Add photos</Text>
         </Pressable>
 
@@ -307,7 +308,7 @@ export function ListingMediaStudio({
             accessibilityRole="button"
             accessibilityLabel="Take photo with camera"
           >
-            <AppIcon name="camera" size={16} color="textMuted" accessible={false} />
+            <AppIcon name="camera" size={IconSize.sm} color="textMuted" accessible={false} />
             <Text style={styles.emptyCameraText}>Take photo</Text>
           </Pressable>
         </View>
@@ -358,7 +359,7 @@ export function ListingMediaStudio({
             accessibilityLabel={`Edit ${isVideo ? 'video' : 'photo'} ${index + 1}`}
           >
             <View style={styles.editScrim}>
-              <AppIcon name="edit" size={28} color="textInverse" accessible={false} />
+              <AppIcon name="edit" size={IconSize.xl} color="textInverse" accessible={false} />
             </View>
           </Pressable>
         )}
@@ -370,7 +371,7 @@ export function ListingMediaStudio({
             accessibilityRole="button"
             accessibilityLabel={`${removeLabel} ${isVideo ? 'video' : 'photo'} ${index + 1}`}
           >
-            <AppIcon name="close" size={16} color="scrimTextPrimary" accessible={false} glyphStyle={styles.mediaGlyph} />
+            <AppIcon name="close" size={IconSize.sm} color="scrimTextPrimary" accessible={false} glyphStyle={styles.mediaGlyph} />
           </Pressable>
         )}
       </View>
@@ -420,7 +421,7 @@ export function ListingMediaStudio({
             accessibilityRole="button"
             accessibilityLabel={`${removeLabel} cover ${isCoverVideo ? 'video' : 'photo'}`}
           >
-            <AppIcon name="close" size={20} color="scrimTextPrimary" accessible={false} glyphStyle={styles.mediaGlyph} />
+            <AppIcon name="close" size={IconSize.md} color="scrimTextPrimary" accessible={false} glyphStyle={styles.mediaGlyph} />
           </Pressable>
         )}
 
@@ -432,7 +433,7 @@ export function ListingMediaStudio({
             accessibilityLabel="Edit cover photo"
           >
             <View style={styles.editScrim}>
-              <AppIcon name="edit" size={28} color="textInverse" accessible={false} />
+              <AppIcon name="edit" size={IconSize.xl} color="textInverse" accessible={false} />
             </View>
           </Pressable>
         )}
@@ -463,7 +464,7 @@ export function ListingMediaStudio({
             accessibilityRole="button"
             accessibilityLabel="Add more photos from library"
           >
-            <AppIcon name="images" size={16} color="textMuted" accessible={false} />
+            <AppIcon name="images" size={IconSize.sm} color="textMuted" accessible={false} />
             <Text style={styles.studioActionText}>Add more</Text>
           </Pressable>
         )}
@@ -474,7 +475,7 @@ export function ListingMediaStudio({
           accessibilityRole="button"
           accessibilityLabel="Take photo with camera"
         >
-          <AppIcon name="camera" size={16} color="textMuted" accessible={false} />
+          <AppIcon name="camera" size={IconSize.sm} color="textMuted" accessible={false} />
           <Text style={styles.studioActionText}>Take photo</Text>
         </Pressable>
       </View>

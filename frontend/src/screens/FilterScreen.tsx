@@ -1,12 +1,14 @@
 import React, { useMemo } from 'react';
 import {
   View,
+  Text,
   StyleSheet,
   ScrollView,
   Pressable,
   useWindowDimensions } from 'react-native';
 import Reanimated from 'react-native-reanimated';
 import { GestureDetector } from 'react-native-gesture-handler';
+import { Ionicons } from '@expo/vector-icons';
 import { useAppTheme, type ThemeColors } from '../theme/ThemeContext';
 import { Radius, Elevation } from '../theme/designTokens';
 import { RouteProp, useNavigation, useRoute } from '@react-navigation/native';
@@ -15,6 +17,8 @@ import { useStore } from '../store/useStore';
 import { useBackendData } from '../context/BackendDataContext';
 import { useTaxonomy } from '../context/TaxonomyContext';
 import { SyncRetryBanner } from '../components/SyncRetryBanner';
+import { SyncStatusPill } from '../components/SyncStatusPill';
+import { AnimatedPressable } from '../components/AnimatedPressable';
 import { getBackendSyncStatus } from '../utils/syncStatus';
 import { useReducedMotion } from '../hooks/useReducedMotion';
 import { useFeatureFlag } from '../analytics';
@@ -47,10 +51,10 @@ export default function FilterScreen() {
   const { brands: taxonomyBrands } = useTaxonomy();
   const { colors } = useAppTheme();
   const reducedMotion = useReducedMotion();
-  const { height, width } = useWindowDimensions();
+  const { height } = useWindowDimensions();
   const SNAP_HALF = height * 0.5;
   const SNAP_FULL = height * 0.1;
-  const styles = useMemo(() => createStyles(colors, width, height), [colors, width, height]);
+  const styles = useMemo(() => createStyles(colors, height), [colors, height]);
   const filterStyles = useMemo(() => createFilterStyles(colors), [colors]);
 
   // Feature flag — gates the advanced filter section (quick price presets).
@@ -93,7 +97,7 @@ export default function FilterScreen() {
     activeFilterCount,
   } = useFilterScreenState(browseFilters);
 
-  const { gesture, sheetStyle, overlayStyle, closeBottomSheet } = useFilterSheet({
+  const { gesture, scrollGesture, sheetStyle, overlayStyle, dockStyle, closeBottomSheet } = useFilterSheet({
     height,
     snapHalf: SNAP_HALF,
     snapFull: SNAP_FULL,
@@ -204,50 +208,78 @@ export default function FilterScreen() {
       : `Show ${resultCount} items`;
 
   return (
-    <View style={styles.container}>
+    <View style={styles.container} accessibilityViewIsModal={true}>
+      {/* Backdrop — semantic overlay at full strength while open; fades with
+          the sheet's travel toward closed. Tap dismisses. */}
       <Reanimated.View style={[StyleSheet.absoluteFill, { backgroundColor: colors.overlay }, overlayStyle]}>
         <Pressable
           style={StyleSheet.absoluteFill}
           onPress={closeBottomSheet}
           accessibilityRole="button"
           accessibilityLabel="Dismiss filters"
+          accessibilityHint="Closes the filter sheet without applying"
         />
       </Reanimated.View>
 
       <GestureDetector gesture={gesture}>
         <Reanimated.View style={[styles.sheet, sheetStyle]}>
+          {/* Sticky chrome: grabber + title/close only — everything else
+              scrolls under it. */}
           <FilterSheetHeader
             activeFilterCount={activeFilterCount}
-            onClear={handleClear}
-            statusMeta={
-              isSearchContext
-                ? 'Filters apply to the current search'
-                : `${resultCount} matches currently`
-            }
-            syncTone={filterStatus.tone}
-            syncLabel={filterStatus.label}
-            contextLabel={title ?? categoryId}
-            onPressContext={() => navigation.navigate('CategoryTree', { categoryPrefix: categoryId === 'search' ? '' : categoryId })}
+            onClose={closeBottomSheet}
           />
 
-          <FilterPresets
-            hasActiveSelection={hasActiveSelection}
-            selection={presetSelection}
-            onApplyPreset={applyPresetSelection}
-          />
+          <GestureDetector gesture={scrollGesture}>
+            <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={filterStyles.scrollContent}>
+            {/* Quiet meta block — capability line + sync state scroll with
+                the controls rather than occupying the sticky chrome. */}
+            <View style={filterStyles.statusRow}>
+              {/* In search context the count is computed against the local
+                  catalog snapshot, not the live query result — showing a
+                  number would overstate precision. Show the honest
+                  capability instead. */}
+              <Text style={filterStyles.statusMeta}>
+                {isSearchContext
+                  ? 'Filters apply to the current search'
+                  : `${resultCount} matches currently`}
+              </Text>
+              <SyncStatusPill tone={filterStatus.tone} label={filterStatus.label} compact />
+            </View>
 
-          {lastError ? (
-            <SyncRetryBanner
-              message="Live filter data is delayed. Showing cached catalog options."
-              onRetry={() => void refreshListings()}
-              isRetrying={isSyncing}
-              telemetryContext="filter_sync"
-              containerStyle={filterStyles.syncRetryBanner}
-              actionStyle={filterStyles.syncRetryBtn}
+            <View style={filterStyles.contextActionRow}>
+              <AnimatedPressable
+                style={filterStyles.contextIdentity}
+                onPress={() => navigation.navigate('CategoryTree', { categoryPrefix: categoryId === 'search' ? '' : categoryId })}
+                activeOpacity={0.85}
+                accessibilityRole="button"
+                accessibilityLabel="Open category tree"
+                accessibilityHint="Shows the full category tree for this filter context"
+              >
+                <Ionicons name="funnel-outline" size={16} color={colors.textPrimary} aria-hidden={true} />
+                <Text style={filterStyles.contextText} numberOfLines={1}>
+                  {title ?? categoryId}
+                </Text>
+              </AnimatedPressable>
+            </View>
+
+            <FilterPresets
+              hasActiveSelection={hasActiveSelection}
+              selection={presetSelection}
+              onApplyPreset={applyPresetSelection}
             />
-          ) : null}
 
-          <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={filterStyles.scrollContent}>
+            {lastError ? (
+              <SyncRetryBanner
+                message="Live filter data is delayed. Showing cached catalog options."
+                onRetry={() => void refreshListings()}
+                isRetrying={isSyncing}
+                telemetryContext="filter_sync"
+                containerStyle={filterStyles.syncRetryBanner}
+                actionStyle={filterStyles.syncRetryBtn}
+              />
+            ) : null}
+
             {showFilterLoadingState ? (
               <FilterLoadingState />
             ) : (
@@ -325,33 +357,56 @@ export default function FilterScreen() {
               </>
             )}
 
-          </ScrollView>
-
-          {/* Docked Bottom Action — outside the scroll surface so Apply is
-              always visible at the resting detent, not 50% below the fold. */}
-          <FilterFooter
-            resetDisabled={!hasActiveSelection}
-            onReset={handleClear}
-            applyLabel={priceRangeInvalid ? 'Fix price range' : applyLabel}
-            applyDisabled={showFilterLoadingState || priceRangeInvalid}
-            onApply={handleApply}
-          />
+            </ScrollView>
+          </GestureDetector>
         </Reanimated.View>
       </GestureDetector>
+
+      {/* Docked action bar — outside the sheet's transformed view. The sheet
+          is a full-height slab whose bottom edge rests below the screen, so
+          anchoring to the sheet would park the dock ~50% under the fold.
+          `dockStyle` pins it to the screen's bottom edge at both detents and
+          lets it ride with dismiss drags / the entry slide. */}
+      <Reanimated.View style={[styles.footerDock, dockStyle]}>
+        <FilterFooter
+          resetDisabled={!hasActiveSelection}
+          onReset={handleClear}
+          applyLabel={priceRangeInvalid ? 'Fix price range' : applyLabel}
+          applyDisabled={showFilterLoadingState || priceRangeInvalid}
+          onApply={handleApply}
+        />
+      </Reanimated.View>
     </View>
   );
 }
 
-function createStyles(colors: ThemeColors, width: number, height: number) {
+function createStyles(colors: ThemeColors, height: number) {
   return StyleSheet.create({
   container: { flex: 1, backgroundColor: 'transparent' },
+  // House sheet grammar (components/BottomSheet): elevated surface, 16pt top
+  // corners, an upward-cast floating shadow, and a hairline top edge — flat
+  // surface, no internal borders beyond hairlines.
   sheet: {
     position: 'absolute',
     bottom: 0,
-    width: width,
+    left: 0,
+    right: 0,
     height: height,
-    backgroundColor: colors.surface,
-    borderTopLeftRadius: Radius.xxl,
-    borderTopRightRadius: Radius.xxl,
-    ...Elevation.modal } });
+    backgroundColor: colors.surfaceElevated,
+    borderTopLeftRadius: Radius.xl,
+    borderTopRightRadius: Radius.xl,
+    shadowColor: Elevation.floating.shadowColor,
+    shadowOffset: {
+      width: Elevation.floating.shadowOffset.width,
+      height: -Elevation.floating.shadowOffset.height },
+    shadowOpacity: Elevation.floating.shadowOpacity,
+    shadowRadius: Elevation.floating.shadowRadius,
+    elevation: Elevation.floating.elevation,
+    borderTopWidth: StyleSheet.hairlineWidth,
+    borderColor: colors.borderSubtle },
+  footerDock: {
+    position: 'absolute',
+    bottom: 0,
+    left: 0,
+    right: 0 } });
 }

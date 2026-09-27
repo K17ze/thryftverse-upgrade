@@ -1,7 +1,7 @@
 import React, { useMemo, useRef } from 'react';
-import { View, Text, Pressable } from 'react-native';
+import { View, Text, Pressable, StyleSheet } from 'react-native';
 
-import { useAppTheme } from '../../theme/ThemeContext';
+import { useAppTheme, type ThemeColors } from '../../theme/ThemeContext';
 import { FlagshipState } from '../flagship';
 import { AppIcon } from '../common/AppIcon';
 import { IconSize } from '../../theme/iconTokens';
@@ -9,6 +9,8 @@ import { PinterestMasonryGrid } from '../discover/PinterestMasonryGrid';
 import { MasonrySkeleton } from '../skeletons/MasonrySkeleton';
 import { DiscoveryPeopleResultRow } from './DiscoveryPeopleResultRow';
 import { createUnifiedDiscoveryStyles } from './unifiedDiscoveryStyles';
+import { FontFamily, Space } from '../../theme/designTokens';
+import { TypographyV2, MAX_FONT_SCALE } from '../../theme/typography.v2';
 import type { DiscoveryFeedUnit } from '../../contracts/discoveryFeedUnit';
 import type { DiscoveryListingSummary } from '../../contracts/DiscoveryListingSummary';
 import type { UserSearchResult } from '../../services/profileApi';
@@ -16,6 +18,34 @@ import type { UserSearchResult } from '../../services/profileApi';
 // ============================================================================
 // SEARCH RESULTS VIEW
 // ============================================================================
+
+// Failed-page retry strip — same grammar as the stale-note/active-filters
+// rows (hairline edge, meta-size copy, brand text action). Anchored at the
+// bottom of the results area so a failed page on a populated list is
+// visible without replacing the loaded results (FRESH-03).
+const createPageFailureStyles = (colors: ThemeColors) => StyleSheet.create({
+  pageErrorBar: {
+    position: 'absolute',
+    left: 0,
+    right: 0,
+    bottom: 0,
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: Space.sm,
+    paddingHorizontal: Space.md,
+    paddingVertical: Space.sm,
+    borderTopWidth: StyleSheet.hairlineWidth,
+    borderTopColor: colors.border,
+    backgroundColor: colors.background },
+  pageErrorText: {
+    flex: 1,
+    fontSize: TypographyV2.meta.size,
+    fontFamily: FontFamily.regular,
+    color: colors.textSecondary },
+  pageErrorRetry: {
+    fontSize: TypographyV2.meta.size,
+    fontFamily: FontFamily.semibold,
+    color: colors.brand } });
 
 export function DiscoverySearchResultsView({
   units,
@@ -26,6 +56,8 @@ export function DiscoverySearchResultsView({
   onRetryPeople,
   searchScope,
   searchError,
+  pageError,
+  onRetryPage,
   onRetry,
   onScopeChange,
   activeFilterCount,
@@ -56,7 +88,15 @@ export function DiscoverySearchResultsView({
   peopleError?: string | null;
   onRetryPeople?: () => void;
   searchScope: 'items' | 'people';
+  /** Initial-load failure — renders the full error state when no results
+   *  are on screen. */
   searchError: string | null;
+  /** Append-page failure on a populated list — renders the failed-page
+   *  retry strip at the bottom of the results (FRESH-03). */
+  pageError?: string | null;
+  /** Re-issues the exact page that failed (page state only advances on a
+   *  successful append, so the retried request is identical). */
+  onRetryPage?: () => void;
   onRetry: () => void;
   onScopeChange: (s: 'items' | 'people') => void;
   activeFilterCount: number;
@@ -87,6 +127,7 @@ export function DiscoverySearchResultsView({
 }) {
   const { colors } = useAppTheme();
   const styles = useMemo(() => createUnifiedDiscoveryStyles(colors), [colors]);
+  const pageFailureStyles = useMemo(() => createPageFailureStyles(colors), [colors]);
   const scrollRef = useRef<any>(null);
 
   // Quiet results meta — count (partial-labelled while more pages may exist)
@@ -118,7 +159,7 @@ export function DiscoverySearchResultsView({
           accessibilityRole="button"
           accessibilityState={{ selected: searchScope === 'items' }}
         >
-          <Text style={[styles.scopeTabText, searchScope === 'items' && styles.scopeTabTextActive]} maxFontSizeMultiplier={2}>
+          <Text style={[styles.scopeTabText, searchScope === 'items' && styles.scopeTabTextActive]} maxFontSizeMultiplier={MAX_FONT_SCALE.utility}>
             Items
           </Text>
           {searchScope === 'items' && <View style={styles.scopeIndicator} />}
@@ -129,7 +170,7 @@ export function DiscoverySearchResultsView({
           accessibilityRole="button"
           accessibilityState={{ selected: searchScope === 'people' }}
         >
-          <Text style={[styles.scopeTabText, searchScope === 'people' && styles.scopeTabTextActive]} maxFontSizeMultiplier={2}>
+          <Text style={[styles.scopeTabText, searchScope === 'people' && styles.scopeTabTextActive]} maxFontSizeMultiplier={MAX_FONT_SCALE.utility}>
             People
           </Text>
           {searchScope === 'people' && <View style={styles.scopeIndicator} />}
@@ -248,7 +289,34 @@ export function DiscoverySearchResultsView({
             listHeaderComponent={resultsHeader}
           />
         )
-      ) : (
+      ) : null}
+
+      {/* Failed-page retry — a page fetch that failed on a populated list is
+          surfaced as a bottom strip with an inline retry, never silently
+          dropped and never disguised as the end of results (FRESH-03). */}
+      {searchScope === 'items' && units.length > 0 && pageError ? (
+        <View
+          style={pageFailureStyles.pageErrorBar}
+          accessibilityLiveRegion="polite"
+        >
+          <Text style={pageFailureStyles.pageErrorText} numberOfLines={1} maxFontSizeMultiplier={MAX_FONT_SCALE.utility}>
+            {pageError}
+          </Text>
+          <Pressable
+            onPress={onRetryPage}
+            accessibilityRole="button"
+            accessibilityLabel="Retry loading more results"
+            hitSlop={8}
+            style={({ pressed }) => ({ opacity: pressed ? 0.6 : 1 })}
+          >
+            <Text style={pageFailureStyles.pageErrorRetry} maxFontSizeMultiplier={MAX_FONT_SCALE.utility}>
+              Retry
+            </Text>
+          </Pressable>
+        </View>
+      ) : null}
+
+      {searchScope === 'items' ? null : (
         isSearchingPeople && peopleResults.length === 0 ? (
           <MasonrySkeleton numColumns={2} itemCount={6} />
         ) : peopleError && peopleResults.length === 0 ? (

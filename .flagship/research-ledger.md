@@ -394,3 +394,21 @@ dead at runtime and the AI-agent surface had deep contract breaks. Fixes landed:
 
 Deferred: none. Unrelated in-flight creator-camera changes left untouched in the
 working tree (separate workstream).
+
+## Wave 4 — interaction audit + deeper parity (date: session)
+
+### Sources
+- arxiv.org/pdf/2510.01198 — eBay "Optimal signals assignment for View Item page" (eBay research, DIRECT): VI page uses signal placements — Urgency over media ("sold in last 24h", "N watchers"), Conversational below buy buttons (Q&A). A/B-tested to lift purchase rate.
+- innovation.ebayinc.com — eBay VI modernization + search redesign (PRIMARY): larger images, rounded corners, interactive price-graph filter, full-width Shopping View for fashion categories; description moved above item specifics in tests.
+- valueaddedresource.net — eBay VI page ordering tests (SECONDARY): item specifics → description → seller feedback ordering experiments.
+- Medium Vinted UX case studies ×3 (SECONDARY): bundles (multi-item seller discount), wardrobe filtering by size/condition gaps, price-transparency complaints (protection+shipping upfront), editorial curated home suggestions.
+
+### Applied
+- PDP Q&A section (agent wave) — matches eBay Conversational placement + mobile ListingQA.
+- Urgency signals on PDP media — gap noted; mobile may have viewer/sold counters.
+- Bundles/seller-wardrobe filtering — candidate for seller-hub/public profile next wave.
+- Price transparency — protection + shipping shown in buy box pre-checkout ✓ (done wave 2).
+
+### Audit finding (root cause of user-reported breakage)
+- Dynamic routes shipped HTML referencing unhashed main-app.js → 404 → no hydration → all buttons dead on /item/[id], /co-own/[id], /auctions/[id]. Cause: .next corruption from concurrent builds. Fixed via clean wipe+build; verified offer sheet opens, bid/trade inputs hydrate.
+- AccountMenu added — avatar dropdown (Profile/Orders/Saved/Offers/Wallet/Seller hub/Support/Settings/Sign out). Sign in was unreachable because session defaults signed-in.

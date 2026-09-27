@@ -217,6 +217,7 @@ vi.mock('react-native-reanimated', () => {
     default: {
       View: createMock('ReanimatedView'),
       ScrollView: createMock('ReanimatedScrollView'),
+      Text: createMock('ReanimatedText'),
       createAnimatedComponent: (Comp: any) => Comp,
     },
     useSharedValue: (v: any) => ({ value: v }),

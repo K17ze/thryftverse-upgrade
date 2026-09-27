@@ -46,8 +46,8 @@ const TOOLS_S1: readonly string[] = [
 
 const TOOLS_S2: readonly string[] = [
   ...TOOLS_S1,
-  'support.create_case_draft',
-  'support.collect_evidence',
+  'support.get_case_snapshot',
+  'support.evaluate_procedure_eligibility',
 ];
 
 const TOOLS_S3: readonly string[] = [
@@ -90,6 +90,21 @@ interface EscalationTrigger {
 
 const ESCALATION_TRIGGERS: readonly EscalationTrigger[] = [
   {
+    reason: 'Prompt injection or instruction-override attempt.',
+    patterns: [
+      /\b(?:ignore|disregard|forget|override|bypass)\s+(?:(?:all|any|the|your|these|those)\s+)*(?:previous|prior|above|earlier|initial|original)?\s*instructions\b/i,
+      /\byou\s+are\s+now\b/i,
+      /\bpretend\s+(?:you\s+are|you're|you|to\s+be|that)\b/i,
+      /\b(?:act|roleplay|role[-\s]?play)\s+as\b/i,
+      /\bsystem\s+prompt\b/i,
+      /\bnew\s+(?:system\s+)?instructions?\b/i,
+      /\bjailbreak\b|\bdo\s+anything\s+now\b/i,
+      /\baccording\s+to\s+(?:the\s+|your\s+|our\s+)?\S+\s+policy\b/i,
+      /\bpolicy\s+(?:page|update|change|revision)s?\s*:/i,
+      /\b(?:new|updated|revised)\s+(?:policy|rules?|instructions?)\s+(?:in\s+effect|states?|says|requires?)\b/i,
+    ],
+  },
+  {
     reason: 'User explicitly requested a human agent.',
     patterns: [
       /\b(?:i\s+want|need|request|ask\s+for|speak\s+to|talk\s+to)\s+(?:a|an)?\s*(?:human|person|real\s+person|agent|support\s+agent|specialist|manager)\b/i,
@@ -113,9 +128,14 @@ const ESCALATION_TRIGGERS: readonly EscalationTrigger[] = [
   {
     reason: 'Account compromise or identity/security change.',
     patterns: [
-      /\b(?:my\s+)?account\s+(?:is|was|has\s+been)\s+(?:hacked|compromised|breached|taken\s+over|stolen)\b/i,
-      /\bsomeone\s+(?:else\s+)?(?:has\s+)?(?:access|logged\s+in|changed)\s+(?:my|the)\s+(?:account|password|email)\b/i,
-      /\bunauthori[sz]ed\s+(?:access|login|charge|transaction)\b/i,
+      /\b(?:my\s+)?account\s+(?:is|was|got|has\s+been|been)\s+(?:hacked|compromised|breached|taken\s+over|stolen)\b/i,
+      /\bhacked\s+(?:my|the|into\s+(?:my|the))\s+(?:account|email|password)\b/i,
+      /\bsomeone\s+(?:else\s+)?(?:has\s+)?(?:access(?:ed)?|logged\s+in(?:to)?|got\s+into|hacked|broke\s+into|changed)\s+(?:my|the)\s+(?:account|password|email)\b/i,
+      /\bsomeone\s+(?:else\s+)?(?:is\s+)?(?:in|using|on)\s+my\s+account\b/i,
+      /\bunauthori[sz]ed\s+(?:access|login|log[-\s]?in|sign[-\s]?in|charge|transaction|activity|changes?)\b/i,
+      /\bsuspicious\s+(?:activity|login|log[-\s]?in|sign[-\s]?in|charges?)\b/i,
+      /\b(?:can'?t|cannot|can\s+not|unable\s+to)\s+log\s*in\b[\s\S]*\b(?:suspicious|unauthori[sz]ed|someone|unfamiliar|not\s+me)\b/i,
+      /\b(?:suspicious|unauthori[sz]ed|unfamiliar)\b[\s\S]*\b(?:can'?t|cannot|can\s+not|unable\s+to)\s+log\s*in\b/i,
       /\bidentity\s+(?:theft|fraud|change)\b/i,
       /\bchange\s+(?:my\s+)?(?:email|password|phone|2fa|two-factor)\b/i,
       /\b(?:reset|recover)\s+(?:my\s+)?(?:password|account)\b/i,
@@ -151,6 +171,20 @@ const ESCALATION_TRIGGERS: readonly EscalationTrigger[] = [
     ],
   },
   {
+    // Checked before the counterfeit/prohibited-item trigger: an appeal
+    // *about* a moderation decision is an appeal, not a fresh enforcement
+    // request, even when it names the underlying violation.
+    reason: 'Moderation appeal.',
+    patterns: [
+      /\bappeal(?:s|ing|ed)?\b/i,
+      /\bmoderation\s+(?:appeal|decision|review|action)\b/i,
+      /\bappeal\s+(?:a\s+)?(?:moderation|suspension|ban|restriction|listing\s+removal)\b/i,
+      /\b(?:suspended|banned|restricted)\s+(?:my\s+)?(?:account|listing)\b/i,
+      /\b(?:listing|item)\s+(?:removed|taken\s+down|delisted)\s+(?:unfairly|wrongly|mistakenly)?\b/i,
+      /\bdisagree\s+with\s+(?:the\s+)?moderation\b/i,
+    ],
+  },
+  {
     reason: 'Counterfeit or prohibited-item final decision.',
     patterns: [
       /\bcounterfeit|fake|replica|knock[-\s]?off\b/i,
@@ -175,19 +209,12 @@ const ESCALATION_TRIGGERS: readonly EscalationTrigger[] = [
     ],
   },
   {
-    reason: 'Moderation appeal.',
-    patterns: [
-      /\bmoderation\s+(?:appeal|decision|review|action)\b/i,
-      /\bappeal\s+(?:a\s+)?(?:moderation|suspension|ban|restriction|listing\s+removal)\b/i,
-      /\b(?:suspended|banned|restricted)\s+(?:my\s+)?(?:account|listing)\b/i,
-      /\b(?:listing|item)\s+(?:removed|taken\s+down|delisted)\s+(?:unfairly|wrongly|mistakenly)?\b/i,
-      /\bdisagree\s+with\s+(?:the\s+)?moderation\b/i,
-    ],
-  },
-  {
     reason: 'Auction or Co-Own rights or settlement dispute.',
     patterns: [
       /\bauction\s+(?:dispute|settlement|rights|unfair|rigged)\b/i,
+      /\bauction\b[\s\S]*\b(?:winner|bidder|buyer)\s+(?:backed\s+out|defaulted|refused|declined|didn'?t\s+pay|did\s+not\s+pay|won'?t\s+pay)\b/i,
+      /\b(?:winner|bidder|buyer)\s+(?:backed\s+out|defaulted|refused|declined|didn'?t\s+pay|did\s+not\s+pay|won'?t\s+pay)\b[\s\S]*\bauction\b/i,
+      /\b(?:second|next)\s+(?:place|highest)\b[\s\S]*\b(?:auction|bid|item)\b/i,
       /\bco[-\s]?own(?:ership)?\s+(?:dispute|rights|settlement|share|fraction)\b/i,
       /\bsettlement\s+dispute\b/i,
       /\b(?:my\s+)?share(?:s)?\s+(?:of|in)\s+(?:the\s+)?(?:asset|co[-\s]?own)\b/i,
@@ -203,7 +230,23 @@ interface IssueTypeRule {
   patterns: readonly RegExp[];
 }
 
+// Rules are evaluated in order and the first match wins. Appeal intent is
+// checked before violation topics — "I want to appeal the counterfeit
+// strike" is a moderation_appeal, not counterfeit_safety. Informational
+// question phrasing ("how long do I have to…", "what are the fees…") is
+// checked after the safety/context-specific types but before the action
+// types — a question *about* returns or cancellations is a knowledge
+// request, not a request to perform the action.
 const ISSUE_TYPE_RULES: readonly IssueTypeRule[] = [
+  {
+    issueType: 'moderation_appeal',
+    patterns: [
+      /\bmoderation\b/i,
+      /\bappeal\b/i,
+      /\bsuspend(?:ed|ion)?|ban(?:ned)?\b/i,
+      /\blisting\s+(?:removed|taken\s+down|delisted)\b/i,
+    ],
+  },
   {
     issueType: 'counterfeit_safety',
     patterns: [
@@ -217,19 +260,13 @@ const ISSUE_TYPE_RULES: readonly IssueTypeRule[] = [
   {
     issueType: 'account_security',
     patterns: [
-      /\baccount\s+(?:hacked|compromised|breached|stolen|locked|suspended)\b/i,
+      /\baccount\s+(?:(?:is|was|got|has\s+been)\s+)?(?:hacked|compromised|breached|stolen|locked|suspended|taken\s+over)\b/i,
+      /\bhacked\s+(?:my|the|into\s+(?:my|the))\s+account\b/i,
+      /\bsomeone\s+(?:else\s+)?(?:logged|hacked|accessed|got)\s+(?:in(?:to)?|into)\s+(?:my|the)\s+account\b/i,
       /\bpassword|2fa|two-factor|login\s+issue\b/i,
       /\bidentity\s+(?:theft|verification|change)\b/i,
       /\bunauthori[sz]ed\s+access\b/i,
-    ],
-  },
-  {
-    issueType: 'moderation_appeal',
-    patterns: [
-      /\bmoderation\b/i,
-      /\bappeal\b/i,
-      /\bsuspend(?:ed|ion)?|ban(?:ned)?\b/i,
-      /\blisting\s+(?:removed|taken\s+down|delisted)\b/i,
+      /\bsuspicious\s+(?:activity|login|sign[-\s]?in)\b/i,
     ],
   },
   {
@@ -244,29 +281,14 @@ const ISSUE_TYPE_RULES: readonly IssueTypeRule[] = [
     ],
   },
   {
-    issueType: 'return_refund',
-    patterns: [
-      /\breturn\b/i,
-      /\brefund\b/i,
-      /\bsend\s+(?:it\s+)?back\b/i,
-      /\bnot\s+as\s+described\b/i,
-      /\bitem\s+(?:damaged|broken|defective|faulty|wrong)\b/i,
-    ],
-  },
-  {
-    issueType: 'cancellation',
-    patterns: [
-      /\bcancel(?:lation|led|ing)?\b/i,
-      /\babort\s+(?:order|purchase)\b/i,
-    ],
-  },
-  {
     issueType: 'order_tracking',
     patterns: [
       /\btrack(?:ing)?\b/i,
       /\bparcel\b/i,
       /\bdelivery\b/i,
       /\bwhere\s+is\s+(?:my|the)\s+(?:order|package|parcel)\b/i,
+      /\b(?:order|package|parcel)\s+status\b/i,
+      /\bstatus\s+of\s+(?:my|the)\s+(?:order|package|parcel)\b/i,
       /\bshipping\b/i,
       /\bestimated\s+delivery\b/i,
     ],
@@ -300,13 +322,31 @@ const ISSUE_TYPE_RULES: readonly IssueTypeRule[] = [
   {
     issueType: 'informational',
     patterns: [
-      /\bhow\s+do\s+i\b/i,
-      /\bwhat\s+is\b/i,
-      /\bwhere\s+can\s+i\b/i,
+      /\bhow\s+(?:do|does|did|can|long|much|many|often)\b/i,
+      /\bwhat\s+(?:is|are|was|were|do|does|happens)\b/i,
+      /\bwhere\s+(?:can|do|does)\b/i,
+      /\bwhen\s+(?:can|do|does|will|would)\b/i,
       /\bcan\s+i\b/i,
       /\bpolicy\b/i,
-      /\bfee\b/i,
+      /\bfees?\b/i,
       /\bhelp\b/i,
+    ],
+  },
+  {
+    issueType: 'return_refund',
+    patterns: [
+      /\breturn\b/i,
+      /\brefund\b/i,
+      /\bsend\s+(?:it\s+)?back\b/i,
+      /\bnot\s+as\s+described\b/i,
+      /\bitem\s+(?:damaged|broken|defective|faulty|wrong)\b/i,
+    ],
+  },
+  {
+    issueType: 'cancellation',
+    patterns: [
+      /\bcancel(?:lation|led|ing)?\b/i,
+      /\babort\s+(?:order|purchase)\b/i,
     ],
   },
 ];
@@ -359,9 +399,11 @@ function deriveRiskTier(
     case 'order_tracking':
       return 'S1';
     case 'cancellation':
-      return 'S2';
+      // Procedure executions can create cases and must evaluate
+      // eligibility first — they require the S3 tool surface.
+      return 'S3';
     case 'return_refund':
-      return 'S2';
+      return 'S3';
     case 'payment_payout':
       return 'S3';
     case 'account_security':

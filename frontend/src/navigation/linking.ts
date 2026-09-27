@@ -125,6 +125,7 @@ export const linking: LinkingOptions<RootStackParamList> = {
 
       // Discovery (root stack — cross-tab)
       UnifiedDiscovery: 'search',
+      GalleriaEditorial: 'galleria/editorials/:editorialId',
 
       // Settings & account (root stack — cross-tab)
       EditProfile: 'me/edit',
@@ -171,6 +172,7 @@ export const linking: LinkingOptions<RootStackParamList> = {
       SellerEarnings: 'wallet/earnings',
       WalletHistory: 'wallet/history',
       WalletConvert: 'wallet/convert',
+      WalletExchange: 'wallet/exchange',
       AddBankAccount: 'wallet/bank-account',
 
       // Agent ledger — transparent record of agent actions and approvals

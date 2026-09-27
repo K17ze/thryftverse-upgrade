@@ -290,13 +290,13 @@ export default function PrivacySettingsScreen({ navigation }: Props) {
         <SettingsRow
           icon="document-text-outline"
           title="Privacy Policy"
-          onPress={() => void handleOpenExternal('https://thryftverse.app/privacy')}
+          onPress={() => void handleOpenExternal('https://thryftverse.com/privacy')}
           isFirst
         />
         <SettingsRow
           icon="checkmark-circle-outline"
           title="Terms of Service"
-          onPress={() => void handleOpenExternal('https://thryftverse.app/terms')}
+          onPress={() => void handleOpenExternal('https://thryftverse.com/terms')}
           isLast
         />
       </SettingsSection>

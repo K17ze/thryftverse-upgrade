@@ -692,3 +692,143 @@ export async function listCountryPricingQuotes(client: Queryable): Promise<Oneze
 
   return quotes;
 }
+
+// ─── Co-Own GBP → 1ZE settlement quote ──────────────────────────────────────
+// FIN-02: Co-Own trade and DRIP settlement used to convert a GBP notional to
+// 1ZE with a raw ×1000 (implicit milli-GBP). That is unsound: the wallet is
+// USD-anchored at par (1 1ZE = $1.00, 1000 minor units per 1ZE), so a GBP
+// obligation must be converted through the USD→GBP internal FX rate.
+//
+// This is THE versioned quote path for Co-Own settlement — the order
+// reservation, order placement, trade settlement and DRIP reinvestment all
+// derive their 1ZE unit amounts from it so every leg agrees on the pair, the
+// rate and the rounding rule.
+//
+// Pair:      GBP → USD(anchor, at-par) → 1ZE
+//            1ZE_amount = gbp / (anchorValue × usdToGbpRate)
+// Rounding:  the payer leg rounds UP (never under-charges), the payee leg
+//            rounds DOWN (never over-credits). Any sub-unit remainder is
+//            absorbed by the platform side of the trade, matching the
+//            existing fee economics.
+
+export const COOWN_SETTLEMENT_QUOTE_VERSION = 'coown_gbp_to_1ze_v1';
+export const COOWN_SETTLEMENT_CURRENCY = 'GBP';
+const ONEZE_MINOR_UNITS_PER_IZE = 1_000;
+
+export interface CoOwnSettlementRateContext {
+  quoteVersion: string;
+  settlementCurrency: 'GBP';
+  anchorCurrency: string;
+  anchorValue: number;
+  /**
+   * FX rate anchor→settlement currency (USD→GBP): 1 anchor unit buys
+   * `anchorToSettlementRate` GBP. GBP→1ZE divides by it (and the anchor
+   * value), matching the wallet ledger convention `izeAmount = gbp / rate`.
+   */
+  anchorToSettlementRate: number;
+  rateSource: string;
+  rateResolvedAt: string;
+}
+
+export interface CoOwnSettlementQuote extends CoOwnSettlementRateContext {
+  notionalGbp: number;
+  feeGbp: number;
+  /** Buyer leg: ceil((notional+fee) → 1ZE units). */
+  buyerDebitUnits: number;
+  /** Seller leg: floor(max(0, notional−fee) → 1ZE units). */
+  sellerCreditUnits: number;
+}
+
+function coOwnFxRateUnavailable(message: string, details?: Record<string, unknown>): Error {
+  const error = new Error(message) as Error & {
+    code?: string;
+    statusCode?: number;
+    details?: Record<string, unknown>;
+  };
+  error.code = 'CO_OWN_FX_RATE_UNAVAILABLE';
+  error.statusCode = 503;
+  if (details) {
+    error.details = details;
+  }
+  return error;
+}
+
+/**
+ * Resolve the current GBP→1ZE settlement rate context once per request/tx so
+ * every leg of a multi-fill execution prices at the same rate (avoids an FX
+ * time-of-check/time-of-use race across fills).
+ */
+export async function resolveCoOwnSettlementRateContext(
+  client: Queryable
+): Promise<CoOwnSettlementRateContext> {
+  let quote: OnezePricingQuote;
+  try {
+    quote = await resolveCountryPricingQuoteByCurrency(client, COOWN_SETTLEMENT_CURRENCY);
+  } catch (error) {
+    throw coOwnFxRateUnavailable(
+      `Unable to resolve the GBP→USD settlement rate for Co-Own: ${error instanceof Error ? error.message : String(error)}`
+    );
+  }
+
+  const rate = quote.fxRate;
+  if (!Number.isFinite(rate) || rate <= 0) {
+    throw coOwnFxRateUnavailable('Resolved GBP→USD settlement rate is not positive', { rate });
+  }
+
+  return {
+    quoteVersion: COOWN_SETTLEMENT_QUOTE_VERSION,
+    settlementCurrency: COOWN_SETTLEMENT_CURRENCY,
+    anchorCurrency: quote.anchorCurrency,
+    anchorValue: quote.anchorValueInInr,
+    anchorToSettlementRate: rate,
+    rateSource: quote.source,
+    rateResolvedAt: quote.updatedAt,
+  };
+}
+
+/**
+ * Pure leg computation for a resolved rate context. Exported separately so
+ * callers that settle multiple fills can resolve the rate once and reuse it.
+ */
+export function computeCoOwnSettlementUnits(
+  ctx: Pick<CoOwnSettlementRateContext, 'anchorToSettlementRate' | 'anchorValue'>,
+  input: { notionalGbp: number; feeGbp?: number }
+): { buyerDebitUnits: number; sellerCreditUnits: number } {
+  const notionalGbp = roundTo(Math.max(0, input.notionalGbp), 4);
+  const feeGbp = roundTo(Math.max(0, input.feeGbp ?? 0), 4);
+  const rate = ctx.anchorToSettlementRate;
+  const anchorValue = ctx.anchorValue;
+
+  if (!Number.isFinite(rate) || rate <= 0 || !Number.isFinite(anchorValue) || anchorValue <= 0) {
+    throw coOwnFxRateUnavailable('Co-Own settlement rate context is invalid', { rate, anchorValue });
+  }
+
+  // 1ZE minor units per £1: 1000 units per 1ZE ÷ (USD per 1ZE × GBP per USD).
+  const unitsPerGbp = ONEZE_MINOR_UNITS_PER_IZE / (anchorValue * rate);
+  const buyerGrossUnits = roundTo((notionalGbp + feeGbp) * unitsPerGbp, 6);
+  const sellerNetUnits = roundTo(Math.max(0, notionalGbp - feeGbp) * unitsPerGbp, 6);
+
+  return {
+    buyerDebitUnits: Math.max(0, Math.ceil(buyerGrossUnits)),
+    sellerCreditUnits: Math.max(0, Math.floor(sellerNetUnits)),
+  };
+}
+
+/**
+ * Resolve the rate and compute both settlement legs in one call. Prefer
+ * `resolveCoOwnSettlementRateContext` + `computeCoOwnSettlementUnits` when a
+ * request settles several fills.
+ */
+export async function computeCoOwnGbpSettlementQuote(
+  client: Queryable,
+  input: { notionalGbp: number; feeGbp?: number }
+): Promise<CoOwnSettlementQuote> {
+  const ctx = await resolveCoOwnSettlementRateContext(client);
+  const legs = computeCoOwnSettlementUnits(ctx, input);
+  return {
+    ...ctx,
+    notionalGbp: roundTo(Math.max(0, input.notionalGbp), 4),
+    feeGbp: roundTo(Math.max(0, input.feeGbp ?? 0), 4),
+    ...legs,
+  };
+}

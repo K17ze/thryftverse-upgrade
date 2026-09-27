@@ -246,6 +246,32 @@ export const NOTIFICATION_EVENT_REGISTRY: Record<string, NotificationEventMetada
     aggregationTemplate: orderAggregation,
     objectExtractor: getOrderObject,
   },
+  // Carrier-reported parcel failures — emitted by
+  // queueCommerceParcelSettlementNotifications when a parcel is reported
+  // failed/lost/damaged while escrow is still held. 'important' rather than
+  // 'action': the buyer cannot fix it, but silence would read as "still on
+  // the way". Aggregates per order like the rest of the order family.
+  order_delivery_failed: {
+    semanticRole: "commerce",
+    attention: "important",
+    requiresAction: false,
+    aggregationTemplate: orderAggregation,
+    objectExtractor: getOrderObject,
+  },
+  order_parcel_lost: {
+    semanticRole: "commerce",
+    attention: "important",
+    requiresAction: false,
+    aggregationTemplate: orderAggregation,
+    objectExtractor: getOrderObject,
+  },
+  order_parcel_damaged: {
+    semanticRole: "commerce",
+    attention: "important",
+    requiresAction: false,
+    aggregationTemplate: orderAggregation,
+    objectExtractor: getOrderObject,
+  },
 
   // Resolution events
   resolution_opened: {
@@ -554,6 +580,33 @@ export const NOTIFICATION_EVENT_REGISTRY: Record<string, NotificationEventMetada
     aggregationTemplate: (payload) => {
       const id = getString(payload, "assetId");
       return id ? `coown:${id}` : null;
+    },
+    objectExtractor: () => undefined,
+  },
+
+  // Co-own price alert triggered — the user set a crossing threshold and the
+  // asset's last settled trade crossed it. Actionable for the alert owner.
+  coown_price_alert_triggered: {
+    semanticRole: "financial",
+    attention: "important",
+    requiresAction: false,
+    aggregationTemplate: (payload) => {
+      const id = getString(payload, "assetId");
+      return id ? `coown_alert:${id}` : null;
+    },
+    objectExtractor: () => undefined,
+  },
+
+  // Co-own DRIP receipt — a settled distribution resolved to reinvested,
+  // retained cash, or a failed reinvestment. Financial receipt the user is
+  // owed regardless of outcome.
+  coown_drip_receipt: {
+    semanticRole: "financial",
+    attention: "important",
+    requiresAction: false,
+    aggregationTemplate: (payload) => {
+      const id = getString(payload, "assetId");
+      return id ? `coown_drip:${id}` : null;
     },
     objectExtractor: () => undefined,
   },

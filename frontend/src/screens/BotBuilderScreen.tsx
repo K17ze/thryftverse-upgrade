@@ -110,6 +110,9 @@ export default function BotBuilderScreen({ navigation, route }: Props) {
           <ModelPermissionsStep
             modelId={form.modelId}
             onModelIdChange={form.setModelId}
+            providerConnectionId={form.providerConnectionId}
+            onProviderConnectionChange={form.setProviderConnectionId}
+            providerConnections={form.providerConnections}
             conversationContext={form.conversationContext}
             onToggleConversationContext={() => form.setConversationContext((v) => !v)}
             maxTurns={form.maxTurns}

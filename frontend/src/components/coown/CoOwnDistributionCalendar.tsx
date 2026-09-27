@@ -16,7 +16,8 @@ import React from 'react';
 import { View, Text, StyleSheet } from 'react-native';
 import { useAppTheme } from '../../theme/ThemeContext';
 import { Space, Radius } from '../../theme/designTokens';
-import { TypographyV2 } from '../../theme/typography.v2';
+import { TypographyV2, MAX_FONT_SCALE } from '../../theme/typography.v2';
+import { formatBusinessDate } from '../../utils/dateFormat';
 
 export interface CoOwnDistributionCalendarEntry {
   id: string;
@@ -60,14 +61,15 @@ function formatGbp(value: number): string {
   })}`;
 }
 
+// Business-date contract: distribution record/ex/payable dates (and the
+// row's primary `date`) are civil calendar dates, not instants — the
+// backend sends UTC-midnight ISO values and "15 September" must render as
+// 15 September on every device timezone. formatBusinessDate renders the
+// UTC calendar date; a device-local toLocaleDateString here would show the
+// previous day for users behind UTC.
 function formatDate(iso: string): string {
-  const d = new Date(iso);
-  if (Number.isNaN(d.getTime())) return iso;
-  return d.toLocaleDateString('en-GB', {
-    day: '2-digit',
-    month: 'short',
-    year: 'numeric',
-  });
+  const formatted = formatBusinessDate(iso, 'en-GB');
+  return formatted || iso;
 }
 
 function statusColor(colors: ReturnType<typeof useAppTheme>['colors'], tone: 'muted' | 'warning' | 'success' | 'danger'): string {
@@ -167,7 +169,7 @@ export function CoOwnDistributionCalendar({
                   key={part}
                   style={[styles.dateMeta, { color: colors.textMuted }]}
                   numberOfLines={1}
-                  maxFontSizeMultiplier={1.3}
+                  maxFontSizeMultiplier={MAX_FONT_SCALE.utility}
                 >
                   {part}
                 </Text>

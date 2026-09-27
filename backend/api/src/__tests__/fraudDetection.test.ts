@@ -152,6 +152,7 @@ function makeVelocityCounts(overrides: Partial<VelocityCounts> = {}): VelocityCo
     listingCreation: 0,
     message: 0,
     loginAttempt: 0,
+    promotionClick: 0,
     ...overrides,
   };
 }
@@ -168,7 +169,7 @@ function makeRuleContext(overrides: Partial<{
   limits: VelocityLimits;
 }> = {}) {
   return {
-    eventType: (overrides.eventType ?? 'signup') as 'signup' | 'listing' | 'message' | 'transaction',
+    eventType: (overrides.eventType ?? 'signup') as 'signup' | 'listing' | 'message' | 'transaction' | 'promotion_click',
     userId: overrides.userId ?? 'usr_test123',
     deviceFingerprint: overrides.deviceFingerprint ?? 'abc123',
     ipAddress: overrides.ipAddress ?? '192.168.1.1',
@@ -235,6 +236,38 @@ test('rule engine: message velocity triggers signal only for message events', ()
   assert.ok(
     signals.some((s) => s.ruleId === 'velocity.message'),
     'Message event with high velocity should trigger message velocity signal',
+  );
+});
+
+test('rule engine: promotion click velocity triggers signal only for promotion_click events', () => {
+  // Click-farming cadence — over the 30/hour default limit.
+  const clickCtx = makeRuleContext({
+    eventType: 'promotion_click',
+    velocity: makeVelocityCounts({ promotionClick: 45 }),
+  });
+  const clickSignals = evaluateRules(clickCtx);
+  const signal = clickSignals.find((s) => s.ruleId === 'velocity.promotion_click');
+  assert.ok(signal, 'High sponsored-click velocity should trigger the promotion click signal');
+  assert.equal(signal!.observedValue, 45);
+
+  // A normal browsing pace stays silent.
+  const normalCtx = makeRuleContext({
+    eventType: 'promotion_click',
+    velocity: makeVelocityCounts({ promotionClick: 12 }),
+  });
+  assert.ok(
+    !evaluateRules(normalCtx).some((s) => s.ruleId === 'velocity.promotion_click'),
+    'Normal click pace should not trigger the promotion click signal',
+  );
+
+  // The counter alone doesn't fire on unrelated event types.
+  const messageCtx = makeRuleContext({
+    eventType: 'message',
+    velocity: makeVelocityCounts({ promotionClick: 45 }),
+  });
+  assert.ok(
+    !evaluateRules(messageCtx).some((s) => s.ruleId === 'velocity.promotion_click'),
+    'Non-promotion event should not trigger the promotion click signal',
   );
 });
 

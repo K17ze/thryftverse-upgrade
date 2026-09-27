@@ -160,6 +160,16 @@ test("POST /orders/:orderId/review accepts photoUrls and persists them in review
     if (text.includes("SELECT id, is_auto FROM order_reviews WHERE order_id")) {
       return empty();
     }
+    if (text.includes("FROM upload_finalizations uf")) {
+      // Provenance gate: photoUrls must resolve to the requester's own
+      // upload_finalizations (public_url or media_asset canonical_url).
+      // Seed both submitted URLs as buyer_1's uploads so this exercises the
+      // authorized happy path — external URLs still 422 MEDIA_NOT_OWNED.
+      return rows([
+        { public_url: "https://cdn.example.com/photo1.jpg", canonical_url: null },
+        { public_url: "https://cdn.example.com/photo2.jpg", canonical_url: null },
+      ]);
+    }
     if (text.includes("INSERT INTO order_reviews")) {
       reviewInserted = true;
       // INSERT ... RETURNING id — a row must come back or the handler
@@ -1443,6 +1453,11 @@ test("POST /orders/:orderId/review supersession writes buyer photos onto the aut
     }
     if (text.includes("SELECT id, is_auto FROM order_reviews WHERE order_id")) {
       return rows([{ id: "review_auto_1", is_auto: true }]);
+    }
+    if (text.includes("FROM upload_finalizations uf")) {
+      // Seed the submitted URL as one of buyer_1's own uploads so the
+      // MEDIA_NOT_OWNED provenance gate passes on the authorized path.
+      return rows([{ public_url: "https://cdn.example.com/a.jpg", canonical_url: null }]);
     }
     if (text.includes("UPDATE order_reviews") && text.includes("is_auto = TRUE")) {
       return rows([{ id: "review_auto_1", created_at: "2024-01-01T00:00:00.000Z" }]);

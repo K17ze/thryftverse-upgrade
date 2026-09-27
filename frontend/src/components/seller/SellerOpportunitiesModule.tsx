@@ -22,9 +22,10 @@ const CARD = 120;
 
 /**
  * SellerOpportunitiesModule — the Etsy 2026 near-winner play: active
- * listings earning real views but no sales in 30 days. One quiet header
- * stating the mechanism, one media rail at catalog scale. Null (source
- * unavailable) and empty (none found) both render nothing — no lecture.
+ * listings earning real views but no sales in 30 days. The title states
+ * the mechanism ("Views, no sales yet"), one media rail at catalog scale.
+ * Null (source unavailable) and empty (none found) both render nothing —
+ * no lecture.
  */
 export const SellerOpportunitiesModule: React.FC<SellerOpportunitiesModuleProps> = ({
   opportunities,
@@ -40,10 +41,7 @@ export const SellerOpportunitiesModule: React.FC<SellerOpportunitiesModuleProps>
   return (
     <View style={styles.container}>
       <View style={styles.headerRow}>
-        <View style={styles.headerLead}>
-          <AppIcon concept="trending" size={IconSize.xs} color="textSecondary" opticalCenter accessible={false} />
-          <Text style={[styles.title, { color: colors.textPrimary }]}>Worth a look</Text>
-        </View>
+        <Text style={[styles.title, { color: colors.textPrimary }]}>Views, no sales yet</Text>
         <AnimatedPressable
           onPress={onViewAll}
           activeOpacity={0.7}
@@ -56,9 +54,6 @@ export const SellerOpportunitiesModule: React.FC<SellerOpportunitiesModuleProps>
           <Text style={[styles.viewAllText, { color: colors.brand }]}>View all</Text>
         </AnimatedPressable>
       </View>
-      <Text style={[styles.subtitle, { color: colors.textMuted }]}>
-        Views without sales in 30 days
-      </Text>
 
       <ScrollView
         horizontal
@@ -113,12 +108,6 @@ function createStyles(colors: ThemeColors) {
       justifyContent: 'space-between',
       paddingHorizontal: Space.md,
     },
-    headerLead: {
-      flex: 1,
-      flexDirection: 'row',
-      alignItems: 'center',
-      gap: Space.sm,
-    },
     title: {
       fontSize: TypographyV2.sectionTitle.size,
       lineHeight: TypographyV2.sectionTitle.lineHeight,
@@ -134,14 +123,6 @@ function createStyles(colors: ThemeColors) {
       fontSize: TypographyV2.caption.size,
       lineHeight: TypographyV2.caption.lineHeight,
       fontFamily: FontFamily.semibold,
-    },
-    subtitle: {
-      paddingHorizontal: Space.md,
-      marginTop: Space.xxs,
-      fontSize: TypographyV2.meta.size,
-      lineHeight: TypographyV2.meta.lineHeight,
-      fontFamily: FontFamily.regular,
-      letterSpacing: TypographyV2.meta.letterSpacing,
     },
     railContent: {
       paddingHorizontal: Space.md,

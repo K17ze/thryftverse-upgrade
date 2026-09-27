@@ -102,6 +102,135 @@ export function resolveRefundCardState(
     : 'order_partially_refunded';
 }
 
+// ── Abuse-signal review routing ────────────────────────────────────────────
+// The amount threshold is not the only reason a refund deserves a second
+// pair of eyes. This is deliberately a small, readable rules set — not a
+// scoring framework. Every fired signal routes the execution to maker-check
+// and is recorded on the execution row (provider_response.review.signals)
+// so ops can see WHY the refund was held.
+
+/** Trailing window for buyer refund-velocity measurement. */
+export const REFUND_REVIEW_WINDOW_DAYS = 30;
+/** Refunds in the window at or above this count route to review outright. */
+export const REFUND_REVIEW_VELOCITY_MIN_REFUNDS = 3;
+/** Below the absolute count, a refund-to-order ratio at or above this still
+ *  routes to review once the minimum refund count is met. */
+export const REFUND_REVIEW_VELOCITY_RATIO = 0.5;
+export const REFUND_REVIEW_VELOCITY_RATIO_MIN_REFUNDS = 2;
+/** Accounts younger than this refunding route to review. */
+export const REFUND_REVIEW_NEW_ACCOUNT_DAYS = 30;
+/** A buyer with this many lifetime return cases is a serial returner. */
+export const REFUND_REVIEW_BUYER_MIN_RETURN_CASES = 3;
+/** Seller-side signal: at least this many disputes/return cases AND that
+ *  ratio of the seller's orders. */
+export const REFUND_REVIEW_SELLER_MIN_CASES = 3;
+export const REFUND_REVIEW_SELLER_CASE_RATIO = 0.15;
+
+export type RefundReviewSignalCode =
+  | 'amount_over_threshold'
+  | 'buyer_refund_velocity'
+  | 'new_buyer_account'
+  | 'buyer_history_unavailable'
+  | 'buyer_prior_disputes'
+  | 'order_prior_case'
+  | 'seller_dispute_rate'
+  | 'signal_evaluation_error';
+
+export interface RefundReviewSignal {
+  code: RefundReviewSignalCode;
+  detail: string;
+}
+
+/** Facts gathered by the signal query — the pure evaluator below decides. */
+export interface RefundAbuseFacts {
+  /** Days since the buyer's user row was created; null when the row is
+   *  missing (conservative: unverifiable history routes to review). */
+  buyerAccountAgeDays: number | null;
+  buyerRefundsInWindow: number;
+  buyerOrdersInWindow: number;
+  buyerDisputeCount: number;
+  buyerReturnCaseCount: number;
+  /** Disputes/return cases already on this order, excluding the return case
+   *  this refund is linked to (the sanctioned return-remedy flow). */
+  orderCaseCount: number;
+  sellerCaseCount: number;
+  sellerOrderCount: number;
+}
+
+/** Evaluate the abuse rules against gathered facts. Pure — no I/O — so the
+ *  rules are unit-testable and the query shape stays in one place. */
+export function evaluateRefundAbuseSignals(facts: RefundAbuseFacts): RefundReviewSignal[] {
+  const signals: RefundReviewSignal[] = [];
+
+  if (facts.buyerAccountAgeDays === null) {
+    signals.push({
+      code: 'buyer_history_unavailable',
+      detail: 'buyer account record not found — history unverifiable',
+    });
+  } else if (facts.buyerAccountAgeDays < REFUND_REVIEW_NEW_ACCOUNT_DAYS) {
+    signals.push({
+      code: 'new_buyer_account',
+      detail: `buyer account is ${Math.floor(facts.buyerAccountAgeDays)}d old (< ${REFUND_REVIEW_NEW_ACCOUNT_DAYS}d)`,
+    });
+  }
+
+  const velocityRatio = facts.buyerRefundsInWindow / Math.max(facts.buyerOrdersInWindow, 1);
+  if (
+    facts.buyerRefundsInWindow >= REFUND_REVIEW_VELOCITY_MIN_REFUNDS ||
+    (facts.buyerRefundsInWindow >= REFUND_REVIEW_VELOCITY_RATIO_MIN_REFUNDS &&
+      velocityRatio >= REFUND_REVIEW_VELOCITY_RATIO)
+  ) {
+    signals.push({
+      code: 'buyer_refund_velocity',
+      detail: `${facts.buyerRefundsInWindow} refunds across ${facts.buyerOrdersInWindow} orders in the last ${REFUND_REVIEW_WINDOW_DAYS}d`,
+    });
+  }
+
+  if (
+    facts.buyerDisputeCount > 0 ||
+    facts.buyerReturnCaseCount >= REFUND_REVIEW_BUYER_MIN_RETURN_CASES
+  ) {
+    signals.push({
+      code: 'buyer_prior_disputes',
+      detail: `${facts.buyerDisputeCount} payment dispute(s), ${facts.buyerReturnCaseCount} return case(s) on buyer`,
+    });
+  }
+
+  if (facts.orderCaseCount > 0) {
+    signals.push({
+      code: 'order_prior_case',
+      detail: `${facts.orderCaseCount} prior dispute/return case(s) on this order`,
+    });
+  }
+
+  if (
+    facts.sellerCaseCount >= REFUND_REVIEW_SELLER_MIN_CASES &&
+    facts.sellerCaseCount / Math.max(facts.sellerOrderCount, 1) >= REFUND_REVIEW_SELLER_CASE_RATIO
+  ) {
+    signals.push({
+      code: 'seller_dispute_rate',
+      detail: `${facts.sellerCaseCount} disputes/returns across ${facts.sellerOrderCount} seller orders`,
+    });
+  }
+
+  return signals;
+}
+
+/** Read the fired-signal list back out of a refund_executions
+ *  provider_response JSONB blob. Unknown shapes yield an empty list —
+ *  parsing is never allowed to break a read path. */
+export function extractReviewSignals(providerResponse: unknown): RefundReviewSignal[] {
+  const review = (providerResponse as { review?: { signals?: unknown } } | null)?.review;
+  if (!review || !Array.isArray(review.signals)) return [];
+  return review.signals.filter(
+    (s): s is RefundReviewSignal =>
+      typeof s === 'object' &&
+      s !== null &&
+      typeof (s as RefundReviewSignal).code === 'string' &&
+      typeof (s as RefundReviewSignal).detail === 'string'
+  );
+}
+
 interface AuthenticatedUser {
   userId: string;
   role: 'user' | 'seller' | 'moderator' | 'admin';
@@ -195,6 +324,90 @@ export function registerRefundRoutes({
         (await sumProviderRefundsGbp(client, orderId, ['succeeded'])),
       2
     );
+
+  /** Gather the abuse-signal facts for an order's buyer/seller in one round
+   *  trip, then run the pure rules set. Every predicate uses an indexed
+   *  column: orders(buyer_id|seller_id, created_at), refund_executions
+   *  (order_id), return_cases(buyer_id|seller_id|order_id), payment_intents
+   *  (user_id|order_id) and payment_disputes(intent_id).
+   *
+   *  `excludeExecutionId` keeps a re-attempted execution out of its own
+   *  velocity count; `linkedReturnCaseId` keeps the sanctioned return-remedy
+   *  case out of the order's prior-case count. Throws on query error — the
+   *  caller fails conservative (routes to review). */
+  const collectRefundAbuseSignals = async (
+    client: PoolClient,
+    opts: {
+      orderId: string;
+      buyerId: string;
+      sellerId: string;
+      linkedReturnCaseId?: string;
+      excludeExecutionId?: string;
+    }
+  ): Promise<RefundReviewSignal[]> => {
+    const result = await client.query<{
+      buyer_created_at: Date | string | null;
+      buyer_refunds_in_window: number;
+      buyer_orders_in_window: number;
+      buyer_dispute_count: number;
+      buyer_return_case_count: number;
+      order_case_count: number;
+      seller_case_count: number;
+      seller_order_count: number;
+    }>(
+      `SELECT
+         (SELECT created_at FROM users WHERE id = $1) AS buyer_created_at,
+         (SELECT COUNT(*)::int FROM orders o
+            JOIN refund_executions re ON re.order_id = o.id
+          WHERE o.buyer_id = $1
+            AND re.created_at >= NOW() - ($2::int * INTERVAL '1 day')
+            AND ($3::text = '' OR re.id <> $3)) AS buyer_refunds_in_window,
+         (SELECT COUNT(*)::int FROM orders o
+          WHERE o.buyer_id = $1
+            AND o.created_at >= NOW() - ($2::int * INTERVAL '1 day')) AS buyer_orders_in_window,
+         (SELECT COUNT(*)::int FROM payment_disputes pd
+            JOIN payment_intents pi ON pi.id = pd.intent_id
+          WHERE pi.user_id = $1) AS buyer_dispute_count,
+         (SELECT COUNT(*)::int FROM return_cases rc
+          WHERE rc.buyer_id = $1) AS buyer_return_case_count,
+         (SELECT COUNT(*)::int FROM payment_disputes pd
+            JOIN payment_intents pi ON pi.id = pd.intent_id
+          WHERE pi.order_id = $4) +
+         (SELECT COUNT(*)::int FROM return_cases rc
+          WHERE rc.order_id = $4
+            AND ($5::text = '' OR rc.id <> $5)) AS order_case_count,
+         (SELECT COUNT(*)::int FROM payment_disputes pd
+            JOIN payment_intents pi ON pi.id = pd.intent_id
+            JOIN orders o ON o.id = pi.order_id
+          WHERE o.seller_id = $6) +
+         (SELECT COUNT(*)::int FROM return_cases rc
+          WHERE rc.seller_id = $6) AS seller_case_count,
+         (SELECT COUNT(*)::int FROM orders o
+          WHERE o.seller_id = $6) AS seller_order_count`,
+      [
+        opts.buyerId,
+        REFUND_REVIEW_WINDOW_DAYS,
+        opts.excludeExecutionId ?? '',
+        opts.orderId,
+        opts.linkedReturnCaseId ?? '',
+        opts.sellerId,
+      ]
+    );
+
+    const row = result.rows[0];
+    const buyerCreatedAt = row?.buyer_created_at ? new Date(row.buyer_created_at).getTime() : null;
+    return evaluateRefundAbuseSignals({
+      buyerAccountAgeDays:
+        buyerCreatedAt === null ? null : (Date.now() - buyerCreatedAt) / (24 * 60 * 60 * 1000),
+      buyerRefundsInWindow: Number(row?.buyer_refunds_in_window ?? 0),
+      buyerOrdersInWindow: Number(row?.buyer_orders_in_window ?? 0),
+      buyerDisputeCount: Number(row?.buyer_dispute_count ?? 0),
+      buyerReturnCaseCount: Number(row?.buyer_return_case_count ?? 0),
+      orderCaseCount: Number(row?.order_case_count ?? 0),
+      sellerCaseCount: Number(row?.seller_case_count ?? 0),
+      sellerOrderCount: Number(row?.seller_order_count ?? 0),
+    });
+  };
 
   interface RefundExecutionOutcome {
     executionStatus: RefundExecutionStatus;
@@ -384,7 +597,8 @@ export function registerRefundRoutes({
 
   // ── POST /orders/:orderId/refund-execute ──────────────────────────────────
   // Operator/admin executes a refund. Idempotent by request_hash. Maker-checker
-  // applies for amounts over the threshold (default £100).
+  // applies for amounts over the threshold (default £100) or when any abuse
+  // signal fires (buyer velocity, account age, dispute history, seller rate).
   app.post('/orders/:orderId/refund-execute', async (request, reply) => {
     const paramsSchema = z.object({
       orderId: z.string().min(4).max(64),
@@ -437,9 +651,10 @@ export function registerRefundRoutes({
         status: RefundExecutionStatus;
         maker_check_status: MakerCheckStatus;
         provider_status: string | null;
+        provider_response: Record<string, unknown> | null;
       }>(
         `
-          SELECT id, status, maker_check_status, provider_status
+          SELECT id, status, maker_check_status, provider_status, provider_response
           FROM refund_executions
           WHERE request_hash = $1
           LIMIT 1
@@ -461,7 +676,8 @@ export function registerRefundRoutes({
             idempotent: true,
           };
         }
-        // If pending checker approval, surface that state.
+        // If pending checker approval, surface that state — including the
+        // recorded review signals so ops see why it was held.
         if (row.maker_check_status === 'pending_check' && row.status === 'pending') {
           await client.query('COMMIT');
           return {
@@ -469,7 +685,8 @@ export function registerRefundRoutes({
             refundExecutionId: row.id,
             status: 'pending_check',
             providerStatus: row.provider_status,
-            message: 'Refund requires checker approval for amounts over £100',
+            reviewSignals: extractReviewSignals(row.provider_response),
+            message: 'Refund requires checker approval',
           };
         }
         // Otherwise (failed/unknown/pending without check) fall through to
@@ -536,12 +753,50 @@ export function registerRefundRoutes({
         };
       }
 
-      const requiresChecker = amountGbp > MAKER_CHECK_THRESHOLD_GBP;
+      // Review routing: the amount threshold is one rule, not the only one.
+      // Abuse signals (buyer velocity, account age, dispute history, seller
+      // dispute rate) ADD to it — any fired signal routes the execution to
+      // maker-check. Fail-conservative: if the signal query errors the
+      // refund goes to review rather than silently auto-approving.
+      let reviewSignals: RefundReviewSignal[];
+      try {
+        reviewSignals = await collectRefundAbuseSignals(client, {
+          orderId,
+          buyerId: order.buyer_id,
+          sellerId: order.seller_id,
+          linkedReturnCaseId: body.returnCaseId,
+          excludeExecutionId: existing.rows[0]?.id,
+        });
+      } catch (err) {
+        request.log.warn(
+          { err, orderId },
+          'refund abuse-signal evaluation failed — routing to manual review'
+        );
+        reviewSignals = [
+          {
+            code: 'signal_evaluation_error',
+            detail: 'abuse-signal evaluation failed; routed to review conservatively',
+          },
+        ];
+      }
+      if (amountGbp > MAKER_CHECK_THRESHOLD_GBP) {
+        reviewSignals.unshift({
+          code: 'amount_over_threshold',
+          detail: `amount £${amountGbp.toFixed(2)} exceeds the £${MAKER_CHECK_THRESHOLD_GBP} single-approval threshold`,
+        });
+      }
+      const requiresChecker = reviewSignals.length > 0;
+      // Recorded on provider_response.review so the checker and the audit
+      // trail can see which rules held this refund.
+      const reviewMetadata = JSON.stringify({
+        review: { signals: reviewSignals, evaluatedAt: new Date().toISOString() },
+      });
       const refundExecutionId =
         existing.rows[0]?.id ??
         `rex_${crypto.randomUUID().replace(/-/g, '')}`;
 
-      // Maker-checker: amounts over the threshold require a checker.
+      // Maker-checker: amounts over the threshold or any fired abuse signal
+      // require a checker.
       if (requiresChecker) {
         const makerCheckStatus: MakerCheckStatus = 'pending_check';
         if (existing.rowCount) {
@@ -556,6 +811,7 @@ export function registerRefundRoutes({
                 checker_id = NULL,
                 maker_check_status = $6,
                 maker_check_threshold_gbp = $7,
+                provider_response = COALESCE(provider_response, '{}'::jsonb) || $8::jsonb,
                 status = 'pending',
                 failure_reason = NULL,
                 updated_at = NOW()
@@ -569,6 +825,7 @@ export function registerRefundRoutes({
               initiatorId,
               makerCheckStatus,
               MAKER_CHECK_THRESHOLD_GBP,
+              reviewMetadata,
             ]
           );
         } else {
@@ -577,9 +834,10 @@ export function registerRefundRoutes({
               INSERT INTO refund_executions (
                 id, order_id, return_case_id, request_hash, amount_gbp,
                 initiator_id, initiator_role, status,
-                maker_id, maker_check_status, maker_check_threshold_gbp
+                maker_id, maker_check_status, maker_check_threshold_gbp,
+                provider_response
               )
-              VALUES ($1, $2, $3, $4, $5, $6, $7, 'pending', $8, $9, $10)
+              VALUES ($1, $2, $3, $4, $5, $6, $7, 'pending', $8, $9, $10, $11)
             `,
             [
               refundExecutionId,
@@ -592,6 +850,7 @@ export function registerRefundRoutes({
               initiatorId,
               makerCheckStatus,
               MAKER_CHECK_THRESHOLD_GBP,
+              reviewMetadata,
             ]
           );
         }
@@ -624,7 +883,10 @@ export function registerRefundRoutes({
           refundExecutionId,
           status: 'pending_check',
           providerStatus: null,
-          message: 'Refund requires checker approval for amounts over £100',
+          reviewSignals,
+          message: `Refund requires checker approval (${reviewSignals
+            .map((s) => s.code)
+            .join(', ')})`,
         };
       }
 
@@ -692,7 +954,7 @@ export function registerRefundRoutes({
               provider = COALESCE(provider, $5),
               provider_refund_id = COALESCE(provider_refund_id, $6),
               provider_status = $7,
-              provider_response = $8,
+              provider_response = COALESCE(provider_response, '{}'::jsonb) || COALESCE($8::jsonb, '{}'::jsonb),
               status = $9,
               failure_reason = $10,
               maker_check_status = 'single_approval',
@@ -1035,6 +1297,8 @@ export function registerRefundRoutes({
         failureReason = err instanceof Error ? err.message : 'refund execution failed';
       }
 
+      // provider_response merges rather than overwrites: the review block
+      // recorded at routing time must survive into the executed row.
       await client.query(
         `
           UPDATE refund_executions
@@ -1044,7 +1308,7 @@ export function registerRefundRoutes({
             provider = COALESCE(provider, $3),
             provider_refund_id = COALESCE(provider_refund_id, $4),
             provider_status = $5,
-            provider_response = $6,
+            provider_response = COALESCE(provider_response, '{}'::jsonb) || COALESCE($6::jsonb, '{}'::jsonb),
             status = $7,
             failure_reason = $8,
             updated_at = NOW()
@@ -1176,6 +1440,7 @@ export function registerRefundRoutes({
       provider: string | null;
       provider_refund_id: string | null;
       provider_status: string | null;
+      provider_response: Record<string, unknown> | null;
       status: RefundExecutionStatus;
       failure_reason: string | null;
       maker_id: string | null;
@@ -1191,7 +1456,7 @@ export function registerRefundRoutes({
         SELECT
           id, order_id, return_case_id, amount_gbp,
           initiator_id, initiator_role,
-          provider, provider_refund_id, provider_status,
+          provider, provider_refund_id, provider_status, provider_response,
           status, failure_reason,
           maker_id, checker_id, maker_check_status, maker_check_threshold_gbp,
           reconciled_at, reconciliation_notes,
@@ -1216,6 +1481,7 @@ export function registerRefundRoutes({
         provider: row.provider,
         providerRefundId: row.provider_refund_id,
         providerStatus: row.provider_status,
+        reviewSignals: extractReviewSignals(row.provider_response),
         status: row.status,
         failureReason: row.failure_reason,
         makerId: row.maker_id,

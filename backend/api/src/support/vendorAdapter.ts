@@ -168,6 +168,14 @@ export async function getVendorMapping(
  * Enqueues an event in the vendor outbox. The idempotency key prevents
  * duplicate delivery — if the same key already exists, the existing entry is
  * returned without creating a new one.
+ *
+ * Delivery path: the periodic `vendor_sync` drain (registered in
+ * index.ts / workers/index.ts → queues.ts `vendor_sync` job →
+ * vendorSyncHandler) claims pending rows and delivers them. A producer
+ * that wants low-latency delivery should also call `enqueueVendorSyncJob`
+ * (lib/queues.ts) after this returns; this adapter deliberately does not
+ * import the queue layer so routes/webhooks can use it without spinning up
+ * BullMQ connections.
  */
 export async function enqueueVendorEvent(
   db: Pool,
@@ -217,8 +225,17 @@ export async function enqueueVendorEvent(
 }
 
 /**
- * Returns pending outbox entries for delivery, oldest first. Limits to a
- * reasonable batch size to avoid overwhelming the vendor API.
+ * Vendor names the sync drain knows how to drive. Mirrored by the webhook
+ * route's vendorName enum — a vendor only delivers when it also has
+ * SUPPORT_VENDOR_<NAME>_API_URL/TOKEN configured (see vendorClient.ts).
+ */
+export const SUPPORT_VENDOR_NAMES = ['intercom', 'zendesk'] as const;
+export type SupportVendorName = (typeof SUPPORT_VENDOR_NAMES)[number];
+
+/**
+ * Read-only view of entries awaiting delivery (pending + retryable failed),
+ * oldest first. Used for ops inspection; the delivery path uses
+ * claimVendorOutboxBatch, which takes the lease atomically.
  */
 export async function getPendingOutboxEntries(
   db: Pool,
@@ -242,7 +259,92 @@ export async function getPendingOutboxEntries(
 }
 
 /**
- * Marks an outbox entry as delivering (in-progress).
+ * Atomically claim up to `limit` deliverable outbox entries for a vendor.
+ *
+ * Two statements, each safe on its own:
+ *
+ *   1. Lease reclaim — a worker that crashed between claim and
+ *      delivered/failed leaves the row in 'delivering' forever. Rows whose
+ *      `last_attempt_at` is older than `staleLeaseMs` return to 'pending'
+ *      (same semantics as domain_outbox's locked_at reclaim), or dead-letter
+ *      to 'skipped' once they have exhausted `maxAttempts`. Each reclaim
+ *      counts as an attempt — a crash-looping entry is still bounded.
+ *
+ *   2. Claim — a single UPDATE ... FROM (SELECT ... FOR UPDATE SKIP LOCKED)
+ *      moves claimable rows to 'delivering' and stamps `last_attempt_at`
+ *      (the lease), so two concurrent drainers can never take the same
+ *      entry. The claim is atomic within the statement — no surrounding
+ *      transaction is needed.
+ */
+export async function claimVendorOutboxBatch(
+  db: Pool,
+  vendorName: string,
+  limit = 50,
+  options?: { staleLeaseMs?: number; maxAttempts?: number },
+): Promise<VendorOutboxEntry[]> {
+  const staleLeaseMs = Math.max(1_000, options?.staleLeaseMs ?? 10 * 60 * 1000);
+  const maxAttempts = Math.max(1, options?.maxAttempts ?? 5);
+  const batchSize = Math.max(1, Math.min(200, limit));
+
+  // 1. Reclaim expired delivery leases for this vendor. A reclaimed lease
+  //    consumes an attempt — otherwise an entry that crashes every worker
+  //    that touches it would loop pending↔delivering forever.
+  await db.query(
+    `
+      UPDATE support_vendor_outbox
+      SET state = CASE WHEN attempts + 1 >= $3 THEN 'skipped' ELSE 'pending' END,
+          attempts = attempts + 1,
+          last_error = CASE
+            WHEN attempts + 1 >= $3
+              THEN 'delivery lease expired; attempt ceiling reached'
+            ELSE last_error
+          END,
+          updated_at = NOW()
+      WHERE vendor_name = $1
+        AND state = 'delivering'
+        -- Lease clock: last_attempt_at normally, updated_at as the
+        -- fallback for rows that entered 'delivering' before the lease
+        -- stamp existed.
+        AND COALESCE(last_attempt_at, updated_at) < NOW() - ($2 * INTERVAL '1 millisecond')
+    `,
+    [vendorName, staleLeaseMs, maxAttempts],
+  );
+
+  // 2. Claim deliverable rows under FOR UPDATE SKIP LOCKED. attempts is
+  //    NOT incremented here — it counts completed-failure outcomes and
+  //    reclaimed leases, so `attempts >= maxAttempts` in the handler means
+  //    "this many real attempts already happened".
+  const result = await db.query<VendorOutboxRow>(
+    `
+      WITH claimable AS (
+        SELECT id
+        FROM support_vendor_outbox
+        WHERE vendor_name = $1 AND state IN ('pending', 'failed')
+        ORDER BY created_at ASC
+        LIMIT $2
+        FOR UPDATE SKIP LOCKED
+      )
+      UPDATE support_vendor_outbox o
+      SET state = 'delivering',
+          last_attempt_at = NOW(),
+          updated_at = NOW()
+      FROM claimable
+      WHERE o.id = claimable.id
+      RETURNING o.id, o.canonical_type, o.canonical_id, o.vendor_name,
+                o.event_type, o.payload, o.idempotency_key, o.state,
+                o.attempts, o.last_error, o.last_attempt_at, o.delivered_at,
+                o.created_at, o.updated_at
+    `,
+    [vendorName, batchSize],
+  );
+
+  return result.rows.map(serializeOutbox);
+}
+
+/**
+ * Marks an outbox entry as delivering (in-progress). Retained for manual
+ * re-drive tooling — the drain path takes the lease atomically inside
+ * claimVendorOutboxBatch instead (SELECT-then-mark is not race-safe).
  */
 export async function markOutboxDelivering(
   db: Pool,
@@ -276,8 +378,9 @@ export async function markOutboxDelivered(
 }
 
 /**
- * Marks an outbox entry as failed and records the error. The entry remains
- * eligible for retry (it will be returned by getPendingOutboxEntries).
+ * Marks an outbox entry as failed and records the error, consuming one
+ * delivery attempt. The entry remains eligible for retry (it will be
+ * re-claimed by claimVendorOutboxBatch until attempts hits the ceiling).
  */
 export async function markOutboxFailed(
   db: Pool,
@@ -298,6 +401,8 @@ export async function markOutboxFailed(
  * Dead-letters an outbox entry after a permanent (non-retryable) failure —
  * e.g. the vendor rejected the payload with a 4xx. The entry is removed
  * from the retry pool but keeps last_error for manual review (F16).
+ * `attempts` is not incremented — the row is out of the retry pool, so the
+ * counter no longer matters.
  */
 export async function markOutboxSkipped(
   db: Pool,
@@ -307,7 +412,7 @@ export async function markOutboxSkipped(
   await db.query(
     `
       UPDATE support_vendor_outbox
-      SET state = 'skipped', last_error = $2, attempts = attempts + 1, updated_at = NOW()
+      SET state = 'skipped', last_error = $2, updated_at = NOW()
       WHERE id = $1
     `,
     [outboxId, reason],

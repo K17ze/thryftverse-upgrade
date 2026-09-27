@@ -79,7 +79,7 @@ export default function AboutScreen({ navigation }: Props) {
     haptic.light();
     try {
       await Share.share({
-        message: 'Check out Thryftverse — the marketplace for second-hand fashion. https://thryftverse.app',
+        message: 'Check out Thryftverse — the marketplace for second-hand fashion. https://thryftverse.com',
         title: 'Thryftverse' });
     } catch {}
   };
@@ -138,9 +138,9 @@ export default function AboutScreen({ navigation }: Props) {
         </View>
 
         <SettingsSection title="Legal">
-          <SettingsRow icon="document" title="Terms of Service" onPress={() => void handleOpenExternal('https://thryftverse.app/terms')} />
-          <SettingsRow icon="lock" title="Privacy Policy" onPress={() => void handleOpenExternal('https://thryftverse.app/privacy')} />
-          <SettingsRow icon="document" title="Cookie Policy" onPress={() => void handleOpenExternal('https://thryftverse.app/cookies')} isLast />
+          <SettingsRow icon="document" title="Terms of Service" onPress={() => void handleOpenExternal('https://thryftverse.com/terms')} />
+          <SettingsRow icon="lock" title="Privacy Policy" onPress={() => void handleOpenExternal('https://thryftverse.com/privacy')} />
+          <SettingsRow icon="document" title="Cookie Policy" onPress={() => void handleOpenExternal('https://thryftverse.com/cookies')} isLast />
         </SettingsSection>
 
         <SettingsSection title="Support">

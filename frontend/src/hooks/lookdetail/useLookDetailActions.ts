@@ -146,10 +146,12 @@ export function useLookDetailActions({
   }, [look, currentUserId, isOwner, repostBusy, haptic, show, navigation]);
 
   const handleReport = useCallback(() => {
-    if (!look?.creator?.id) return;
+    if (!look?.id) return;
     haptic.light();
     setOverflowVisible(false);
-    navigation.navigate('Report', { type: 'user', targetId: look.creator.id });
+    // Report the content itself, not the creator — creator reporting lives
+    // on their profile. The look id is the reportable UGC subject.
+    navigation.navigate('Report', { type: 'ugc', ugcSubjectType: 'look', targetId: look.id });
   }, [look, navigation, haptic]);
 
   const handleDelete = useCallback(() => {

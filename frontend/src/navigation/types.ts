@@ -219,6 +219,8 @@ export type RootStackParamList = {
   // Wallet V3 — focused money-movement destinations (spec 17)
   SellerEarnings: undefined;
   WalletConvert: undefined;
+  // Fiat↔fiat currency exchange across wallet pockets (multi-currency FX)
+  WalletExchange: undefined;
   WalletHistory: undefined;
   /**
    * Orders ledger — optional deep-link scope. `tab` selects the rail
@@ -317,7 +319,12 @@ export type RootStackParamList = {
   WriteReview: { orderId: string; initialRating?: number };
 
   // ── Support & Help ──
-  Report: { type: 'item' | 'user' | 'group'; targetId?: string };
+  Report: {
+    type: 'item' | 'user' | 'group' | 'ugc';
+    targetId?: string;
+    /** Required when type === 'ugc' — the concrete content surface. */
+    ugcSubjectType?: 'look' | 'look_comment' | 'poster' | 'moodboard_comment' | 'listing_qa';
+  };
   Appeal: { decisionId: string };
 
   // ── Auctions & Trading ──
@@ -480,6 +487,8 @@ export type RootStackParamList = {
   // ── Auctions & Trading ── (trade confirm)
   // Diagnostic — dev only
   RuntimeSmokeTest: undefined;
+  // Model artifact registry — operator surface (entry via Settings → Advanced)
+  ModelRegistry: undefined;
 
   // ── Seller Tools ── (sell, trade hub, seller hub, analytics, verification)
   Sell: undefined;
@@ -514,6 +523,8 @@ export type RootStackParamList = {
   LiveShopping: undefined;
   // Live stream viewer — watch + bid + chat
   LiveStreamViewer: { sessionId: string };
+  // Live stream replay — VOD playback of an ended session (deep-linkable)
+  LiveStreamReplay: { sessionId: string };
   // Live stream seller — broadcast + manage lots
   LiveStreamSeller: { sessionId?: string };
 
@@ -530,6 +541,9 @@ export type RootStackParamList = {
   // Galleria — editorial discovery surface for Co-Own assets & curated collections
   Galleria: undefined;
   GalleriaCollectionDetail: { collectionId: string };
+  // Full editorial article reader — resolves the piece by ID and renders
+  // its body (S21-02). Missing/unpublished IDs get an honest recovery state.
+  GalleriaEditorial: { editorialId: string };
   // Algorithm transparency — "Your Algorithm" dashboard
   YourAlgorithm: undefined;
   // AI photo enhancement — Photoroom-equivalent editing surface
@@ -550,6 +564,8 @@ export type RootStackParamList = {
   AIAgentIntegration: undefined;
   // Agent activity ledger — transparent record of agent actions and approvals
   AgentLedger: undefined;
+  // Agent memory — inspect, forget and disable what agents remember
+  AgentMemory: undefined;
 };
 
 export const ROOT_STACK_ROUTES = [
@@ -604,6 +620,7 @@ export const ROOT_STACK_ROUTES = [
   'Wallet',
   'SellerEarnings',
   'WalletConvert',
+  'WalletExchange',
   'WalletHistory',
   'MyOrders',
   'Personalisation',
@@ -684,6 +701,7 @@ export const ROOT_STACK_ROUTES = [
   'ListingPreview',
   'TradeConfirm',
   'RuntimeSmokeTest',
+  'ModelRegistry',
   'Sell',
   'CatalogImportStart',
   'CatalogImportConsent',
@@ -703,6 +721,7 @@ export const ROOT_STACK_ROUTES = [
   'VerificationResponse',
   'LiveShopping',
   'LiveStreamViewer',
+  'LiveStreamReplay',
   'LiveStreamSeller',
   'AIPoweredListing',
   'BulkListing',
@@ -710,6 +729,7 @@ export const ROOT_STACK_ROUTES = [
   'KYCVerification',
   'Galleria',
   'GalleriaCollectionDetail',
+  'GalleriaEditorial',
   'UnifiedDiscovery',
   'YourAlgorithm',
   'AIPhotoEnhancement',
@@ -722,6 +742,7 @@ export const ROOT_STACK_ROUTES = [
   'NotificationPreferences',
   'AIAgentIntegration',
   'AgentLedger',
+  'AgentMemory',
 ] as const;
 
 export type RootStackRouteName = typeof ROOT_STACK_ROUTES[number];

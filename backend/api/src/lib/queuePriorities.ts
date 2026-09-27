@@ -25,12 +25,19 @@ export interface RepeatableJobConfig {
  * it does not modify existing queue instances.
  */
 export function configureQueuePriorities(): QueuePriorityMap {
+  // Entries must name real queues in lib/queues.ts — BullMQ applies
+  // priority per job at enqueue time, so this map is the shared
+  // registry for enqueue call sites.
   return {
     push_notifications: { priority: 5 },
-    email_notifications: { priority: 3 },
-    image_processing: { priority: 7 },
+    media_ingest: { priority: 7 },
+    media_embedding: { priority: 6 },
+    catalog_import: { priority: 3 },
+    importer_extraction: { priority: 4 },
+    moderation_triage: { priority: 8 },
+    infra_ops: { priority: 9 },
     search_indexing: { priority: 2 },
-    payout_processing: { priority: 9 },
+    'agent-runs': { priority: 5 },
   };
 }
 
@@ -41,10 +48,10 @@ export function configureQueuePriorities(): QueuePriorityMap {
  * instances.
  */
 export function configureQueueRateLimits(): QueueRateLimitMap {
+  // Entries must name real queues in lib/queues.ts. Worker `limiter`
+  // options consume this map at worker construction.
   return {
     push_notifications: { max: 100, duration: 1000 },
-    email_notifications: { max: 10, duration: 1000 },
-    payout_processing: { max: 1, duration: 1000 },
   };
 }
 

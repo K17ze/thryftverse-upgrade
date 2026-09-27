@@ -4,7 +4,10 @@ import { writeAuditEvent } from './immutableAudit.js';
 import { logger } from './logger.js';
 import { hasNcmecReport, submitNcmecReport } from './ncmecReporting.js';
 import type { WorkforcePrincipal, WorkforceSession } from './workforceAuth.js';
-import { sendOutcomeNotification } from './safetyNotifications.js';
+import {
+  sendBuyerRemovalNotification,
+  sendOutcomeNotification,
+} from './safetyNotifications.js';
 import {
   getSellerReach,
   restoreSellerReach,
@@ -313,7 +316,12 @@ export async function createSafetyNotice(
 // of an already-persisted report (conversation_reports carries a client
 // idempotency key) returns the original notice instead of double-filing.
 
-export type ConsumerReportKind = 'user' | 'listing' | 'conversation';
+export type ConsumerReportKind =
+  | 'user'
+  | 'listing'
+  | 'conversation'
+  | 'live_chat'
+  | 'ugc';
 
 // Maps the mobile report vocabularies onto the seeded safety_reason_codes
 // taxonomy (migration 172). The user/listing enums are already 1:1 with
@@ -497,11 +505,101 @@ export async function recordConsumerReport(
         }
         break;
       }
+      case 'live_chat': {
+        // subjectId is the live_shopping_chat_messages.id; session and
+        // author ids travel in the subject snapshot passed by the route.
+        const snapshot = input.subjectSnapshot ?? {};
+        const insertResult = await client.query<{ id: string }>(
+          `INSERT INTO live_chat_reports
+             (id, session_id, message_id, author_user_id, reporter_user_id,
+              reason, details, status, created_at, updated_at, idempotency_key)
+           VALUES ($1, $2, $3, $4, $5, $6, $7, 'submitted', NOW(), NOW(), $8)
+           ON CONFLICT (idempotency_key) WHERE idempotency_key IS NOT NULL
+           DO NOTHING
+           RETURNING id`,
+          [
+            input.reportId,
+            String(snapshot.sessionId ?? ''),
+            input.evidenceMessageId ?? input.subjectId,
+            String(snapshot.authorUserId ?? ''),
+            input.reporterId,
+            input.reason,
+            input.details ?? null,
+            input.idempotencyKey ?? null,
+          ],
+        );
+        if (insertResult.rowCount && insertResult.rowCount > 0) {
+          effectiveReportId = insertResult.rows[0].id;
+        } else {
+          duplicated = true;
+          if (input.idempotencyKey) {
+            const existing = await client.query<{ id: string }>(
+              `SELECT id FROM live_chat_reports WHERE idempotency_key = $1 LIMIT 1`,
+              [input.idempotencyKey],
+            );
+            if (existing.rows[0]) {
+              effectiveReportId = existing.rows[0].id;
+            }
+          }
+        }
+        break;
+      }
+      case 'ugc': {
+        // Polymorphic UGC report — the concrete surface type
+        // (look / look_comment / poster / moodboard_comment / listing_qa)
+        // and the author id travel in the subject snapshot.
+        const snapshot = input.subjectSnapshot ?? {};
+        const insertResult = await client.query<{ id: string }>(
+          `INSERT INTO ugc_reports
+             (id, subject_type, subject_id, author_user_id, reporter_user_id,
+              reason, details, status, created_at, updated_at, idempotency_key)
+           VALUES ($1, $2, $3, $4, $5, $6, $7, 'submitted', NOW(), NOW(), $8)
+           ON CONFLICT (idempotency_key) WHERE idempotency_key IS NOT NULL
+           DO NOTHING
+           RETURNING id`,
+          [
+            input.reportId,
+            String(snapshot.subjectType ?? ''),
+            input.subjectId,
+            String(snapshot.authorUserId ?? ''),
+            input.reporterId,
+            input.reason,
+            input.details ?? null,
+            input.idempotencyKey ?? null,
+          ],
+        );
+        if (insertResult.rowCount && insertResult.rowCount > 0) {
+          effectiveReportId = insertResult.rows[0].id;
+        } else {
+          duplicated = true;
+          if (input.idempotencyKey) {
+            const existing = await client.query<{ id: string }>(
+              `SELECT id FROM ugc_reports WHERE idempotency_key = $1 LIMIT 1`,
+              [input.idempotencyKey],
+            );
+            if (existing.rows[0]) {
+              effectiveReportId = existing.rows[0].id;
+            }
+          }
+        }
+        break;
+      }
     }
 
     const notice = await createSafetyNotice(client, {
       reporter_id: input.reporterId,
-      subject_type: input.kind,
+      // 'live_chat' report rows key the live_chat_reports table, but the
+      // notice's subject_type CHECK allows 'message' — a live chat report's
+      // subject is the reported message. UGC reports map onto the closest
+      // allowed type: posts/looks are 'media', comment-like text is 'message'.
+      subject_type:
+        input.kind === 'live_chat'
+          ? 'message'
+          : input.kind === 'ugc'
+            ? ['look', 'poster'].includes(String(input.subjectSnapshot?.subjectType))
+              ? 'media'
+              : 'message'
+            : input.kind,
       subject_id: input.subjectId,
       subject_snapshot: {
         reportId: effectiveReportId,
@@ -532,8 +630,14 @@ export async function recordConsumerReport(
       ? null
       : await maybeAutoLimitReachForNotice(client, {
           noticeId: notice.id,
-          subjectType: input.kind,
-          subjectId: input.subjectId,
+          // For UGC the enforcement target is the content author, resolved
+          // by the route at report time — the polymorphic subject id itself
+          // has no single owner table to look up.
+          subjectType: input.kind === 'ugc' ? 'user' : input.kind,
+          subjectId:
+            input.kind === 'ugc'
+              ? String(input.subjectSnapshot?.authorUserId ?? input.subjectId)
+              : input.subjectId,
           reasonCode,
           urgency: EMERGENCY_REASON_CODES.has(reasonCode)
             ? 'emergency'
@@ -891,6 +995,16 @@ export async function recordDecision(
       logger.warn({ caseId, error: e }, '[safetyCaseService] outcome notification failed'),
     );
 
+    // R87: a restrictive outcome on an illegal listing subject removes the
+    // item from sale — buyers holding non-terminal orders are owed the
+    // same closure as the reporter. Same best-effort contract.
+    notifyBuyersOfListingOutcome(db, caseId, input).catch((e) =>
+      logger.warn(
+        { caseId, error: e },
+        '[safetyCaseService] buyer removal notification failed',
+      ),
+    );
+
     return mapDecisionRow(result.rows[0]);
   } catch (error) {
     await client.query('ROLLBACK');
@@ -1024,6 +1138,151 @@ async function notifyReporterOfOutcome(
     decision: input.decision,
     reasonCode: input.user_reason_code,
     automatedMeans: input.automated_means ?? false,
+  });
+}
+
+// ── Buyer removal notification (R87) ────────────────────────────────────
+//
+// When a restrictive outcome removes/quarantines a listing for an
+// illegal/prohibited-item reason, the reporter is not the only affected
+// party: buyers holding a non-terminal order on that listing are owed a
+// notice too (DSA illegal-item buyer notice). One 'safety_outcome'
+// notification per affected order, deduped on notification_events
+// (user_id, idempotency_key) with key `safety_buyer_removal:<caseId>:<orderId>`
+// — the same idempotency mechanism the reporter notice uses — so a
+// re-recorded outcome or a repeated enforcement execution can never
+// double-notify.
+//
+// "Non-terminal" excludes every status where the buyer is already inside
+// the cancel/refund flow or the order completed (migration 313 taxonomy):
+//   cancelled, refunded, refunding, completed, returned
+// 'created', 'paid', 'shipped', 'delivered' and 'delivery_failed' still
+// have escrow or goods in flight, so those buyers are notified.
+//
+// The notice is factual only: this path does NOT cancel the order or move
+// money — it points the buyer at the order/support flow rather than
+// promising an automatic refund.
+
+/** True when the decision's reason code is classified as illegal content
+ *  in the versioned taxonomy (migration 172) — the buyer notice is scoped
+ *  to illegal/prohibited removals, not every restrictive outcome. */
+async function isIllegalContentReason(
+  db: Pool,
+  reasonCode: string,
+): Promise<boolean> {
+  const result = await db.query<{ is_illegal_content: boolean }>(
+    `SELECT is_illegal_content
+       FROM safety_reason_codes
+      WHERE code = $1
+      LIMIT 1`,
+    [reasonCode],
+  );
+  return result.rows[0]?.is_illegal_content === true;
+}
+
+/** Fan out one removal notice per non-terminal order on the listing. */
+async function notifyBuyersOfRemovedListing(
+  db: Pool,
+  input: {
+    caseId: string;
+    listingId: string;
+    reasonCode: string;
+    automatedMeans: boolean;
+  },
+): Promise<void> {
+  const ordersResult = await db.query<{ id: string; buyer_id: string }>(
+    `SELECT id, buyer_id
+       FROM orders
+      WHERE listing_id = $1
+        AND status NOT IN ('cancelled', 'refunded', 'refunding', 'completed', 'returned')`,
+    [input.listingId],
+  );
+
+  for (const order of ordersResult.rows) {
+    await sendBuyerRemovalNotification(db, {
+      caseId: input.caseId,
+      orderId: order.id,
+      buyerId: order.buyer_id,
+      listingId: input.listingId,
+      reasonCode: input.reasonCode,
+      automatedMeans: input.automatedMeans,
+    });
+  }
+}
+
+/**
+ * Decision-time trigger (recordDecision): a 'restrict' or 'emergency_hold'
+ * outcome on a listing subject is the removal/quarantine outcome — the
+ * case moves to enforcement_pending and the executed hold lands via
+ * executeEnforcement. Buyers are notified at the same point the reporter
+ * is, gated on the reason code being classified as illegal content.
+ */
+async function notifyBuyersOfListingOutcome(
+  db: Pool,
+  caseId: string,
+  input: {
+    decision: SafetyDecision;
+    user_reason_code: string;
+    automated_means?: boolean;
+  },
+): Promise<void> {
+  if (input.decision !== 'restrict' && input.decision !== 'emergency_hold') {
+    return;
+  }
+
+  const subjectResult = await db.query<{
+    subject_type: string | null;
+    subject_id: string | null;
+  }>(
+    `SELECT sn.subject_type, sn.subject_id
+       FROM safety_cases sc
+       LEFT JOIN safety_notices sn ON sn.id = sc.notice_id
+      WHERE sc.id = $1`,
+    [caseId],
+  );
+  const subject = subjectResult.rows[0];
+  if (subject?.subject_type !== 'listing' || !subject.subject_id) {
+    return;
+  }
+
+  if (!(await isIllegalContentReason(db, input.user_reason_code))) {
+    return;
+  }
+
+  await notifyBuyersOfRemovedListing(db, {
+    caseId,
+    listingId: subject.subject_id,
+    reasonCode: input.user_reason_code,
+    automatedMeans: input.automated_means ?? false,
+  });
+}
+
+/**
+ * Enforcement-time trigger (executeEnforcement): fires when a listing
+ * target was actually quarantined at 'risk_pending', covering holds whose
+ * case subject was not the listing itself. The shared per-order
+ * idempotency key dedupes against the decision-time notice.
+ */
+async function notifyBuyersOfEnforcedListing(
+  db: Pool,
+  input: {
+    caseId: string | null;
+    listingId: string;
+    reasonCode: string;
+    automatedMeans: boolean;
+  },
+): Promise<void> {
+  if (!input.caseId) {
+    return;
+  }
+  if (!(await isIllegalContentReason(db, input.reasonCode))) {
+    return;
+  }
+  await notifyBuyersOfRemovedListing(db, {
+    caseId: input.caseId,
+    listingId: input.listingId,
+    reasonCode: input.reasonCode,
+    automatedMeans: input.automatedMeans,
   });
 }
 
@@ -1291,6 +1550,15 @@ async function resolveSubjectUserId(
       [subjectId],
     );
     return listingResult.rows[0]?.seller_id ?? null;
+  }
+  if (subjectType === 'live_chat') {
+    // The subject is the reported message — the enforcement target is its
+    // author.
+    const messageResult = await client.query<{ user_id: string }>(
+      `SELECT user_id FROM live_shopping_chat_messages WHERE id = $1 LIMIT 1`,
+      [subjectId],
+    );
+    return messageResult.rows[0]?.user_id ?? null;
   }
   return null;
 }
@@ -1746,8 +2014,12 @@ export async function executeEnforcement(
     );
 
     const action = result.rows[0];
-    const decisionResult = await client.query<{ case_id: string }>(
-      `SELECT case_id FROM safety_decisions WHERE id = $1`,
+    const decisionResult = await client.query<{
+      case_id: string;
+      user_reason_code: string;
+      automated_means: boolean;
+    }>(
+      `SELECT case_id, user_reason_code, automated_means FROM safety_decisions WHERE id = $1`,
       [action.decision_id],
     );
 
@@ -1767,6 +2039,35 @@ export async function executeEnforcement(
     });
 
     await client.query('COMMIT');
+
+    // R87: a listing-target hold just quarantined the listing at
+    // 'risk_pending'. When the underlying decision was for illegal or
+    // prohibited content, buyers holding non-terminal orders on the
+    // listing are notified — deduped per order against the decision-time
+    // notice, so the two triggers never double-send. Best-effort: the
+    // execution is already committed.
+    const appliedEffect = mergedScope.applied as
+      | { kind?: string; applied?: boolean }
+      | undefined;
+    if (
+      action.target_type === 'listing'
+      && appliedEffect?.kind === 'listing_visibility'
+      && appliedEffect.applied === true
+    ) {
+      const decisionRow = decisionResult.rows[0];
+      notifyBuyersOfEnforcedListing(db, {
+        caseId: decisionRow?.case_id ?? null,
+        listingId: action.target_id,
+        reasonCode: decisionRow?.user_reason_code ?? '',
+        automatedMeans: decisionRow?.automated_means ?? false,
+      }).catch((e) =>
+        logger.warn(
+          { actionId, error: e },
+          '[safetyCaseService] buyer removal notification failed',
+        ),
+      );
+    }
+
     return mapEnforcementRow(action);
   } catch (error) {
     await client.query('ROLLBACK');

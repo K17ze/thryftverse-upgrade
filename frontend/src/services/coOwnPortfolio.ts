@@ -209,6 +209,10 @@ export async function fetchCoOwnPortfolioProjection(userId: string): Promise<CoO
         : null;
 
     const isOpen = h.marketStatus !== 'closed' && h.offeringStatus !== 'failed' && h.offeringStatus !== 'closed';
+    // FRESH-05: a paused market/offering is not "Closed" — the position is
+    // live but untradeable. Keep the paused status so rows, the action
+    // sheet and detail surfaces can say so instead of mislabelling it.
+    const isPaused = h.marketStatus === 'paused' || h.offeringStatus === 'paused';
 
     positions.push({
       assetId: h.assetId,
@@ -244,7 +248,7 @@ export async function fetchCoOwnPortfolioProjection(userId: string): Promise<CoO
       availableUnits: sellableUnits,
       sellableUnits: isOpen ? sellableUnits : 0,
       isOpen,
-      status: isOpen ? 'open' : 'closed',
+      status: isPaused ? 'paused' : isOpen ? 'open' : 'closed',
       createdAt: '',
       positionState: {
         settled: unitsOwned,
@@ -439,7 +443,12 @@ async function fetchCoOwnPortfolioPositionsLegacy(
       availableUnits: asset.availableUnits,
       sellableUnits: asset.isOpen ? sellableUnits : 0,
       isOpen: asset.isOpen,
-      status: asset.isOpen ? 'open' : 'closed',
+      // FRESH-05: surface the paused market state instead of collapsing it
+      // into open/closed — one status source of truth for row/sheet/detail.
+      status:
+        asset.marketStatus === 'paused' || (asset.offeringStatus as string | undefined) === 'paused'
+          ? 'paused'
+          : asset.isOpen ? 'open' : 'closed',
       createdAt: asset.createdAt,
       positionState: {
         settled: h.unitsOwned,

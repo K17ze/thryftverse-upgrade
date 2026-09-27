@@ -11,6 +11,7 @@ import { logger } from '../../lib/logger.js';
 import { publishRealtimeEvent } from '../../lib/realtime.js';
 import {
   type DomainOutboxEvent,
+  appendDomainEvent,
   claimDomainOutboxBatch,
   completeDomainOutboxEvent,
   failDomainOutboxEvent,
@@ -100,6 +101,76 @@ async function processDomainOutboxEvent(event: DomainOutboxEvent): Promise<void>
       newPriceGbp: payload.newPriceGbp,
       queueNotification: queueUserNotification,
     });
+
+    // R35 — material-change invalidation. Every pending offer on the
+    // listing was negotiated against the previous price, so a reprice
+    // invalidates them all. They are cancelled inside one transaction and
+    // each emits the same `offer.cancelled` domain event the lifecycle
+    // already drains (notification + participant realtime + in-thread card
+    // flip) — no parallel fan-out path. `cancellationReason` is
+    // 'listing_terms_changed', distinct from 'listing_unavailable': the
+    // listing is still on sale and the buyer may re-offer on the new terms.
+    // The deduplication key matches the command service's cancel key, so
+    // an offer already cancelled by a terminal transition cannot emit a
+    // second event — and this UPDATE only touches 'pending' rows anyway.
+    const offerClient = await db.connect();
+    try {
+      await offerClient.query('BEGIN');
+      const cancelledOffers = await offerClient.query<{
+        id: string;
+        buyer_id: string;
+        seller_id: string;
+        offer_price_gbp: string;
+        conversation_id: string | null;
+        offered_by_user_id: string | null;
+      }>(
+        `UPDATE listing_offers
+            SET status = 'cancelled',
+                cancelled_at = NOW(),
+                updated_at = NOW()
+          WHERE listing_id = $1
+            AND status = 'pending'
+          RETURNING id, buyer_id, seller_id, offer_price_gbp::text,
+                    conversation_id, offered_by_user_id`,
+        [payload.listingId],
+      );
+      for (const cancelledOffer of cancelledOffers.rows) {
+        await appendDomainEvent(offerClient, {
+          aggregateType: 'offer',
+          aggregateId: cancelledOffer.id,
+          eventType: 'offer.cancelled',
+          actorId: event.actorId,
+          correlationId: event.correlationId,
+          causationId: event.id,
+          deduplicationKey: `offer.cancelled:${cancelledOffer.id}`,
+          payload: {
+            offerId: cancelledOffer.id,
+            listingId: payload.listingId,
+            buyerId: cancelledOffer.buyer_id,
+            sellerId: cancelledOffer.seller_id,
+            offerPriceGbp: Number(cancelledOffer.offer_price_gbp),
+            conversationId: cancelledOffer.conversation_id,
+            offeredByUserId:
+              cancelledOffer.offered_by_user_id ?? cancelledOffer.buyer_id,
+            // The price change is a seller-authored mutation — attribute
+            // the cancellation to the actor so the drain notifies the
+            // counterparty (the buyer), not the seller who acted.
+            cancelledByUserId: event.actorId ?? cancelledOffer.seller_id,
+            cancellationReason: 'listing_terms_changed',
+          },
+        });
+      }
+      await offerClient.query('COMMIT');
+    } catch (error) {
+      try {
+        await offerClient.query('ROLLBACK');
+      } catch {
+        // ignore rollback failure — the connection is reset on release
+      }
+      throw error;
+    } finally {
+      offerClient.release();
+    }
     return;
   }
 
@@ -227,13 +298,26 @@ async function processDomainOutboxEvent(event: DomainOutboxEvent): Promise<void>
       expiresAt: z.string().datetime(),
       counterRound: z.number().int().nonnegative(),
       conversationId: z.string().nullable().optional(),
+      // Who authored the offer — buyer for ordinary offers, seller for
+      // offer-to-likers fan-out. Missing on pre-change events; those were
+      // all buyer-authored.
+      offeredByUserId: z.string().min(2).optional(),
+      source: z.string().optional(),
     }).parse(event.payload);
+    // Buyer-authored offers notify the seller; seller-authored targeted
+    // offers (offer-to-likers) notify the buyer — the liker is the one who
+    // must respond, and telling the seller "you got an offer" about their
+    // own send would be false.
+    const sellerAuthored = payload.offeredByUserId === payload.sellerId;
+    const recipientId = sellerAuthored ? payload.buyerId : payload.sellerId;
     await queueUserNotification({
-      userId: payload.sellerId,
-      title: 'New offer',
-      body: `${formatGbpAmount(payload.amountGbp)} offered on your listing.`,
+      userId: recipientId,
+      title: sellerAuthored ? 'Private offer' : 'New offer',
+      body: sellerAuthored
+        ? `The seller sent you a private offer: ${formatGbpAmount(payload.amountGbp)}.`
+        : `${formatGbpAmount(payload.amountGbp)} offered on your listing.`,
       eventType: 'offer_created',
-      actorUserId: payload.buyerId,
+      actorUserId: sellerAuthored ? payload.sellerId : payload.buyerId,
       payload: {
         event: 'offer_created',
         offerId: payload.offerId,
@@ -244,10 +328,13 @@ async function processDomainOutboxEvent(event: DomainOutboxEvent): Promise<void>
       },
       route: offerNotificationRoute(
         payload.conversationId,
-        payload.buyerId,
+        sellerAuthored ? payload.sellerId : payload.buyerId,
         payload.listingId,
       ),
-      idempotencyKey: `offer_created_seller_${payload.offerId}`,
+      // Buyer-authored keys keep the historical `..._seller_` shape so
+      // in-flight dedup is unchanged; seller-authored fan-out keys name the
+      // buyer recipient.
+      idempotencyKey: `offer_created_${sellerAuthored ? 'buyer' : 'seller'}_${payload.offerId}`,
       metadata: { outboxEventId: event.id },
     });
     publishOfferEventToParticipants({
@@ -405,10 +492,14 @@ async function processDomainOutboxEvent(event: DomainOutboxEvent): Promise<void>
         ? `The buyer withdrew their ${formatGbpAmount(payload.offerPriceGbp)} offer.`
         : `The buyer declined your ${formatGbpAmount(payload.offerPriceGbp)} counter-offer.`)
       : (authorIsBuyer
-        ? (payload.cancellationReason === 'listing_unavailable'
-          ? `Your ${formatGbpAmount(payload.offerPriceGbp)} offer was cancelled — the listing is no longer available.`
-          : `Your ${formatGbpAmount(payload.offerPriceGbp)} offer was cancelled by the seller.`)
-        : `The seller withdrew their ${formatGbpAmount(payload.offerPriceGbp)} counter-offer.`);
+        ? (payload.cancellationReason === 'listing_terms_changed'
+          ? `Your ${formatGbpAmount(payload.offerPriceGbp)} offer was cancelled — the listing's price changed. You can send a new offer on the updated terms.`
+          : payload.cancellationReason === 'listing_unavailable'
+            ? `Your ${formatGbpAmount(payload.offerPriceGbp)} offer was cancelled — the listing is no longer available.`
+            : `Your ${formatGbpAmount(payload.offerPriceGbp)} offer was cancelled by the seller.`)
+        : (payload.cancellationReason === 'listing_terms_changed'
+          ? `The seller's ${formatGbpAmount(payload.offerPriceGbp)} counter-offer was withdrawn — the listing's price changed.`
+          : `The seller withdrew their ${formatGbpAmount(payload.offerPriceGbp)} counter-offer.`));
     await queueUserNotification({
       userId: cancelledRecipient,
       title: 'Offer cancelled',
@@ -888,6 +979,124 @@ async function processDomainOutboxEvent(event: DomainOutboxEvent): Promise<void>
       topic: `order:${payload.orderId}`,
       type: 'order.dispatch_extension_responded',
       payload,
+    });
+    return;
+  }
+
+  // Co-Own price alert crossing — emitted by the alert evaluator worker.
+  // Without this branch the event dead-letters after 10 retries and the
+  // user is never notified.
+  if (event.eventType === 'coown_price_alert_triggered') {
+    const payload = z.object({
+      alertId: z.string().min(2),
+      // SEP20-FIN-12: which activation fired — scopes notification dedup.
+      activationSeq: z.number().int().positive().optional(),
+      userId: z.string().min(2),
+      assetId: z.string().min(2),
+      condition: z.enum(['above', 'below']),
+      triggerPriceGbpMinor: z.number().nonnegative(),
+      currentPriceGbpMinor: z.number().nonnegative(),
+      // SEP20-FIN-11: appraisal/reference-mark alerts legitimately carry
+      // tradeId: null — the old non-nullable schema rejected the event
+      // before delivery and the alert was already marked triggered, so
+      // retries never notified.
+      tradeId: z.string().nullable().optional(),
+      markSource: z.enum(['trade', 'reference']).optional(),
+    }).parse(event.payload);
+
+    const direction = payload.condition === 'above' ? 'rose above' : 'fell below';
+    // Disclose mark provenance: a settled-trade mark and an appraisal/
+    // reference mark are not the same evidence and the copy must not
+    // pretend they are.
+    const markBasis =
+      payload.markSource === 'reference'
+        ? 'reference/appraisal price'
+        : 'last settled trade';
+    await queueUserNotification({
+      userId: payload.userId,
+      title: 'Price alert triggered',
+      body: `A co-own asset you watch ${direction} ${formatGbpAmount(payload.triggerPriceGbpMinor / 100)} — now at ${formatGbpAmount(payload.currentPriceGbpMinor / 100)} (${markBasis}).`,
+      eventType: 'coown_price_alert_triggered',
+      payload: {
+        event: 'coown_price_alert_triggered',
+        alertId: payload.alertId,
+        activationSeq: payload.activationSeq ?? null,
+        assetId: payload.assetId,
+        condition: payload.condition,
+        triggerPriceGbpMinor: payload.triggerPriceGbpMinor,
+        currentPriceGbpMinor: payload.currentPriceGbpMinor,
+        tradeId: payload.tradeId ?? null,
+        markSource: payload.markSource ?? null,
+      },
+      route: { screen: 'AssetDetail', params: { assetId: payload.assetId } },
+      // Exactly-once per ACTIVATION: a re-armed alert (higher
+      // activationSeq) must produce a second delivered notification, while
+      // outbox replays of the same trigger still dedup. Legacy events
+      // without activationSeq keep the lifetime key so they cannot
+      // double-notify against an already-delivered row.
+      idempotencyKey: payload.activationSeq != null
+        ? `coown_price_alert_notif_${payload.alertId}_${payload.activationSeq}`
+        : `coown_price_alert_notif_${payload.alertId}`,
+      metadata: { outboxEventId: event.id },
+    });
+    return;
+  }
+
+  // Co-Own DRIP receipt — emitted by the DRIP execution worker after a
+  // distribution resolves to reinvested / retained_cash / reinvest_failed.
+  if (event.eventType === 'coown_drip_receipt') {
+    const payload = z.object({
+      distributionId: z.string().min(2),
+      userId: z.string().min(2),
+      assetId: z.string().min(2),
+      outcome: z.enum(['reinvested', 'retained_cash', 'reinvest_failed']),
+      tradeId: z.string().nullable().optional(),
+      units: z.number().int().nonnegative().optional(),
+      unitPriceGbp: z.number().nonnegative().optional(),
+      notionalGbp: z.number().nonnegative().optional(),
+      amountGbpMinor: z.number().nonnegative().optional(),
+      cause: z.string().optional(),
+      // SEP20-FIN-14: ledger evidence the worker observed when it decided
+      // not to reinvest — lets the copy state the true state.
+      spendableUnits: z.number().int().nonnegative().optional(),
+      requiredUnits: z.number().int().nonnegative().optional(),
+    }).parse(event.payload);
+
+    const title =
+      payload.outcome === 'reinvested'
+        ? 'Distribution reinvested'
+        : payload.outcome === 'retained_cash'
+          ? 'Distribution not reinvested'
+          : 'Reinvestment could not complete';
+    // SEP20-FIN-14: 'retained_cash' means the reinvestment was skipped —
+    // the worker verified the spendable balance was short and bought no
+    // units. It did NOT verify a cash credit landed anywhere, so the copy
+    // must not claim "paid as cash" or "stays in your balance as cash".
+    const body =
+      payload.outcome === 'reinvested'
+        ? `Your distribution bought ${payload.units ?? 0} unit${payload.units === 1 ? '' : 's'}${payload.unitPriceGbp ? ` at ${formatGbpAmount(payload.unitPriceGbp)}` : ''}.`
+        : payload.outcome === 'retained_cash'
+          ? 'Automatic reinvestment was skipped because your available 1ZE balance was too low at the time it ran. No units were purchased — any cash already in your balance is unchanged.'
+          : 'Automatic reinvestment failed. Your distribution was not reinvested — you can reinvest manually.';
+
+    await queueUserNotification({
+      userId: payload.userId,
+      title,
+      body,
+      eventType: 'coown_drip_receipt',
+      payload: {
+        event: 'coown_drip_receipt',
+        distributionId: payload.distributionId,
+        assetId: payload.assetId,
+        outcome: payload.outcome,
+        tradeId: payload.tradeId ?? null,
+        cause: payload.cause ?? null,
+        spendableUnits: payload.spendableUnits ?? null,
+        requiredUnits: payload.requiredUnits ?? null,
+      },
+      route: { screen: 'AssetDetail', params: { assetId: payload.assetId } },
+      idempotencyKey: `coown_drip_receipt_${payload.distributionId}`,
+      metadata: { outboxEventId: event.id },
     });
     return;
   }

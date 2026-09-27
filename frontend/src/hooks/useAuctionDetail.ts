@@ -32,6 +32,11 @@ import {
   detectLifecycleTransition,
 } from '../utils/auctionDetailLogic';
 import { createStableId } from '../utils/createStableId';
+import { waitForPaymentIntentSettlement } from '../services/checkoutPaymentIntent';
+import {
+  fetchPaymentIntentSheetConfig,
+  presentStripePaymentSheet,
+} from '../services/paymentSheetFlow';
 
 export interface UseAuctionDetailOptions {
   openBidSheet?: boolean;
@@ -473,6 +478,10 @@ export function useAuctionDetail(
     }
   };
 
+  // FIN-01: winner payment is a pending → provider-verified transition.
+  // The endpoint mints/reuses a payment intent and returns 'pending' with
+  // the intent (clientSecret / hosted-checkout nextActionUrl). 'paid' is
+  // only truth once the provider confirms capture — never optimistically.
   const handlePayNow = async () => {
     if (!auction || isPayLoading) return;
     if (!requireAuth('purchase')) return;
@@ -482,10 +491,104 @@ export function useAuctionDetail(
         payIdempotencyKeyRef.current = createStableId('pay');
       }
       const idempotencyKey = payIdempotencyKeyRef.current;
-      await payAuction(auction.id, { idempotencyKey });
+      const result = await payAuction(auction.id, { idempotencyKey });
+      // The pay endpoint may also carry the created payment intent (not in
+      // the legacy response contract — intersect the type locally so
+      // services/marketApi.ts stays untouched).
+      const intent = (
+        result as Awaited<ReturnType<typeof payAuction>> & {
+          intent?: {
+            id: string;
+            status: string;
+            nextActionUrl?: string | null;
+            clientSecret?: string | null;
+            gatewayId?: string | null;
+          } | null;
+        }
+      ).intent ?? null;
+
+      if (result.paymentStatus === 'paid') {
+        await fetchDetail();
+        show('Payment confirmed', 'success');
+        payIdempotencyKeyRef.current = null;
+        return;
+      }
+
+      if (result.paymentStatus === 'failed') {
+        show('Payment failed — you can try again.', 'error');
+        payIdempotencyKeyRef.current = null;
+        await fetchDetail();
+        return;
+      }
+
+      // pending — collect payment through the SAME native PaymentSheet
+      // checkout uses (services/paymentSheetFlow): initialise with the
+      // server-issued customer/customer-session credentials, present the
+      // sheet, and only then poll the authoritative intent outcome. The
+      // created intent alone can never settle — an unconfirmed Stripe
+      // intent sits in requires_payment_method forever.
+      show('Complete the payment to secure your win', 'info');
+      if (!intent?.id) {
+        await fetchDetail();
+        return;
+      }
+
+      // The sheet endpoint only serves live Stripe intents — a non-Stripe
+      // rail or an intent that raced terminal has no sheet to open, so
+      // those outcomes fall through to authoritative polling (the poller
+      // still opens hosted 3DS/next-action URLs when required).
+      let sheetOutcome: 'completed' | 'cancelled' | 'unavailable' = 'unavailable';
+      try {
+        const sheetConfig = await fetchPaymentIntentSheetConfig(intent.id);
+        if (!isMountedRef.current) return;
+        sheetOutcome = await presentStripePaymentSheet(sheetConfig);
+      } catch (sheetError) {
+        const parsed = parseApiError(sheetError, 'Payment failed');
+        if (
+          parsed.code === 'PAYMENT_SHEET_UNAVAILABLE'
+          || parsed.code === 'PAYMENT_INTENT_FINAL'
+        ) {
+          sheetOutcome = 'unavailable';
+        } else {
+          // Init/presentation/network failure — retryable; the intent
+          // stays live server-side. Never report success off a thrown error.
+          throw sheetError;
+        }
+      }
+      if (!isMountedRef.current) return;
+
+      // Dismissed sheet → honestly unpaid. Keep the idempotency key so the
+      // next tap replays the live intent (and re-opens its sheet) instead
+      // of minting a second provider payment.
+      if (sheetOutcome === 'cancelled') {
+        show('Payment not completed — your win is still reserved.', 'info');
+        await fetchDetail();
+        return;
+      }
+
+      const outcome = await waitForPaymentIntentSettlement(
+        intent.id,
+        () => isMountedRef.current
+      );
+      if (!isMountedRef.current) return;
+
+      if (outcome === 'succeeded') {
+        await fetchDetail();
+        show('Payment confirmed', 'success');
+        payIdempotencyKeyRef.current = null;
+        return;
+      }
+      if (outcome === 'failed') {
+        show('Payment failed — you can try again.', 'error');
+        payIdempotencyKeyRef.current = null;
+        await fetchDetail();
+        return;
+      }
+      // Still pending (or polling aborted) — keep the idempotency key so
+      // the next tap replays the in-flight attempt rather than minting a
+      // second provider payment.
+      show('Waiting for payment confirmation — we will update when it lands.', 'info');
       await fetchDetail();
-      show('Payment initiated', 'success');
-      payIdempotencyKeyRef.current = null;
     } catch (err) {
       const parsed = parseApiError(err, 'Payment failed');
       show(parsed.message, 'error');

@@ -1100,7 +1100,14 @@
       "errorApproveTitle": "No se pudo aprobar",
       "errorApproveMessage": "No se pudo aprobar la solicitud.",
       "errorRejectTitle": "No se pudo rechazar",
-      "errorRejectMessage": "No se pudo rechazar la solicitud."
+      "errorRejectMessage": "No se pudo rechazar la solicitud.",
+      "status": {
+        "pending": "Pendiente",
+        "approved": "Aprobada",
+        "rejected": "Rechazada",
+        "expired": "Caducada",
+        "superseded": "Sustituida"
+      }
     },
     "cancel": {
       "cancelling": "Cancelando…",
@@ -1126,6 +1133,29 @@
     },
     "tokens": {
       "usage": "{{input}} entrada · {{output}} salida"
+    },
+    "trace": {
+      "toggle": "Ver detalles de la ejecución de {{botName}}",
+      "loadError": "No se pudo cargar la traza",
+      "retry": "Reintentar",
+      "empty": "No hay pasos registrados para esta ejecución",
+      "approvalLine": "{{tool}} · {{status}}",
+      "status": {
+        "pending": "Pendiente",
+        "running": "En curso",
+        "succeeded": "Correcto",
+        "failed": "Fallido",
+        "skipped": "Omitido"
+      },
+      "step": {
+        "modelCall": "Llamada al modelo",
+        "toolCall": "Llamada de herramienta",
+        "retrieval": "Recuperación de memoria",
+        "guardrail": "Protección",
+        "approval": "Aprobación",
+        "retry": "Reintento",
+        "handoff": "Transferencia"
+      }
     }
   },
   "liveStreamViewer": {
@@ -1362,7 +1392,7 @@
       "noSessionsRunning": "No hay sesiones de agente en ejecución",
       "sessionsRunning": "{{count}} sesión(es) de agente en ejecución",
       "activity": "Actividad del agente",
-      "activitySub": "Registro local de acciones y aprobaciones del agente"
+      "activitySub": "Registro del servidor de ejecuciones y aprobaciones de agentes"
     },
     "connect": {
       "cancel": "Cancelar",

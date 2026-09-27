@@ -88,16 +88,22 @@ export function isWinningViewer(currentLot: LiveLot | null, viewerUserId?: strin
   return currentLot.currentHighBidder === 'You';
 }
 
-/** Stage caption — honest about what the LiveKit room is doing. Null when
+/** Stage caption — honest about what the live feed is doing. The session
+ *  resnapshot state wins: while the realtime transport recovers, bids, chat
+ *  and the lot are stale regardless of whether video still plays. Null when
  *  video is playing or when the session simply carries no credentials (the
  *  stage then degrades without a message). */
 export function resolveStageCaption(args: {
   hasVideoCredentials: boolean;
   roomState: LiveKitConnectionState;
   hasRemoteVideo: boolean;
+  /** True while the session's realtime feed is reconnecting or
+   *  resnapshotting — the data on stage is stale until it clears. */
+  sessionReconnecting?: boolean;
   t: LiveStreamTranslate;
 }): string | null {
-  const { hasVideoCredentials, roomState, hasRemoteVideo, t } = args;
+  const { hasVideoCredentials, roomState, hasRemoteVideo, sessionReconnecting, t } = args;
+  if (sessionReconnecting) return t('session.reconnecting');
   if (!hasVideoCredentials) return null;
   if (roomState === 'connecting' || roomState === 'reconnecting') {
     return t('video.connecting');

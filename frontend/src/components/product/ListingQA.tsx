@@ -10,6 +10,11 @@ import { useAppTheme, type ThemeColors } from '../../theme/ThemeContext';
 import { Space, Radius } from '../../theme/designTokens';
 import { TypographyV2 } from '../../theme/typography.v2';
 import { AnimatedPressable } from '../AnimatedPressable';
+import { Alert } from 'react-native';
+import { useNavigation } from '@react-navigation/native';
+import type { NativeStackNavigationProp } from '@react-navigation/native-stack';
+import type { RootStackParamList } from '../../navigation/types';
+import { useStore } from '../../store/useStore';
 import { useHaptic } from '../../hooks/useHaptic';
 import { useToast } from '../../context/ToastContext';
 import { useSignupWall } from '../../hooks/useSignupWall';
@@ -24,34 +29,47 @@ import { parseApiError } from '../../lib/apiClient';
 export interface ListingQuestion {
   id: string;
   listingId: string;
+  askerId?: string;
   askerName: string;
   askerAvatar?: string;
   text: string;
-  createdAt: number;
+  /** Milliseconds epoch, or null when the API timestamp is missing or
+   *  unparseable — the time line is omitted rather than fabricating a
+   *  "just now" for content that may be old (P3 honesty nit). */
+  createdAt: number | null;
   answer?: {
     text: string;
     responderName: string;
-    createdAt: number;
+    createdAt: number | null;
   } | null;
 }
+
+// An unparseable/missing timestamp stays null — Date.parse(...) || Date.now()
+// would fabricate "just now" for a question that could be days old.
+const parseCreatedAt = (iso: string | null | undefined): number | null => {
+  if (!iso) return null;
+  const ts = Date.parse(iso);
+  return Number.isFinite(ts) ? ts : null;
+};
 
 function mapApiQuestion(q: ListingQuestionApi, fallbackAskerName?: string): ListingQuestion {
   return {
     id: q.id,
     listingId: q.listingId,
+    askerId: q.askerId,
     // The POST response carries the real asker username; fall back to the
     // signed-in viewer's name for their own just-posted question, then the
     // neutral 'Member' label — never a fabricated name.
     askerName: q.askerName ?? fallbackAskerName ?? 'Member',
     text: q.text,
-    createdAt: Date.parse(q.createdAt) || Date.now(),
+    createdAt: parseCreatedAt(q.createdAt),
     answer: q.answer
       ? {
           text: q.answer.text,
           // Only the seller can answer — the role label is truthful when
           // the username is absent.
           responderName: q.answer.responderName ?? 'Seller',
-          createdAt: Date.parse(q.answer.createdAt) || Date.now() }
+          createdAt: parseCreatedAt(q.answer.createdAt) }
       : null };
 }
 
@@ -61,6 +79,13 @@ export interface ListingQAProps {
   currentUserName: string;
   /** Whether the current user is the seller (can answer questions) */
   isSeller: boolean;
+  /** The viewer blocked this seller. Public Q&A stays readable, but the
+   *  ask composer is replaced by an honest capability note — a blocked
+   *  relationship cannot post seller-directed questions server-side
+   *  anyway, so a live composer would be a dead affordance (S20-06).
+   *  The prop is reactive: blocking while the sheet is open swaps the
+   *  composer out immediately. */
+  isSellerBlocked?: boolean;
 }
 
 /**
@@ -71,7 +96,8 @@ export interface ListingQAProps {
 export function ListingQA({
   listingId,
   currentUserName,
-  isSeller }: ListingQAProps) {
+  isSeller,
+  isSellerBlocked = false }: ListingQAProps) {
   const { colors } = useAppTheme();
   const styles = React.useMemo(() => createStyles(colors), [colors]);
   const [questions, setQuestions] = useState<ListingQuestion[]>([]);
@@ -83,6 +109,29 @@ export function ListingQA({
   const haptic = useHaptic();
   const { show } = useToast();
   const { requireAuth } = useSignupWall();
+  const navigation = useNavigation<NativeStackNavigationProp<RootStackParamList>>();
+  const currentUserId = useStore((s) => s.currentUser?.id);
+
+  const confirmReportQuestion = useCallback((question: ListingQuestion) => {
+    haptic.light();
+    Alert.alert(
+      'Report this question?',
+      undefined,
+      [
+        { text: 'Cancel', style: 'cancel' },
+        {
+          text: 'Report',
+          onPress: () => {
+            navigation.navigate('Report', {
+              type: 'ugc',
+              ugcSubjectType: 'listing_qa',
+              targetId: question.id,
+            });
+          },
+        },
+      ],
+    );
+  }, [haptic, navigation]);
 
   const cancelledRef = React.useRef(false);
 
@@ -105,6 +154,9 @@ export function ListingQA({
   }, [load]);
 
   const handleAsk = useCallback(async () => {
+    // Defense in depth — the composer is hidden when the viewer blocked
+    // the seller, so a late press or stale render must not submit either.
+    if (isSellerBlocked) return;
     const trimmed = askText.trim();
     if (!trimmed) return;
     if (trimmed.length < 5) {
@@ -124,7 +176,7 @@ export function ListingQA({
     } finally {
       setIsSubmitting(false);
     }
-  }, [askText, listingId, currentUserName, requireAuth, haptic, show]);
+  }, [askText, listingId, currentUserName, isSellerBlocked, requireAuth, haptic, show]);
 
   const handleAnswer = useCallback(async (questionId: string) => {
     const trimmed = answerText.trim();
@@ -141,7 +193,7 @@ export function ListingQA({
         ? {
             text: answer.text,
             responderName: answer.responderName ?? 'Seller',
-            createdAt: Date.parse(answer.createdAt) || Date.now() }
+            createdAt: parseCreatedAt(answer.createdAt) }
         : null;
       setQuestions((prev) =>
         prev.map((q) => (q.id === questionId ? { ...q, answer: mapped } : q)),
@@ -177,29 +229,40 @@ export function ListingQA({
         )}
       </View>
 
-      {/* Ask question input */}
-      <View style={styles.askRow}>
-        <TextInput
-          style={styles.askInput}
-          value={askText}
-          onChangeText={setAskText}
-          placeholder="Ask a question about this item..."
-          placeholderTextColor={colors.textMuted}
-          multiline
-          maxLength={300}
-          accessibilityLabel="Ask a question"
-        />
-        <AnimatedPressable
-          style={[styles.askBtn, (!askText.trim() || isSubmitting) && styles.askBtnDisabled]}
-          onPress={() => void handleAsk()}
-          disabled={!askText.trim() || isSubmitting}
-          activeOpacity={0.85}
-          accessibilityRole="button"
-          accessibilityLabel="Post question"
-        >
-          <Ionicons name="send" size={16} color={askText.trim() ? colors.scrimTextPrimary : colors.textMuted} />
-        </AnimatedPressable>
-      </View>
+      {/* Ask question input — hidden when the viewer blocked the seller.
+          Public Q&A stays readable below; only the submission affordance
+          is gated, with the relationship state stated plainly (S20-06). */}
+      {isSellerBlocked ? (
+        <View style={styles.blockedNotice}>
+          <Ionicons name="ban-outline" size={16} color={colors.textMuted} />
+          <Text style={styles.blockedNoticeText}>
+            You blocked this seller — unblock them to ask a question.
+          </Text>
+        </View>
+      ) : (
+        <View style={styles.askRow}>
+          <TextInput
+            style={styles.askInput}
+            value={askText}
+            onChangeText={setAskText}
+            placeholder="Ask a question about this item..."
+            placeholderTextColor={colors.textMuted}
+            multiline
+            maxLength={300}
+            accessibilityLabel="Ask a question"
+          />
+          <AnimatedPressable
+            style={[styles.askBtn, (!askText.trim() || isSubmitting) && styles.askBtnDisabled]}
+            onPress={() => void handleAsk()}
+            disabled={!askText.trim() || isSubmitting}
+            activeOpacity={0.85}
+            accessibilityRole="button"
+            accessibilityLabel="Post question"
+          >
+            <Ionicons name="send" size={16} color={askText.trim() ? colors.scrimTextPrimary : colors.textMuted} />
+          </AnimatedPressable>
+        </View>
+      )}
 
       {/* Questions list — full state contract: loading / error / empty / populated */}
       {loadState === 'loading' ? (
@@ -226,12 +289,25 @@ export function ListingQA({
         <View style={styles.emptyWrap}>
           <Ionicons name="chatbubble-outline" size={28} color={colors.textMuted} />
           <Text style={styles.emptyText}>No questions yet</Text>
-          <Text style={styles.emptySubtext}>Be the first to ask about this item</Text>
+          {/* The invitation to ask is itself an affordance — suppress it
+              when the viewer cannot ask (S20-06). */}
+          {!isSellerBlocked ? (
+            <Text style={styles.emptySubtext}>Be the first to ask about this item</Text>
+          ) : null}
         </View>
       ) : (
         <View style={styles.qList}>
           {questions.map((q) => (
-            <View key={q.id} style={styles.qItem}>
+            <Pressable
+              key={q.id}
+              style={styles.qItem}
+              onLongPress={
+                currentUserId && q.askerId && q.askerId !== currentUserId
+                  ? () => confirmReportQuestion(q)
+                  : undefined
+              }
+              accessibilityLabel={`Question from ${q.askerName}`}
+            >
               {/* Question */}
               <View style={styles.qHeader}>
                 <View style={styles.avatarPlaceholder}>
@@ -239,7 +315,9 @@ export function ListingQA({
                 </View>
                 <View style={{ flex: 1 }}>
                   <Text style={styles.qAsker}>{q.askerName}</Text>
-                  <Text style={styles.qTime}>{formatTime(q.createdAt)}</Text>
+                  {q.createdAt != null ? (
+                    <Text style={styles.qTime}>{formatTime(q.createdAt)}</Text>
+                  ) : null}
                 </View>
               </View>
               <Text style={styles.qText}>{q.text}</Text>
@@ -250,7 +328,9 @@ export function ListingQA({
                   <View style={styles.answerHeader}>
                     <Ionicons name="checkmark-circle-outline" size={12} color={colors.successText} />
                     <Text style={styles.answerLabel}>Seller · {q.answer.responderName}</Text>
-                    <Text style={styles.qTime}>{formatTime(q.answer.createdAt)}</Text>
+                    {q.answer.createdAt != null ? (
+                      <Text style={styles.qTime}>{formatTime(q.answer.createdAt)}</Text>
+                    ) : null}
                   </View>
                   <Text style={styles.answerText}>{q.answer.text}</Text>
                 </View>
@@ -306,7 +386,7 @@ export function ListingQA({
               {!q.answer && !isSeller && (
                 <Text style={styles.pendingAnswer}>Awaiting seller response</Text>
               )}
-            </View>
+            </Pressable>
           ))}
         </View>
       )}
@@ -371,6 +451,22 @@ function createStyles(colors: ThemeColors) {
     justifyContent: 'center' },
   askBtnDisabled: {
     backgroundColor: colors.surfaceAlt },
+  // Blocked-relationship note — same flat treatment as the composer row;
+  // the reason is stated, not just a disabled input (S20-06).
+  blockedNotice: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: Space.sm,
+    marginBottom: Space.md,
+    paddingHorizontal: Space.md,
+    paddingVertical: Space.sm + 2,
+    borderRadius: Radius.md,
+    backgroundColor: colors.surfaceAlt },
+  blockedNoticeText: {
+    flex: 1,
+    fontSize: TypographyV2.meta.size,
+    fontFamily: TypographyV2.meta.fontFamily,
+    color: colors.textMuted },
   emptyWrap: {
     alignItems: 'center',
     paddingVertical: Space.lg,

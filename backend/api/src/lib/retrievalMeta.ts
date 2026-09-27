@@ -80,4 +80,23 @@ export interface RetrievalMeta {
    * correlate capability with a deployed engine version.
    */
   searchEngineVersion?: string;
+  /**
+   * Which backend actually served the request ('in_memory' |
+   * 'meilisearch' | 'elasticsearch_placeholder'). Lets clients and ops
+   * distinguish shared-index results from process-local fallback results.
+   */
+  backend?: string;
+  /**
+   * Present only when a shared backend was configured but unavailable and
+   * the process-local index served the request instead. Presence means the
+   * response may diverge across replicas.
+   */
+  degraded?: boolean;
+  /**
+   * Visual search only (R24): 'region' when a supplied ROI rect was
+   * actually applied to the query image before feature extraction,
+   * 'whole_image' otherwise. Never reports 'region' for a degenerate crop
+   * that fell back to whole-image scoring.
+   */
+  queryScope?: 'whole_image' | 'region';
 }

@@ -93,7 +93,7 @@ export function useOrderDetailTracking({
   // Format: "Latest: Out for delivery · Royal Mail · 2h ago"
   const latestEventSummary = useMemo(() => {
     if (!latestParcelEvent) return null;
-    const display = getParcelEventDisplay(latestParcelEvent.eventType);
+    const display = getParcelEventDisplay(latestParcelEvent);
     const parts: string[] = [`Latest: ${display.label}`];
     // Carrier / source
     const carrier = latestParcelEvent.provider || backendOrder?.shippingProvider;

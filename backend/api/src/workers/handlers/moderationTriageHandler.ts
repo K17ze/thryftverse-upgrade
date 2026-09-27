@@ -35,6 +35,7 @@ import {
   type TriageDecision,
   type TriageLabel,
 } from '../../lib/moderation/moderationTriageService.js';
+import { fetchPinnedRemoteMedia } from '../../lib/safeRemoteMediaFetch.js';
 
 // ---------------------------------------------------------------------------
 // Constants
@@ -71,26 +72,40 @@ interface TriageModelResult {
 // ---------------------------------------------------------------------------
 
 /**
- * Download an image from a URL with a bounded timeout and size cap.
+ * Download an image through the shared pinned/deadline-aware transport
+ * (`fetchPinnedRemoteMedia`) — the same SSRF-hardened implementation the
+ * catalogue importer, extraction worker, and Rekognition provider use.
+ * This replaces a local fetch that followed redirects unchecked, cleared
+ * its timeout once headers arrived, and buffered via `arrayBuffer()` with
+ * no streaming cap (audit: "independent weaker media fetchers").
+ *
+ * The transport resolves DNS once, blocklist-checks and pins the validated
+ * address set, revalidates every redirect hop, shares one deadline across
+ * DNS + headers + body, and streams the body into a bounded buffer.
+ *
  * Returns the raw buffer or null on any failure.
  */
 async function downloadImage(url: string): Promise<Buffer | null> {
-  try {
-    const controller = new AbortController();
-    const timer = setTimeout(() => controller.abort(), DOWNLOAD_TIMEOUT_MS);
-    const response = await fetch(url, {
-      signal: controller.signal,
-      redirect: 'follow',
-    });
-    clearTimeout(timer);
-    if (!response.ok) return null;
-    const arrayBuffer = await response.arrayBuffer();
-    const buffer = Buffer.from(arrayBuffer);
-    if (buffer.length === 0 || buffer.length > MAX_IMAGE_BYTES) return null;
-    return buffer;
-  } catch {
+  const result = await fetchPinnedRemoteMedia({
+    url,
+    maxBytes: MAX_IMAGE_BYTES,
+    timeoutMs: DOWNLOAD_TIMEOUT_MS,
+    allowHttp: false,
+  });
+  if (!result.ok) {
+    // `message` is log-safe (host/path only, never the full URL).
+    logger.warn(
+      { code: result.code, message: result.message },
+      'moderationTriage.download_rejected',
+    );
     return null;
   }
+  // Sniffed content type is the only trusted signal — an unrecognised body
+  // is not usable image input for a triage model.
+  if (result.sniffedContentType === null) {
+    return null;
+  }
+  return result.buffer;
 }
 
 // ---------------------------------------------------------------------------

@@ -2,13 +2,13 @@
  * SellerStandardsModule — the Gate 12 performance-program surface on the
  * Seller Hub.
  *
- * Composition (flat canvas, hairline separators — same grammar as
- * SellerOrdersModule):
+ * Composition (flat canvas — same grammar as SellerOrdersModule):
  *   1. Section header — shield glyph + "Standards" + the seller's real tier.
- *   2. Metrics line — the five recomputed program actuals, verbatim.
- *   3. Defect rows — threshold / actual / gap straight from the endpoint;
- *      the client never recomputes or fabricates a pass.
- *   4. Appeal — an inline form (defect, grounds, details) that posts to
+ *   2. One status line — "All program criteria met", or the single closest
+ *      failing criterion phrased as the remaining gap (numbers verbatim
+ *      from the endpoint; the client never recomputes or fabricates a
+ *      pass). The full defect list still drives the appeal metric picker.
+ *   3. Appeal — an inline form (defect, grounds, details) that posts to
  *      POST /sellers/:sellerId/standards/appeal. Shown only when the
  *      backend reports appealsAvailable.
  *
@@ -50,6 +50,10 @@ const TIER_LABEL: Record<SellerStandards['tier'], string> = {
 
 interface MetricMeta {
   label: string;
+  /** 'up' = more-is-better (gap counts up to the threshold); 'down' = less-is-better. */
+  direction: 'up' | 'down';
+  /** Phrase fragment for the single-gap line, e.g. "19 more lifetime orders". */
+  gapNoun: string;
   format: (value: number, formatMoney: SellerStandardsModuleProps['formatMoney']) => string;
 }
 
@@ -57,26 +61,38 @@ interface MetricMeta {
 const DEFECT_METRIC_META: Record<string, MetricMeta> = {
   ordersShipped: {
     label: 'Lifetime orders shipped',
+    direction: 'up',
+    gapNoun: 'lifetime orders',
     format: (v) => String(Math.round(v)),
   },
   ordersInWindow: {
     label: 'Orders in 90 days',
+    direction: 'up',
+    gapNoun: 'orders in 90 days',
     format: (v) => String(Math.round(v)),
   },
   salesVolume: {
     label: 'Sales in 90 days',
+    direction: 'up',
+    gapNoun: 'in 90-day sales',
     format: (v, formatMoney) => formatMoney(v),
   },
   averageShipTimeDays: {
     label: 'Avg ship time',
+    direction: 'down',
+    gapNoun: 'ship time',
     format: (v) => `${v.toFixed(1)}d`,
   },
   cancellationRate: {
     label: 'Cancellation rate',
+    direction: 'down',
+    gapNoun: 'cancellation rate',
     format: (v) => `${v.toFixed(1)}%`,
   },
   returnCaseRate: {
     label: 'Return case rate',
+    direction: 'down',
+    gapNoun: 'return case rate',
     format: (v) => `${v.toFixed(1)}%`,
   },
 };
@@ -89,7 +105,43 @@ const APPEAL_GROUNDS: { key: StandardsAppealGrounds; label: string }[] = [
 ];
 
 function defectMeta(metric: string): MetricMeta {
-  return DEFECT_METRIC_META[metric] ?? { label: metric, format: (v) => String(v) };
+  return DEFECT_METRIC_META[metric] ?? {
+    label: metric,
+    direction: 'up',
+    gapNoun: metric.toLowerCase(),
+    format: (v) => String(v),
+  };
+}
+
+/**
+ * The defect nearest to passing — smallest gap relative to its threshold.
+ * Purely a display ordering over verbatim endpoint numbers; pass/fail is
+ * never recomputed.
+ */
+function closestDefect(defects: SellerStandardsDefect[]): SellerStandardsDefect {
+  let best = defects[0];
+  let bestRatio = Infinity;
+  for (const defect of defects) {
+    const denom = Math.abs(defect.threshold) > 0 ? Math.abs(defect.threshold) : 1;
+    const ratio = Math.abs(defect.gap) / denom;
+    if (ratio < bestRatio) {
+      bestRatio = ratio;
+      best = defect;
+    }
+  }
+  return best;
+}
+
+/** "19 more lifetime orders" · "Avg ship time 3.2d — 2.0d max" */
+function gapPhrase(
+  defect: SellerStandardsDefect,
+  formatMoney: SellerStandardsModuleProps['formatMoney'],
+): string {
+  const meta = defectMeta(defect.metric);
+  if (meta.direction === 'up') {
+    return `${meta.format(defect.gap, formatMoney)} more ${meta.gapNoun}`;
+  }
+  return `${meta.label} ${meta.format(defect.actual, formatMoney)} — ${meta.format(defect.threshold, formatMoney)} max`;
 }
 
 export const SellerStandardsModule: React.FC<SellerStandardsModuleProps> = ({
@@ -114,7 +166,6 @@ export const SellerStandardsModule: React.FC<SellerStandardsModuleProps> = ({
     return (
       <View style={styles.container}>
         <View style={styles.headerRow}>
-          <AppIcon concept="shield" size={IconSize.xs} color="textSecondary" accessible={false} />
           <Text style={styles.sectionTitle}>Standards</Text>
         </View>
         <View style={styles.skeletonBlock}>
@@ -129,6 +180,8 @@ export const SellerStandardsModule: React.FC<SellerStandardsModuleProps> = ({
 
   const { metrics, tier, defects, appealsAvailable } = standards;
   const selectedMetric = appealMetric ?? defects[0]?.metric ?? null;
+  // Defects only exist while qualification fails — the next rung up.
+  const nextTierLabel = tier === 'standard' ? 'Performer' : 'Top performer';
   const detailsReady = appealDetails.trim().length > 0;
 
   const handleSubmit = async () => {
@@ -157,44 +210,25 @@ export const SellerStandardsModule: React.FC<SellerStandardsModuleProps> = ({
     <View style={styles.container}>
       {/* ── Section header — title + real tier ── */}
       <View style={styles.headerRow}>
-        <View style={styles.headerLead}>
-          <AppIcon concept="shield" size={IconSize.xs} color="textSecondary" accessible={false} />
-          <Text style={styles.sectionTitle}>Standards</Text>
-        </View>
+        <Text style={styles.sectionTitle}>Standards</Text>
         <Text style={[styles.tierLabel, { color: tier === 'standard' ? colors.textSecondary : colors.brand }]}>
           {TIER_LABEL[tier]}
         </Text>
       </View>
 
-      {/* ── Program actuals, verbatim ── */}
-      {metrics ? (
-        <Text style={styles.metricsLine}>
-          {`${metrics.ordersShipped} shipped · ${formatMoney(metrics.salesVolume)} sold · ${metrics.averageShipTimeDays.toFixed(1)}d ship · ${metrics.cancellationRate.toFixed(1)}% cancel · ${metrics.returnCaseRate.toFixed(1)}% returns`}
-        </Text>
+      {/* ── One status line — level reads in the header; here only the
+             closest remaining gap (or the honest all-clear). ── */}
+      {!metrics ? (
+        <Text style={styles.statusLine}>No shipped orders in the last 90 days</Text>
+      ) : defects.length === 0 ? (
+        <Text style={styles.statusLine}>All program criteria met</Text>
       ) : (
-        <Text style={styles.metricsLine}>No shipped orders in the last 90 days</Text>
+        <Text style={styles.statusLine}>
+          {defects.length > 1
+            ? `${defects.length} gaps to ${nextTierLabel} — closest: ${gapPhrase(closestDefect(defects), formatMoney)}`
+            : `${gapPhrase(closestDefect(defects), formatMoney)} to ${nextTierLabel}`}
+        </Text>
       )}
-
-      {/* ── Defect rows — threshold / actual / gap verbatim ── */}
-      {defects.length > 0 ? (
-        <View style={styles.rowList}>
-          {defects.map((defect: SellerStandardsDefect) => {
-            const meta = defectMeta(defect.metric);
-            return (
-              <View key={defect.metric} style={styles.defectRow}>
-                <View style={styles.defectInfo}>
-                  <Text style={styles.defectLabel}>{meta.label}</Text>
-                  <Text style={styles.defectNumbers}>
-                    {`${meta.format(defect.actual, formatMoney)} vs ${meta.format(defect.threshold, formatMoney)} needed · ${meta.format(defect.gap, formatMoney)} to close`}
-                  </Text>
-                </View>
-              </View>
-            );
-          })}
-        </View>
-      ) : metrics ? (
-        <Text style={styles.clearLine}>All program criteria met</Text>
-      ) : null}
 
       {/* ── Appeal entry point + submitted/error states ── */}
       {appealResult === 'submitted' ? (
@@ -353,12 +387,6 @@ function createStyles(colors: ThemeColors) {
       paddingHorizontal: Space.md,
       marginBottom: Space.xs,
     },
-    headerLead: {
-      flex: 1,
-      flexDirection: 'row',
-      alignItems: 'center',
-      gap: Space.sm,
-    },
     sectionTitle: {
       fontSize: TypographyV2.sectionTitle.size,
       lineHeight: TypographyV2.sectionTitle.lineHeight,
@@ -371,46 +399,9 @@ function createStyles(colors: ThemeColors) {
       lineHeight: TypographyV2.caption.lineHeight,
       fontFamily: FontFamily.semibold,
     },
-    metricsLine: {
+    statusLine: {
       paddingHorizontal: Space.md,
       marginTop: Space.xxs,
-      fontSize: TypographyV2.meta.size,
-      lineHeight: TypographyV2.meta.lineHeight,
-      fontFamily: FontFamily.regular,
-      fontVariant: ['tabular-nums'],
-      color: colors.textMuted,
-    },
-    clearLine: {
-      paddingHorizontal: Space.md,
-      marginTop: Space.sm,
-      fontSize: TypographyV2.meta.size,
-      lineHeight: TypographyV2.meta.lineHeight,
-      fontFamily: FontFamily.regular,
-      color: colors.textMuted,
-    },
-    rowList: {
-      paddingHorizontal: Space.md,
-      marginTop: Space.xs,
-    },
-    defectRow: {
-      flexDirection: 'row',
-      alignItems: 'center',
-      paddingVertical: Space.sm,
-      minHeight: Control.hit,
-      borderBottomWidth: StyleSheet.hairlineWidth,
-      borderBottomColor: colors.borderSubtle,
-    },
-    defectInfo: {
-      flex: 1,
-      gap: 1,
-    },
-    defectLabel: {
-      fontSize: TypographyV2.caption.size,
-      lineHeight: TypographyV2.caption.lineHeight,
-      fontFamily: FontFamily.medium,
-      color: colors.textPrimary,
-    },
-    defectNumbers: {
       fontSize: TypographyV2.meta.size,
       lineHeight: TypographyV2.meta.lineHeight,
       fontFamily: FontFamily.regular,

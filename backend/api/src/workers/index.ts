@@ -1,5 +1,10 @@
 import { startBackgroundWorkers, closeBackgroundQueues } from '../lib/queues.js';
 import { logger } from '../lib/logger.js';
+// Boot gate: this process runs the moderation triage worker, so an
+// undeployable MODERATION_PROVIDER must kill it here — not on first job.
+// (The module also self-asserts at import; the explicit call documents the
+// worker process depends on it.)
+import { assertModerationProviderReady } from '../lib/moderation/moderationService.js';
 import { closeDb, db } from '../db/pool.js';
 import { closeRedis } from '../lib/redis.js';
 import { closeRealtimeConnections } from '../lib/realtime.js';
@@ -37,6 +42,9 @@ import {
   evaluateCoOwnPriceAlerts,
   processCoOwnDripReinvestment,
   processAutoFeedbackSweep,
+  processSearchIndexSync,
+  processSupportAgentTurnJob,
+  processVendorSyncJob,
 } from './handlers/index.js';
 
 /**
@@ -168,6 +176,15 @@ async function main(): Promise<void> {
       handleAgentRunJob: async ({ runId }) => {
         const { processAgentRun } = await import('../botRuntime/index.js');
         await processAgentRun(db, runId);
+      },
+      handleSupportAgentTurnJob: async (job) => {
+        await processSupportAgentTurnJob(job);
+      },
+      handleSearchIndexSyncJob: async ({ reason }) => {
+        await processSearchIndexSync({ reason });
+      },
+      handleVendorSyncJob: async ({ vendorName }) => {
+        await processVendorSyncJob({ vendorName });
       },
     },
     logger,

@@ -6,7 +6,8 @@ import { CURRENCIES } from '../../constants/currencies';
 import { AppIcon } from '../common/AppIcon';
 import type { SoldCompsResult } from '../../hooks/useSoldComps';
 import type { PriceVsMarket } from './editListingViewModels';
-import { t } from '../../i18n';
+import { t, getI18nLocale } from '../../i18n';
+import { formatDateRange } from '../../utils/dateFormat';
 import { EditListingHairline, EditListingFieldLabel } from './EditListingFieldChrome';
 import { editListingStyles as styles, useEditListingThemedStyles } from './editListingStyles';
 
@@ -48,6 +49,9 @@ export function EditListingPricingSection({
   const themed = useEditListingThemedStyles();
   const { currencyCode } = useCurrencyPref();
   const currencySymbol = CURRENCIES[currencyCode].symbol;
+  // Freshness window for the sold-comparables hint — '' when the comps
+  // carry no usable date range (client-derived fallback, missing fields).
+  const soldCompsWindow = formatDateRange(soldComps.dateFrom, soldComps.dateTo, getI18nLocale());
 
   return (
     <View style={styles.sectionGroup} onLayout={onSectionLayout}>
@@ -78,7 +82,9 @@ export function EditListingPricingSection({
             <View style={styles.soldCompsHint}>
               <AppIcon name="cash-outline" size={12} color="textMuted" opticalCenter accessible={false} />
               <Text style={[styles.soldCompsText, themed.soldCompsText]}>
-                {t('listing.create.soldCompsRange', { min: `${currencySymbol}${soldComps.minPrice.toFixed(0)}`, max: `${currencySymbol}${soldComps.maxPrice.toFixed(0)}`, count: soldComps.sampleSize })}
+                {soldCompsWindow
+                  ? t('comps.soldRangeWindow', { min: `${currencySymbol}${soldComps.minPrice.toFixed(0)}`, max: `${currencySymbol}${soldComps.maxPrice.toFixed(0)}`, count: soldComps.sampleSize, window: soldCompsWindow })
+                  : t('listing.create.soldCompsRange', { min: `${currencySymbol}${soldComps.minPrice.toFixed(0)}`, max: `${currencySymbol}${soldComps.maxPrice.toFixed(0)}`, count: soldComps.sampleSize })}
               </Text>
             </View>
             {soldComps.medianPrice != null && (

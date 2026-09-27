@@ -24,6 +24,7 @@
 
 import { db } from '../../db/pool.js';
 import { logger } from '../../lib/logger.js';
+import { fetchPinnedRemoteMedia } from '../../lib/safeRemoteMediaFetch.js';
 import { importerExtractionService } from '../../domain/catalogImports/importerExtractionService.js';
 
 // ---------------------------------------------------------------------------
@@ -66,6 +67,10 @@ interface MediaAssetUrlRow {
 
 interface ExtractionStatusRow {
   extraction_status: string;
+  /** Owning import item — cross-checked against the job payload so a
+   *  mis-wired job cannot mix a runId from one item with another item's
+   *  media binding. */
+  item_id: string;
 }
 
 // ---------------------------------------------------------------------------
@@ -75,39 +80,43 @@ interface ExtractionStatusRow {
 /**
  * Download an image from a URL with a bounded timeout and size cap.
  * Returns the raw buffer or null on any failure.
+ *
+ * Security: delegates to `fetchPinnedRemoteMedia` — DNS is resolved once,
+ * blocklist-checked, and the connection is pinned to the validated address
+ * set (no validate-then-re-resolve TOCTOU), redirects are revalidated per
+ * hop, and the single deadline covers DNS + redirects + body streaming.
+ * The previous implementation called `fetch(url, { redirect: 'follow' })`
+ * directly — an unpinned SSRF vector.
  */
 async function downloadImage(url: string): Promise<Buffer | null> {
-  try {
-    const controller = new AbortController();
-    const timer = setTimeout(() => controller.abort(), DOWNLOAD_TIMEOUT_MS);
-    const response = await fetch(url, {
-      signal: controller.signal,
-      redirect: 'follow',
-    });
-    clearTimeout(timer);
-    if (!response.ok) return null;
-    const arrayBuffer = await response.arrayBuffer();
-    const buffer = Buffer.from(arrayBuffer);
-    if (buffer.length === 0 || buffer.length > MAX_IMAGE_BYTES) return null;
-    return buffer;
-  } catch {
-    return null;
-  }
+  const result = await fetchPinnedRemoteMedia({
+    url,
+    maxBytes: MAX_IMAGE_BYTES,
+    timeoutMs: DOWNLOAD_TIMEOUT_MS,
+  });
+  return result.ok ? result.buffer : null;
 }
 
 /**
- * Resolve the image URL for a media asset. Prefers canonical_url, falls back
- * to original_object_url.
+ * Resolve the image URL for a media asset, BOUND through
+ * catalog_import_media for the owned import item — the asset must be
+ * associated with this item. This replaces the old global media_assets
+ * SELECT, which let any caller who knew a mediaAssetId trigger extraction
+ * (and its outbound fetch) on another user's media (cross-tenant IDOR).
+ * Item ownership was verified by the route before the job was enqueued.
+ * Prefers canonical_url, falls back to original_object_url.
  */
 async function resolveMediaAssetUrl(
+  itemId: string,
   mediaAssetId: string,
 ): Promise<string | null> {
   const result = await db.query<MediaAssetUrlRow>(
-    `SELECT canonical_url, original_object_url
-     FROM media_assets
-     WHERE id = $1
+    `SELECT a.canonical_url, a.original_object_url
+     FROM catalog_import_media m
+     JOIN media_assets a ON a.id = m.media_asset_id
+     WHERE m.import_item_id = $1 AND m.media_asset_id = $2
      LIMIT 1`,
-    [mediaAssetId],
+    [itemId, mediaAssetId],
   );
   const row = result.rows[0];
   if (!row) return null;
@@ -176,13 +185,14 @@ export async function processImporterExtraction(
 
   // ── 1. Idempotency check ─────────────────────────────────────────────
   const statusResult = await db.query<ExtractionStatusRow>(
-    `SELECT extraction_status FROM catalog_import_extractions
+    `SELECT extraction_status, item_id FROM catalog_import_extractions
      WHERE id = $1
      LIMIT 1`,
     [runId],
   );
 
-  const existingStatus = statusResult.rows[0]?.extraction_status;
+  const extractionRow = statusResult.rows[0];
+  const existingStatus = extractionRow?.extraction_status;
   if (!existingStatus) {
     logger.warn(
       { runId, itemId },
@@ -207,10 +217,19 @@ export async function processImporterExtraction(
     return;
   }
 
-  // ── 2. Resolve the image URL ─────────────────────────────────────────
+  // Defense-in-depth: the extraction row must belong to the job's item.
+  if (extractionRow.item_id !== itemId) {
+    logger.warn(
+      { runId, itemId },
+      'importerExtraction.item_mismatch',
+    );
+    return;
+  }
+
+  // ── 2. Resolve the image URL (scoped to the item's bound media) ──────
   let imageUrl: string | null = null;
   if (mediaAssetId) {
-    imageUrl = await resolveMediaAssetUrl(mediaAssetId);
+    imageUrl = await resolveMediaAssetUrl(itemId, mediaAssetId);
   }
 
   if (!imageUrl) {

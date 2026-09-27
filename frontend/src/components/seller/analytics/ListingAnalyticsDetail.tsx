@@ -8,6 +8,8 @@ import { openProductDetail } from '../../../platform/product/openProductDetail';
 import { adjustListingPrice } from '../../../services/commerceApi';
 import { ConfirmationSheet } from '../../ConfirmationSheet';
 import { haptics } from '../../../utils/haptics';
+import { formatDateRange } from '../../../utils/dateFormat';
+import { t, getI18nLocale } from '../../../i18n';
 import type { SellerAnalyticsModel } from './useSellerAnalytics';
 
 export function ListingAnalyticsDetail({ model }: { model: SellerAnalyticsModel }) {
@@ -280,6 +282,11 @@ export function ListingAnalyticsDetail({ model }: { model: SellerAnalyticsModel 
                 const posPct = Math.min(94, Math.max(6, Math.round(((askingPrice - minP) / span) * 100)));
                 const medPct = Math.min(94, Math.max(6, Math.round(((medP - minP) / span) * 100)));
 
+                // Freshness window — first/last sale dates in the comp set.
+                // '' when the API sent no usable window; a single comp
+                // collapses to one date rather than a degenerate range.
+                const soldWindow = formatDateRange(comps.dateFrom, comps.dateTo, getI18nLocale());
+
                 const isBelowMedian = askingPrice < medP * 0.96;
                 const isAboveMedian = askingPrice > medP * 1.04;
                 const posBadge = isBelowMedian
@@ -307,8 +314,13 @@ export function ListingAnalyticsDetail({ model }: { model: SellerAnalyticsModel 
                     </View>
 
                     <Text style={[styles.spectrumSubtitle, { color: colors.textMuted }]}>
-                      {comps.sampleSize} verified sales in{' '}
-                      {listingAnalytics.listing.category ?? 'this category'}
+                      {soldWindow
+                        ? t('comps.verifiedSalesWindow', {
+                            count: comps.sampleSize,
+                            category: listingAnalytics.listing.category ?? 'this category',
+                            window: soldWindow,
+                          })
+                        : `${comps.sampleSize} verified sales in ${listingAnalytics.listing.category ?? 'this category'}`}
                     </Text>
 
                     {/* Horizontal Spectrum Bar with Pointer */}

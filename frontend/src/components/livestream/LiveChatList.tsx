@@ -5,13 +5,14 @@
  */
 
 import React, { useCallback, useMemo, useRef } from 'react';
-import { View, Text, StyleSheet, FlatList, useWindowDimensions } from 'react-native';
+import { View, Text, StyleSheet, FlatList, Pressable, Alert, useWindowDimensions } from 'react-native';
 import { useAppTheme, type ThemeColors } from '../../theme/ThemeContext';
 import { Space } from '../../theme/designTokens';
 import { TypographyV2 } from '../../theme/typography.v2';
 import { useReducedMotion } from '../../hooks/useReducedMotion';
 import { useAppTranslation } from '../../i18n/useAppTranslation';
-import type { LiveStreamChatMessage } from '../../services/liveShoppingApi';
+import { useStore } from '../../store/useStore';
+import { reportLiveChatMessage, type LiveStreamChatMessage } from '../../services/liveShoppingApi';
 
 interface LiveChatListProps {
   messages: LiveStreamChatMessage[];
@@ -24,6 +25,31 @@ export function LiveChatList({ messages }: LiveChatListProps) {
   const styles = useMemo(() => createStyles(colors, screenHeight), [colors, screenHeight]);
   const { t } = useAppTranslation('liveStreamViewer');
   const chatListRef = useRef<FlatList<LiveStreamChatMessage>>(null);
+  const viewerUserId = useStore((s) => s.currentUser?.id ?? null);
+
+  const confirmReport = useCallback((item: LiveStreamChatMessage) => {
+    Alert.alert(
+      t('chat.reportTitle', { defaultValue: 'Report this message?' }),
+      undefined,
+      [
+        { text: t('common.cancel', { defaultValue: 'Cancel' }), style: 'cancel' },
+        {
+          text: t('chat.reportAction', { defaultValue: 'Report' }),
+          onPress: () => {
+            const key = `rpt_live_${item.streamId}_${item.id}`;
+            reportLiveChatMessage(item.streamId, item.id, 'other', undefined, key)
+              .then((res) => {
+                Alert.alert(
+                  res.ok
+                    ? t('chat.reportSuccess', { defaultValue: 'Report submitted. Thank you.' })
+                    : t('chat.reportFailed', { defaultValue: 'Could not submit the report. Try again.' }),
+                );
+              });
+          },
+        },
+      ],
+    );
+  }, [t]);
 
   const renderChatMessage = useCallback(({ item }: { item: LiveStreamChatMessage }) => {
     if (item.type === 'system' || item.type === 'bid' || item.type === 'purchase') {
@@ -35,8 +61,15 @@ export function LiveChatList({ messages }: LiveChatListProps) {
         </View>
       );
     }
+    const reportable = viewerUserId !== null && item.userId !== viewerUserId;
     return (
-      <View style={styles.chatRow}>
+      <Pressable
+        style={styles.chatRow}
+        onLongPress={reportable ? () => confirmReport(item) : undefined}
+        accessibilityRole="button"
+        accessibilityLabel={`${item.userName}: ${item.message}`}
+        accessibilityHint={t('chat.reportHint', { defaultValue: 'Long-press to report this message' })}
+      >
         <Text style={styles.chatLine} numberOfLines={2}>
           {item.isSeller ? (
             <Text style={[styles.chatSellerMark, { color: colors.warningText }]}>{t('chat.seller')} · </Text>
@@ -49,9 +82,9 @@ export function LiveChatList({ messages }: LiveChatListProps) {
             {item.message}
           </Text>
         </Text>
-      </View>
+      </Pressable>
     );
-  }, [colors, styles, t]);
+  }, [colors, styles, t, viewerUserId, confirmReport]);
 
   return (
     <FlatList
