@@ -20,6 +20,9 @@ interface DraftResumeBannerProps {
 export function DraftResumeBanner({ record, onResume, onDiscard }: DraftResumeBannerProps) {
   const when = timeAgo(record.savedAt);
   const editing = Boolean(record.editId);
+  // Device photos may not have survived the reload — set the expectation
+  // before the resume decision, not after it.
+  const photoCaveat = record.photos.some((u) => u.startsWith('blob:'));
 
   return (
     <div
@@ -30,6 +33,9 @@ export function DraftResumeBanner({ record, onResume, onDiscard }: DraftResumeBa
       <p className="min-w-0 flex-1 text-caption text-text-secondary">
         {editing ? 'Unsaved edits to one of your listings' : 'You have a saved draft'}
         {when ? <span className="text-text-muted"> — {when}</span> : null}
+        {photoCaveat ? (
+          <span className="text-text-muted"> · device photos may need re-adding</span>
+        ) : null}
       </p>
       <div className="flex shrink-0 items-center gap-2">
         <Button variant="secondary" size="sm" onClick={onResume}>

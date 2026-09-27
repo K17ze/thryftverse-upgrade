@@ -19,6 +19,7 @@ const isLocalUri = (uri: string) => uri.startsWith('blob:') || uri.startsWith('d
 
 export function GroupInfoHero({
   conversation,
+  viewerId,
   canEdit,
   onEditCover,
   onEditAvatar,
@@ -26,6 +27,8 @@ export function GroupInfoHero({
   onEditInfo,
 }: {
   conversation: Conversation;
+  /** Session user id — the mosaic drops the viewer (fixture 'me'). */
+  viewerId: string;
   canEdit: boolean;
   onEditCover: () => void;
   onEditAvatar: () => void;
@@ -40,7 +43,7 @@ export function GroupInfoHero({
   const mosaic = (
     <div className="relative">
       <GroupAvatarMosaic
-        members={mosaicMembers(conversation)}
+        members={mosaicMembers(conversation, viewerId)}
         size={cover ? 96 : 104}
         groupPhoto={conversation.avatar}
         fallbackName={title}
@@ -52,9 +55,11 @@ export function GroupInfoHero({
           type="button"
           onClick={onEditAvatar}
           aria-label="Change group photo"
-          className="pressable absolute bottom-0.5 right-0.5 flex h-[30px] w-[30px] items-center justify-center rounded-full border-[2.5px] border-background bg-brand text-text-inverse"
+          className="pressable absolute -bottom-1.5 -right-1.5 flex h-11 w-11 items-center justify-center"
         >
-          <Icon name="camera" size={14} filled />
+          <span className="flex h-[30px] w-[30px] items-center justify-center rounded-full border-[2.5px] border-background bg-brand text-text-inverse">
+            <Icon name="camera" size={14} filled />
+          </span>
         </button>
       ) : null}
     </div>
@@ -105,7 +110,7 @@ export function GroupInfoHero({
               type="button"
               onClick={onEditInfo}
               aria-label="Edit group"
-              className="pressable -mr-1 flex h-8 w-8 shrink-0 items-center justify-center text-text-muted"
+              className="pressable -m-1.5 flex h-11 w-11 shrink-0 items-center justify-center text-text-muted"
             >
               <Icon name="edit" size={16} />
             </button>

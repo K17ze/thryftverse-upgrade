@@ -36,6 +36,22 @@ export interface ListingSeller {
   reviewCount?: number | null;
   location?: string | null;
   verified?: boolean | null;
+  /** Mobile ListingDetailSeller parity — suppresses purchase CTAs while the
+   *  seller is away (listingDetailContract.ts CommerceActionDock). */
+  holidayMode?: boolean;
+  reachState?: 'normal' | 'limited' | 'suspended' | null;
+}
+
+/** Returns terms the seller set on the listing — mirrors the mobile
+ *  ReturnPolicy contract carried in the /listings/:id commerce block.
+ *  `accepted === null` means "the server did not say" — render the honest
+ *  fallback, not a fabricated policy. */
+export interface ListingReturnPolicy {
+  accepted: boolean | null;
+  windowDays?: number | null;
+  conditions?: string | null;
+  /** Server-authored summary string — rendered verbatim when present. */
+  summary?: string | null;
 }
 
 export interface Listing {
@@ -69,6 +85,18 @@ export interface Listing {
   auctionEndsAt?: string | null;
   shippingMethod?: string | null;
   shippingPayer?: string | null;
+  /** Delivery charge in GBP when the buyer pays postage — the live
+   *  commerce block's `shippingPrice`. Absent (not zero) when unknown. */
+  shippingPrice?: number | null;
+  /** ISO date bounds for the estimated delivery window (commerce block). */
+  estimatedDeliveryStart?: string | null;
+  estimatedDeliveryEnd?: string | null;
+  /** Seller-set returns terms (commerce block `returnPolicy`). */
+  returnPolicy?: ListingReturnPolicy | null;
+  /** Seller's dispatch SLA in days when the contract carries one —
+   *  the PDP falls back to the platform default (lib/commerce/dispatch)
+   *  when it doesn't. */
+  dispatchSlaDays?: number | null;
   featured?: boolean | null;
   sustainabilityGrade?: 'A' | 'B' | 'C' | 'D' | null;
 }
@@ -271,12 +299,16 @@ export interface Message {
   text?: string;
   offerPrice?: number;
   originalPrice?: number;
+  /** Id of the backing offer record — the handle the card needs to reach
+   *  the real accept/decline/counter write path (mobile threads offerId
+   *  through its offer messages). Absent on legacy fixture messages. */
+  offerId?: string;
   offerStatus?: 'pending' | 'accepted' | 'declined' | 'countered' | 'expired' | 'cancelled';
   isSystem?: boolean;
   systemTitle?: string;
   timestamp: string;
   itemImage?: string;
-  type?: 'text' | 'offer' | 'offer_declined' | 'purchase_status' | 'system' | 'commerce_state' | 'media' | 'listing_share';
+  type?: 'text' | 'offer' | 'offer_declined' | 'purchase_status' | 'system' | 'commerce_state' | 'media' | 'listing_share' | 'voice' | 'document';
   sender?: 'me' | 'other' | 'system';
   listing?: {
     id: string;
@@ -293,9 +325,24 @@ export interface Message {
     isSold?: boolean;
   };
   mediaUri?: string;
-  /** Media flavour for mediaUri — drives the '📷 Photo' / '🎥 Video'
+  /** Media flavour for mediaUri — drives the 'Photo' / 'Video'
    *  preview grammar and bubble treatment (mirrors mobile mediaType). */
   mediaType?: 'image' | 'video';
+  /** Poster still for video media — the mediaUri may be an HLS playlist
+   *  no image loader can decode; bubbles render this instead. */
+  posterUri?: string;
+  /** Voice message receipt — duration in ms + optional waveform samples
+   *  (0..1) the bubble renders as bars. Mirrors mobile voice fields. */
+  voiceUri?: string;
+  voiceDurationMs?: number;
+  voiceWaveform?: number[];
+  /** Document attachment — renders a document row, never an image bubble. */
+  documentUri?: string;
+  documentName?: string;
+  documentMimeType?: string;
+  /** Threaded reply preview — resolved by the caller from
+   *  replyToMessageId against the loaded message set. */
+  replyTo?: { senderName: string; text: string } | null;
   /** Display label for the sender in group threads — hydrated from
    *  participantProfiles (displayName ?? username). */
   senderLabel?: string;
@@ -342,6 +389,13 @@ export interface Conversation {
   participantProfiles?: ConversationParticipant[];
   /** Server-derived unread count — renders as a count badge when > 1. */
   unreadCount?: number;
+  /** Live per-viewer conversation state (notification mute). Local
+   *  overrides in inboxPrefs take display precedence while a write is
+   *  in flight; absent = not muted. */
+  isMuted?: boolean;
+  /** Live per-viewer archive flag — mirrors the backend conversation
+   *  state so archived threads stay out of All across devices. */
+  isArchived?: boolean;
 }
 
 // ============================================================================
@@ -370,6 +424,7 @@ export type NotificationKind =
   | 'review'
   | 'new_item'
   | 'saved_search_match'
+  | 'auction'
   | 'system';
 
 export interface NotificationEntry {
@@ -563,6 +618,9 @@ export interface ReturnCase {
   status: ReturnCaseStatus;
   reasonCategory: string;
   reasonLabel: string;
+  /** Buyer-attached evidence photos — mirrors returnsApi
+   *  evidenceMediaUrls. Absent when nothing was attached. */
+  evidenceMediaUrls?: string[];
   /** Null = full refund requested. */
   requestedAmountGbp: number | null;
   proposedRemedy?: ReturnRemedy | null;
@@ -652,6 +710,9 @@ export interface ListingQuestionAnswer {
   text: string;
   responderName: string;
   createdAt?: string;
+  /** Author-visible quarantine marker — a held answer shows the text with a
+   *  "held for review" note rather than pretending it's live. */
+  moderationState?: 'published' | 'pending_review' | null;
 }
 
 /** A buyer question thread on a listing. createdAt stays optional — an
@@ -665,6 +726,9 @@ export interface ListingQuestion {
   askerAvatar?: string;
   text: string;
   createdAt?: string;
+  /** Author-visible quarantine marker — 'pending_review' rows only appear
+   *  to their author (backend filters them out of the public feed). */
+  moderationState?: 'published' | 'pending_review' | null;
   answer?: ListingQuestionAnswer | null;
 }
 

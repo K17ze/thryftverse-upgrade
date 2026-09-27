@@ -1,6 +1,7 @@
 export * as auth from './auth';
 export * as listings from './listings';
 export * as feed from './feed';
+export * as recommendations from './recommendations';
 export * as users from './users';
 export * as chat from './chat';
 export * as notifications from './notifications';
@@ -16,3 +17,4 @@ export * as saved from './saved';
 export * as visualSearchService from './visualSearch';
 export * as uploads from './uploads';
 export * as agents from './agents';
+export * as verification from './verification';

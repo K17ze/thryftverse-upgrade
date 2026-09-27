@@ -115,7 +115,7 @@ export function EntryBand() {
   return (
     <ModuleSection title="Start here" bordered={false}>
       <Rail label="Ways into the catalogue">
-        {ENTRIES.map((entry) => (
+        {ENTRIES.map((entry, i) => (
           <Link
             key={entry.key}
             href={entry.href}
@@ -128,14 +128,14 @@ export function EntryBand() {
               alt={entry.label}
               fill
               sizes="(max-width: 640px) 160px, 192px"
-              className="h-full w-full"
-              imgClassName="transition-transform duration-300 group-hover:scale-105"
+              priority={i < 4}
+              className="h-full w-full media-zoom"
             />
-            <div className="absolute inset-x-0 bottom-0 bg-gradient-to-t from-black/75 via-black/35 to-transparent px-2.5 pb-1.5 pt-7">
-              <span className="clamp-1 block text-body-emphasis font-semibold leading-tight text-white">
+            <div className="absolute inset-x-0 bottom-0 bg-gradient-to-t from-media-overlay-scrim via-media-overlay-scrim/40 to-transparent px-2.5 pb-1.5 pt-7">
+              <span className="clamp-1 block text-body-emphasis font-semibold leading-tight text-scrim-text-primary">
                 {entry.label}
               </span>
-              <span className="tnum text-meta text-white/70">
+              <span className="tnum text-meta text-scrim-text-secondary">
                 {entry.count} item{entry.count === 1 ? '' : 's'}
               </span>
             </div>

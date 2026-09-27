@@ -2,13 +2,16 @@
 
 /**
  * FulfilmentRow — one dispatch job. Flat hairline row: item, buyer, paid,
- * service + deadline, then the stage action. Overdue takes the danger accent.
+ * service + deadline, then the stage action. Overdue takes the danger
+ * accent. Posted/delivered rows keep the tracking number visible at every
+ * width (it's the job's proof) with a copy affordance for the carrier app.
  */
 
 import Link from 'next/link';
 import { AppImage } from '@/components/ui/AppImage';
 import { Badge } from '@/components/ui/Badge';
 import { Button } from '@/components/ui/Button';
+import { useToast } from '@/components/ui/Toast';
 import { formatPrice, timeAgo } from '@/lib/utils/format';
 import type { FulfilmentJob } from '@/lib/data/fixtures-seller';
 
@@ -23,12 +26,23 @@ export function FulfilmentRow({
   onMarkPosted: (jobId: string) => void;
   isMarking?: boolean;
 }) {
+  const { show } = useToast();
   const overdue = job.stage === 'to-post' && Date.parse(job.shipBy) < Date.now();
   const deadline = new Date(job.shipBy).toLocaleDateString('en-GB', {
     weekday: 'short',
     day: 'numeric',
     month: 'short',
   });
+
+  const copyTracking = async () => {
+    if (!job.trackingNumber) return;
+    try {
+      await navigator.clipboard.writeText(job.trackingNumber);
+      show('Tracking number copied', 'success');
+    } catch {
+      show('Copy failed — select the number instead', 'error');
+    }
+  };
 
   return (
     <li className="flex items-center gap-3.5 py-3">
@@ -47,17 +61,29 @@ export function FulfilmentRow({
           <span aria-hidden="true">·</span>
           <span className="tnum shrink-0">Paid {formatPrice(job.paid)}</span>
         </p>
+        {/* Deadline folds into meta below sm where the column collapses. */}
+        {job.stage === 'to-post' ? (
+          <p
+            className={`tnum mt-0.5 text-meta sm:hidden ${
+              overdue ? 'font-semibold text-danger-text' : 'text-text-muted'
+            }`}
+          >
+            {overdue ? `Past deadline · ${deadline}` : `Ship by ${deadline}`}
+          </p>
+        ) : null}
       </div>
 
       <div className="hidden w-36 shrink-0 sm:block">
         <p className="text-meta text-text-secondary">{job.service}</p>
-        <p
-          className={`tnum mt-0.5 text-meta ${
-            overdue ? 'font-semibold text-danger-text' : 'text-text-muted'
-          }`}
-        >
-          {overdue ? `Past deadline · ${deadline}` : `Ship by ${deadline}`}
-        </p>
+        {job.stage === 'to-post' ? (
+          <p
+            className={`tnum mt-0.5 text-meta ${
+              overdue ? 'font-semibold text-danger-text' : 'text-text-muted'
+            }`}
+          >
+            {overdue ? `Past deadline · ${deadline}` : `Ship by ${deadline}`}
+          </p>
+        ) : null}
       </div>
 
       {overdue ? (
@@ -81,17 +107,30 @@ export function FulfilmentRow({
               Mark posted
             </Button>
           </>
-        ) : job.stage === 'posted' ? (
-          <span className="tnum hidden text-meta text-text-secondary md:inline">
-            {job.trackingNumber}
+        ) : (
+          <span className="flex min-w-0 flex-col items-end">
+            {job.trackingNumber ? (
+              <button
+                type="button"
+                onClick={copyTracking}
+                className="pressable tnum -my-1 rounded-md px-1.5 py-1 text-right text-meta text-text-secondary underline-offset-2 hover:text-text-primary hover:underline"
+                aria-label={`Copy tracking number ${job.trackingNumber}`}
+                title="Copy tracking number"
+              >
+                {job.trackingNumber}
+              </button>
+            ) : null}
+            <span
+              className={`tnum mt-0.5 text-meta ${
+                job.stage === 'delivered' ? 'text-success-text' : 'text-text-muted'
+              }`}
+            >
+              {job.stage === 'delivered'
+                ? `Delivered ${job.deliveredAt ? timeAgo(job.deliveredAt) : ''}`
+                : `Posted ${job.postedAt ? timeAgo(job.postedAt) : ''}`}
+            </span>
           </span>
-        ) : null}
-        {job.stage === 'posted' ? (
-          <span className="text-meta text-text-muted">Posted {job.postedAt ? timeAgo(job.postedAt) : ''}</span>
-        ) : null}
-        {job.stage === 'delivered' ? (
-          <span className="text-meta text-success-text">Delivered {job.deliveredAt ? timeAgo(job.deliveredAt) : ''}</span>
-        ) : null}
+        )}
       </div>
     </li>
   );

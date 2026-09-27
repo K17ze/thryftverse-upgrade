@@ -1,7 +1,7 @@
 'use client';
 
 import { Badge } from '@/components/ui/Badge';
-import type { Distribution } from '@/lib/contracts/coown';
+import type { DistributionReceipt } from '@/lib/contracts/coown';
 import { formatDate } from '@/lib/utils/format';
 import { gbp } from './format';
 
@@ -11,12 +11,17 @@ const KIND_LABEL = {
   licensing: 'Licensing',
 } as const;
 
-/** Distributions history — paid and scheduled income, one quiet rail. */
+/**
+ * Income receipts — what the viewer was actually paid (or is owed), one
+ * line per distribution they were entitled to: units held on the ex-date
+ * snapshot × the per-unit rate, with the total that lands in the wallet.
+ * Market-level pot sizes belong on the asset page, not the portfolio.
+ */
 export function DistributionsTable({
-  distributions,
+  receipts,
   assetTitle,
 }: {
-  distributions: Distribution[];
+  receipts: DistributionReceipt[];
   assetTitle: (assetId: string) => string;
 }) {
   return (
@@ -25,50 +30,56 @@ export function DistributionsTable({
         <h2 id="distributions-heading" className="text-section-title font-semibold text-text-primary">
           Distributions
         </h2>
-        <p className="text-meta text-text-muted tnum">{distributions.length} records</p>
+        <p className="text-meta text-text-muted tnum">{receipts.length} receipts</p>
       </div>
 
-      {distributions.length === 0 ? (
+      {receipts.length === 0 ? (
         <p className="mt-4 text-body text-text-secondary">
-          No distributions yet. Income lands here the moment an asset pays out.
+          No distributions yet. Income lands here the moment an asset you hold pays out.
         </p>
       ) : (
         <>
-          <div className="mt-4 hidden gap-4 border-b border-border-subtle px-1 pb-2 text-micro font-semibold uppercase tracking-[0.08em] text-text-muted md:grid md:grid-cols-[minmax(0,1fr)_9rem_6.5rem_7rem_7rem]">
+          <div className="mt-4 hidden gap-4 border-b border-border-subtle px-1 pb-2 text-micro font-semibold uppercase tracking-[0.08em] text-text-muted md:grid md:grid-cols-[minmax(0,1fr)_8rem_9rem_6.5rem_6rem_7rem]">
             <span>Asset</span>
             <span>Kind</span>
-            <span className="text-right">Per unit</span>
+            <span className="text-right">Units × rate</span>
+            <span className="text-right">Total</span>
             <span>Status</span>
             <span className="text-right">Date</span>
           </div>
           <ul className="divide-y divide-border-subtle">
-            {distributions.map((d) => (
-              <li key={d.id}>
+            {receipts.map((r) => (
+              <li key={r.id}>
                 {/* Mobile */}
                 <div className="flex items-start justify-between gap-3 py-4 md:hidden">
                   <div className="min-w-0">
                     <p className="clamp-1 text-body-emphasis font-semibold text-text-primary">
-                      {assetTitle(d.assetId)}
+                      {assetTitle(r.assetId)}
                     </p>
-                    <p className="mt-0.5 text-meta text-text-secondary">{KIND_LABEL[d.kind]}</p>
+                    <p className="mt-0.5 text-meta text-text-secondary tnum">
+                      {KIND_LABEL[r.kind]} · {r.unitsHeld} {r.unitsHeld === 1 ? 'unit' : 'units'} × {gbp(r.amountPerUnitGbp)}
+                    </p>
                   </div>
                   <div className="shrink-0 text-right">
-                    <p className="text-body-emphasis text-text-primary tnum">{gbp(d.amountPerUnitGbp)}</p>
-                    <Badge variant={d.status === 'paid' ? 'success' : 'warning'} className="mt-1">
-                      {d.status === 'paid' ? 'Paid' : 'Scheduled'}
+                    <p className="text-body-emphasis text-text-primary tnum">{gbp(r.totalGbp)}</p>
+                    <Badge variant={r.status === 'paid' ? 'success' : 'warning'} className="mt-1">
+                      {r.status === 'paid' ? 'Paid' : 'Scheduled'}
                     </Badge>
                   </div>
                 </div>
                 {/* Desktop */}
-                <div className="hidden items-center gap-4 px-1 py-3.5 md:grid md:grid-cols-[minmax(0,1fr)_9rem_7rem_7rem_7rem]">
-                  <p className="clamp-1 text-body-emphasis font-semibold text-text-primary">{assetTitle(d.assetId)}</p>
-                  <p className="text-body text-text-secondary">{KIND_LABEL[d.kind]}</p>
-                  <p className="text-body text-text-primary tnum">{gbp(d.amountPerUnitGbp)}</p>
-                  <Badge variant={d.status === 'paid' ? 'success' : 'warning'}>
-                    {d.status === 'paid' ? 'Paid' : 'Scheduled'}
+                <div className="hidden items-center gap-4 px-1 py-3.5 md:grid md:grid-cols-[minmax(0,1fr)_8rem_9rem_6.5rem_6rem_7rem]">
+                  <p className="clamp-1 text-body-emphasis font-semibold text-text-primary">{assetTitle(r.assetId)}</p>
+                  <p className="text-body text-text-secondary">{KIND_LABEL[r.kind]}</p>
+                  <p className="text-right text-body text-text-secondary tnum">
+                    {r.unitsHeld} × {gbp(r.amountPerUnitGbp)}
+                  </p>
+                  <p className="text-right text-body text-text-primary tnum">{gbp(r.totalGbp)}</p>
+                  <Badge variant={r.status === 'paid' ? 'success' : 'warning'}>
+                    {r.status === 'paid' ? 'Paid' : 'Scheduled'}
                   </Badge>
                   <p className="text-right text-body text-text-secondary tnum">
-                    {formatDate(d.paidAt ?? d.scheduledFor)}
+                    {formatDate(r.paidAt ?? r.exDate)}
                   </p>
                 </div>
               </li>

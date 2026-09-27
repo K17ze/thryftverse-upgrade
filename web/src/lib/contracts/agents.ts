@@ -378,3 +378,44 @@ export const AGENT_PURPOSES: AgentPurposeTemplate[] = [
 export function purposeById(id: AgentPurposeId): AgentPurposeTemplate | undefined {
   return AGENT_PURPOSES.find((p) => p.id === id);
 }
+
+// ---------------------------------------------------------------------------
+// Agent memory — ported verbatim from mobile botsApi.ts (Phase 7).
+// Per-user long-term memory: the owner can inspect every stored memory,
+// retract individual records, clear everything, and switch memory or
+// extraction off entirely. Mirrors the /agent-memory endpoints — every
+// field is a real server field; the web ships no extras.
+// ---------------------------------------------------------------------------
+
+export type AgentMemoryKind = 'preference' | 'fact' | 'directive' | 'episodic_summary';
+export type AgentMemoryStatus = 'active' | 'retracted' | 'expired';
+
+export interface AgentMemory {
+  id: string;
+  /** Scoped to one agent, or null when it applies to every agent. */
+  botId: string | null;
+  kind: AgentMemoryKind;
+  content: string;
+  status: AgentMemoryStatus;
+  confidence: number;
+  sourceType: 'conversation' | 'tool_result' | 'explicit' | 'extraction';
+  sourceConversationId: string | null;
+  useCount: number;
+  lastUsedAt: string | null;
+  createdAt: string;
+  validFrom: string;
+  validTo: string | null;
+}
+
+export interface AgentMemorySettings {
+  memoryEnabled: boolean;
+  extractionEnabled: boolean;
+}
+
+/** Row subtitle vocabulary — the mobile screen's KIND_LABELS verbatim. */
+export const AGENT_MEMORY_KIND_LABELS: Record<AgentMemoryKind, string> = {
+  preference: 'Preference',
+  fact: 'Fact',
+  directive: 'Rule',
+  episodic_summary: 'Summary',
+};

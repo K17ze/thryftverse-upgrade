@@ -51,24 +51,28 @@ export default function QuickRepliesPage() {
             icon="zap"
             title="No quick replies"
             subtitle="Save the answers you type most — dispatch times, firm pricing, measurement requests."
+            actionLabel="New reply"
+            onAction={() => setEditor({ id: null })}
           />
         ) : (
           <ul className="mt-6 divide-y divide-border-subtle">
             {replies.map((r) => (
-              <li key={r.id} className="group flex items-start gap-2 py-3.5">
+              <li key={r.id} className="flex items-start gap-2 py-3.5">
                 <button
                   type="button"
                   onClick={() => setEditor({ id: r.id })}
                   className="pressable min-w-0 flex-1 rounded-sm text-left focus-visible:outline-2 focus-visible:outline-text-primary"
                 >
-                  <p className="text-body font-semibold text-text-primary">{r.title}</p>
+                  <p className="clamp-1 text-body font-semibold text-text-primary">{r.title}</p>
                   <p className="clamp-2 mt-0.5 text-body text-text-secondary">{r.message}</p>
                 </button>
+                {/* Always visible — touch has no hover; opacity-on-hover
+                    would hide the only delete affordance. */}
                 <IconButton
                   name="trash"
                   aria-label={`Delete "${r.title}"`}
                   onClick={() => setConfirmDelete(r)}
-                  className="shrink-0 opacity-0 transition-opacity focus-visible:opacity-100 group-hover:opacity-100"
+                  className="shrink-0 text-text-muted hover:text-danger-text"
                 />
               </li>
             ))}
@@ -150,7 +154,19 @@ function ReplySheet({
     setTouched(false);
   }
 
-  const valid = title.trim().length > 0 && message.trim().length > 0;
+  // Mobile grammar: title 40, message 200 — the store the inbox composer
+  // inserts from treats these as the caps, so they gate Save here too.
+  const titleError = !title.trim()
+    ? 'Give this reply a title'
+    : title.trim().length > 40
+      ? 'Keep the title under 40 characters.'
+      : null;
+  const messageError = !message.trim()
+    ? 'Write the message buyers receive'
+    : message.trim().length > 200
+      ? 'Keep the message under 200 characters.'
+      : null;
+  const valid = !titleError && !messageError;
 
   return (
     <Sheet open={open} onClose={onClose} title={editing ? 'Edit reply' : 'New quick reply'}>
@@ -159,7 +175,9 @@ function ReplySheet({
           label="Shortcut title"
           id="qr-title"
           required
-          error={touched && !title.trim() ? 'Give this reply a title' : undefined}
+          done={!titleError && title.trim().length > 0}
+          error={touched && titleError ? titleError : undefined}
+          hint={!(touched && titleError) ? `Shown as the chip label in chat — ${title.length}/40` : undefined}
         >
           <input
             id="qr-title"
@@ -169,13 +187,17 @@ function ReplySheet({
             onBlur={() => setTouched(true)}
             placeholder="Dispatch time"
             maxLength={40}
+            aria-invalid={Boolean(touched && titleError)}
+            aria-describedby={touched && titleError ? 'qr-title-error' : undefined}
           />
         </SellField>
         <SellField
           label="Message"
           id="qr-message"
           required
-          error={touched && !message.trim() ? 'Write the message buyers receive' : undefined}
+          done={!messageError && message.trim().length > 0}
+          error={touched && messageError ? messageError : undefined}
+          hint={!(touched && messageError) ? `Inserted into the composer when tapped — ${message.length}/200` : undefined}
         >
           <textarea
             id="qr-message"
@@ -185,7 +207,9 @@ function ReplySheet({
             onChange={(e) => setMessage(e.target.value)}
             onBlur={() => setTouched(true)}
             placeholder="Thanks for your order! I dispatch within…"
-            maxLength={500}
+            maxLength={200}
+            aria-invalid={Boolean(touched && messageError)}
+            aria-describedby={touched && messageError ? 'qr-message-error' : undefined}
           />
         </SellField>
         <Button

@@ -47,7 +47,7 @@ export default function ReviewPage() {
   const queryClient = useQueryClient();
 
   const orderId = params?.orderId ?? '';
-  const { data: orders, isLoading } = useCommerceOrders();
+  const { data: orders, isLoading, isError, refetch } = useCommerceOrders();
   const actions = useOrderActions(orderId);
 
   const [submitting, setSubmitting] = useState(false);
@@ -85,6 +85,27 @@ export default function ReviewPage() {
     return <ReviewSkeleton />;
   }
 
+  // Error is not absence — a failed fetch gets a retry, not a gravestone.
+  if (isError) {
+    return (
+      <div className="mx-auto max-w-[720px] px-4 py-8 sm:px-6">
+        <IconButton
+          name="back"
+          aria-label="Back"
+          onClick={() => router.back()}
+          className="-ml-2"
+        />
+        <EmptyState
+          icon="warning"
+          title="Couldn't load this order"
+          subtitle="Check your connection and try again — the order is safe."
+          actionLabel="Try again"
+          onAction={() => void refetch()}
+        />
+      </div>
+    );
+  }
+
   if (!order) {
     return (
       <div className="mx-auto max-w-[720px] px-4 py-8 sm:px-6">
@@ -105,7 +126,7 @@ export default function ReviewPage() {
     );
   }
 
-  const viewerId = user.id ?? 'me';
+  const viewerId = user.id;
   const isBuyer = order.buyerId === viewerId;
   const key = normaliseOrderStatus(order.status);
   const reviewable = key === 'delivered' || key === 'completed';

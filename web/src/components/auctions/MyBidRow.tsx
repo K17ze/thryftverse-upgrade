@@ -11,21 +11,33 @@ import Link from 'next/link';
 import { AppImage } from '@/components/ui/AppImage';
 import { Icon } from '@/components/ui/Icon';
 import type { MyBidStatus } from '@/lib/contracts/auction';
-import { countdownLabel } from '@/lib/data/fixtures-auctions';
+import { auctionOutcome, countdownLabel } from '@/lib/data/fixtures-auctions';
 import type { MyBidRow } from '@/lib/data/fixtures-auctions';
 import { formatPrice } from '@/lib/utils/format';
 
-const STATUS: Record<MyBidStatus, { label: string; icon: 'close' | 'check'; tone: string }> = {
-  outbid: { label: 'Outbid', icon: 'close', tone: 'text-danger-text' },
-  winning: { label: 'Leading', icon: 'check', tone: 'text-success-text' },
+const STATUS: Record<MyBidStatus, { label: string; icon: 'close' | 'check' | 'trending' | 'auction'; tone: string }> = {
+  outbid: { label: "You're outbid", icon: 'trending', tone: 'text-danger-text' },
+  winning: { label: "You're winning", icon: 'check', tone: 'text-success-text' },
+  // Wire 'active' — bid placed on a running auction, lead unresolved.
+  // Native MyBidsScreen labels it 'Active'; claiming a win here would lie.
+  active: { label: 'Active', icon: 'auction', tone: 'text-brand' },
   won: { label: 'Won', icon: 'check', tone: 'text-success-text' },
   lost: { label: 'Lost', icon: 'close', tone: 'text-text-muted' },
+};
+
+/** Why a "lost" row closed that way — reserve-not-met and cancelled runs
+ *  aren't losses to another bidder. */
+const ENDED_SUFFIX: Partial<Record<string, string>> = {
+  reserve_not_met: ' · Reserve not met',
+  cancelled: ' · Cancelled',
+  payment_expired: ' · Payment expired',
 };
 
 export function MyBidRow({ row }: { row: MyBidRow }) {
   const { auction, myBid, status } = row;
   const info = STATUS[status];
   const settled = auction.lifecycle === 'ended';
+  const outcome = settled ? auctionOutcome(auction) : null;
 
   return (
     <li className="relative">
@@ -51,6 +63,7 @@ export function MyBidRow({ row }: { row: MyBidRow }) {
             {status === 'outbid' || status === 'lost'
               ? ` · Top ${formatPrice(auction.currentBid)}`
               : ''}
+            {status === 'lost' && outcome ? (ENDED_SUFFIX[outcome] ?? '') : ''}
           </p>
         </div>
 

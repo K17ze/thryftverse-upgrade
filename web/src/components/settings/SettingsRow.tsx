@@ -12,6 +12,8 @@ import { Icon, type AppIconName } from '@/components/ui/Icon';
 interface SettingsRowProps {
   icon: AppIconName;
   label: string;
+  /** Secondary line under the label — mirrors the mobile row grammar. */
+  subtitle?: string;
   /** Muted right-side value (e.g. "English", "On"). */
   value?: string;
   href?: string;
@@ -22,21 +24,26 @@ interface SettingsRowProps {
   trailing?: React.ReactNode;
 }
 
-export function SettingsRow({ icon, label, value, href, onClick, danger, trailing }: SettingsRowProps) {
+export function SettingsRow({ icon, label, subtitle, value, href, onClick, danger, trailing }: SettingsRowProps) {
   const body = (
     <>
       <span className={`flex h-11 w-9 shrink-0 items-center ${danger ? 'text-danger-text' : 'text-text-secondary'}`}>
         <Icon name={icon} size={18} />
       </span>
-      <span
-        className={`flex-1 text-body-emphasis ${
-          danger ? 'font-medium text-danger-text' : 'text-text-primary'
-        }`}
-      >
-        {label}
+      <span className="min-w-0 flex-1">
+        <span
+          className={`clamp-1 block text-body-emphasis ${
+            danger ? 'font-medium text-danger-text' : 'text-text-primary'
+          }`}
+        >
+          {label}
+        </span>
+        {subtitle ? (
+          <span className="clamp-1 mt-0.5 block text-caption text-text-muted">{subtitle}</span>
+        ) : null}
       </span>
       {value ? (
-        <span className="clamp-1 max-w-[40%] text-body text-text-muted">{value}</span>
+        <span className="tnum clamp-1 max-w-[40%] text-body text-text-muted">{value}</span>
       ) : null}
       {trailing ?? (
         <Icon name="forward" size={16} className="shrink-0 text-text-muted" />
@@ -45,7 +52,7 @@ export function SettingsRow({ icon, label, value, href, onClick, danger, trailin
   );
 
   const className =
-    'pressable flex min-h-[52px] w-full items-center gap-1 px-4 text-left sm:px-5';
+    'pressable flex min-h-[52px] w-full items-center gap-1 px-4 py-2 text-left sm:px-5';
 
   if (href) {
     return (
@@ -57,7 +64,7 @@ export function SettingsRow({ icon, label, value, href, onClick, danger, trailin
 
   if (trailing) {
     // Toggle rows aren't pressable themselves — the trailing control is.
-    return <div className="flex min-h-[52px] w-full items-center gap-1 px-4 sm:px-5">{body}</div>;
+    return <div className="flex min-h-[52px] w-full items-center gap-1 px-4 py-2 sm:px-5">{body}</div>;
   }
 
   return (

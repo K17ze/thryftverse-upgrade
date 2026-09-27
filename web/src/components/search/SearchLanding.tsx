@@ -143,11 +143,13 @@ export function SearchLanding({
       {/* Photo-driven discovery — the visual-search entry point. */}
       <Link
         href="/search/visual"
-        className="pressable group mt-6 flex items-center gap-3 rounded-xl border border-border-subtle px-4 py-3 hover:bg-surface-alt"
+        className="pressable group mt-6 flex min-h-14 items-center gap-3.5 rounded-xl border border-border-subtle px-4 py-3 hover:bg-surface-alt"
       >
-        <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-surface-alt text-text-primary">
-          <Icon name="camera" size={18} />
-        </span>
+        <Icon
+          name="camera"
+          size={20}
+          className="shrink-0 text-text-primary"
+        />
         <span className="min-w-0 flex-1">
           <span className="block text-body-emphasis font-medium text-text-primary">
             Search by photo
@@ -181,13 +183,17 @@ export function SearchLanding({
                 <Chip icon="clock" onClick={() => onSelect(term)}>
                   {term}
                 </Chip>
+                {/* 44px target, small glyph — reveals on hover AND on
+                    focus/focus-within so keyboard users can reach it. */}
                 <button
                   type="button"
                   aria-label={`Remove “${term}” from recent searches`}
                   onClick={() => onRemoveRecent(term)}
-                  className="pressable absolute -right-1 -top-1 hidden h-5 w-5 items-center justify-center rounded-full bg-surface-elevated text-text-muted group-hover:flex hover:text-text-primary"
+                  className="pressable absolute -right-2 -top-2 flex h-11 w-11 items-start justify-end rounded-full text-text-muted transition-opacity hover:text-text-primary focus-visible:ring-2 focus-visible:ring-text-primary focus-visible:outline-none [@media(hover:hover)]:opacity-0 [@media(hover:hover)]:focus-visible:opacity-100 [@media(hover:hover)]:group-focus-within:opacity-100 [@media(hover:hover)]:group-hover:opacity-100"
                 >
-                  <Icon name="close" size={12} />
+                  <span className="flex h-5 w-5 items-center justify-center rounded-full bg-surface-elevated">
+                    <Icon name="close" size={12} />
+                  </span>
                 </button>
               </span>
             ))}

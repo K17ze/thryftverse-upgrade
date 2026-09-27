@@ -18,12 +18,16 @@ import {
 
 interface SearchRecoveryProps {
   query: string;
+  /** Canonical near-miss correction that also came back empty — surfaced
+   *  as the leading recovery offer rather than buried (Google grammar). */
+  suggestion?: string | null;
   hasActiveFilters: boolean;
   onSelect: (term: string) => void;
 }
 
 export function SearchRecovery({
   query,
+  suggestion,
   hasActiveFilters,
   onSelect,
 }: SearchRecoveryProps) {
@@ -38,6 +42,20 @@ export function SearchRecovery({
       <p className="mt-1.5 text-caption text-text-muted">
         Check the spelling, or try a popular search.
       </p>
+
+      {suggestion ? (
+        <p className="mt-3 text-body text-text-primary">
+          Did you mean{' '}
+          <button
+            type="button"
+            onClick={() => onSelect(suggestion)}
+            className="pressable rounded-md font-semibold text-brand hover:underline hover:underline-offset-2"
+          >
+            {suggestion}
+          </button>
+          ?
+        </p>
+      ) : null}
 
       <div className="mt-4 flex flex-wrap gap-1.5">
         {POPULAR_SEARCHES.map((term) => (

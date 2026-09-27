@@ -21,11 +21,12 @@ import {
   useConversations,
   useCreateConversation,
   useMemberDirectory,
-  useUser,
 } from '@/lib/hooks/queries';
+import { useSession } from '@/lib/session/SessionProvider';
 import { useToast } from '@/components/ui/Toast';
 import { Avatar } from '@/components/ui/Avatar';
 import { Button } from '@/components/ui/Button';
+import { EmptyState } from '@/components/ui/EmptyState';
 import { Icon } from '@/components/ui/Icon';
 import { IconButton } from '@/components/ui/IconButton';
 import { Sheet } from '@/components/ui/Sheet';
@@ -49,7 +50,8 @@ export function NewMessageSheet({ open, onClose }: NewMessageSheetProps) {
   const router = useRouter();
   const toast = useToast();
   const { data: conversations } = useConversations();
-  const { data: me } = useUser('me');
+  // The staged "You" row reads the session, not the fixture 'me' profile.
+  const { user } = useSession();
   const createConversation = useCreateConversation();
 
   const [stage, setStage] = useState<Stage>('contacts');
@@ -59,7 +61,12 @@ export function NewMessageSheet({ open, onClose }: NewMessageSheetProps) {
   const [description, setDescription] = useState('');
   const searchRef = useRef<HTMLInputElement>(null);
 
-  const { data: directory, isLoading: directoryLoading } = useMemberDirectory(q);
+  const {
+    data: directory,
+    isLoading: directoryLoading,
+    isError: directoryError,
+    refetch: refetchDirectory,
+  } = useMemberDirectory(q);
 
   // Fresh draft each time the sheet opens.
   useEffect(() => {
@@ -229,6 +236,8 @@ export function NewMessageSheet({ open, onClose }: NewMessageSheetProps) {
                   <UserResultList
                     users={directoryUsers}
                     loading={directoryLoading}
+                    error={directoryError}
+                    onRetry={() => void refetchDirectory()}
                     existingIds={existingDmIds}
                     onPick={(u) => openDm(u.id)}
                     disabled={isCreating}
@@ -274,7 +283,16 @@ export function NewMessageSheet({ open, onClose }: NewMessageSheetProps) {
                 )
               ) : (
                 <>
-                  {directoryLoading ? (
+                  {directoryError ? (
+                    <EmptyState
+                      compact
+                      icon="alert"
+                      title="Couldn't load people"
+                      subtitle="Check your connection and try again."
+                      actionLabel="Try again"
+                      onAction={() => void refetchDirectory()}
+                    />
+                  ) : directoryLoading ? (
                     <MemberListSkeleton />
                   ) : directoryUsers.length === 0 ? (
                     <p className="px-4 py-10 text-center text-body text-text-muted">
@@ -429,7 +447,7 @@ export function NewMessageSheet({ open, onClose }: NewMessageSheetProps) {
                   </div>
                 ))}
                 <p className="mt-1 flex items-center gap-3 py-2 text-body text-text-secondary">
-                  <Avatar src={me?.avatar} name="You" size={36} />
+                  <Avatar src={user?.avatar} name="You" size={36} />
                   <span className="text-body-emphasis font-semibold text-text-primary">You</span>
                   <span className="text-meta text-text-muted">owner</span>
                 </p>
@@ -458,16 +476,32 @@ export function NewMessageSheet({ open, onClose }: NewMessageSheetProps) {
 function UserResultList({
   users,
   loading,
+  error,
+  onRetry,
   existingIds,
   onPick,
   disabled,
 }: {
   users: User[];
   loading: boolean;
+  error?: boolean;
+  onRetry?: () => void;
   existingIds: ReadonlySet<string>;
   onPick: (u: User) => void;
   disabled: boolean;
 }) {
+  if (error) {
+    return (
+      <EmptyState
+        compact
+        icon="alert"
+        title="Couldn't search people"
+        subtitle="Check your connection and try again."
+        actionLabel="Try again"
+        onAction={onRetry}
+      />
+    );
+  }
   if (loading) return <MemberListSkeleton />;
   if (users.length === 0) {
     return (

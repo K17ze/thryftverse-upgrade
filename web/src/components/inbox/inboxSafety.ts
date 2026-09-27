@@ -12,6 +12,8 @@
 
 import { create } from 'zustand';
 import { persist, createJSONStorage } from 'zustand/middleware';
+import { useHydrated } from '@/lib/store/useStore';
+import { useSettingsPrefs } from '@/lib/store/settingsPrefs';
 
 interface InboxSafetyState {
   blockedUserIds: string[];
@@ -36,3 +38,22 @@ export const useInboxSafety = create<InboxSafetyState>()(
     },
   ),
 );
+
+/**
+ * useIsBlockedUser — the viewer-relationship truth every surface shares.
+ * Blocks write into two persisted stores (the inbox safety slice and
+ * Settings → Privacy's list) and both are authoritative — the union is the
+ * same predicate ProfileOptionsMenu applies. Hydration-gated: persisted
+ * stores rehydrate client-side, so SSR and the first client render read
+ * "not blocked" rather than a stale guess.
+ */
+export function useIsBlockedUser(userId: string | null | undefined): boolean {
+  const hydrated = useHydrated();
+  const inboxBlocked = useInboxSafety((s) => s.blockedUserIds);
+  const prefBlocked = useSettingsPrefs((s) => s.blockedIds);
+  return (
+    hydrated &&
+    !!userId &&
+    (inboxBlocked.includes(userId) || prefBlocked.includes(userId))
+  );
+}

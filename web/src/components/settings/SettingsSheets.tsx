@@ -11,9 +11,10 @@ import { useRouter } from 'next/navigation';
 import { Sheet } from '@/components/ui/Sheet';
 import { Button } from '@/components/ui/Button';
 import { Icon } from '@/components/ui/Icon';
-import { Switch } from './Switch';
 import { useToast } from '@/components/ui/Toast';
 import { useSession } from '@/lib/session/SessionProvider';
+import { useSupportActions } from '@/components/support/useSupportTickets';
+import { useLocale } from '@/lib/i18n/useLocale';
 
 interface SheetProps {
   open: boolean;
@@ -22,79 +23,23 @@ interface SheetProps {
 
 // ── Shared bits ─────────────────────────────────────────────────────────────
 
-function SheetRow({ children }: { children: React.ReactNode }) {
-  return (
-    <div className="flex items-center gap-3 border-b border-border-subtle px-5 py-3.5 last:border-b-0">
-      {children}
-    </div>
-  );
-}
-
 function SheetNote({ children }: { children: React.ReactNode }) {
   return <p className="px-5 pb-5 pt-3 text-caption text-text-muted">{children}</p>;
 }
 
-// ── Notifications ───────────────────────────────────────────────────────────
-
-const NOTIFICATION_PREFS = [
-  { key: 'messages', label: 'New messages', sub: 'Chat replies and offer messages' },
-  { key: 'offers', label: 'Offers & price drops', sub: 'Counter-offers and items on your wishlist' },
-  { key: 'orders', label: 'Order updates', sub: 'Purchases, sales and delivery' },
-  { key: 'live', label: 'Live reminders', sub: 'Shows you follow going live' },
-] as const;
-
-export function NotificationsSheet({ open, onClose }: SheetProps) {
-  const [prefs, setPrefs] = useState<Record<string, boolean>>({
-    messages: true,
-    offers: true,
-    orders: true,
-    live: false,
-  });
-
-  return (
-    <Sheet open={open} onClose={onClose} title="Notifications" maxWidth={480}>
-      <div>
-        {NOTIFICATION_PREFS.map((p) => (
-          <SheetRow key={p.key}>
-            <div className="min-w-0 flex-1">
-              <p className="text-body-emphasis text-text-primary">{p.label}</p>
-              <p className="text-caption text-text-muted">{p.sub}</p>
-            </div>
-            <Switch
-              checked={prefs[p.key]}
-              onChange={(v) => setPrefs((s) => ({ ...s, [p.key]: v }))}
-              aria-label={p.label}
-            />
-          </SheetRow>
-        ))}
-      </div>
-      <SheetNote>Push and email preferences apply to every device signed in to your account.</SheetNote>
-    </Sheet>
-  );
-}
-
 // ── Language ────────────────────────────────────────────────────────────────
 
-const LANGUAGES = [
-  { code: 'en-GB', label: 'English (UK)' },
-  { code: 'en-US', label: 'English (US)' },
-  { code: 'fr', label: 'Français' },
-  { code: 'de', label: 'Deutsch' },
-  { code: 'es', label: 'Español' },
-  { code: 'it', label: 'Italiano' },
-];
-
-export function LanguageSheet({
-  open,
-  onClose,
-  value,
-  onChange,
-}: SheetProps & { value: string; onChange: (label: string) => void }) {
+/** The i18n pipeline ships all 13 locales — navigation, common actions
+ *  and state copy are translated; untranslated keys fall back to English
+ *  (never blank). Screen-by-screen copy adoption is progressive — the
+ *  note states that honestly. */
+export function LanguageSheet({ open, onClose }: SheetProps) {
+  const { locale, setLocale, locales } = useLocale();
   return (
     <Sheet open={open} onClose={onClose} title="Language" maxWidth={480}>
       <ul role="radiogroup" aria-label="Language">
-        {LANGUAGES.map((l) => {
-          const selected = value === l.label;
+        {locales.map((l) => {
+          const selected = locale === l.code;
           return (
             <li key={l.code}>
               <button
@@ -102,7 +47,7 @@ export function LanguageSheet({
                 role="radio"
                 aria-checked={selected}
                 onClick={() => {
-                  onChange(l.label);
+                  setLocale(l.code);
                   onClose();
                 }}
                 className="pressable flex w-full items-center gap-3 border-b border-border-subtle px-5 py-3.5 text-left last:border-b-0"
@@ -110,136 +55,21 @@ export function LanguageSheet({
                 <span className={`flex-1 text-body-emphasis ${selected ? 'font-medium text-text-primary' : 'text-text-secondary'}`}>
                   {l.label}
                 </span>
-                {selected ? <Icon name="check" size={18} className="text-text-primary" /> : null}
+                {l.dir === 'rtl' ? (
+                  <span className="text-meta text-text-muted">RTL</span>
+                ) : null}
+                {selected ? (
+                  <Icon name="check" size={18} className="text-text-primary" />
+                ) : null}
               </button>
             </li>
           );
         })}
       </ul>
-      <SheetNote>More languages arrive as community translations are verified.</SheetNote>
-    </Sheet>
-  );
-}
-
-// ── Password ────────────────────────────────────────────────────────────────
-
-export function PasswordSheet({ open, onClose }: SheetProps) {
-  const { show } = useToast();
-  return (
-    <Sheet open={open} onClose={onClose} title="Password" maxWidth={440}>
-      <div className="px-5 py-5">
-        <p className="text-body text-text-secondary">
-          For your security, password changes go through a signed email link — valid
-          for 30 minutes, one use only.
-        </p>
-        <Button
-          variant="primary"
-          size="md"
-          fullWidth
-          className="mt-5"
-          onClick={() => {
-            onClose();
-            show('Reset link sent to your email', 'success');
-          }}
-        >
-          Send reset link
-        </Button>
-      </div>
-    </Sheet>
-  );
-}
-
-// ── Two-factor ──────────────────────────────────────────────────────────────
-
-export function TwoFactorSheet({ open, onClose }: SheetProps) {
-  const { show } = useToast();
-  const [enabled, setEnabled] = useState(false);
-  return (
-    <Sheet open={open} onClose={onClose} title="Two-factor authentication" maxWidth={440}>
-      <div className="px-5 py-5">
-        <div className="flex items-start gap-3">
-          <Icon name="shieldCheck" size={22} className={enabled ? 'mt-0.5 text-success-text' : 'mt-0.5 text-text-muted'} filled={enabled} />
-          <div>
-            <p className="text-body-emphasis font-medium text-text-primary">
-              {enabled ? 'Two-factor is on' : 'Two-factor is off'}
-            </p>
-            <p className="mt-1 text-body text-text-secondary">
-              {enabled
-                ? 'Sign-ins require a code from your authenticator app.'
-                : 'Add an authenticator code on sign-in — the strongest protection for your balance and listings.'}
-            </p>
-          </div>
-        </div>
-        <Button
-          variant={enabled ? 'outline' : 'primary'}
-          size="md"
-          fullWidth
-          className="mt-5"
-          onClick={() => {
-            const next = !enabled;
-            setEnabled(next);
-            show(next ? 'Two-factor authentication enabled' : 'Two-factor authentication disabled', next ? 'success' : 'info');
-          }}
-        >
-          {enabled ? 'Turn off' : 'Set up authenticator'}
-        </Button>
-      </div>
-    </Sheet>
-  );
-}
-
-// ── Sessions ────────────────────────────────────────────────────────────────
-
-const SESSIONS = [
-  { id: 's1', icon: 'desktop' as const, device: 'This device — Chrome on Windows', meta: 'London · Active now', current: true },
-  { id: 's2', icon: 'phone' as const, device: 'ThryftVerse app — iPhone 15', meta: 'London · 2 days ago', current: false },
-];
-
-export function SessionsSheet({ open, onClose }: SheetProps) {
-  const { show } = useToast();
-  return (
-    <Sheet open={open} onClose={onClose} title="Sessions" maxWidth={480}>
-      <ul>
-        {SESSIONS.map((s) => (
-          <li key={s.id} className="flex items-center gap-3 border-b border-border-subtle px-5 py-4 last:border-b-0">
-            <Icon name={s.icon} size={20} className="text-text-secondary" />
-            <div className="min-w-0 flex-1">
-              <p className="clamp-1 text-body-emphasis font-medium text-text-primary">{s.device}</p>
-              <p className="text-caption text-text-muted">{s.meta}</p>
-            </div>
-            {s.current ? (
-              <span className="rounded-full bg-success-subtle px-2 py-0.5 text-meta font-semibold text-success-text">
-                Current
-              </span>
-            ) : (
-              <button
-                type="button"
-                onClick={() => show('Session signed out', 'info')}
-                className="pressable rounded-md px-2 py-1 text-caption font-semibold text-danger-text hover:bg-danger-subtle"
-              >
-                Sign out
-              </button>
-            )}
-          </li>
-        ))}
-      </ul>
-      <SheetNote>Signing out a session ends it everywhere — including remembered devices.</SheetNote>
-    </Sheet>
-  );
-}
-
-// ── Blocked users ───────────────────────────────────────────────────────────
-
-export function BlockedSheet({ open, onClose }: SheetProps) {
-  return (
-    <Sheet open={open} onClose={onClose} title="Blocked users" maxWidth={440}>
-      <div className="flex flex-col items-center px-5 py-10 text-center">
-        <Icon name="ban" size={26} className="text-text-muted" />
-        <p className="mt-3 text-body-emphasis font-medium text-text-primary">Nobody blocked</p>
-        <p className="mt-1 max-w-xs text-body text-text-secondary">
-          Blocked members can’t message you, follow you, or see your listings.
-        </p>
-      </div>
+      <SheetNote>
+        Navigation, common actions and state messages are translated — some
+        screen copy is still being localised and shows English meanwhile.
+      </SheetNote>
     </Sheet>
   );
 }
@@ -248,10 +78,41 @@ export function BlockedSheet({ open, onClose }: SheetProps) {
 
 export function VerificationSheet({ open, onClose }: SheetProps) {
   const router = useRouter();
-  const { verificationStatus } = useSession();
+  const { user, isGuest, verificationStatus, verificationTier } = useSession();
+
+  // Guests hold no account state — every row would be fabricated, so the
+  // sheet degrades to the sign-in ask instead.
+  if (isGuest || !user) {
+    return (
+      <Sheet open={open} onClose={onClose} title="Verification" maxWidth={440}>
+        <div className="flex flex-col items-center px-5 py-8 text-center">
+          <Icon name="shieldCheck" size={26} className="text-text-muted" />
+          <p className="mt-3 text-body-emphasis font-medium text-text-primary">
+            Sign in to verify
+          </p>
+          <p className="mt-1 max-w-xs text-body text-text-secondary">
+            Verification is tied to your account — sign in to see your status.
+          </p>
+          <Button
+            variant="primary"
+            size="md"
+            className="mt-5"
+            onClick={() => {
+              onClose();
+              router.push('/auth');
+            }}
+          >
+            Sign in
+          </Button>
+        </div>
+      </Sheet>
+    );
+  }
 
   // Real state from the session — the persisted KYC outcome wins, else the
-  // account's existing verification.
+  // account's existing verification. Email derives from the account's
+  // trust tier (every tier above 'none' implies a verified email); seller
+  // verification comes from the same source.
   const identity = {
     approved: { state: 'Verified', tone: 'text-success-text', done: true },
     in_review: { state: 'In review', tone: 'text-warning-text', done: false },
@@ -259,16 +120,19 @@ export function VerificationSheet({ open, onClose }: SheetProps) {
     not_started: { state: 'Not started', tone: 'text-text-muted', done: false },
   }[verificationStatus];
 
+  const email =
+    verificationTier !== 'none'
+      ? { state: 'Verified', tone: 'text-success-text', done: true }
+      : { state: 'Not verified', tone: 'text-text-muted', done: false };
+  const seller =
+    verificationTier === 'seller'
+      ? { state: 'Verified', tone: 'text-success-text', done: true }
+      : { state: 'Not started', tone: 'text-text-muted', done: false };
+
   const rows = [
-    { icon: 'mail' as const, label: 'Email', state: 'Verified', tone: 'text-success-text', done: true },
+    { icon: 'mail' as const, label: 'Email', ...email },
     { icon: 'profile' as const, label: 'Identity', ...identity },
-    {
-      icon: 'store' as const,
-      label: 'Seller verification',
-      state: 'Not started',
-      tone: 'text-text-muted',
-      done: false,
-    },
+    { icon: 'store' as const, label: 'Seller verification', ...seller },
   ];
 
   const cta =
@@ -317,7 +181,10 @@ export function VerificationSheet({ open, onClose }: SheetProps) {
 
 export function ReportSheet({ open, onClose }: SheetProps) {
   const { show } = useToast();
+  const router = useRouter();
+  const { createTicket } = useSupportActions();
   const [text, setText] = useState('');
+  const [sending, setSending] = useState(false);
   return (
     <Sheet open={open} onClose={onClose} title="Report a problem" maxWidth={480}>
       <div className="px-5 py-5">
@@ -337,14 +204,27 @@ export function ReportSheet({ open, onClose }: SheetProps) {
           size="md"
           fullWidth
           className="mt-4"
-          disabled={text.trim().length < 10}
+          disabled={text.trim().length < 10 || sending}
           onClick={() => {
-            setText('');
-            onClose();
-            show('Report sent — thank you', 'success');
+            const message = text.trim();
+            if (message.length < 10 || sending) return;
+            setSending(true);
+            void Promise.resolve(
+              createTicket({ topicId: 'other', orderRef: null, message }),
+            )
+              .then((ticket) => {
+                setText('');
+                onClose();
+                show('Report sent — thank you', 'success');
+                router.push(`/support/${ticket.id}`);
+              })
+              .catch(() => {
+                setSending(false);
+                show('Could not send the report — try again.', 'error');
+              });
           }}
         >
-          Send report
+          {sending ? 'Sending…' : 'Send report'}
         </Button>
       </div>
     </Sheet>

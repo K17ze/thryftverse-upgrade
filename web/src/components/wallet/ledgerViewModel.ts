@@ -12,6 +12,7 @@
 
 import type { Transaction } from '@/lib/contracts/domain';
 import { TRANSACTIONS } from '@/lib/data/fixtures';
+import { DATA_MODE } from '@/lib/api/client';
 import { round2 } from './convertViewModel';
 
 export type LedgerKind =
@@ -32,8 +33,35 @@ export interface WalletLedgerEntry {
   /** ISO date; day precision for fixture rows, full timestamp for session rows. */
   date: string;
   description: string;
-  /** Running balance after this entry; null while pending. */
+  /** Running balance after this entry; null while pending — and always
+   *  null for live rows: the contract carries no running balance and the
+   *  view model does not fabricate one. */
   balance: number | null;
+}
+
+/**
+ * Live ledger row — the wire projection of GET /users/:id/transactions,
+ * carried through useWalletData without loss. The backend posts
+ * ledger_entries facts: `amount` is UNSIGNED major units (the sign lives
+ * in `direction`), `status` is the literal 'posted' for settled entries,
+ * and `description` may be null (the view falls back to a humanized
+ * line type, like mobile's BalanceHistoryScreen).
+ */
+export interface WalletLedgerTransaction {
+  id: string;
+  /** Ledger source_type — 'order_payment', 'order_delivery', 'payout',
+   *  'refund', 'reserve_hold', 'fx_conversion', ... */
+  sourceType: string;
+  /** Ledger line_type — 'buyer_charge', 'seller_payable_release',
+   *  'payout_paid', 'reserve_release', ... */
+  lineType: string;
+  /** Unsigned amount in `currency` — sign comes from `direction`. */
+  amount: number;
+  currency: string;
+  direction: string;
+  status: string;
+  createdAt: string;
+  description: string | null;
 }
 
 /** Wallet-only seed rows — top-ups, payouts and protection fees. */
@@ -68,13 +96,98 @@ export type LedgerFilter = (typeof LEDGER_FILTERS)[number]['value'];
 export const LEDGER_PAGE_SIZE = 12;
 
 /**
- * Build the full ledger newest-first. The balance walk runs over settled
- * entries only; pending entries keep a null balance until they clear.
+ * Classify a live ledger row onto the closed kind vocabulary. Mirrors
+ * mobile's BalanceHistoryScreen precedence — line_type is the finer
+ * signal and is checked before source_type. Unclassifiable rows fall
+ * back to money-in/money-out; the signed amount and the humanized
+ * description still carry the truth of the row.
+ */
+function kindForLive(sourceType: string, lineType: string, direction: string): LedgerKind {
+  const lt = lineType.toLowerCase();
+  const st = sourceType.toLowerCase();
+  if (lt.includes('refund') || st === 'refund') return 'refund';
+  if (
+    lt.includes('withdrawal') ||
+    lt.includes('payout') ||
+    st === 'withdrawal' ||
+    st === 'payout'
+  ) {
+    return 'withdrawal';
+  }
+  if (lt.includes('seller_payable') || lt.includes('earning') || st === 'sale') return 'sale';
+  if (st === 'fx_conversion' || lt.includes('conversion')) return 'conversion';
+  if (lt.includes('buyer') || st === 'purchase' || st === 'order_payment') return 'purchase';
+  if (lt.includes('fee') || lt.includes('commission') || st === 'fee') return 'fee';
+  if (
+    lt.includes('topup') ||
+    lt.includes('top_up') ||
+    lt.includes('deposit') ||
+    st === 'topup' ||
+    st === 'deposit'
+  ) {
+    return 'topup';
+  }
+  return direction === 'credit' ? 'topup' : 'withdrawal';
+}
+
+/** 'seller_payable_release' → 'Seller Payable Release' — the same
+ *  humanized fallback label mobile's labelForType produces. */
+function humanizeLineType(value: string): string {
+  return value
+    .replace(/_/g, ' ')
+    .replace(/\b\w/g, (c) => c.toUpperCase());
+}
+
+/**
+ * Map one live ledger row to a view entry. `balance` stays null — the
+ * contract carries no running balance and we do not reconstruct one.
+ */
+function liveEntry(t: WalletLedgerTransaction): WalletLedgerEntry {
+  return {
+    id: t.id,
+    kind: kindForLive(t.sourceType, t.lineType, t.direction),
+    // Wire amount is unsigned — direction carries the sign.
+    amount: round2(t.direction === 'credit' ? Math.abs(t.amount) : -Math.abs(t.amount)),
+    // Ledger rows are posted-only facts; only an explicit 'pending'
+    // keeps the pending badge. 'posted' renders as settled.
+    status: t.status === 'pending' ? 'pending' : 'completed',
+    date: t.createdAt,
+    description: t.description?.trim() || humanizeLineType(t.lineType || t.sourceType),
+    balance: null,
+  };
+}
+
+/** Newest-first, with a numeric-aware id tie-break for equal timestamps. */
+function newestFirst(a: WalletLedgerEntry, b: WalletLedgerEntry): number {
+  const byDate = b.date.localeCompare(a.date);
+  if (byDate !== 0) return byDate;
+  const na = Number(a.id);
+  const nb = Number(b.id);
+  if (Number.isFinite(na) && Number.isFinite(nb)) return nb - na;
+  return b.id.localeCompare(a.id);
+}
+
+/**
+ * Build the full ledger newest-first.
+ *
+ * Live mode renders only the real ledger rows the wallet hook fetched —
+ * fixture TRANSACTIONS and SEED_EXTRA are never merged in, and no
+ * running balance is reconstructed (the live contract carries none).
+ *
+ * Fixture mode keeps the original statement reconstruction: the balance
+ * walk runs over settled entries only, anchored so the newest settled
+ * row lands on the current available balance; pending entries keep a
+ * null balance until they clear.
  */
 export function buildLedger(
   sessionEntries: WalletLedgerEntry[],
   currentAvailable: number,
+  transactions: WalletLedgerTransaction[] = [],
 ): WalletLedgerEntry[] {
+  if (DATA_MODE === 'live') {
+    return [...transactions.map(liveEntry), ...sessionEntries].sort(newestFirst);
+  }
+
   const fromFixture: WalletLedgerEntry[] = TRANSACTIONS.map((t) => ({
     id: t.id,
     kind: KIND_FOR_TX[t.type],

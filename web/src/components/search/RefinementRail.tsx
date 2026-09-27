@@ -3,10 +3,12 @@
 /**
  * RefinementRail — the desktop (lg+) refinement column behind search,
  * category and browse results. eBay grammar: collapsible facet groups
- * (Category, Brand, Size, Condition, Price), each option carrying its
- * real count from the current result set, "Show more" past six options.
- * Counts come from facetCounts.ts — what the grid would show on click,
- * never a fabricated tally. Mobile keeps the sheet/toolbar pattern.
+ * (Category, Brand, Size, Colour, Condition, Show, Price), each option
+ * carrying its real count from the current result set, "Show more" past
+ * six options. Brand/size/category/colour are multi-select checkboxes —
+ * union semantics like the mobile sheet. Counts come from facetCounts.ts
+ * — what the grid would show on click, never a fabricated tally. Mobile
+ * keeps the sheet/toolbar pattern.
  */
 
 import { useEffect, useMemo, useState } from 'react';
@@ -15,10 +17,11 @@ import { CATEGORIES } from '@/lib/data/fixtures';
 import type { Listing, ListingCondition } from '@/lib/contracts/domain';
 import type { ListingFilters } from '@/components/filters/filterTypes';
 import {
-  brandFacets,
   categoryFacets,
+  colourFacets,
   conditionFacets,
-  sizeFacets,
+  optionsWithSelected,
+  soldFacetCount,
   type FacetOption,
 } from './facetCounts';
 
@@ -48,6 +51,14 @@ interface FacetGroup {
   toggle: (o: FacetOption) => void;
 }
 
+/** Toggle one value in/out of a multi-select list (case-insensitive). */
+function toggleValue(list: string[], value: string): string[] {
+  const v = value.toLowerCase();
+  return list.some((x) => x.toLowerCase() === v)
+    ? list.filter((x) => x.toLowerCase() !== v)
+    : [...list, value];
+}
+
 function OptionRow({
   option,
   selected,
@@ -75,6 +86,13 @@ function OptionRow({
         >
           {selected ? <Icon name="check" size={12} /> : null}
         </span>
+        {option.swatch ? (
+          <span
+            aria-hidden
+            className="h-3.5 w-3.5 shrink-0 rounded-full border border-border-subtle"
+            style={{ backgroundColor: option.swatch }}
+          />
+        ) : null}
         <span
           className={`min-w-0 flex-1 truncate text-body ${
             selected ? 'font-medium text-text-primary' : 'text-text-secondary'
@@ -180,15 +198,28 @@ export function RefinementRail({
     const g: FacetGroup[] = [];
 
     if (!hideCategory) {
+      // Selected slugs that aren't present in the result set stay visible
+      // (honest 0) so they can be unchecked here.
+      const catOptions = categoryFacets(listings, filters, categoryNames);
+      for (const slug of filters.categories) {
+        if (!catOptions.some((o) => o.value === slug.toLowerCase())) {
+          catOptions.push({
+            value: slug.toLowerCase(),
+            label: categoryNames.get(slug.toLowerCase()) ?? slug,
+            count: 0,
+          });
+        }
+      }
       g.push({
         key: 'category',
         title: 'Category',
-        options: categoryFacets(listings, filters, categoryNames),
-        isSelected: (o) => filters.category?.toLowerCase() === o.value,
+        options: catOptions,
+        isSelected: (o) =>
+          filters.categories.some((c) => c.toLowerCase() === o.value),
         toggle: (o) =>
           onChange({
             ...filters,
-            category: filters.category?.toLowerCase() === o.value ? null : o.value,
+            categories: toggleValue(filters.categories, o.value),
           }),
       });
     }
@@ -197,24 +228,29 @@ export function RefinementRail({
       {
         key: 'brand',
         title: 'Brand',
-        options: brandFacets(listings, filters),
-        isSelected: (o) => filters.brand.trim().toLowerCase() === o.value,
+        options: optionsWithSelected(listings, filters, 'brand'),
+        isSelected: (o) =>
+          filters.brands.some((b) => b.trim().toLowerCase() === o.value),
         toggle: (o) =>
-          onChange({
-            ...filters,
-            brand: filters.brand.trim().toLowerCase() === o.value ? '' : o.label,
-          }),
+          onChange({ ...filters, brands: toggleValue(filters.brands, o.label) }),
       },
       {
         key: 'size',
         title: 'Size',
-        options: sizeFacets(listings, filters),
-        isSelected: (o) => filters.size.trim().toLowerCase() === o.value,
+        options: optionsWithSelected(listings, filters, 'size'),
+        isSelected: (o) =>
+          filters.sizes.some((s) => s.trim().toLowerCase() === o.value),
         toggle: (o) =>
-          onChange({
-            ...filters,
-            size: filters.size.trim().toLowerCase() === o.value ? '' : o.label,
-          }),
+          onChange({ ...filters, sizes: toggleValue(filters.sizes, o.label) }),
+      },
+      {
+        key: 'colour',
+        title: 'Colour',
+        options: colourFacets(listings, filters),
+        isSelected: (o) =>
+          filters.colours.some((c) => c.toLowerCase() === o.value.toLowerCase()),
+        toggle: (o) =>
+          onChange({ ...filters, colours: toggleValue(filters.colours, o.value) }),
       },
       {
         key: 'condition',
@@ -231,14 +267,32 @@ export function RefinementRail({
           });
         },
       },
+      {
+        // eBay "Show only" grammar — sold listings surface on demand.
+        key: 'sold',
+        title: 'Show',
+        options: [
+          {
+            value: 'sold',
+            label: 'Sold items',
+            count: soldFacetCount(listings, filters),
+          },
+        ],
+        isSelected: () => filters.includeSold,
+        toggle: () =>
+          onChange({ ...filters, includeSold: !filters.includeSold }),
+      },
     );
 
     return g;
   }, [listings, filters, hideCategory, categoryNames, onChange]);
 
   // Groups with no refinements under the current combination disappear —
-  // an empty facet list is noise, not honesty.
-  const activeGroups = groups.filter((g) => g.options.length > 0);
+  // an empty facet list is noise, not honesty. The availability row stays
+  // even at 0 so the "Sold items" escape is discoverable.
+  const activeGroups = groups.filter(
+    (g) => g.options.length > 0 && (g.key !== 'sold' || g.options[0]?.count > 0 || g.isSelected(g.options[0])),
+  );
 
   return (
     <div className="pb-4">

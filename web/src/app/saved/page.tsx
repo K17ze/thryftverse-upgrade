@@ -14,12 +14,13 @@ import { ProfileTabs } from '@/components/profile/ProfileTabs';
 import { EmptyState } from '@/components/ui/EmptyState';
 import { Icon } from '@/components/ui/Icon';
 import { ClosetGrid, ClosetGridSkeleton } from '@/components/profile/ClosetGrid';
+import { SaveToBoardSheet } from '@/components/saved/SaveToBoardSheet';
 import { BoardCard, BoardGrid } from '@/components/profile/BoardGrid';
-import {
-  COLLECTIONS,
-  listingsForIds,
-  MOODBOARD_ITEM_IDS,
-} from '@/components/profile/fixtures';
+import { listingsForIds } from '@/components/profile/fixtures';
+import { boardHref } from '@/components/profile/profileViewModel';
+import { useOwnerBoards } from '@/components/profile/useOwnerBoards';
+import { BoardSortControl } from '@/components/profile/BoardSortControl';
+import { sortBoards, useBoardPrefs } from '@/components/profile/boardPrefs';
 import { listingCoverThumbs } from '@/components/profile/boardMedia';
 import { useStore, useHydrated } from '@/lib/store/useStore';
 import {
@@ -28,17 +29,18 @@ import {
   searchHref,
 } from '@/lib/store/savedSearches';
 import { Switch } from '@/components/settings/Switch';
-import { MOODBOARDS } from '@/lib/data/fixtures';
 import { useSession } from '@/lib/session/SessionProvider';
 
 type Segment = 'favourites' | 'saved' | 'boards' | 'searches';
 
 export default function SavedPage() {
   const router = useRouter();
-  const { user } = useSession();
+  const { user, isGuest } = useSession();
   const [seg, setSeg] = useState<Segment>('favourites');
   // Store hydration gate — wishlist/saved/searches persist to localStorage.
   const mounted = useHydrated();
+  // Hold-to-file web equivalent — the tile being offered to a board.
+  const [filing, setFiling] = useState<{ id: string; title: string } | null>(null);
 
   const wishlist = useStore((s) => s.wishlist);
   const saved = useStore((s) => s.saved);
@@ -48,11 +50,13 @@ export default function SavedPage() {
 
   const favouriteListings = useMemo(() => listingsForIds(wishlist), [wishlist]);
   const savedListings = useMemo(() => listingsForIds(saved), [saved]);
-  const boards = useMemo(
-    () => MOODBOARDS.filter((b) => b.ownerId === (user?.id ?? 'me')),
-    [user?.id],
-  );
-  const boardCount = boards.length + COLLECTIONS.length;
+  // Same derivation as the profile Boards tab — one source of truth:
+  // fixture boards plus persisted owner edits, private boards included.
+  // Guests are never the fixture 'me' — no id, no boards.
+  const boardsRaw = useOwnerBoards(user?.id ?? '', true);
+  const boardSort = useBoardPrefs((s) => s.sort);
+  const boards = useMemo(() => sortBoards(boardsRaw, boardSort), [boardsRaw, boardSort]);
+  const boardCount = boards.length;
 
   const tabs: { key: Segment; label: string; count?: number }[] = [
     { key: 'favourites', label: 'Favourites', count: mounted ? wishlist.length : undefined },
@@ -88,6 +92,9 @@ export default function SavedPage() {
           <ClosetGrid
             items={savedListings}
             unsave="saved"
+            onFileItem={
+              isGuest ? undefined : (item) => setFiling({ id: item.id, title: item.title })
+            }
             emptyIcon="bookmark"
             emptyTitle="No saved items"
             emptySubtitle="Bookmark items to compare them here later."
@@ -108,38 +115,51 @@ export default function SavedPage() {
             <ul className="px-4 sm:px-6">
               {searches.map((s) => {
                 const filterText = describeFilters(s.filters);
+                const isVisual = s.kind === 'visual';
                 return (
                   <li key={s.id} className="border-b border-border-subtle last:border-0">
-                    <div className="flex items-center gap-3 py-3">
+                    <div className="flex items-center gap-3 py-[var(--density-row-py)]">
                       <button
                         type="button"
                         onClick={() => router.push(searchHref(s))}
                         className="pressable flex min-w-0 flex-1 items-center gap-3 text-left"
                         aria-label={`Run search${s.query ? ` “${s.query}”` : ''}`}
                       >
-                        <Icon name="search" size={17} className="shrink-0 text-text-muted" />
+                        <Icon
+                          name={isVisual ? 'camera' : 'search'}
+                          size={17}
+                          className="shrink-0 text-text-muted"
+                        />
                         <span className="min-w-0">
                           <span className="clamp-1 block text-body font-semibold text-text-primary">
                             {s.query || 'All items'}
                           </span>
-                          {filterText ? (
-                            <span className="clamp-1 block text-meta text-text-muted">
-                              {filterText}
-                            </span>
-                          ) : null}
+                          <span className="clamp-1 block text-meta text-text-muted">
+                            {[
+                              filterText,
+                              isVisual
+                                ? 'Matches on the detected details — the photo isn’t kept.'
+                                : null,
+                              s.resultCount !== undefined
+                                ? `${s.resultCount} result${s.resultCount === 1 ? '' : 's'} when saved`
+                                : null,
+                            ]
+                              .filter(Boolean)
+                              .join(' · ')}
+                          </span>
                         </span>
                         <Icon name="forward" size={14} className="shrink-0 text-text-muted" />
                       </button>
                       <Switch
                         checked={s.alertsOn}
                         onChange={() => toggleAlert(s.id)}
-                        aria-label={`Alerts for${s.query ? ` “${s.query}”` : ' this search'}`}
+                        aria-label={`Alerts for${s.query ? ` “${s.query}”` : ' this search'}${isVisual ? ' — matches new listings against the detected details' : ''}`}
                       />
                       <button
                         type="button"
                         onClick={() => removeSearch(s.id)}
                         aria-label={`Delete saved search${s.query ? ` “${s.query}”` : ''}`}
-                        className="pressable flex h-9 w-9 shrink-0 items-center justify-center text-text-muted transition-colors hover:text-danger-text"
+                        className="pressable -my-1 flex h-11 w-11 shrink-0 items-center justify-center text-text-muted transition-colors hover:text-danger-text"
                       >
                         <Icon name="trash" size={17} />
                       </button>
@@ -149,6 +169,15 @@ export default function SavedPage() {
               })}
             </ul>
           )
+        ) : isGuest ? (
+          <EmptyState
+            icon="lock"
+            title="Sign in to see your boards"
+            subtitle="Collections and moodboards are tied to your account."
+            actionLabel="Sign in"
+            onAction={() => router.push('/auth')}
+            compact
+          />
         ) : boardCount === 0 ? (
           <EmptyState
             icon="layers"
@@ -160,7 +189,8 @@ export default function SavedPage() {
           />
         ) : (
           <>
-            <div className="mb-3 flex justify-end px-4 sm:px-6">
+            <div className="mb-3 flex items-center justify-between px-4 sm:px-6">
+              <BoardSortControl />
               <Link
                 href="/collections"
                 className="pressable inline-flex items-center gap-1 text-meta font-semibold text-text-primary"
@@ -173,25 +203,24 @@ export default function SavedPage() {
               {boards.map((b) => (
                 <BoardCard
                   key={b.id}
-                  href={`/moodboard/${b.id}`}
+                  href={boardHref(b)}
                   title={b.title}
-                  thumbs={listingCoverThumbs(MOODBOARD_ITEM_IDS[b.id] ?? [], 4, b.coverUri)}
-                  count={b.itemCount ?? (MOODBOARD_ITEM_IDS[b.id]?.length ?? 0)}
-                />
-              ))}
-              {COLLECTIONS.map((c) => (
-                <BoardCard
-                  key={c.id}
-                  href={`/collection/${c.id}`}
-                  title={c.title}
-                  thumbs={listingCoverThumbs(c.itemIds, 4)}
-                  count={c.itemIds.length}
+                  thumbs={listingCoverThumbs(b.itemIds, 4, b.coverUri, b.coverItemId)}
+                  count={b.itemIds.length}
+                  isPrivate={b.isPrivate}
                 />
               ))}
             </BoardGrid>
           </>
         )}
       </div>
+
+      <SaveToBoardSheet
+        open={filing !== null}
+        onClose={() => setFiling(null)}
+        itemId={filing?.id ?? null}
+        itemLabel={filing?.title}
+      />
     </div>
   );
 }

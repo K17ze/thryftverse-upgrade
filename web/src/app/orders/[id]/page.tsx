@@ -14,6 +14,7 @@
 import { useMemo, useState } from 'react';
 import Link from 'next/link';
 import { useParams, useRouter } from 'next/navigation';
+import { useQueryClient } from '@tanstack/react-query';
 import { AppImage } from '@/components/ui/AppImage';
 import { Avatar } from '@/components/ui/Avatar';
 import { Button } from '@/components/ui/Button';
@@ -51,9 +52,18 @@ import {
   type OrderAction,
   type OrderRole,
 } from '@/components/orders/orderCapabilities';
-import { useCommerceOrders, useOrderActions } from '@/lib/hooks/queries';
+import {
+  useCommerceOrders,
+  useCreateConversation,
+  useOrderActions,
+  useOrderReturnCase,
+} from '@/lib/hooks/queries';
+import { DATA_MODE } from '@/lib/api/client';
+import * as commerceService from '@/lib/api/services/commerce';
+import { parseApiError } from '@/lib/api/http';
 import { useSession } from '@/lib/session/SessionProvider';
 import { useSavedAddresses, useSavedPaymentMethods } from '@/lib/store/userPaymentData';
+import { useOrderInstrumentFacts } from '@/lib/hooks/instrument-queries';
 import { useSupportActions, useSupportTickets } from '@/components/support/useSupportTickets';
 import { listingById, userById } from '@/lib/data/fixtures';
 import {
@@ -76,7 +86,7 @@ const ACTION_LABEL: Record<OrderAction, string> = {
   view_resolution: 'View return request',
   leave_review: 'Leave a review',
   view_review: 'Reviewed — thanks',
-  view_receipt: 'View payment details',
+  view_receipt: 'View receipt',
   track_order: 'Track parcel',
   inspect: 'Check your item',
   contact: 'Message',
@@ -100,7 +110,7 @@ export default function OrderDetailPage() {
   const params = useParams<{ id: string }>();
   const router = useRouter();
   const { show } = useToast();
-  const { user } = useSession();
+  const { user, sessionLoading } = useSession();
   const {
     data: orders,
     isLoading,
@@ -110,21 +120,36 @@ export default function OrderDetailPage() {
 
   const orderId = params?.id ?? '';
   const actions = useOrderActions(orderId);
+  const createConversation = useCreateConversation();
   const { data: tickets } = useSupportTickets();
   const { createTicket } = useSupportActions();
+  // Live mode pulls the real return case (404 → none); fixture mode reads
+  // the enrichment store inline below — no flash for session-local cases.
+  const { data: liveReturnCase } = useOrderReturnCase(orderId);
 
   const order = useMemo(
     () => (orders ?? []).find((o) => o.id === orderId) ?? null,
     [orders, orderId],
   );
 
-  // Purchase-summary truth — the payment method and delivery address the
-  // session actually holds (fixture seeds + session additions). The order
-  // contract carries no per-order payment snapshot, so the session's
-  // resolved default stands in; nothing here is invented per order.
-  const { defaultAddress } = useSavedAddresses();
-  const { defaultMethod } = useSavedPaymentMethods();
+  // Purchase-summary truth. Fixture keeps the session's resolved defaults
+  // (fixture orders carry no instrument refs, so the local default stands
+  // in — unchanged). Live resolves the ids stamped on THIS order — GET
+  // /orders/:id carries addressId/paymentMethodId — against the real saved
+  // rails; an unresolvable ref (wallet-paid, detached method, deleted
+  // address) omits the row rather than falling back to a local default.
+  const { defaultAddress: fixtureDefaultAddress } = useSavedAddresses();
+  const { defaultMethod: fixtureDefaultMethod } = useSavedPaymentMethods();
+  const orderFacts = useOrderInstrumentFacts(
+    orderId,
+    !!user && !!order && order.buyerId === user.id,
+  );
+  const deliveryAddress =
+    DATA_MODE === 'live' ? orderFacts.deliveryAddress : fixtureDefaultAddress;
+  const paidWith =
+    DATA_MODE === 'live' ? orderFacts.paymentMethod : fixtureDefaultMethod;
 
+  const queryClient = useQueryClient();
   const [actionsOpen, setActionsOpen] = useState(false);
   const [issueOpen, setIssueOpen] = useState(false);
   const [returnOpen, setReturnOpen] = useState(false);
@@ -143,8 +168,21 @@ export default function OrderDetailPage() {
       });
   };
 
-  if (isLoading) {
+  if (sessionLoading || isLoading) {
     return <OrderDetailSkeleton />;
+  }
+
+  if (!user) {
+    // An order is account-bound — a guest has no order to show.
+    return (
+      <EmptyState
+        icon="profile"
+        title="Sign in to view this order"
+        subtitle="Purchases and sales are tied to your account."
+        actionLabel="Sign in"
+        onAction={() => router.push('/auth')}
+      />
+    );
   }
 
   if (isError) {
@@ -171,14 +209,16 @@ export default function OrderDetailPage() {
     );
   }
 
-  const viewerId = user?.id ?? 'me';
+  const viewerId = user.id;
   const isBuyer = order.buyerId === viewerId;
   const role: OrderRole = isBuyer ? 'buyer' : 'seller';
   const listing = listingById(order.listingId);
   const counterparty = userById(isBuyer ? order.sellerId : order.buyerId);
   const detail = commerceOrderDetailFor(order);
   const enrichment = orderEnrichmentFor(order.id);
-  const returnCase = enrichment.returnCase ?? null;
+  // Live: the returns API is the truth. Fixture: the enrichment store.
+  const returnCase =
+    DATA_MODE === 'live' ? (liveReturnCase ?? null) : (enrichment.returnCase ?? null);
   const openTicket = (tickets ?? []).find(
     (t) => t.orderRef === order.id && (t.status === 'open' || t.status === 'in_review'),
   );
@@ -211,6 +251,22 @@ export default function OrderDetailPage() {
   const scrollTo = (id: string) =>
     document.getElementById(id)?.scrollIntoView({ behavior: 'smooth', block: 'start' });
 
+  /**
+   * Contact the counterparty — create-or-reuse the DM thread and land
+   * inside it (/inbox/[id]), never just the inbox list. Falls back to
+   * the inbox only when the counterparty record itself is missing.
+   */
+  const openCounterpartyThread = () => {
+    if (!counterparty) {
+      router.push('/inbox');
+      return;
+    }
+    void createConversation
+      .mutateAsync({ memberIds: [counterparty.id] })
+      .then((conversation) => router.push(`/inbox/${conversation.id}`))
+      .catch(() => show('Could not open the conversation', 'error'));
+  };
+
   const copyTracking = async () => {
     if (!order.trackingNumber) return;
     try {
@@ -232,10 +288,96 @@ export default function OrderDetailPage() {
 
   // ── Action handlers — capability → sheet/navigation/mutation ─────────────
 
+  /**
+   * Live 'pay' — POST /payments/intents re-serves the order's bound intent
+   * when one exists (the backend's idempotent re-attach path) or mints a
+   * fresh one bound to this order's server-derived amount and saved
+   * instrument. An SCA nextActionUrl opens in a new tab while we poll the
+   * status endpoint for settlement. Terminal failure shows the server's
+   * message — never a fake success; a still-pending intent says so plainly.
+   */
+  const payLiveOrder = async (): Promise<void> => {
+    setBusy(true);
+    try {
+      const intent = await commerceService.createCommercePaymentIntent({
+        orderId: order.id,
+        idempotencyKey: `web-order-pay-${order.id}`,
+      });
+      if (intent.status === 'succeeded') {
+        await queryClient.invalidateQueries({ queryKey: ['orders'] });
+        show('Payment confirmed.', 'success');
+        return;
+      }
+      if (intent.status === 'failed' || intent.status === 'cancelled') {
+        show(
+          intent.failureMessage ?? 'Payment could not be completed — try again or use the app.',
+          'error',
+        );
+        return;
+      }
+      if (intent.nextActionUrl) {
+        window.open(intent.nextActionUrl, '_blank', 'noopener,noreferrer');
+        show(
+          'Finish the bank check in the new tab — this page updates when payment clears.',
+          'info',
+        );
+      }
+      const deadline = Date.now() + 90_000;
+      let latest = intent;
+      while (
+        Date.now() < deadline &&
+        !['succeeded', 'failed', 'cancelled'].includes(latest.status)
+      ) {
+        await new Promise((resolve) => setTimeout(resolve, 2000));
+        latest = await commerceService
+          .getPaymentIntentStatus(intent.id)
+          .catch(() => latest);
+      }
+      if (latest.status === 'succeeded') {
+        await queryClient.invalidateQueries({ queryKey: ['orders'] });
+        show('Payment confirmed.', 'success');
+      } else if (latest.status === 'failed' || latest.status === 'cancelled') {
+        show(
+          latest.failureMessage ?? 'Payment could not be completed — try again or use the app.',
+          'error',
+        );
+      } else {
+        await queryClient.invalidateQueries({ queryKey: ['orders'] });
+        show(
+          'Payment is still processing — this page updates when it clears, or finish it in the app.',
+          'info',
+        );
+      }
+    } catch (error) {
+      show(
+        parseApiError(error, 'Payment could not be started — try again or use the app.')
+          .message,
+        'error',
+      );
+    } finally {
+      setBusy(false);
+      setConfirmSheet(null);
+    }
+  };
+
   const handleAction = (action: OrderAction) => {
     switch (action) {
       case 'pay':
-        router.push(`/checkout?item=${order.listingId}`);
+        // Pay THIS order — never a second listing checkout (which would
+        // create a duplicate order). Live re-attaches to the order's bound
+        // payment intent; fixture mode flips the overlay.
+        setConfirmSheet({
+          title: `Pay ${formatPrice(order.totalPrice)}?`,
+          message:
+            DATA_MODE === 'live'
+              ? 'Your payment method on this order will be charged. If your bank needs a verification step it opens in a new tab.'
+              : 'Your saved payment method will be charged and the seller will be asked to dispatch.',
+          confirmLabel: 'Pay now',
+          onConfirm: () =>
+            DATA_MODE === 'live'
+              ? void payLiveOrder()
+              : run(() => actions.payOrder(), 'Payment confirmed.'),
+        });
         break;
       case 'dispatch':
         setConfirmSheet({
@@ -285,21 +427,28 @@ export default function OrderDetailPage() {
         router.push(`/review/${order.id}`);
         break;
       case 'view_receipt':
-        scrollTo('payment');
+        // The receipt is its own printable/shareable surface — the payment
+        // section on this page is the summary, not the document.
+        router.push(`/orders/${order.id}/receipt`);
         break;
       case 'contact':
-        router.push('/inbox');
+        openCounterpartyThread();
         break;
       default:
         break;
     }
   };
 
-  const handleIssueSelect = async (category: IssueCategory, note: string) => {
+  const handleIssueSelect = async (
+    category: IssueCategory,
+    note: string,
+    evidenceUris: string[],
+  ) => {
     const ticket = await createTicket({
       topicId: category.id === 'counterfeit' ? 'verification' : 'order_issue',
       orderRef: order.id,
       message: `${category.label}${note ? ` — ${note}` : ''} (order ${order.id})`,
+      evidenceUris: evidenceUris.length ? evidenceUris : undefined,
     });
     setIssueOpen(false);
     show('Support request opened', 'success');
@@ -467,6 +616,17 @@ export default function OrderDetailPage() {
             </dd>
           </div>
         </dl>
+        {/* Receipt — the standalone printable/shareable document surface. */}
+        <div className="mt-3 border-t border-border-subtle pt-3">
+          <Link
+            href={`/orders/${order.id}/receipt`}
+            className="pressable -my-1.5 flex min-h-11 items-center gap-2.5 text-body text-text-secondary hover:text-text-primary"
+          >
+            <Icon name="receipt" size={18} className="shrink-0" />
+            <span className="flex-1 font-medium">Receipt — printable record</span>
+            <Icon name="forward" size={16} className="text-text-muted" />
+          </Link>
+        </div>
         {/* Order number — copyable; the reference support asks for. */}
         <div className="mt-3 flex items-center justify-between border-t border-border-subtle pt-3">
           <span className="text-caption text-text-muted">Order number</span>
@@ -480,33 +640,36 @@ export default function OrderDetailPage() {
             <Icon name="document" size={14} />
           </button>
         </div>
-        {/* Payment method used — the session's real saved method; the order
-            contract carries no per-order snapshot, so nothing is invented. */}
-        {isBuyer && defaultMethod ? (
+        {/* Payment method used — fixture renders the session default; live
+            resolves the paymentMethodId stamped on this order against the
+            real provider rail (omits when unresolvable — wallet-paid or
+            detached — never a local stand-in). */}
+        {isBuyer && paidWith ? (
           <div className="mt-2.5 flex items-center justify-between">
             <span className="text-caption text-text-muted">Paid with</span>
             <span className="flex items-center gap-1.5 text-caption text-text-secondary">
-              <Icon name={defaultMethod.type === 'card' ? 'card' : 'wallet'} size={14} />
-              {defaultMethod.type === 'bank_account'
-                ? (defaultMethod.bankName ?? 'Bank account')
+              <Icon name={paidWith.type === 'card' ? 'card' : 'wallet'} size={14} />
+              {paidWith.type === 'bank_account'
+                ? (paidWith.bankName ?? 'Bank account')
                 : `${
-                    defaultMethod.brand
-                      ? defaultMethod.brand[0].toUpperCase() + defaultMethod.brand.slice(1)
+                    paidWith.brand
+                      ? paidWith.brand[0].toUpperCase() + paidWith.brand.slice(1)
                       : 'Card'
-                  } •••• ${defaultMethod.last4}`}
+                  } •••• ${paidWith.last4}`}
             </span>
           </div>
         ) : null}
-        {/* Delivery address — the buyer's real saved address; sellers see
-            only the snapshot destination summary the fulfilment record holds. */}
-        {isBuyer && defaultAddress ? (
+        {/* Delivery address — the buyer's address this order was placed
+            against (live resolves the order's addressId); sellers see only
+            the snapshot destination summary the fulfilment record holds. */}
+        {isBuyer && deliveryAddress ? (
           <div className="mt-2.5 flex items-start justify-between gap-3">
             <span className="shrink-0 text-caption text-text-muted">Delivery address</span>
             <span className="text-right text-caption text-text-secondary">
-              <span className="block font-medium text-text-primary">{defaultAddress.name}</span>
-              <span className="block">{defaultAddress.street}</span>
+              <span className="block font-medium text-text-primary">{deliveryAddress.name}</span>
+              <span className="block">{deliveryAddress.street}</span>
               <span className="block">
-                {defaultAddress.city} {defaultAddress.postcode}
+                {deliveryAddress.city} {deliveryAddress.postcode}
               </span>
             </span>
           </div>
@@ -524,22 +687,36 @@ export default function OrderDetailPage() {
         ) : null}
       </section>
 
-      {/* Counterparty */}
+      {/* Counterparty — the identity itself is the profile link (mobile
+          OrderCounterpartySection), with Message + View profile actions. */}
       {counterparty ? (
         <section className="flex items-center gap-3 border-b border-border-subtle py-4">
-          <Avatar src={counterparty.avatar} name={counterparty.username} size={40} />
-          <div className="min-w-0 flex-1">
-            <p className="flex items-center gap-1 text-body font-medium text-text-primary">
-              <span className="clamp-1">@{counterparty.username}</span>
-              {counterparty.isVerified ? (
-                <Icon name="verified" size={12} className="shrink-0 text-success-text" />
-              ) : null}
-            </p>
-            <p className="text-caption text-text-secondary">
-              {isBuyer ? 'Seller' : 'Buyer'} ·{' '}
-              <span className="tnum">{counterparty.rating.toFixed(1)}</span> rating
-            </p>
-          </div>
+          <Link
+            href={`/u/${counterparty.username}`}
+            aria-label={`Open @${counterparty.username}'s profile`}
+            className="pressable flex min-w-0 flex-1 items-center gap-3"
+          >
+            <Avatar src={counterparty.avatar} name={counterparty.username} size={40} />
+            <span className="min-w-0">
+              <span className="flex items-center gap-1 text-body font-medium text-text-primary">
+                <span className="clamp-1">@{counterparty.username}</span>
+                {counterparty.isVerified ? (
+                  <Icon name="verified" size={12} className="shrink-0 text-success-text" />
+                ) : null}
+              </span>
+              <span className="mt-0.5 block text-caption text-text-secondary">
+                {isBuyer ? 'Seller' : 'Buyer'} ·{' '}
+                <span className="tnum">{counterparty.rating.toFixed(1)}</span> rating
+              </span>
+            </span>
+          </Link>
+          <button
+            type="button"
+            onClick={openCounterpartyThread}
+            className="pressable shrink-0 rounded-md px-2 py-1 text-caption font-semibold text-text-secondary hover:text-text-primary"
+          >
+            Message
+          </button>
           <Link
             href={`/u/${counterparty.username}`}
             className="pressable shrink-0 rounded-md px-2 py-1 text-caption font-semibold text-text-secondary hover:text-text-primary"
@@ -566,7 +743,7 @@ export default function OrderDetailPage() {
             isResponding={busy}
             onRespond={(accept) =>
               run(
-                () => actions.respondExtension(accept),
+                () => actions.respondExtension(accept, pendingExtension.id),
                 accept ? 'Extension accepted — new deadline applies.' : 'Extension declined.',
               )
             }
@@ -639,11 +816,15 @@ export default function OrderDetailPage() {
                   'Our team will review the case and decide the outcome. The seller will no longer be able to resolve it directly.',
                 confirmLabel: 'Ask Thryft to step in',
                 cancelLabel: 'Not yet',
-                onConfirm: () => run(() => actions.stepIn(), 'Thryft is now reviewing this case.'),
+                onConfirm: () =>
+                  run(
+                    () => actions.stepIn(returnCase.id),
+                    'Thryft is now reviewing this case.',
+                  ),
               })
             }
             onAction={(action) =>
-              run(() => actions.returnCaseAction(action), 'Return case updated.')
+              run(() => actions.returnCaseAction(action, returnCase.id), 'Return case updated.')
             }
           />
         </section>
@@ -657,13 +838,21 @@ export default function OrderDetailPage() {
           openTicket={openTicket ? { id: openTicket.id, topicLabel: openTicket.topicLabel } : null}
           onPressOpenTicket={(ticketId) => router.push(`/support/${ticketId}`)}
           contactLabel={isBuyer ? 'Contact seller' : 'Contact buyer'}
-          onContact={() => router.push('/inbox')}
+          onContact={openCounterpartyThread}
           onPressGetSupport={() => setIssueOpen(true)}
         />
       </section>
 
-      {/* Actions — capability primary, then the overflow sheet */}
+      {/* Actions — capability primary, then the overflow sheet. Live 'pay'
+          re-attaches to the order's bound payment intent (or mints one)
+          and follows the status to settlement — the unpaid-order recovery
+          path, same as native. */}
       <section className="flex flex-col gap-2 pt-5">
+        {DATA_MODE === 'live' && experience.primaryAction === 'pay' ? (
+          <p className="text-center text-caption text-text-secondary">
+            Payment isn’t confirmed yet — pay now, or the order can be cancelled below.
+          </p>
+        ) : null}
         {experience.primaryAction ? (
           <Button
             variant="primary"
@@ -674,7 +863,7 @@ export default function OrderDetailPage() {
           >
             {ACTION_LABEL[experience.primaryAction]}
           </Button>
-        ) : listing && !listing.isSold ? (
+        ) : !experience.primaryAction && listing && !listing.isSold ? (
           <Button
             variant="primary"
             size="lg"

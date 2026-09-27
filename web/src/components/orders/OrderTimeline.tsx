@@ -79,18 +79,22 @@ export function OrderTimeline({ order, detail }: { order: CommerceOrder; detail:
         ? 1
         : 0;
 
-  // Fallback timestamps — fixture truth: payment is captured at order
-  // placement; shipped/delivered prefer the server stamps when present.
-  const fallbackAt = (stepKey: StepKey): string | null => {
+  // Milestone dates must be real evidence, not echoes: payment is
+  // captured at order placement so createdAt is honest for ordered/paid,
+  // but shipped/delivered only render a date when the contract carries a
+  // real stamp (shippedAt/deliveredAt) or an authored timeline entry.
+  // The derived detail fallback stamps createdAt on reached milestones —
+  // an entry equal to createdAt on a post-ordered step is that echo, not
+  // a real dispatch/delivery time, and renders without a date instead.
+  const stampFor = (stepKey: StepKey, authored: string | null | undefined): string | null => {
     switch (stepKey) {
       case 'ordered':
-        return order.createdAt;
       case 'paid':
         return order.createdAt;
       case 'shipped':
-        return order.shippedAt ?? order.createdAt;
+        return order.shippedAt ?? (authored && authored !== order.createdAt ? authored : null);
       case 'delivered':
-        return order.deliveredAt ?? order.createdAt;
+        return order.deliveredAt ?? (authored && authored !== order.createdAt ? authored : null);
     }
   };
 
@@ -98,8 +102,8 @@ export function OrderTimeline({ order, detail }: { order: CommerceOrder; detail:
     <ol className="flex flex-col">
       {STEPS.map((stepKey, i) => {
         const step = detail.timeline.find((s) => s.key === stepKey);
-        const at = step?.at ?? (i <= reachedIndex ? fallbackAt(stepKey) : null);
-        const done = i <= reachedIndex && at != null;
+        const at = i <= reachedIndex ? stampFor(stepKey, step?.at) : null;
+        const done = i <= reachedIndex;
         const current = done && i === reachedIndex;
         const isLast = i === STEPS.length - 1;
         return (
@@ -134,6 +138,10 @@ export function OrderTimeline({ order, detail }: { order: CommerceOrder; detail:
               </p>
               {at ? (
                 <p className="text-caption text-text-secondary">{formatDate(at)}</p>
+              ) : done ? (
+                // Milestone reached, no recorded timestamp — the event is
+                // true, the date is unknown and stays unstated.
+                <p className="text-caption text-text-muted">Confirmed</p>
               ) : (
                 <p className="text-caption text-text-muted">{PENDING_CAPTION[stepKey]}</p>
               )}

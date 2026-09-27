@@ -12,8 +12,10 @@ import Link from 'next/link';
 import { Chip } from '@/components/ui/Chip';
 import { EmptyState } from '@/components/ui/EmptyState';
 import { SegmentedControl } from '@/components/feed/SegmentedControl';
-import { useCoOwnAssets } from '@/lib/hooks/coown-queries';
+import { DATA_MODE } from '@/lib/api/client';
+import { useCoOwnAssets, useCoOwnPositions } from '@/lib/hooks/coown-queries';
 import { deriveLifecycleState } from '@/lib/contracts/coown';
+import type { CoOwnAsset, CoOwnPosition } from '@/lib/contracts/coown';
 import { useCoOwnWatchlist } from '@/lib/store/coownWatchlist';
 import { useHydrated } from '@/lib/store/useStore';
 import { HubSkeleton } from './HubSkeleton';
@@ -21,14 +23,110 @@ import { CoOwnOnboardingGate } from './CoOwnOnboardingGate';
 import { EducationBand } from './EducationBand';
 import { FeaturedHero } from './FeaturedHero';
 import { MarketList } from './MarketList';
-import { gbpCompact } from './format';
+import { AssetThumb } from './AssetThumb';
+import { useEvaluateCoOwnAlerts } from './alertStore';
+import { gbp, gbpCompact, signedPct } from './format';
 
 const ALL = 'All';
 
 type View = 'markets' | 'watchlist';
 
+/**
+ * Compact "what you hold" rail — holders land on their book before the
+ * day's highlight, matching the mobile hub ordering (positions →
+ * highlights → markets). Value is marked at the session unit price;
+ * return is measured against the blended average entry.
+ */
+function PositionsRail({
+  positions,
+  assets,
+}: {
+  positions: CoOwnPosition[];
+  assets: CoOwnAsset[];
+}) {
+  const rows = useMemo(
+    () =>
+      positions
+        .filter((p) => p.units > 0)
+        .flatMap((p) => {
+          const asset = assets.find((a) => a.id === p.assetId);
+          return asset ? [{ position: p, asset }] : [];
+        })
+        .sort(
+          (a, b) =>
+            b.position.units * b.asset.unitPriceGbp -
+            a.position.units * a.asset.unitPriceGbp,
+        ),
+    [positions, assets],
+  );
+  if (rows.length === 0) return null;
+
+  const totalValue = rows.reduce(
+    (sum, r) => sum + r.position.units * r.asset.unitPriceGbp,
+    0,
+  );
+
+  return (
+    <section aria-label="Your positions" className="mt-8">
+      <div className="flex items-baseline justify-between gap-4">
+        <h2 className="text-label font-semibold uppercase tracking-[0.08em] text-text-muted">
+          Your positions
+        </h2>
+        <Link
+          href="/co-own/portfolio"
+          className="text-meta font-medium text-text-secondary hover:text-text-primary"
+        >
+          Portfolio · <span className="tnum">{gbp(totalValue)}</span>
+        </Link>
+      </div>
+      <ul className="mt-3 divide-y divide-border-subtle border-y border-border-subtle">
+        {rows.slice(0, 4).map(({ position, asset }) => {
+          const value = position.units * asset.unitPriceGbp;
+          const cost = position.units * position.avgEntryPriceGbp;
+          const plPct = cost > 0 ? ((value - cost) / cost) * 100 : 0;
+          return (
+            <li key={asset.id}>
+              <Link
+                href={`/co-own/${asset.id}`}
+                className="group flex items-center gap-3 px-1 py-3 transition-colors hover:bg-row"
+              >
+                <AssetThumb src={asset.imageUrl} alt="" className="h-10 w-10 shrink-0" />
+                <div className="min-w-0 flex-1">
+                  <p className="clamp-1 text-body font-semibold text-text-primary">
+                    {asset.title}
+                  </p>
+                  <p className="mt-0.5 text-meta text-text-muted tnum">
+                    {position.units} {position.units === 1 ? 'unit' : 'units'} · avg{' '}
+                    {gbp(position.avgEntryPriceGbp)}
+                  </p>
+                </div>
+                <div className="shrink-0 text-right">
+                  <p className="text-body font-semibold text-text-primary tnum">
+                    {gbp(value)}
+                  </p>
+                  <p
+                    className={`mt-0.5 text-meta tnum ${
+                      plPct >= 0 ? 'text-coown-up' : 'text-coown-down'
+                    }`}
+                  >
+                    {signedPct(plPct)} since entry
+                  </p>
+                </div>
+              </Link>
+            </li>
+          );
+        })}
+      </ul>
+    </section>
+  );
+}
+
 export function CoOwnHubView() {
   const { data: assets, isLoading, isError, refetch } = useCoOwnAssets();
+  const positionsQ = useCoOwnPositions();
+  // Alert evaluation ticks anywhere market data lands — a fill elsewhere
+  // in the session must still fire the viewer's triggers.
+  useEvaluateCoOwnAlerts();
   const [segment, setSegment] = useState<string>(ALL);
   const [view, setView] = useState<View>('markets');
   const hydrated = useHydrated();
@@ -83,11 +181,15 @@ export function CoOwnHubView() {
     );
   }
 
-  const openCount = assets.filter((a) => {
-    const s = deriveLifecycleState(a);
-    return s === 'initialOffering' || s === 'secondaryTrading';
-  }).length;
-  const closedCount = assets.length - openCount;
+  // Honest market-state counts — paused and exiting markets are not
+  // "closed", they carry their own grammar.
+  const pausedCount = assets.filter(
+    (a) => deriveLifecycleState(a) === 'tradingPaused',
+  ).length;
+  const exitingCount = assets.filter(
+    (a) => deriveLifecycleState(a) === 'exitUnderway',
+  ).length;
+  const openCount = assets.length - pausedCount - exitingCount;
   const totalVolume = assets.reduce((sum, a) => sum + (a.volume24hGbp ?? 0), 0);
   const featured = ranked[0]!;
 
@@ -101,15 +203,38 @@ export function CoOwnHubView() {
               <span className="h-1.5 w-1.5 rounded-full bg-coown-up" aria-hidden="true" />
               <span className="tnum">{openCount} open</span>
             </span>
-            <span aria-hidden="true" className="text-text-muted">·</span>
-            <span className="tnum">{closedCount} closed</span>
+            {pausedCount > 0 ? (
+              <>
+                <span aria-hidden="true" className="text-text-muted">·</span>
+                <span className="inline-flex items-center gap-1.5">
+                  <span className="h-1.5 w-1.5 rounded-full bg-warning" aria-hidden="true" />
+                  <span className="tnum">{pausedCount} paused</span>
+                </span>
+              </>
+            ) : null}
+            {exitingCount > 0 ? (
+              <>
+                <span aria-hidden="true" className="text-text-muted">·</span>
+                <span className="tnum">{exitingCount} exiting</span>
+              </>
+            ) : null}
             <span aria-hidden="true" className="text-text-muted">·</span>
             <span className="tnum">{gbpCompact(totalVolume)} traded today</span>
           </p>
         </div>
         <nav aria-label="Co-Own" className="flex items-center gap-5">
-          <Link href="/co-own/syndicate" className="text-body font-medium text-text-secondary underline-offset-4 hover:text-text-primary hover:underline">
-            Syndicates
+          {/* No syndicate endpoints exist — in live mode the link leads
+              to an honest notice, so the entry point stays hidden. */}
+          {DATA_MODE !== 'live' ? (
+            <Link href="/co-own/syndicate" className="text-body font-medium text-text-secondary underline-offset-4 hover:text-text-primary hover:underline">
+              Syndicates
+            </Link>
+          ) : null}
+          <Link href="/co-own/leaderboard" className="text-body font-medium text-text-secondary underline-offset-4 hover:text-text-primary hover:underline">
+            Leaderboard
+          </Link>
+          <Link href="/co-own/ledger" className="text-body font-medium text-text-secondary underline-offset-4 hover:text-text-primary hover:underline">
+            Tape
           </Link>
           <Link href="/co-own/portfolio" className="text-body font-medium text-text-secondary underline-offset-4 hover:text-text-primary hover:underline">
             Portfolio
@@ -120,11 +245,14 @@ export function CoOwnHubView() {
           <Link href="/co-own/alerts" className="text-body font-medium text-text-secondary underline-offset-4 hover:text-text-primary hover:underline">
             Alerts
           </Link>
-          <Link href="/help" className="text-body font-medium text-text-secondary underline-offset-4 hover:text-text-primary hover:underline">
-            How it works
+          <Link href="/co-own/guide" className="text-body font-medium text-text-secondary underline-offset-4 hover:text-text-primary hover:underline">
+            Guide
           </Link>
         </nav>
       </header>
+
+      {/* Positions before highlights — holders land on what they own. */}
+      {positionsQ.data ? <PositionsRail positions={positionsQ.data} assets={assets} /> : null}
 
       <section className="mt-8 border-b border-border-subtle pb-10">
         <FeaturedHero asset={featured} />

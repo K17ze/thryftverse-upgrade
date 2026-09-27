@@ -2,34 +2,64 @@
 
 /**
  * PhotosSection — listing media authoring.
- * Empty state is a full-width dropzone; once photos exist it becomes a
- * compact grid tile. First photo is the cover; tiles support HTML5 drag
- * reorder and file drag-and-drop.
+ * Empty state is a full-width dropzone; once photos exist the staged set
+ * renders through SortablePhotoStrip (drag + arrow-key reorder, cover badge,
+ * per-tile remove/edit/upload state). The quiet action row mirrors the
+ * mobile media studio: library add, and camera capture where the browser
+ * honestly supports it.
  */
 
 import { useRef, useState } from 'react';
-import { AppImage } from '@/components/ui/AppImage';
 import { Icon } from '@/components/ui/Icon';
+import {
+  SortablePhotoStrip,
+  type StripPhoto,
+} from '@/components/media/SortablePhotoStrip';
+import { isLocalMediaUri } from '@/lib/utils/media';
 import { MAX_PHOTOS } from './constants';
 import { SellSection } from './SellSection';
 
-interface PhotosSectionProps {
-  photos: string[];
-  error?: string;
-  onAdd: (files: FileList | null) => void;
-  onRemove: (index: number) => void;
-  onReorder: (from: number, to: number) => void;
+/** Per-photo live-upload state, keyed by the staged preview URL. */
+export interface PhotoMediaState {
+  status: 'uploading' | 'uploaded' | 'failed';
+  /** Byte progress 0..1; null while the presigned total is unknown. */
+  progress: number | null;
 }
 
-export function PhotosSection({ photos, error, onAdd, onRemove, onReorder }: PhotosSectionProps) {
+interface PhotosSectionProps {
+  photos: string[];
+  /** Live upload state per staged URL — absent in fixture mode. */
+  media?: Record<string, PhotoMediaState>;
+  error?: string;
+  /** Camera entry is only rendered when the browser supports capture. */
+  cameraSupported?: boolean;
+  onAdd: (files: File[]) => void;
+  onRemove: (index: number) => void;
+  onReorder: (from: number, to: number) => void;
+  onEdit?: (index: number) => void;
+  onRetryUpload?: (index: number) => void;
+  onTakePhoto?: () => void;
+}
+
+export function PhotosSection({
+  photos,
+  media,
+  error,
+  cameraSupported,
+  onAdd,
+  onRemove,
+  onReorder,
+  onEdit,
+  onRetryUpload,
+  onTakePhoto,
+}: PhotosSectionProps) {
   const inputRef = useRef<HTMLInputElement>(null);
-  const dragFrom = useRef<number | null>(null);
   const [draggingFiles, setDraggingFiles] = useState(false);
 
   const pick = () => inputRef.current?.click();
 
   const handleFiles = (e: React.ChangeEvent<HTMLInputElement>) => {
-    onAdd(e.target.files);
+    onAdd(e.target.files ? Array.from(e.target.files) : []);
     e.target.value = '';
   };
 
@@ -37,15 +67,21 @@ export function PhotosSection({ photos, error, onAdd, onRemove, onReorder }: Pho
     e.preventDefault();
     setDraggingFiles(false);
     if (e.dataTransfer.files.length) {
-      onAdd(e.dataTransfer.files);
-      return;
+      onAdd(Array.from(e.dataTransfer.files));
     }
-    const from = dragFrom.current;
-    if (from != null) dragFrom.current = null;
   };
 
   const hasPhotos = photos.length > 0;
   const canAdd = photos.length < MAX_PHOTOS;
+
+  const items: StripPhoto[] = photos.map((src) => ({
+    src,
+    status: media?.[src]?.status,
+    progress: media?.[src]?.progress,
+    // Canvas edits need readable pixels — blob:/data: only, the same gate
+    // mobile applies to non-manipulable remote media.
+    editable: isLocalMediaUri(src),
+  }));
 
   return (
     <SellSection
@@ -58,6 +94,16 @@ export function PhotosSection({ photos, error, onAdd, onRemove, onReorder }: Pho
           : `Add up to ${MAX_PHOTOS} photos — the first is your cover.`
       }
     >
+      {/* Shot list — mirrors the mobile photo-tips guidance: the frames
+          buyers look for before they'll trust a listing. Quiet checklist
+          copy, not a gate. */}
+      <p className="mb-3 text-caption text-text-muted">
+        Cover the essentials: <span className="font-medium text-text-secondary">front</span>,{' '}
+        <span className="font-medium text-text-secondary">back</span>,{' '}
+        <span className="font-medium text-text-secondary">label</span>, and{' '}
+        <span className="font-medium text-text-secondary">any flaws</span> — honest photos sell
+        faster and prevent disputes.
+      </p>
       <input
         ref={inputRef}
         type="file"
@@ -77,87 +123,77 @@ export function PhotosSection({ photos, error, onAdd, onRemove, onReorder }: Pho
         onDrop={handleContainerDrop}
       >
         {!hasPhotos ? (
-          <button
-            type="button"
-            onClick={pick}
-            className={`pressable flex h-44 w-full flex-col items-center justify-center gap-2 rounded-lg border border-dashed text-center transition-colors ${
-              draggingFiles
-                ? 'border-text-muted bg-surface-alt'
-                : 'border-border hover:border-text-muted'
-            }`}
-          >
-            <Icon name="camera" size={28} className="text-text-muted" />
-            <span className="text-body-emphasis font-medium text-text-primary">Add photos</span>
-            <span className="text-caption text-text-muted">
-              Drag and drop or browse — good light sells faster
-            </span>
-          </button>
-        ) : (
-          <div className="grid grid-cols-3 gap-2 sm:grid-cols-4 sm:gap-3">
-            {photos.map((src, i) => (
-              <div
-                key={src}
-                draggable
-                onDragStart={(e) => {
-                  dragFrom.current = i;
-                  e.dataTransfer.effectAllowed = 'move';
-                  e.dataTransfer.setData('text/plain', String(i));
-                }}
-                onDragOver={(e) => e.preventDefault()}
-                onDrop={(e) => {
-                  e.preventDefault();
-                  const raw = e.dataTransfer.getData('text/plain');
-                  const from = dragFrom.current ?? (raw ? Number(raw) : null);
-                  if (from != null && from !== i && Number.isFinite(from)) {
-                    onReorder(from, i);
-                  }
-                  dragFrom.current = null;
-                }}
-                className="group relative cursor-grab overflow-hidden rounded-lg bg-surface-alt active:cursor-grabbing"
-              >
-                <AppImage
-                  src={src}
-                  alt={`Listing photo ${i + 1}`}
-                  aspectRatio={0.8}
-                  sizes="(max-width: 640px) 33vw, 168px"
-                />
-                {i === 0 ? (
-                  <span className="absolute left-1.5 top-1.5 rounded-md bg-overlay px-1.5 py-0.5 text-micro font-semibold uppercase tracking-wide text-scrim-text-primary">
-                    Cover
-                  </span>
-                ) : null}
+          <div>
+            <button
+              type="button"
+              onClick={pick}
+              className={`pressable flex h-44 w-full flex-col items-center justify-center gap-2 rounded-lg border border-dashed text-center transition-colors ${
+                draggingFiles
+                  ? 'border-text-muted bg-surface-alt'
+                  : 'border-border hover:border-text-muted'
+              }`}
+            >
+              <Icon name="camera" size={28} className="text-text-muted" />
+              <span className="text-body-emphasis font-medium text-text-primary">Add photos</span>
+              <span className="text-caption text-text-muted">
+                Drag and drop or browse — good light sells faster
+              </span>
+            </button>
+            {cameraSupported && onTakePhoto ? (
+              <div className="mt-2 flex justify-center">
                 <button
                   type="button"
-                  onClick={() => onRemove(i)}
-                  aria-label={`Remove photo ${i + 1}`}
-                  className="pressable absolute right-0 top-0 flex h-11 w-11 items-center justify-center"
+                  onClick={onTakePhoto}
+                  className="pressable flex h-11 items-center gap-2 rounded-md px-3 text-body font-medium text-text-secondary transition-colors hover:text-text-primary"
                 >
-                  <Icon name="close" size={16} className="text-scrim-text-primary drop-scrim" />
+                  <Icon name="camera" size={18} />
+                  Take photo
                 </button>
               </div>
-            ))}
-
-            {canAdd ? (
-              <button
-                type="button"
-                onClick={pick}
-                aria-label="Add more photos"
-                className={`pressable flex aspect-[4/5] flex-col items-center justify-center gap-1.5 rounded-lg border border-dashed transition-colors ${
-                  draggingFiles
-                    ? 'border-text-muted bg-surface-alt'
-                    : 'border-border text-text-muted hover:border-text-muted hover:text-text-secondary'
-                }`}
-              >
-                <Icon name="camera" size={22} />
-                <span className="text-caption font-medium">Add</span>
-              </button>
             ) : null}
           </div>
+        ) : (
+          <>
+            <SortablePhotoStrip
+              photos={items}
+              onReorder={onReorder}
+              onRemove={onRemove}
+              onEdit={onEdit}
+              onRetryUpload={onRetryUpload}
+              canAdd={canAdd}
+              onAdd={pick}
+              fileDragActive={draggingFiles}
+            />
+
+            {/* Quiet action row — the mobile media-studio grammar. */}
+            <div className="mt-3 flex items-center gap-4">
+              {canAdd ? (
+                <button
+                  type="button"
+                  onClick={pick}
+                  className="pressable flex h-11 items-center gap-2 rounded-md text-body font-medium text-text-secondary transition-colors hover:text-text-primary"
+                >
+                  <Icon name="images" size={16} />
+                  Add more
+                </button>
+              ) : null}
+              {cameraSupported && onTakePhoto && canAdd ? (
+                <button
+                  type="button"
+                  onClick={onTakePhoto}
+                  className="pressable flex h-11 items-center gap-2 rounded-md text-body font-medium text-text-secondary transition-colors hover:text-text-primary"
+                >
+                  <Icon name="camera" size={16} />
+                  Take photo
+                </button>
+              ) : null}
+            </div>
+          </>
         )}
       </div>
 
       {error ? (
-        <p role="alert" className="mt-1.5 text-caption text-danger-text">
+        <p id="sell-photos-error" role="alert" className="mt-1.5 text-caption text-danger-text">
           {error}
         </p>
       ) : null}

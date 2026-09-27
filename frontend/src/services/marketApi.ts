@@ -1,4 +1,4 @@
-import { fetchJson, fetchWithAuth } from '../lib/apiClient';
+import { ApiRequestError, fetchJson, fetchWithAuth } from '../lib/apiClient';
 import { ENABLE_RUNTIME_MOCKS } from '../constants/runtimeFlags';
 import { warnIfMockSuppressed } from '../utils/mockGate';
 import type { ListingMediaDerivative } from '../contracts/listingMedia';
@@ -3022,4 +3022,210 @@ export async function updateDripEnrollment(assetId: string, enrolled: boolean): 
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({ assetId, enrolled }),
   });
+}
+
+/* ─── Co-Own Syndicates (pooled buys) ─── */
+// Group-buy pools for shared ownership targets: a named pool of members
+// commits funds toward buying units of one Co-Own asset; when the pool
+// covers the target the buy executes and each member owns a pro-rata
+// share — contribution over the pool target. Mirrors the web syndicate
+// contract (web/src/lib/contracts/syndicate.ts). Pool math and
+// contribution validation live in components/coown/syndicate/syndicateDomain.ts.
+
+export type SyndicateStatus = 'open' | 'executed' | 'dissolved';
+
+export interface SyndicateMember {
+  id: string;
+  userId: string;
+  username: string;
+  displayName: string | null;
+  avatar: string | null;
+  role: 'organizer' | 'member';
+  /** Total committed to the pool — top-ups fold into this. */
+  contributionGbp: number;
+  joinedAt: string;
+}
+
+/** One line in the pool's order history — contributions, executions,
+ * refunds and milestones, newest rendered first. */
+export interface SyndicateExecution {
+  id: string;
+  kind: 'contribution' | 'purchase' | 'refund' | 'note';
+  actorUsername: string | null;
+  amountGbp: number | null;
+  units: number | null;
+  note: string | null;
+  at: string;
+}
+
+export interface Syndicate {
+  id: string;
+  name: string;
+  /** The shared ownership target — one Co-Own asset. */
+  assetId: string;
+  organizerId: string;
+  organizerUsername: string;
+  /** Hard cap on distinct members. Top-ups by existing members are not
+   * capped by this — it gates joining, not funding. */
+  memberCap: number;
+  /** Units of the asset the pool buys when funded. */
+  unitsTarget: number;
+  /** Per-member contribution bounds — cumulative per member. */
+  minContributionGbp: number;
+  maxContributionGbp: number;
+  termsNote: string | null;
+  status: SyndicateStatus;
+  members: SyndicateMember[];
+  executions: SyndicateExecution[];
+  createdAt: string;
+}
+
+/** Creation bounds — kept narrow so pools stay group buys, not solo
+ * listings or unconstrained crowds. */
+export const SYNDICATE_LIMITS = {
+  memberCapMin: 2,
+  memberCapMax: 20,
+  nameMaxLength: 48,
+  termsMaxLength: 240,
+} as const;
+
+export interface NewSyndicateInput {
+  name: string;
+  assetId: string;
+  memberCap: number;
+  unitsTarget: number;
+  minContributionGbp: number;
+  maxContributionGbp: number;
+  termsNote: string | null;
+}
+
+/** Thrown when the syndicate routes are not deployed on the backend (404).
+ * Callers must show the honest "Syndicates aren't available yet" state —
+ * never an error toast, never fabricated pools (LiveShoppingHome
+ * reminder self-hide pattern). */
+export class SyndicatesUnavailableError extends Error {
+  constructor(message = 'Syndicates are not available on this backend yet') {
+    super(message);
+    this.name = 'SyndicatesUnavailableError';
+  }
+}
+
+function rethrowSyndicateUnavailable(error: unknown): never {
+  if (error instanceof ApiRequestError && error.status === 404) {
+    throw new SyndicatesUnavailableError();
+  }
+  throw error;
+}
+
+interface SyndicateListResponse {
+  ok: true;
+  items: Syndicate[];
+}
+
+interface SyndicateResponse {
+  ok: true;
+  syndicate: Syndicate;
+}
+
+interface SyndicateExecutionsResponse {
+  ok: true;
+  items: SyndicateExecution[];
+}
+
+export async function listSyndicates(options: { limit?: number } = {}): Promise<Syndicate[]> {
+  const query = toQuery({ limit: options.limit });
+  try {
+    const payload = await fetchJson<SyndicateListResponse>(`/co-own/syndicates${query}`);
+    return payload.items;
+  } catch (error) {
+    return rethrowSyndicateUnavailable(error);
+  }
+}
+
+export async function fetchSyndicateById(syndicateId: string): Promise<Syndicate> {
+  try {
+    const payload = await fetchJson<SyndicateResponse>(
+      `/co-own/syndicates/${encodeURIComponent(syndicateId)}`
+    );
+    return payload.syndicate;
+  } catch (error) {
+    return rethrowSyndicateUnavailable(error);
+  }
+}
+
+export async function createSyndicate(input: NewSyndicateInput): Promise<Syndicate> {
+  try {
+    const payload = await fetchJson<SyndicateResponse>('/co-own/syndicates', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(input),
+    });
+    return payload.syndicate;
+  } catch (error) {
+    return rethrowSyndicateUnavailable(error);
+  }
+}
+
+/** Commit funds to a pool. Join is folded in: a non-member with a valid
+ * contribution becomes a member; an existing member's amount folds into
+ * their commitment. The idempotency key makes a retried POST a no-op on
+ * the backend instead of a double commitment (TradeScreen reserve
+ * pattern). Returns the updated pool and whether the contribution
+ * closed the target. */
+export async function contributeToSyndicate(
+  syndicateId: string,
+  amountGbp: number,
+  idempotencyKey: string
+): Promise<{ syndicate: Syndicate; funded: boolean }> {
+  try {
+    const payload = await fetchJson<{ ok: true; syndicate: Syndicate; funded: boolean }>(
+      `/co-own/syndicates/${encodeURIComponent(syndicateId)}/contributions`,
+      {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ amountGbp, idempotencyKey }),
+      }
+    );
+    return { syndicate: payload.syndicate, funded: payload.funded };
+  } catch (error) {
+    return rethrowSyndicateUnavailable(error);
+  }
+}
+
+/** Withdraw committed funds from an open pool. The backend is the
+ * authority on whether a pool allows withdrawals; the client only
+ * carries the request. */
+export async function withdrawFromSyndicate(
+  syndicateId: string,
+  amountGbp: number,
+  idempotencyKey: string
+): Promise<Syndicate> {
+  try {
+    const payload = await fetchJson<SyndicateResponse>(
+      `/co-own/syndicates/${encodeURIComponent(syndicateId)}/withdrawals`,
+      {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ amountGbp, idempotencyKey }),
+      }
+    );
+    return payload.syndicate;
+  } catch (error) {
+    return rethrowSyndicateUnavailable(error);
+  }
+}
+
+export async function listSyndicateExecutions(
+  syndicateId: string,
+  options: { limit?: number } = {}
+): Promise<SyndicateExecution[]> {
+  const query = toQuery({ limit: options.limit });
+  try {
+    const payload = await fetchJson<SyndicateExecutionsResponse>(
+      `/co-own/syndicates/${encodeURIComponent(syndicateId)}/executions${query}`
+    );
+    return payload.items;
+  } catch (error) {
+    return rethrowSyndicateUnavailable(error);
+  }
 }

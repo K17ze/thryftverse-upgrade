@@ -8,6 +8,7 @@
 
 import type { Listing } from '@/lib/contracts/domain';
 import { listingById, MOODBOARDS } from '@/lib/data/fixtures';
+import { POSTER_HIGHLIGHTS, type PosterHighlight } from '@/lib/data/fixtures-posters';
 
 /** Listing ids composing each fixture moodboard (length matches itemCount). */
 export const MOODBOARD_ITEM_IDS: Record<string, string[]> = {
@@ -17,16 +18,12 @@ export const MOODBOARD_ITEM_IDS: Record<string, string[]> = {
   mb2: ['l8', 'l4', 'l28', 'l17', 'l10'],
 };
 
-/** Decorative collaborator rows on own boards. */
-export const MOODBOARD_COLLABORATOR_IDS: Record<string, string[]> = {
-  mb1: ['u6', 'u1'],
-  mb2: ['u3'],
-};
-
 export interface SavedCollection {
   id: string;
   title: string;
   itemIds: string[];
+  /** Owner-only boards — never surface on a visitor's profile view. */
+  isPrivate?: boolean;
   createdAt: string;
 }
 
@@ -48,6 +45,7 @@ export const COLLECTIONS: SavedCollection[] = [
     id: 'col-watchlist',
     title: 'Designer watchlist',
     itemIds: ['l8', 'l28', 'l25', 'l17', 'l10', 'l19'],
+    isPrivate: true,
     createdAt: '2026-09-20T10:00:00Z',
   },
 ];
@@ -163,6 +161,7 @@ export function boardsForOwner(ownerId: string, includePrivate = false): Profile
       coverUri: b.coverUri,
       createdAt: b.createdAt,
     })),
+
     // Saved collections are the member's own boards today.
     ...(ownerId === 'me'
       ? COLLECTIONS.map((c) => ({
@@ -171,6 +170,7 @@ export function boardsForOwner(ownerId: string, includePrivate = false): Profile
           title: c.title,
           kind: 'collection' as const,
           itemIds: c.itemIds,
+          isPrivate: c.isPrivate,
           createdAt: c.createdAt,
         }))
       : []),
@@ -183,9 +183,93 @@ export function collectionById(id: string): SavedCollection | ProfileBoard | und
   return COLLECTIONS.find((c) => c.id === id) ?? PROFILE_COLLECTIONS.find((c) => c.id === id);
 }
 
+/**
+ * Post-create patch for collection fixtures — the session write path for
+ * fields the fixture rows carry (title, privacy). Same mutation posture as
+ * `ensureCollectionResolvable` and the detail route's delete.
+ */
+export function patchCollectionFixture(
+  id: string,
+  patch: { title?: string; isPrivate?: boolean },
+): void {
+  const c = collectionById(id);
+  if (!c) return;
+  if (patch.title !== undefined) c.title = patch.title;
+  if (patch.isPrivate !== undefined) c.isPrivate = patch.isPrivate;
+}
+
 /** Resolve fixture listing ids → listings, dropping misses. */
 export function listingsForIds(ids: string[]): Listing[] {
   return ids
     .map((id) => listingById(id))
     .filter((l): l is Listing => Boolean(l));
 }
+
+// ============================================================================
+// STORY HIGHLIGHTS ON PROFILES — mirrors GET /users/:id/poster-highlights.
+// 'me' resolves the member's archive set (POSTER_HIGHLIGHTS) plus any
+// session-created highlights (posterArchive store); sellers below are the
+// demo members whose profiles carry a rail.
+// ============================================================================
+
+const hlImg = (id: string) =>
+  `https://images.unsplash.com/${id}?auto=format&fit=crop&w=400&q=80`;
+
+export const PROFILE_HIGHLIGHTS: Record<string, PosterHighlight[]> = {
+  me: POSTER_HIGHLIGHTS,
+  u5: [
+    {
+      id: 'hl-u5-archive-drops',
+      title: 'Archive drops',
+      coverUri: hlImg('photo-1441984904996-e0b6ba687e04'),
+      frames: [
+        {
+          frameId: 'hl-u5-f1',
+          mediaUrl: hlImg('photo-1441984904996-e0b6ba687e04'),
+          caption: 'Rack restock — Margiela-era minimalism',
+        },
+        {
+          frameId: 'hl-u5-f2',
+          mediaUrl: hlImg('photo-1445205170230-053b83016050'),
+        },
+      ],
+    },
+    {
+      id: 'hl-u5-denim',
+      title: 'Denim',
+      coverUri: hlImg('photo-1523381210434-271e8be1f52b'),
+      frames: [
+        {
+          frameId: 'hl-u5-f3',
+          mediaUrl: hlImg('photo-1523381210434-271e8be1f52b'),
+          caption: 'Selvedge week — four pairs up now',
+        },
+      ],
+    },
+  ],
+  u3: [
+    {
+      id: 'hl-u3-grails',
+      title: 'Grails',
+      coverUri: hlImg('photo-1556906781-9a412961c28c'),
+      frames: [
+        {
+          frameId: 'hl-u3-f1',
+          mediaUrl: hlImg('photo-1556906781-9a412961c28c'),
+          caption: 'This week’s legit-checked pairs',
+        },
+      ],
+    },
+  ],
+};
+
+// ============================================================================
+// FEATURED SHOP RAIL — mirrors storefront featuredListingIds (mobile
+// shopRailItems). Seller-pinned items that sit atop the profile shop.
+// ============================================================================
+
+export const FEATURED_LISTING_IDS: Record<string, string[]> = {
+  me: ['ml1', 'ml2'],
+  u5: ['l23', 'l5', 'l26'],
+  u3: ['l4', 'l27'],
+};

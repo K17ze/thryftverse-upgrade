@@ -11,6 +11,7 @@
  */
 
 import type { AuctionBid } from '@/lib/contracts/auction';
+import { Icon } from '@/components/ui/Icon';
 import { Skeleton } from '@/components/ui/Skeleton';
 import { userById } from '@/lib/data/fixtures';
 import { formatPrice, timeAgo } from '@/lib/utils/format';
@@ -38,11 +39,15 @@ function cap(word: string): string {
 
 interface BidHistoryProps {
   bids: AuctionBid[];
-  viewerId: string;
+  /** null for guests — no row may claim "You" without a real identity. */
+  viewerId: string | null | undefined;
   isLoading?: boolean;
+  /** Ledger fetch failed — an errored ledger is not an empty one. */
+  isError?: boolean;
+  onRetry?: () => void;
 }
 
-export function BidHistory({ bids, viewerId, isLoading }: BidHistoryProps) {
+export function BidHistory({ bids, viewerId, isLoading, isError, onRetry }: BidHistoryProps) {
   if (isLoading) {
     return (
       <div className="flex flex-col gap-3" aria-busy aria-label="Loading bid history">
@@ -53,6 +58,26 @@ export function BidHistory({ bids, viewerId, isLoading }: BidHistoryProps) {
             <Skeleton className="h-4 w-16" />
           </div>
         ))}
+      </div>
+    );
+  }
+
+  if (isError) {
+    return (
+      <div className="flex items-center gap-2 py-2" role="alert">
+        <Icon name="alert" size={14} className="shrink-0 text-warning-text" />
+        <span className="min-w-0 flex-1 text-body text-text-secondary">
+          Couldn&apos;t load bids.
+        </span>
+        {onRetry ? (
+          <button
+            type="button"
+            onClick={onRetry}
+            className="pressable shrink-0 text-caption font-semibold text-text-primary underline-offset-4 hover:underline"
+          >
+            Try again
+          </button>
+        ) : null}
       </div>
     );
   }
@@ -84,8 +109,14 @@ export function BidHistory({ bids, viewerId, isLoading }: BidHistoryProps) {
       </thead>
       <tbody>
         {ordered.map((bid, index) => {
-          const mine = bid.bidderId === viewerId;
+          const mine = viewerId != null && bid.bidderId === viewerId;
           const username = userById(bid.bidderId)?.username ?? bid.bidderName;
+          const exact = new Date(bid.createdAt).toLocaleString('en-GB', {
+            day: 'numeric',
+            month: 'short',
+            hour: '2-digit',
+            minute: '2-digit',
+          });
           return (
             <tr
               key={bid.id}
@@ -94,6 +125,11 @@ export function BidHistory({ bids, viewerId, isLoading }: BidHistoryProps) {
             >
               <td className="py-2.5 pr-3 text-body font-medium text-text-primary">
                 {mine ? 'You' : maskBidder(username)}
+                {index === 0 ? (
+                  <span className="ml-2 text-meta font-semibold uppercase tracking-[0.08em] text-success-text">
+                    Top bid
+                  </span>
+                ) : null}
               </td>
               <td
                 className={`tnum py-2.5 pr-3 text-right text-body-emphasis font-bold ${
@@ -102,8 +138,11 @@ export function BidHistory({ bids, viewerId, isLoading }: BidHistoryProps) {
               >
                 {formatPrice(bid.amount)}
               </td>
-              <td className="tnum py-2.5 text-right text-meta text-text-muted">
-                {timeAgo(bid.createdAt)}
+              <td
+                className="tnum py-2.5 text-right text-meta text-text-muted"
+                title={exact}
+              >
+                <time dateTime={bid.createdAt}>{timeAgo(bid.createdAt)}</time>
               </td>
             </tr>
           );

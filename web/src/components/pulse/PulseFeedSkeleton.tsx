@@ -14,7 +14,7 @@ export function PulseFeedSkeleton() {
       aria-label="Loading Pulse feed"
     >
       <div className="mx-auto h-full max-w-[430px] md:py-3">
-        <div className="relative h-full w-full overflow-hidden bg-surface-alt md:rounded-2xl">
+        <div className="relative h-full w-full overflow-hidden bg-surface-alt md:rounded-xl">
           <Skeleton className="absolute inset-0 rounded-none" />
 
           {/* Creator row */}

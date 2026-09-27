@@ -26,12 +26,35 @@ export interface NotificationRowModel {
   actorId?: string;
 }
 
-export type NotificationFilter = 'all' | 'unread' | 'orders';
+export type NotificationFilter =
+  | 'all'
+  | 'unread'
+  | 'orders'
+  | 'items'
+  | 'reviews'
+  | 'prices'
+  | 'auctions';
 
+/** Primary pill chips — always visible (mobile PRIMARY_FILTERS parity). */
 export const NOTIFICATION_FILTERS: { key: NotificationFilter; label: string }[] = [
   { key: 'all', label: 'All' },
   { key: 'unread', label: 'Unread' },
   { key: 'orders', label: 'Orders' },
+];
+
+/**
+ * The complete filter set, rendered as a selection list inside the
+ * overflow sheet — label + count + checkmark is the complete grammar
+ * (mobile OVERFLOW_FILTERS parity). The label is the object: no icons.
+ */
+export const NOTIFICATION_OVERFLOW_FILTERS: { key: NotificationFilter; label: string }[] = [
+  { key: 'all', label: 'All' },
+  { key: 'unread', label: 'Unread' },
+  { key: 'orders', label: 'Orders' },
+  { key: 'items', label: 'Items' },
+  { key: 'reviews', label: 'Reviews' },
+  { key: 'prices', label: 'Prices' },
+  { key: 'auctions', label: 'Auctions' },
 ];
 
 /** Per-kind accent — one icon family, semantic colour, like mobile rows. */
@@ -44,6 +67,7 @@ export const KIND_ACCENT: Record<NotificationKind, { icon: AppIconName; classNam
   review: { icon: 'star', className: 'text-warning-text', filled: true },
   new_item: { icon: 'pricetag', className: 'text-text-secondary' },
   saved_search_match: { icon: 'search', className: 'text-commerce-trust' },
+  auction: { icon: 'auction', className: 'text-warning-text' },
   system: { icon: 'info', className: 'text-text-secondary' },
 };
 
@@ -198,7 +222,7 @@ const TYPE_SECTIONS: { label: string; kinds: NotificationKind[] }[] = [
   { label: 'Offers', kinds: ['offer'] },
   {
     label: 'Activity',
-    kinds: ['like', 'review', 'price_drop', 'new_item', 'saved_search_match', 'system'],
+    kinds: ['like', 'review', 'price_drop', 'new_item', 'saved_search_match', 'auction', 'system'],
   },
 ];
 
@@ -214,7 +238,12 @@ export function groupNotificationsAuto(items: NotificationRowModel[]): Notificat
   return items.length > 6 ? groupNotificationsByType(items) : groupNotifications(items);
 }
 
-/** Filter rows — 'orders' covers order + offer activity (mobile parity). */
+/**
+ * Filter rows — 'orders' covers order + offer activity, 'items' covers
+ * new listings and saved-search matches (mobile FILTER_EVENT_TYPES
+ * parity). Kinds with no dedicated filter (likes, follows, system) only
+ * surface under All — same as mobile.
+ */
 export function filterNotifications(
   items: NotificationRowModel[],
   filter: NotificationFilter,
@@ -224,7 +253,72 @@ export function filterNotifications(
       return items.filter((i) => i.unread);
     case 'orders':
       return items.filter((i) => i.kind === 'order' || i.kind === 'offer');
+    case 'items':
+      return items.filter(
+        (i) => i.kind === 'new_item' || i.kind === 'saved_search_match',
+      );
+    case 'reviews':
+      return items.filter((i) => i.kind === 'review');
+    case 'prices':
+      return items.filter((i) => i.kind === 'price_drop');
+    case 'auctions':
+      return items.filter((i) => i.kind === 'auction');
     default:
       return items;
+  }
+}
+
+/**
+ * Per-filter counts computed from the merged feed — the sheet's trailing
+ * numbers are the dataset's own truth, so a filter with zero rows reads
+ * no count rather than a fabricated badge.
+ */
+export function notificationFilterCounts(
+  items: NotificationRowModel[],
+): Record<NotificationFilter, number> {
+  const counts = {} as Record<NotificationFilter, number>;
+  for (const f of NOTIFICATION_OVERFLOW_FILTERS) {
+    counts[f.key] = filterNotifications(items, f.key).length;
+  }
+  return counts;
+}
+
+/** Empty-state copy for a filtered feed — label-aware, never generic. */
+export function notificationFilterEmpty(
+  filter: NotificationFilter,
+): { title: string; subtitle: string } {
+  switch (filter) {
+    case 'unread':
+      return { title: 'All caught up', subtitle: 'You have no unread notifications.' };
+    case 'orders':
+      return {
+        title: 'No order updates',
+        subtitle: 'Order and offer activity will show up here.',
+      };
+    case 'items':
+      return {
+        title: 'No item alerts',
+        subtitle: 'New listings from sellers you follow and saved-search matches will show up here.',
+      };
+    case 'reviews':
+      return {
+        title: 'No reviews yet',
+        subtitle: 'Reviews you receive will show up here.',
+      };
+    case 'prices':
+      return {
+        title: 'No price drops',
+        subtitle: 'Price drops on items you watch will show up here.',
+      };
+    case 'auctions':
+      return {
+        title: 'No auction activity',
+        subtitle: 'Outbid alerts and auction results will show up here.',
+      };
+    default:
+      return {
+        title: 'No notifications',
+        subtitle: 'Offers, orders and new followers will show up here.',
+      };
   }
 }

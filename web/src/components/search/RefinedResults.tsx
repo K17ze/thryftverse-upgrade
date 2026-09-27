@@ -3,19 +3,22 @@
 /**
  * RefinedResults — the results engine for search, category and browse.
  * eBay grammar on desktop (lg+): a sticky refinement rail on the left
- * (real facet counts, collapsible groups) beside the results column;
- * mobile keeps the sticky count/sort/filter toolbar + filter sheet.
+ * (real facet counts, collapsible groups) beside the results column.
+ * Below lg the sheet is the one facet surface — the rail is hidden and
+ * the sheet unmounts on desktop so the two never cover the same facets
+ * in one viewport.
  *
- * Sort arrives controlled (persisted in the URL by the page via
- * useSortParam) so a sorted result set survives share and back.
- * Facets stay in component state; active ones render as removable
- * chips with a quiet "Clear all". Full state coverage: skeleton,
- * filtered-empty, empty, populated.
- *
- * Mount with a `key` when the result context changes to reset facets.
+ * Facets arrive controlled — the page owns them (persisted in the URL via
+ * useFacetParams) so a refined view is shareable and back/forward replays
+ * it. Sort is controlled the same way. Active facet values render as
+ * removable chips with a quiet "Clear all"; populated results end with a
+ * related-searches row derived from the result set itself. Full state
+ * coverage: skeleton, filtered-empty, empty, populated.
  */
 
 import { useMemo, useState } from 'react';
+import Link from 'next/link';
+import { StateGate } from '@/components/flagship/StateGate';
 import { MasonryGrid } from '@/components/feed/MasonryGrid';
 import { Button } from '@/components/ui/Button';
 import { EmptyState } from '@/components/ui/EmptyState';
@@ -35,30 +38,49 @@ import {
   type SortKey,
 } from '@/components/filters/filterTypes';
 import { FilterSheet } from '@/components/filters/FilterSheet';
+import { useMediaQuery } from '@/components/filters/useMediaQuery';
 import { useResultColumns } from '@/components/filters/useResultColumns';
+import { COLOR_VOCAB } from '@/components/visualsearch/visualSearchTypes';
+import { relatedSearches } from './searchMatch';
 import { RefinementRail } from './RefinementRail';
 import { SortDropdown } from './SortDropdown';
+import type { StateCopyDomain } from '@/lib/state-copy';
 
 interface ResultsChip {
   key: string;
   label: string;
+  /** Colour chips carry the vocabulary swatch. */
+  swatch?: string;
   onRemove: () => void;
 }
 
 interface RefinedResultsProps {
   listings: Listing[];
   isLoading: boolean;
+  /** Query failure — renders an error state with retry, not "no results". */
+  isError?: boolean;
+  onRetry?: () => void;
+  /** Registry domain for the error/offline state — the host surface names
+   *  it ('search' on /search, 'listings' on category/browse). */
+  stateDomain?: StateCopyDomain;
   /** Rendered in the toolbar; receives the filtered count (null while loading). */
   heading: (count: number | null) => React.ReactNode;
   /** Hide the category facet where the surface is already category-scoped. */
   hideCategoryFilter?: boolean;
-  /** Seed filters — replays a saved-search URL. */
-  initialFilters?: ListingFilters;
+  /** Controlled facets — the page persists them (URL via useFacetParams). */
+  filters: ListingFilters;
+  onFiltersChange: (next: ListingFilters) => void;
+  /** Best-match score per listing id — ranks the default relevance sort. */
+  relevanceScores?: ReadonlyMap<string, number>;
+  /** The active query — excluded from the related-searches row. */
+  query?: string;
   /** Controlled sort — the page persists it in the URL. */
   sort: SortKey;
   onSortChange: (next: SortKey) => void;
   /** Quiet line under the toolbar — e.g. a "did you mean" correction. */
   notice?: React.ReactNode;
+  /** Content above the grid inside the results column (e.g. member matches). */
+  preamble?: React.ReactNode;
   onSaveSearch?: (filters: ListingFilters) => void;
   /** Empty state when the unfiltered set is empty. */
   emptyTitle?: string;
@@ -67,15 +89,27 @@ interface RefinedResultsProps {
   onEmptyAction?: () => void;
 }
 
+/** Swatch lookup for colour chips — kept off the render path. */
+const COLOUR_SWATCHES = new Map(
+  COLOR_VOCAB.map((c) => [c.name, `rgb(${c.rgb[0]}, ${c.rgb[1]}, ${c.rgb[2]})`]),
+);
+
 export function RefinedResults({
   listings,
   isLoading,
+  isError,
+  onRetry,
+  stateDomain = 'listings',
   heading,
   hideCategoryFilter,
-  initialFilters,
+  filters,
+  onFiltersChange,
+  relevanceScores,
+  query,
   sort,
   onSortChange,
   notice,
+  preamble,
   onSaveSearch,
   emptyTitle = 'Nothing here yet',
   emptySubtitle = 'Check back soon — new items arrive daily.',
@@ -83,14 +117,14 @@ export function RefinedResults({
   onEmptyAction,
 }: RefinedResultsProps) {
   const columns = useResultColumns();
-  const [filters, setFilters] = useState<ListingFilters>(
-    initialFilters ?? EMPTY_FILTERS,
-  );
   const [sheetOpen, setSheetOpen] = useState(false);
+  // One facet surface per viewport — the lg rail owns desktop; the sheet
+  // only exists below lg (and auto-dismisses across a resize crossing).
+  const isDesktop = useMediaQuery('(min-width: 1024px)');
 
   const filtered = useMemo(
-    () => sortListings(applyListingFilters(listings, filters), sort),
-    [listings, filters, sort],
+    () => sortListings(applyListingFilters(listings, filters), sort, relevanceScores),
+    [listings, filters, sort, relevanceScores],
   );
   const activeCount = countActiveFilters(filters);
 
@@ -104,14 +138,27 @@ export function RefinedResults({
     [filtered],
   );
 
+  const categoryName = useMemo(
+    () => new Map(CATEGORIES.map((c) => [c.slug, c.name])),
+    [],
+  );
+
+  // "Searches related to" — terms the result set itself surfaces.
+  const related = useMemo(
+    () => relatedSearches(filtered, query ?? ''),
+    [filtered, query],
+  );
+
   /**
-   * One removable chip per active facet value — conditions fan out,
-   * price collapses to a single chip. Removing reflows the grid
-   * immediately, matching the sheet's live apply.
+   * One removable chip per active facet value — every multi-select
+   * dimension fans out, price collapses to a single chip. Removing
+   * reflows the grid immediately, matching the sheet's live apply.
    */
   const chips = useMemo<ResultsChip[]>(() => {
     const set = (next: Partial<ListingFilters>) =>
-      setFilters({ ...filters, ...next });
+      onFiltersChange({ ...filters, ...next });
+    const dropValue = (list: string[], v: string) =>
+      list.filter((x) => x.toLowerCase() !== v.toLowerCase());
     const out: ResultsChip[] = filters.conditions.map((c) => ({
       key: `condition:${c}`,
       label: c,
@@ -131,40 +178,55 @@ export function RefinedResults({
         onRemove: () => set({ priceMin: null, priceMax: null }),
       });
     }
-    if (filters.category) {
+    for (const slug of filters.categories) {
       out.push({
-        key: 'category',
-        label:
-          CATEGORIES.find((c) => c.slug === filters.category)?.name ??
-          filters.category,
-        onRemove: () => set({ category: null }),
+        key: `category:${slug}`,
+        label: categoryName.get(slug.toLowerCase()) ?? slug,
+        onRemove: () => set({ categories: dropValue(filters.categories, slug) }),
       });
     }
-    if (filters.size.trim()) {
+    for (const s of filters.sizes) {
+      if (!s.trim()) continue;
       out.push({
-        key: 'size',
-        label: `Size ${filters.size.trim()}`,
-        onRemove: () => set({ size: '' }),
+        key: `size:${s.toLowerCase()}`,
+        label: `Size ${s.trim()}`,
+        onRemove: () => set({ sizes: dropValue(filters.sizes, s) }),
       });
     }
-    if (filters.brand.trim()) {
+    for (const b of filters.brands) {
+      if (!b.trim()) continue;
       out.push({
-        key: 'brand',
-        label: filters.brand.trim(),
-        onRemove: () => set({ brand: '' }),
+        key: `brand:${b.toLowerCase()}`,
+        label: b.trim(),
+        onRemove: () => set({ brands: dropValue(filters.brands, b) }),
+      });
+    }
+    for (const c of filters.colours) {
+      out.push({
+        key: `colour:${c.toLowerCase()}`,
+        label: c,
+        swatch: COLOUR_SWATCHES.get(c) ?? undefined,
+        onRemove: () => set({ colours: dropValue(filters.colours, c) }),
+      });
+    }
+    if (filters.includeSold) {
+      out.push({
+        key: 'sold',
+        label: 'Sold items',
+        onRemove: () => set({ includeSold: false }),
       });
     }
     return out;
-  }, [filters]);
+  }, [filters, onFiltersChange, categoryName]);
 
   const rail = (
     <RefinementRail
       listings={listings}
       filters={filters}
-      onChange={setFilters}
+      onChange={onFiltersChange}
       hideCategory={hideCategoryFilter}
       activeCount={activeCount}
-      onClearAll={() => setFilters(EMPTY_FILTERS)}
+      onClearAll={() => onFiltersChange(EMPTY_FILTERS)}
     />
   );
 
@@ -179,8 +241,8 @@ export function RefinedResults({
 
       <div className="min-w-0">
         {/* Sticky results toolbar — count left, sort + filters right.
-            Under the 64px header (+42px department rail below lg). */}
-        <div className="sticky top-[106px] z-elevated border-b border-border-subtle bg-background/95 backdrop-blur-sm lg:top-16">
+            Sits directly under the header (56px below md, 64px at md+). */}
+        <div className="sticky top-14 z-elevated border-b border-border-subtle bg-background/95 backdrop-blur-sm md:top-16">
           <div className="flex flex-wrap items-center justify-between gap-x-3 gap-y-2 px-4 pb-2.5 pt-2 sm:px-6">
             <div className="min-w-0 flex-1">
               {heading(isLoading ? null : filtered.length)}
@@ -192,6 +254,7 @@ export function RefinedResults({
                 size="sm"
                 icon="filter"
                 onClick={() => setSheetOpen(true)}
+                className="lg:hidden"
               >
                 Filters{activeCount > 0 ? ` · ${activeCount}` : ''}
               </Button>
@@ -205,62 +268,109 @@ export function RefinedResults({
               aria-label="Active filters"
             >
               {chips.map((chip) => (
-                <button
-                  key={chip.key}
-                  type="button"
-                  role="listitem"
-                  onClick={chip.onRemove}
-                  aria-label={`Remove filter: ${chip.label}`}
-                  className="pressable inline-flex h-8 shrink-0 items-center gap-1 rounded-full bg-surface-alt pl-3 pr-2 text-caption font-semibold text-text-primary hover:bg-surface-raised"
-                >
-                  {chip.label}
-                  <Icon name="close" size={13} className="text-text-muted" />
-                </button>
+                <div key={chip.key} role="listitem" className="shrink-0">
+                  <button
+                    type="button"
+                    onClick={chip.onRemove}
+                    aria-label={`Remove filter: ${chip.label}`}
+                    className="pressable inline-flex h-8 items-center gap-1 rounded-full bg-surface-alt pl-3 pr-2 text-caption font-semibold text-text-primary hover:bg-surface-raised"
+                  >
+                    {chip.swatch ? (
+                      <span
+                        aria-hidden
+                        className="h-3 w-3 shrink-0 rounded-full border border-border-subtle"
+                        style={{ backgroundColor: chip.swatch }}
+                      />
+                    ) : null}
+                    <span className="max-w-44 truncate">{chip.label}</span>
+                    <Icon name="close" size={13} className="shrink-0 text-text-muted" />
+                  </button>
+                </div>
               ))}
-              <button
-                type="button"
-                onClick={() => setFilters(EMPTY_FILTERS)}
-                className="pressable h-8 shrink-0 px-1 text-caption font-semibold text-text-secondary hover:text-text-primary"
-              >
-                Clear all
-              </button>
+              <div role="listitem" className="shrink-0">
+                <button
+                  type="button"
+                  onClick={() => onFiltersChange(EMPTY_FILTERS)}
+                  className="pressable h-8 px-1 text-caption font-semibold text-text-secondary hover:text-text-primary"
+                >
+                  Clear all
+                </button>
+              </div>
             </div>
           ) : null}
         </div>
 
         <div className="pt-3">
           {notice ? <div className="px-4 pb-2 sm:px-6">{notice}</div> : null}
-          {isLoading || units.length > 0 ? (
-            <MasonryGrid units={units} columns={columns} isLoading={isLoading} />
-          ) : activeCount > 0 ? (
-            <EmptyState
-              icon="filter"
-              title="No matches with these filters"
-              subtitle="Try widening the price range or removing a filter."
-              actionLabel="Clear filters"
-              onAction={() => setFilters(EMPTY_FILTERS)}
-            />
-          ) : (
-            <EmptyState
-              icon="search"
-              title={emptyTitle}
-              subtitle={emptySubtitle}
-              actionLabel={emptyActionLabel}
-              onAction={onEmptyAction}
-            />
-          )}
+          {preamble}
+          {/* Registry error/offline via StateGate — offline resolves to
+              the domain's offline copy; the empty branches below stay
+              bespoke (query/facet context the registry doesn't have). */}
+          <StateGate
+            domain={stateDomain}
+            isLoading={false}
+            isError={isError === true && !isLoading}
+            onRetry={onRetry}
+          >
+            {isLoading || units.length > 0 ? (
+              <MasonryGrid units={units} columns={columns} isLoading={isLoading} />
+            ) : activeCount > 0 ? (
+              <EmptyState
+                icon="filter"
+                title="No matches with these filters"
+                subtitle="Try widening the price range or removing a filter."
+                actionLabel="Clear filters"
+                onAction={() => onFiltersChange(EMPTY_FILTERS)}
+              />
+            ) : (
+              <EmptyState
+                icon="search"
+                title={emptyTitle}
+                subtitle={emptySubtitle}
+                actionLabel={emptyActionLabel}
+                onAction={onEmptyAction}
+              />
+            )}
+          </StateGate>
+
+          {/* Searches related to — trailing row on populated sets, terms
+              sourced from the result set itself. */}
+          {!isLoading && !isError && units.length > 0 && related.length > 0 ? (
+            <nav
+              aria-label="Related searches"
+              className="px-4 pb-10 pt-9 sm:px-6"
+            >
+              <h2 className="text-label font-semibold uppercase tracking-wide text-text-muted">
+                Related searches
+              </h2>
+              <div className="mt-2.5 flex flex-wrap gap-1.5">
+                {related.map((term) => (
+                  <Link
+                    key={term.toLowerCase()}
+                    href={`/search?q=${encodeURIComponent(term)}`}
+                    className="pressable inline-flex h-9 items-center rounded-full bg-surface-alt px-4 text-body font-medium text-text-primary hover:bg-surface-raised"
+                  >
+                    {term}
+                  </Link>
+                ))}
+              </div>
+            </nav>
+          ) : null}
         </div>
       </div>
 
-      <FilterSheet
-        open={sheetOpen}
-        onClose={() => setSheetOpen(false)}
-        filters={filters}
-        onChange={setFilters}
-        resultCount={filtered.length}
-        hideCategory={hideCategoryFilter}
-        onSaveSearch={onSaveSearch ? () => onSaveSearch(filters) : undefined}
-      />
+      {isDesktop ? null : (
+        <FilterSheet
+          open={sheetOpen}
+          onClose={() => setSheetOpen(false)}
+          listings={listings}
+          filters={filters}
+          onChange={onFiltersChange}
+          resultCount={filtered.length}
+          hideCategory={hideCategoryFilter}
+          onSaveSearch={onSaveSearch ? () => onSaveSearch(filters) : undefined}
+        />
+      )}
     </div>
   );
 }

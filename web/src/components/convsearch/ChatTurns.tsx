@@ -22,9 +22,12 @@ import {
   refinementsFor,
   searchHref,
   STARTER_PROMPTS,
+  trustForAnswer,
   type ConstraintChip,
   type ParsedIntent,
 } from './convSearchEngine';
+import { DATA_MODE } from '@/lib/api/client';
+import { AITrustSignal } from './AITrustSignal';
 
 // ---------------------------------------------------------------------------
 // Turn model — owned by ConvSearchClient, rendered here
@@ -111,7 +114,7 @@ function ConstraintChipButton({
         type="button"
         onClick={() => onRemove(chip)}
         aria-label={`Remove ${chip.label}`}
-        className="pressable flex h-6 w-6 items-center justify-center rounded-full text-text-muted hover:text-text-primary"
+        className="pressable relative flex h-6 w-6 items-center justify-center rounded-full text-text-muted after:absolute after:-inset-2.5 after:content-[''] hover:text-text-primary"
       >
         <Icon name="close" size={13} />
       </button>
@@ -140,11 +143,25 @@ function AssistantTurn({
   const chips = hasConstraints ? buildChips(intent) : [];
   const refinements = hasConstraints ? refinementsFor(intent, results) : [];
   const rail = results.slice(0, RAIL_LIMIT).map(mapListingToDiscoverySummary);
+  // Per-answer trust signal — confidence derived from what the parser
+  // actually extracted and whether the catalogue could satisfy it.
+  const trust = intent ? trustForAnswer(intent, turn.results ?? []) : null;
 
   return (
     <div className="flex flex-col gap-3">
       <div className="max-w-[92%] rounded-chat bg-surface px-4 py-3 sm:max-w-[80%]">
         <p className="text-body text-text-primary">{turn.text}</p>
+
+        {trust ? (
+          <div className="mt-2.5">
+            <AITrustSignal
+              confidence={trust.confidence}
+              source={trust.source}
+              expanded={trust.expanded}
+              isDemo={DATA_MODE === 'fixture'}
+            />
+          </div>
+        ) : null}
 
         {chips.length > 0 ? (
           <div className="mt-3">

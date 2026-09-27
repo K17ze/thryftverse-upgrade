@@ -6,9 +6,13 @@
  * (bounded random walk around the seed) so presence reads alive without
  * pretending a socket exists. Seeded by session id — the walk is
  * deterministic across opens, matching fixture-mode honesty.
+ *
+ * Live mode renders the server count verbatim — the random walk only runs
+ * on fixture sessions, never over real viewer counts.
  */
 
 import { useEffect, useState } from 'react';
+import { DATA_MODE } from '@/lib/api/client';
 import type { LiveSession } from '@/lib/data/fixtures-media';
 
 /**
@@ -39,6 +43,9 @@ export function useLivePresence(session: LiveSession | null): number | null {
   useEffect(() => {
     const base = session?.viewers ?? null;
     setViewers(base);
+    // Live sessions show the server count as-is — fabricated drift on a
+    // real room would be a fake metric.
+    if (DATA_MODE === 'live') return;
     if (!session || session.status !== 'live' || base == null) return;
 
     const rand = seededRandom(`${session.id}:viewers`);

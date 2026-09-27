@@ -1,12 +1,17 @@
 'use client';
 
 /**
- * Payout accounts + withdrawal request history — persisted session store,
- * mirroring lib/store/userPaymentData.ts conventions. Fixture seeds live in
- * PAYOUT_ACCOUNTS / PAYOUT_REQUESTS; the store carries session-created
- * accounts (masked to last4 — the full account number never persists),
- * seed-removal overrides, the resolved default and payout requests made
- * in-session, so /wallet/payouts and /wallet/withdraw share one truth.
+ * Payout accounts + withdrawal request history — one hook, two truths:
+ *
+ *  - live: the server is truth. Destinations come from
+ *    GET /users/:id/payout-accounts, history from GET /payout-requests —
+ *    fixture seeds are never merged into a real user's rail, and no local
+ *    write path pretends to move money.
+ *  - fixture: the demo overlay store below. Seeds live in
+ *    PAYOUT_ACCOUNTS / PAYOUT_REQUESTS; the store carries session-created
+ *    accounts (masked to last4 — the full account number never persists),
+ *    seed-removal overrides, the resolved default and session requests,
+ *    all under the 'thryftverse.web.payouts' localStorage key.
  */
 
 import { useMemo } from 'react';
@@ -18,7 +23,21 @@ import {
   type PayoutAccount,
   type PayoutRequest,
 } from '@/lib/data/fixtures';
-import { accountNumberDigits, formatSortCode } from './withdrawViewModel';
+import { DATA_MODE } from '@/lib/api/client';
+import type { PayoutAccountPayload } from '@/lib/api/services/payouts';
+import { usePayoutAccountsQuery, usePayoutRequestsQuery } from '@/lib/hooks/payout-queries';
+import { useSession } from '@/lib/session/SessionProvider';
+import { useHydrated } from '@/lib/store/useStore';
+import {
+  accountNumberDigits,
+  fixtureDestination,
+  formatSortCode,
+  liveDestination,
+  requestFromApi,
+  type PayoutDestination,
+} from './withdrawViewModel';
+
+const IS_LIVE = DATA_MODE === 'live';
 
 export interface NewPayoutAccountInput {
   holderName: string;
@@ -31,7 +50,9 @@ export interface NewPayoutAccountInput {
 
 export type RemoveAccountResult =
   | { ok: true; promotedToDefault?: string }
-  | { ok: false; reason: 'only_account' | 'not_found' };
+  | { ok: false; reason: 'only_account' | 'not_found' | 'unsupported' };
+
+// ── Fixture-mode overlay store (demo build only) ──────────────────────
 
 interface PayoutsState {
   extraAccounts: PayoutAccount[];
@@ -118,48 +139,154 @@ export const usePayoutStore = create<PayoutsState>()(
   ),
 );
 
+// ── Hook ──────────────────────────────────────────────────────────────
+
 export interface PayoutAccountsData {
-  /** Merged accounts with exactly one resolved default. */
-  accounts: PayoutAccount[];
-  defaultAccount: PayoutAccount | null;
-  /** Newest-first request history: session entries, then fixture seeds. */
+  mode: 'live' | 'fixture';
+  /** Loading the payout rail (live) — fixture resolves synchronously. */
+  isLoading: boolean;
+  /** The destinations read failed (live only) — show an honest retry. */
+  isError: boolean;
+  /** The history read failed (live only) — destinations may still load. */
+  requestsError: boolean;
+  refetch: () => void;
+  /** Every destination, any status — the rail renders pending/disabled
+   *  rows disabled rather than hiding them. */
+  destinations: PayoutDestination[];
+  /** Destinations a payout can target right now (status 'active'). */
+  selectableDestinations: PayoutDestination[];
+  /** Default pick: the explicit override (fixture) or first active (live). */
+  defaultDestination: PayoutDestination | null;
+  /** Newest-first withdrawal history — server truth in live mode. */
   requests: PayoutRequest[];
+  /** Raw fixture accounts — feeds the add-sheet duplicate check. Empty
+   *  in live mode, where the bank-detail form never renders. */
+  fixtureAccounts: PayoutAccount[];
+  /** Fixture-mode local write — throws in live mode; views gate on mode
+   *  and open the Stripe setup sheet instead. */
   addAccount: (input: NewPayoutAccountInput) => PayoutAccount;
+  /** Fixture-mode only — there is no payout-account delete endpoint. */
   removeAccount: (id: string) => RemoveAccountResult;
+  /** Fixture-mode only — the live rail has no client-settable default. */
   setDefault: (id: string) => void;
+  /** Fixture-mode only — live requests come back through the server. */
   recordRequest: (request: PayoutRequest) => void;
 }
 
 export function usePayoutAccounts(): PayoutAccountsData {
+  const { user, isGuest } = useSession();
+  // Persisted reads gate behind hydration — SSR and the first client
+  // render resolve the seed set; localStorage truth lands after mount.
+  const hydrated = useHydrated();
   const extraAccounts = usePayoutStore((s) => s.extraAccounts);
   const removedSeedIds = usePayoutStore((s) => s.removedSeedIds);
   const defaultOverride = usePayoutStore((s) => s.defaultOverride);
   const sessionRequests = usePayoutStore((s) => s.sessionRequests);
-  const addAccount = usePayoutStore((s) => s.addAccount);
-  const removeAccount = usePayoutStore((s) => s.removeAccount);
-  const setDefault = usePayoutStore((s) => s.setDefault);
-  const recordRequest = usePayoutStore((s) => s.recordRequest);
+  const storeAddAccount = usePayoutStore((s) => s.addAccount);
+  const storeRemoveAccount = usePayoutStore((s) => s.removeAccount);
+  const storeSetDefault = usePayoutStore((s) => s.setDefault);
+  const storeRecordRequest = usePayoutStore((s) => s.recordRequest);
 
-  // Memoised so effect deps downstream don't fire on every render.
-  const accounts = useMemo(
-    () => resolveAccounts({ extraAccounts, removedSeedIds, defaultOverride }),
-    [extraAccounts, removedSeedIds, defaultOverride],
-  );
-  const requests = useMemo(
+  // Live rail — disabled-gated inside the query hooks (guests and fixture
+  // builds never fire them).
+  const {
+    data: liveAccounts,
+    isLoading: accountsLoading,
+    isError: accountsError,
+    refetch: refetchAccounts,
+  } = usePayoutAccountsQuery();
+  const {
+    data: liveRequests,
+    isError: liveRequestsError,
+    refetch: refetchRequests,
+  } = usePayoutRequestsQuery();
+
+  const fixtureAccounts = useMemo(
     () =>
-      [...sessionRequests, ...PAYOUT_REQUESTS].sort(
-        (a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime(),
+      resolveAccounts(
+        hydrated
+          ? { extraAccounts, removedSeedIds, defaultOverride }
+          : { extraAccounts: [], removedSeedIds: [], defaultOverride: null },
       ),
-    [sessionRequests],
+    [hydrated, extraAccounts, removedSeedIds, defaultOverride],
   );
 
-  return {
-    accounts,
-    defaultAccount: accounts.find((a) => a.isDefault) ?? null,
-    requests,
-    addAccount,
-    removeAccount,
-    setDefault,
-    recordRequest,
-  };
+  return useMemo<PayoutAccountsData>(() => {
+    if (IS_LIVE) {
+      // Live mode NEVER merges fixture seeds — a signed-out or
+      // unresolved session resolves to an empty rail, not the demo
+      // identity's bank accounts.
+      const liveAccountsList = user && !isGuest ? (liveAccounts ?? []) : [];
+      const accountById = new Map<number, PayoutAccountPayload>(
+        liveAccountsList.map((a) => [a.id, a]),
+      );
+      const firstActiveId = liveAccountsList.find((a) => a.status === 'active')?.id ?? null;
+      const destinations = liveAccountsList.map((a) =>
+        liveDestination(a, a.id === firstActiveId),
+      );
+      const requests = (liveRequests ?? []).map((r) =>
+        requestFromApi(r, accountById.get(r.payoutAccountId)),
+      );
+      return {
+        mode: 'live',
+        isLoading: accountsLoading,
+        isError: accountsError,
+        requestsError: liveRequestsError,
+        refetch: () => {
+          void refetchAccounts();
+          void refetchRequests();
+        },
+        destinations,
+        selectableDestinations: destinations.filter((d) => d.status === 'active'),
+        defaultDestination:
+          destinations.find((d) => d.isDefault) ?? destinations[0] ?? null,
+        requests,
+        fixtureAccounts: [],
+        addAccount: () => {
+          throw new Error('Payout methods are set up through Stripe in live mode.');
+        },
+        removeAccount: () => ({ ok: false, reason: 'unsupported' }),
+        setDefault: () => undefined,
+        recordRequest: () => undefined,
+      };
+    }
+
+    const destinations = fixtureAccounts.map(fixtureDestination);
+    const requests = [...(hydrated ? sessionRequests : []), ...PAYOUT_REQUESTS].sort(
+      (a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime(),
+    );
+    return {
+      mode: 'fixture',
+      isLoading: false,
+      isError: false,
+      requestsError: false,
+      refetch: () => undefined,
+      destinations,
+      selectableDestinations: destinations,
+      defaultDestination: destinations.find((d) => d.isDefault) ?? null,
+      requests,
+      fixtureAccounts,
+      addAccount: storeAddAccount,
+      removeAccount: storeRemoveAccount,
+      setDefault: storeSetDefault,
+      recordRequest: storeRecordRequest,
+    };
+  }, [
+    user,
+    isGuest,
+    hydrated,
+    fixtureAccounts,
+    sessionRequests,
+    liveAccounts,
+    accountsLoading,
+    accountsError,
+    refetchAccounts,
+    liveRequests,
+    liveRequestsError,
+    refetchRequests,
+    storeAddAccount,
+    storeRemoveAccount,
+    storeSetDefault,
+    storeRecordRequest,
+  ]);
 }

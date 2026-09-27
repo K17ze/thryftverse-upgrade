@@ -30,12 +30,13 @@ import { formatDate } from '@/lib/utils/format';
 import { ContributionComposer } from './ContributionComposer';
 import { ExecutionList } from './ExecutionList';
 import { MemberList } from './MemberList';
+import { PoolActions } from './PoolActions';
 import { PoolMeter } from './PoolMeter';
 import { SyndicateStatusTag } from './SyndicateStatusTag';
 
 const PHASE_LINE: Record<string, string | null> = {
   open: null,
-  funded: 'The pool is fully funded — the pooled buy is queued.',
+  funded: 'The pool is fully funded — a member can settle the pooled buy now.',
   executed: 'The pooled buy executed and units were allocated pro-rata.',
   dissolved: 'This pool was dissolved and contributions returned.',
 };
@@ -222,6 +223,7 @@ export function SyndicateDetailView({ id }: { id: string }) {
             <div className={member ? 'mt-4 border-t border-border-subtle pt-4' : 'mt-3'}>
               <ContributionComposer syndicate={syndicate} asset={asset} />
             </div>
+            <PoolActions syndicate={syndicate} asset={asset} />
           </div>
 
           {syndicate.termsNote ? (
@@ -235,7 +237,8 @@ export function SyndicateDetailView({ id }: { id: string }) {
           ) : null}
 
           <p className="mt-3 px-1 text-meta text-text-muted">
-            Commitments are pooled in GBP and used only to buy the target units. Capital at risk.
+            Commitments are pooled in GBP and used only to buy the target units. Pools and
+            their order history live for this session. Capital at risk.
           </p>
         </aside>
       </div>

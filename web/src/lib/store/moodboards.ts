@@ -13,18 +13,40 @@
 
 import { create } from 'zustand';
 import { persist, createJSONStorage } from 'zustand/middleware';
+import type { MoodboardItemPosition } from '@/lib/data/fixtures-content';
 
 export interface MoodboardOverlay {
   /** Renamed board title — replaces the fixture title when present. */
   title?: string;
-  /** Effective ordered listing ids once edited; absent = fixture order. */
+  /** Effective ordered listing ids once edited; absent = fixture order.
+   *  Also the canvas layer order (back → front), matching mobile. */
   itemIds?: string[];
+  /** Canvas theme override — absent = fixture theme for the board. */
+  themeId?: string;
+  /** Freeform canvas placement keyed by listing id — absent = authored
+   *  fixture layout or the deterministic scatter fallback. */
+  positions?: Record<string, MoodboardItemPosition>;
 }
 
 interface MoodboardsState {
   boards: Record<string, MoodboardOverlay>;
   renameBoard: (boardId: string, title: string) => void;
   setBoardItems: (boardId: string, itemIds: string[]) => void;
+  setBoardTheme: (boardId: string, themeId: string) => void;
+  setItemPosition: (
+    boardId: string,
+    itemId: string,
+    position: MoodboardItemPosition,
+  ) => void;
+  /** Restore a full canvas snapshot (theme + item order + positions). */
+  restoreBoardSnapshot: (
+    boardId: string,
+    snapshot: {
+      itemIds: string[];
+      themeId?: string;
+      positions?: Record<string, MoodboardItemPosition>;
+    },
+  ) => void;
 }
 
 export const useMoodboardEdits = create<MoodboardsState>()(
@@ -38,6 +60,35 @@ export const useMoodboardEdits = create<MoodboardsState>()(
       setBoardItems: (boardId, itemIds) =>
         set((s) => ({
           boards: { ...s.boards, [boardId]: { ...s.boards[boardId], itemIds } },
+        })),
+      setBoardTheme: (boardId, themeId) =>
+        set((s) => ({
+          boards: { ...s.boards, [boardId]: { ...s.boards[boardId], themeId } },
+        })),
+      setItemPosition: (boardId, itemId, position) =>
+        set((s) => {
+          const overlay = s.boards[boardId];
+          return {
+            boards: {
+              ...s.boards,
+              [boardId]: {
+                ...overlay,
+                positions: { ...overlay?.positions, [itemId]: position },
+              },
+            },
+          };
+        }),
+      restoreBoardSnapshot: (boardId, snapshot) =>
+        set((s) => ({
+          boards: {
+            ...s.boards,
+            [boardId]: {
+              ...s.boards[boardId],
+              itemIds: snapshot.itemIds,
+              ...(snapshot.themeId ? { themeId: snapshot.themeId } : {}),
+              positions: snapshot.positions ?? {},
+            },
+          },
         })),
     }),
     {
@@ -95,4 +146,19 @@ export function withItemsAdded(ids: string[], added: string[]): string[] {
   const have = new Set(ids);
   const fresh = added.filter((id) => !have.has(id));
   return fresh.length === 0 ? ids : [...ids, ...fresh];
+}
+
+/**
+ * Canvas layer order — itemIds double as the z-stack (back → front), the
+ * same grammar the mobile editor uses for its item array. `front` pushes
+ * the item last (topmost); `back` pulls it first (bottom-most).
+ */
+export function itemToLayer(
+  ids: string[],
+  id: string,
+  layer: 'front' | 'back',
+): string[] {
+  const without = ids.filter((x) => x !== id);
+  if (without.length === ids.length) return ids;
+  return layer === 'front' ? [...without, id] : [id, ...without];
 }

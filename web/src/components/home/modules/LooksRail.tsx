@@ -38,7 +38,7 @@ export function LooksRail() {
                   alt={look.title ?? 'Look'}
                   fill
                   sizes="160px"
-                  className="h-full w-full transition-transform duration-300 group-hover:scale-105"
+                  className="h-full w-full media-zoom"
                 />
                 <div className="absolute inset-x-0 bottom-0 bg-gradient-to-t from-media-overlay-scrim to-transparent px-2.5 pb-2 pt-8">
                   <div className="flex items-center gap-1.5">

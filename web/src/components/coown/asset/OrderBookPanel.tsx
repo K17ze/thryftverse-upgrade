@@ -260,6 +260,15 @@ export function OrderBookPanel({
   const bestBid = book?.bids[0]?.unitPriceGbp ?? null;
   const bestAsk = book?.asks[0]?.unitPriceGbp ?? null;
 
+  // Full-book totals for the depth view's text summary (the ladder caps
+  // at MAX_LEVELS; depth reads every level).
+  const bidsAll = book?.bids ?? [];
+  const asksAll = book?.asks ?? [];
+  const depthBidUnits = bidsAll.reduce((s, l) => s + l.units, 0);
+  const depthAskUnits = asksAll.reduce((s, l) => s + l.units, 0);
+  const depthLow = bidsAll.at(-1)?.unitPriceGbp ?? null;
+  const depthHigh = asksAll.at(-1)?.unitPriceGbp ?? null;
+
   const bookLoaded = book !== undefined;
   // Null snapshot = no book exists for this market at all (e.g. initial
   // offering) — same honest empty state as a book with no levels.
@@ -279,16 +288,18 @@ export function OrderBookPanel({
         ) : null}
       </div>
 
+      {/* View switcher — these swap one region, not labelled tabpanels,
+          so they're pressed-buttons, not a tablist. */}
       <div
-        role="tablist"
+        role="group"
         aria-label="Order book view"
         className="mt-2 flex gap-5 border-b border-border-subtle"
       >
         {VIEWS.map((v) => (
           <button
             key={v.value}
-            role="tab"
-            aria-selected={view === v.value}
+            type="button"
+            aria-pressed={view === v.value}
             onClick={() => setView(v.value)}
             className={`pressable relative pb-2 text-body-emphasis ${
               view === v.value
@@ -336,6 +347,13 @@ export function OrderBookPanel({
       ) : view === 'depth' ? (
         <div className="mt-4">
           <DepthChart bids={book?.bids ?? []} asks={book?.asks ?? []} height={170} />
+          {/* The chart's text twin — same numbers, readable without the SVG. */}
+          <p className="mt-2 text-meta text-text-muted tnum">
+            {depthBidUnits} units bid · {depthAskUnits} units offered
+            {depthLow != null && depthHigh != null
+              ? ` · ${gbp(depthLow)}–${gbp(depthHigh)} range`
+              : ''}
+          </p>
         </div>
       ) : (
         <div className="mt-3">

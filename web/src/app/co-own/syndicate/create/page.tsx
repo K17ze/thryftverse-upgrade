@@ -1,5 +1,7 @@
 import type { Metadata } from 'next';
+import { DATA_MODE } from '@/lib/api/client';
 import { CreateSyndicateView } from '@/components/syndicate/CreateSyndicateView';
+import { SyndicateLiveNotice } from '../SyndicateLiveNotice';
 
 export const metadata: Metadata = {
   title: 'Start a syndicate',
@@ -8,5 +10,8 @@ export const metadata: Metadata = {
 };
 
 export default function CreateSyndicatePage() {
+  // No syndicate endpoints exist on the backend — in live mode the
+  // wizard can't create a real pool, so the honest notice stands in.
+  if (DATA_MODE === 'live') return <SyndicateLiveNotice />;
   return <CreateSyndicateView />;
 }

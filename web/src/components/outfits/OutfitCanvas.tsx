@@ -118,9 +118,11 @@ export function OutfitCanvas({
                   type="button"
                   onClick={() => onRemoveItem?.(slot)}
                   aria-label={`Remove ${item.title} from ${SLOT_LABEL[slot]} slot`}
-                  className="pressable absolute right-1.5 top-1.5 flex h-7 w-7 items-center justify-center rounded-full bg-overlay text-scrim-text-primary"
+                  className="pressable absolute -right-1.5 -top-1.5 flex h-11 w-11 items-center justify-center"
                 >
-                  <Icon name="close" size={14} />
+                  <span className="flex h-7 w-7 items-center justify-center rounded-full bg-overlay text-scrim-text-primary">
+                    <Icon name="close" size={14} />
+                  </span>
                 </button>
               ) : null}
             </div>

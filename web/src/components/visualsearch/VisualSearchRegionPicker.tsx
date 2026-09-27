@@ -31,6 +31,9 @@ interface Point {
 
 const clamp01 = (v: number) => Math.max(0, Math.min(1, v));
 
+/** Arrow-key travel per press, as a fraction of the frame. */
+const NUDGE_STEP = 0.025;
+
 function rectFromPoints(a: Point, b: Point): VisualSearchRegion {
   const x = Math.min(a.x, b.x);
   const y = Math.min(a.y, b.y);
@@ -103,12 +106,42 @@ export function VisualSearchRegionPicker({
 
   const pct = (v: number) => `${(v * 100).toFixed(2)}%`;
 
+  /**
+   * Keyboard path — the stage is a real named, focusable widget. The
+   * first arrow press lands the tap-size focus box at centre; further
+   * arrows nudge the shown frame inside the image bounds. Pointer users
+   * keep drag/tap; "Whole image" remains the no-region escape for both.
+   */
+  const onKeyDown = (e: React.KeyboardEvent) => {
+    const dir =
+      e.key === 'ArrowLeft'
+        ? { x: -1, y: 0 }
+        : e.key === 'ArrowRight'
+          ? { x: 1, y: 0 }
+          : e.key === 'ArrowUp'
+            ? { x: 0, y: -1 }
+            : e.key === 'ArrowDown'
+              ? { x: 0, y: 1 }
+              : null;
+    if (!dir) return;
+    e.preventDefault();
+    const base = shown ?? focusBoxAt({ x: 0.5, y: 0.5 });
+    onCommit({
+      ...base,
+      x: Math.min(Math.max(0, base.x + dir.x * NUDGE_STEP), 1 - base.width),
+      y: Math.min(Math.max(0, base.y + dir.y * NUDGE_STEP), 1 - base.height),
+    });
+  };
+
   return (
     <div>
       <div
         ref={stageRef}
-        aria-label="Frame part of your photo. Drag to draw a region, or tap to focus around a point."
+        role="group"
+        tabIndex={0}
+        aria-label="Frame part of your photo. Drag to draw a region, tap to focus around a point, or use arrow keys to move a focus box."
         className="relative w-full touch-none select-none overflow-hidden rounded-lg bg-surface-alt"
+        onKeyDown={onKeyDown}
         onPointerDown={onPointerDown}
         onPointerMove={onPointerMove}
         onPointerUp={onPointerUp}
@@ -163,7 +196,7 @@ export function VisualSearchRegionPicker({
         <p className="tnum text-caption text-text-muted" aria-live="polite">
           {shown
             ? `${Math.round(shown.width * 100)}% × ${Math.round(shown.height * 100)}% framed`
-            : 'Drag or tap to frame part of the photo'}
+            : 'Drag, tap or use arrow keys to frame part of the photo'}
         </p>
         {shown ? (
           <button

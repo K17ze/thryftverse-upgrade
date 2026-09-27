@@ -17,17 +17,42 @@ export interface SupportTicketMessage {
   authorName: string | null;
   body: string;
   createdAt: string;
-  /** Optimistic send — 'sending' renders a clock receipt. */
-  status?: 'sending' | 'sent';
+  /** Optimistic send — 'sending' renders a clock receipt, 'failed' a retry. */
+  status?: 'sending' | 'sent' | 'failed';
 }
 
-export type SupportTicketEventKind = 'opened' | 'in_review' | 'resolved' | 'closed' | 'note';
+export type SupportTicketEventKind =
+  | 'opened'
+  | 'in_review'
+  | 'resolved'
+  | 'closed'
+  | 'note'
+  /** Evidence landed on the case — mirrors mobile `evidence_received`. */
+  | 'evidence'
+  /** Buyer asked for a human — mirrors mobile ownership 'human_queued'. */
+  | 'handoff';
 
 export interface SupportTicketEvent {
   kind: SupportTicketEventKind;
   label: string;
   detail?: string;
   at: string;
+}
+
+/** Linked commerce context — mirrors the mobile extractContextLinks set
+ *  (order | listing | payout). Ids are the web route params. */
+export type SupportContextKind = 'order' | 'listing' | 'payout';
+
+export interface SupportContextLink {
+  kind: SupportContextKind;
+  id: string;
+}
+
+/** Photo/document evidence attached to the case. Fixture-mode uploads are
+ *  session-local object URLs; live mode carries the uploaded media URL. */
+export interface SupportEvidence {
+  id: string;
+  uri: string;
 }
 
 export interface SupportTicketResolution {
@@ -49,6 +74,12 @@ export interface SupportTicket {
   topicLabel: string;
   /** Order-scoped cases link to the commerce order detail. */
   orderRef: string | null;
+  /** Non-order context (listing, payout) — folded with orderRef by
+   *  contextLinksFor so the thread renders one deduped link set. */
+  contextLinks?: SupportContextLink[];
+  /** Evidence attached to the case — renders the evidence block + the
+   *  'evidence' activity event carries the received stamp. */
+  evidence?: SupportEvidence[];
   status: SupportTicketStatus;
   priority: 'low' | 'normal' | 'high' | 'urgent';
   messages: SupportTicketMessage[];
@@ -117,6 +148,69 @@ export function statusMeta(status: SupportTicketStatus): {
     case 'closed':
       return { label: 'Closed', badge: 'neutral', icon: 'lock' };
   }
+}
+
+/**
+ * The linked order/listing/payout set for the context bar — orderRef folds
+ * into the same row grammar as mobile's extractContextLinks, deduped.
+ */
+export function contextLinksFor(ticket: SupportTicket): SupportContextLink[] {
+  const links: SupportContextLink[] = [];
+  const seen = new Set<string>();
+  const push = (kind: SupportContextKind, id: string | null | undefined) => {
+    if (!id || seen.has(`${kind}:${id}`)) return;
+    seen.add(`${kind}:${id}`);
+    links.push({ kind, id });
+  };
+  push('order', ticket.orderRef);
+  for (const link of ticket.contextLinks ?? []) push(link.kind, link.id);
+  return links;
+}
+
+export function contextLinkLabel(kind: SupportContextKind): string {
+  switch (kind) {
+    case 'order':
+      return 'Order';
+    case 'listing':
+      return 'Listing';
+    case 'payout':
+      return 'Payout';
+  }
+}
+
+/** Where a context link resolves on web — payout lands on the wallet
+ *  surface (no per-payout route exists yet). */
+export function contextLinkHref(link: SupportContextLink): string | null {
+  switch (link.kind) {
+    case 'order':
+      return `/orders/${link.id}`;
+    case 'listing':
+      return `/item/${link.id}`;
+    case 'payout':
+      return '/wallet';
+  }
+}
+
+/**
+ * Conversation ownership — mirrors mobile headerSubtitleFor /
+ * ownershipState derivation. A human agent owns the thread once an
+ * agent_human message exists; a 'handoff' event means the request is
+ * queued; agent_ai means the assistant is answering.
+ */
+export function ownershipLabel(ticket: SupportTicket): string | null {
+  if (ticket.messages.some((m) => m.role === 'agent_human')) return 'Support specialist';
+  if (ticket.events.some((e) => e.kind === 'handoff')) return 'Waiting for a specialist';
+  if (ticket.messages.some((m) => m.role === 'agent_ai')) return 'AI assistant';
+  return null;
+}
+
+/** Bot→human handoff is offerable while the AI assistant (or nobody) owns
+ *  an open case — never after a specialist replied or a handoff was
+ *  already requested, and never on a closed case. */
+export function canRequestHandoff(ticket: SupportTicket): boolean {
+  if (ticket.status === 'closed' || ticket.status === 'resolved') return false;
+  if (ticket.messages.some((m) => m.role === 'agent_human')) return false;
+  return !ticket.events.some((e) => e.kind === 'handoff');
 }
 
 /** Canonical timeline steps, mirroring the case lifecycle. */

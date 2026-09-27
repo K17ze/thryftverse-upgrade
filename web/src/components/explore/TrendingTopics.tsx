@@ -33,8 +33,7 @@ export function TrendingTopics() {
               alt={topic.label}
               aspectRatio={0.75}
               sizes="(max-width: 640px) 160px, (max-width: 1024px) 30vw, 16vw"
-              className="w-full"
-              imgClassName="transition-transform duration-300 group-hover:scale-105"
+              className="w-full media-zoom"
             />
             <div className="absolute inset-0 bg-gradient-to-t from-media-overlay-scrim via-transparent to-transparent" />
             <span className="clamp-1 absolute inset-x-3 bottom-2.5 text-body-emphasis font-semibold text-scrim-text-primary">

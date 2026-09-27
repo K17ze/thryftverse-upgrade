@@ -14,7 +14,7 @@
 import { useMemo } from 'react';
 import { useParams, useRouter } from 'next/navigation';
 import { useListing, useSellerListings } from '@/lib/hooks/queries';
-import { similarListings } from '@/lib/data/fixtures-commerce';
+import { usePdpSimilarListings } from '@/lib/hooks/pdp-market-queries';
 import { PdpGallery } from '@/components/pdp/PdpGallery';
 import { BuyPanel } from '@/components/pdp/BuyPanel';
 import { PdpBreadcrumb } from '@/components/pdp/PdpBreadcrumb';
@@ -24,40 +24,65 @@ import { SustainabilityBadge } from '@/components/pdp/SustainabilityBadge';
 import { PdpMarket } from '@/components/pdp/PdpMarket';
 import { ListingQA } from '@/components/pdp/ListingQA';
 import { PdpRails } from '@/components/pdp/PdpRails';
+import { PdpRecentlyViewed } from '@/components/pdp/PdpRecentlyViewed';
 import { SeenInLooksRail } from '@/components/pdp/SeenInLooksRail';
 import { CuratedCollectionsRail } from '@/components/pdp/CuratedCollectionsRail';
 import { PdpSkeleton } from '@/components/pdp/PdpSkeleton';
+import { PdpBuyDock } from '@/components/pdp/PdpBuyDock';
 import { EmptyState } from '@/components/ui/EmptyState';
 import { IconButton } from '@/components/ui/IconButton';
 import { useRecordListingView } from '@/lib/store/recentlyViewed';
+import { useIsBlockedUser } from '@/components/inbox/inboxSafety';
 
 export default function ItemPage() {
   const params = useParams<{ id: string }>();
   const router = useRouter();
   const id = params?.id ?? '';
 
-  const { data: listing, isLoading, isError } = useListing(id);
-  const { data: sellerListings, isLoading: sellerLoading } = useSellerListings(
-    listing?.sellerId ?? '',
-  );
+  const { data: listing, isLoading, isError, refetch } = useListing(id);
+  const {
+    data: sellerListings,
+    isLoading: sellerLoading,
+    isError: sellerError,
+    refetch: refetchSellerListings,
+  } = useSellerListings(listing?.sellerId ?? '');
   // Recently-viewed memory — records once the listing resolves, not the raw param.
   useRecordListingView(listing?.id);
+  // Viewer-relationship truth — a blocked seller gates the public Q&A
+  // composer below (buy/offer/message suppression lives in the buy
+  // panel + dock, which read the same store union).
+  const sellerBlocked = useIsBlockedUser(listing?.sellerId ?? null);
 
   const sellerItems = useMemo(
     () => (sellerListings ?? []).filter((l) => l.id !== listing?.id && !l.isSold),
     [sellerListings, listing?.id],
   );
-  const similar = useMemo(() => (listing ? similarListings(listing) : []), [listing]);
+  // Similar band — live mode reads /listings/:id/related so the rail only
+  // ever deep-links real listings; fixture mode keeps the local scorer.
+  const { items: similar, isLoading: similarLoading } = usePdpSimilarListings(listing);
 
   if (isLoading) {
     return <PdpSkeleton />;
+  }
+
+  // A failed fetch is not a removed listing — retry, don't misreport.
+  if (isError) {
+    return (
+      <EmptyState
+        icon="alert"
+        title="Couldn’t load this item"
+        subtitle="Check your connection and try again."
+        actionLabel="Try again"
+        onAction={() => void refetch()}
+      />
+    );
   }
 
   if (!listing) {
     return (
       <EmptyState
         icon="pricetag"
-        title={isError ? 'Couldn’t load this item' : 'This listing is no longer available'}
+        title="This listing is no longer available"
         subtitle="It may have been sold or removed by the seller."
         actionLabel="Browse similar items"
         onAction={() => router.push('/explore')}
@@ -78,7 +103,10 @@ export default function ItemPage() {
           <div className="mb-3 lg:hidden">
             <IconButton name="back" aria-label="Back" onClick={() => router.back()} className="-ml-2" />
           </div>
-          <PdpGallery listing={listing} />
+          {/* The evidence column's "View all photos" jump lands here. */}
+          <div id="pdp-gallery" className="scroll-mt-20">
+            <PdpGallery listing={listing} />
+          </div>
         </div>
 
         {/* Sticky buy column — capped to the viewport and scrollable in
@@ -95,7 +123,7 @@ export default function ItemPage() {
           <PdpReviews listing={listing} />
           <SustainabilityBadge grade={listing.sustainabilityGrade} />
           <PdpMarket listing={listing} />
-          <ListingQA listing={listing} />
+          <ListingQA listing={listing} isSellerBlocked={sellerBlocked} />
         </div>
       </div>
 
@@ -105,6 +133,9 @@ export default function ItemPage() {
         sellerItems={sellerItems}
         similarItems={similar}
         isLoading={sellerLoading}
+        similarLoading={similarLoading}
+        hasError={sellerError}
+        onRetry={() => void refetchSellerListings()}
       />
 
       {/* Community styling — looks + collections featuring this item.
@@ -113,6 +144,16 @@ export default function ItemPage() {
           item is featured nowhere. */}
       <SeenInLooksRail listing={listing} />
       <CuratedCollectionsRail listing={listing} />
+
+      {/* Session trail — the buyer's own recently-viewed set minus this
+          item. Hydration-gated; self-omits when empty. */}
+      <PdpRecentlyViewed listing={listing} />
+
+      {/* Mobile purchase dock — price + buy pinned over the tab bar on
+          <lg, where the aside scrolls away. The spacer keeps the last
+          rails clear of the dock + tab-bar overlay. */}
+      <div className="h-[84px] lg:hidden" aria-hidden />
+      <PdpBuyDock listing={listing} />
     </div>
   );
 }

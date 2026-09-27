@@ -43,8 +43,8 @@ export type ReportReason =
   | 'minor_safety'
   | 'other';
 
-export interface ReportReasonOption {
-  key: ReportReason;
+export interface ReportReasonOption<K extends string = ReportReason> {
+  key: K;
   label: string;
   description: string;
   icon: AppIconName;
@@ -131,8 +131,73 @@ export function reportTitleFor(type: ReportTargetType): string {
   return type === 'user' ? 'Report account' : 'Report listing';
 }
 
-/** Session case reference — live mode returns reportId from the backend;
- *  fixture mode derives the same shape so support contact stays referenceable. */
-export function newReportReference(): string {
-  return `RPT-${Date.now().toString(36).toUpperCase().slice(-6)}`;
-}
+// ── DSA notice-and-action (illegal content) ─────────────────────────────────
+// Distinct taxonomy from the standard report — DSA Art. 16 notices must say
+// why the content is illegal, point at its exact location, and carry the
+// reporter's contact plus a good-faith declaration. The mobile entry point
+// is the "Report illegal content" row under Trust & Safety in Help & Support.
+
+export type DsaReportReason =
+  | 'illegal_goods'
+  | 'ip_infringement'
+  | 'hate_speech'
+  | 'harassment'
+  | 'fraud'
+  | 'privacy_violation'
+  | 'minor_safety'
+  | 'other_illegal';
+
+/** Reason catalogue for the DSA notice — ordered most-severe first. */
+export const DSA_REPORT_REASONS: ReportReasonOption<DsaReportReason>[] = [
+  {
+    key: 'illegal_goods',
+    label: 'Illegal goods or services',
+    description: 'Counterfeits, prohibited items or unlawful offers for sale',
+    icon: 'ban',
+  },
+  {
+    key: 'ip_infringement',
+    label: 'Intellectual property infringement',
+    description: 'Content that violates copyright, trademark or design rights',
+    icon: 'document',
+  },
+  {
+    key: 'minor_safety',
+    label: 'Content endangering minors',
+    description: 'Content that is unsafe for or exploits minors',
+    icon: 'shield',
+  },
+  {
+    key: 'hate_speech',
+    label: 'Hate speech or discrimination',
+    description: 'Illegal attacks or incitement against protected groups',
+    icon: 'warning',
+  },
+  {
+    key: 'harassment',
+    label: 'Harassment or threats',
+    description: 'Unlawful threatening, bullying or targeted abuse',
+    icon: 'alert',
+  },
+  {
+    key: 'fraud',
+    label: 'Scams or fraud',
+    description: 'Deceptive content intended to defraud users',
+    icon: 'payout',
+  },
+  {
+    key: 'privacy_violation',
+    label: 'Unlawful personal data',
+    description: 'Private information shared without a legal basis',
+    icon: 'lock',
+  },
+  {
+    key: 'other_illegal',
+    label: 'Other illegal content',
+    description: 'Content you believe is illegal under EU or national law',
+    icon: 'flag',
+  },
+];
+
+export const MAX_DSA_DETAILS = 2000;
+

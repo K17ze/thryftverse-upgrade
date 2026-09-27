@@ -193,14 +193,16 @@ export function memberRolesFor(
   return roles;
 }
 
-/** The viewer's role — ownerId/creatorId on a live payload beats the map. */
+/** The viewer's role — an explicit ownerId is authoritative (it moves on
+ *  transfer); creatorId is only an owner proxy when no ownerId is present. */
 export function viewerRole(
   c: Conversation,
   viewerId: string,
   overrides: Record<string, GroupMemberRole> | undefined,
 ): GroupMemberRole | undefined {
   const fields = adminFieldsOf(c);
-  if (fields.ownerId === viewerId || fields.creatorId === viewerId) return 'owner';
+  if (fields.ownerId === viewerId) return 'owner';
+  if (fields.ownerId == null && fields.creatorId === viewerId) return 'owner';
   return memberRolesFor(c, viewerId, overrides)?.[viewerId];
 }
 
@@ -297,6 +299,45 @@ export function addFixtureMembers(id: string, users: User[]): string[] {
   return added.map((u) => u.id);
 }
 
+/**
+ * Transfer group ownership in the fixture store — mirrors the backend
+ * route's write: the conversation's ownerId moves to the new owner, the
+ * previous owner demotes to 'admin', and the memberRoles map records the
+ * full post-transfer truth (the same payload the endpoint returns). No
+ * system message — the backend only publishes a realtime event that
+ * updates roles, so the fixture write updates the same fields.
+ */
+export function transferFixtureOwnership(
+  id: string,
+  newOwnerId: string,
+  previousOwnerId: string,
+): boolean {
+  const c = fixtureConversation(id);
+  if (!c || c.type !== 'group') return false;
+  if (!newOwnerId || newOwnerId === previousOwnerId) return false;
+  const memberIds = new Set([
+    ...(c.participantIds ?? []),
+    ...(c.participantProfiles ?? []).map((p) => p.id),
+  ]);
+  if (!memberIds.has(newOwnerId)) return false;
+  const fields = adminFieldsOf(c);
+  const current =
+    sanitizeMemberRoles(fields.memberRoles) ??
+    memberRolesFor(c, previousOwnerId, undefined) ??
+    {};
+  fields.ownerId = newOwnerId;
+  // creatorId is a provenance fallback viewerRole treats as an owner
+  // proxy — if it pointed at the previous owner it must move with the
+  // transfer or the surface would keep deriving them as owner.
+  if (fields.creatorId === previousOwnerId) fields.creatorId = newOwnerId;
+  fields.memberRoles = {
+    ...current,
+    [previousOwnerId]: 'admin',
+    [newOwnerId]: 'owner',
+  };
+  return true;
+}
+
 export function removeFixtureMember(id: string, userId: string): boolean {
   const c = fixtureConversation(id);
   if (!c || c.type !== 'group') return false;
@@ -331,6 +372,29 @@ export function deleteFixtureConversation(id: string): boolean {
   return true;
 }
 
+/**
+ * Mark-unread — mirrors the mobile store's toggleConversationUnread: the
+ * flag is a viewer intent, not a message count, so `unread` flips without
+ * inflating `unreadCount` (the row renders a dot, never a fake number).
+ */
+export function markFixtureConversationUnread(id: string): boolean {
+  const c = fixtureConversation(id);
+  if (!c) return false;
+  c.unread = true;
+  return true;
+}
+
+/** Accept a message request in the fixture store — clears isRequest so a
+ *  refetch keeps the thread in the regular list. Declines stay local to
+ *  the caller (a declined request keeps its flag and is hidden by state,
+ *  matching the server's requestStatus='declined' filtering). */
+export function acceptFixtureRequest(id: string): boolean {
+  const c = fixtureConversation(id);
+  if (!c) return false;
+  c.isRequest = false;
+  return true;
+}
+
 // ── Live writes — same routes the mobile chatApi calls ───────────────────
 
 async function apiCall<T = unknown>(
@@ -361,6 +425,14 @@ export const liveGroupApi = {
       method: 'PATCH',
       body: JSON.stringify({ role }),
     }),
+  /** POST /transfer-ownership — mirrors mobile
+   *  transferConversationOwnershipOnApi: owner-only, the caller's role
+   *  becomes admin and the full memberRoles map comes back. */
+  transferOwnership: (id: string, newOwnerId: string) =>
+    apiCall<{ ownerId: string; memberRoles: Record<string, string> }>(
+      `/chat/conversations/${id}/transfer-ownership`,
+      { method: 'POST', body: JSON.stringify({ newOwnerId }) },
+    ),
   fetchSettings: (id: string) =>
     apiCall<{ settings: GroupSettings; capabilities: GroupCapabilities }>(
       `/chat/conversations/${id}/group-settings`,
@@ -372,4 +444,31 @@ export const liveGroupApi = {
     }),
   deleteConversation: (id: string, scope: 'me' | 'leave' = 'me') =>
     apiCall(`/chat/conversations/${id}?scope=${scope}`, { method: 'DELETE' }),
+};
+
+/**
+ * Conversation-level viewer edges — the non-admin routes the mobile
+ * chatApi calls for row actions: pin, marked-unread and message-request
+ * resolution. Fixture mode never reaches these (the module dataset is the
+ * source of truth there).
+ */
+export const liveConversationApi = {
+  /** PATCH /pin — mirrors pinConversationOnApi. */
+  setPinned: (id: string, pinned: boolean) =>
+    apiCall(`/chat/conversations/${id}/pin`, {
+      method: 'PATCH',
+      body: JSON.stringify({ pinned }),
+    }),
+  /** PATCH /unread — mirrors setConversationUnreadOnApi. */
+  setUnread: (id: string, unread: boolean) =>
+    apiCall(`/chat/conversations/${id}/unread`, {
+      method: 'PATCH',
+      body: JSON.stringify({ unread }),
+    }),
+  /** POST /accept — mirrors acceptMessageRequestOnApi. */
+  acceptRequest: (id: string) =>
+    apiCall(`/chat/conversations/${id}/accept`, { method: 'POST' }),
+  /** POST /decline — mirrors declineMessageRequestOnApi. */
+  declineRequest: (id: string) =>
+    apiCall(`/chat/conversations/${id}/decline`, { method: 'POST' }),
 };

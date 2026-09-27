@@ -1,20 +1,27 @@
 'use client';
 
 /**
- * Top-up sheet — quiet single-purpose flow over the fixture wallet.
- * Withdrawals moved to /wallet/withdraw (amount composer, payout-method
- * picker, review + receipt) — the old fake-confirm sheet is retired.
+ * Top-up sheet — fixture-mode demo only. There is no top-up endpoint in
+ * this build, so the sheet is never mounted in live mode (WalletView gates
+ * it) and it guards itself the same way. Confirming writes an honest
+ * `topup` entry labelled as a demo into the wallet session ledger and
+ * credits the available balance — no card is charged, no receipt is
+ * minted, and the copy says so.
  */
 
 import { useState } from 'react';
+import { useQueryClient } from '@tanstack/react-query';
 import { Sheet } from '@/components/ui/Sheet';
 import { Button } from '@/components/ui/Button';
 import { Icon } from '@/components/ui/Icon';
 import { useToast } from '@/components/ui/Toast';
-import { PAYMENT_METHODS } from '@/lib/data/fixtures';
+import { DATA_MODE } from '@/lib/api/client';
+import { useSession } from '@/lib/session/SessionProvider';
 import { formatPrice } from '@/lib/utils/format';
-
-const bank = PAYMENT_METHODS.find((p) => p.isDefault) ?? PAYMENT_METHODS[0];
+import type { WalletLedgerEntry } from './ledgerViewModel';
+import type { WalletData } from './useWalletData';
+import { walletKeys } from './walletKeys';
+import { round2 } from './convertViewModel';
 
 interface TopUpSheetProps {
   open: boolean;
@@ -26,15 +33,38 @@ const TOP_UP_AMOUNTS = [20, 50, 100, 200];
 
 export function TopUpSheet({ open, onClose, currency }: TopUpSheetProps) {
   const { show } = useToast();
+  const queryClient = useQueryClient();
+  const { user } = useSession();
   const [amount, setAmount] = useState<number>(50);
   const [busy, setBusy] = useState(false);
+
+  // No top-up endpoint exists — the sheet is a fixture-mode demo surface.
+  if (DATA_MODE === 'live') return null;
 
   const confirm = () => {
     setBusy(true);
     setTimeout(() => {
+      const entry: WalletLedgerEntry = {
+        id: `tu-${Date.now().toString(36)}`,
+        kind: 'topup',
+        amount: round2(amount),
+        status: 'completed',
+        date: new Date().toISOString(),
+        description: 'Top-up — demo',
+        balance: null,
+      };
+      queryClient.setQueryData<WalletData>(walletKeys.all(user?.id), (old) =>
+        old
+          ? {
+              ...old,
+              available: round2(old.available + amount),
+              session: [entry, ...old.session],
+            }
+          : old,
+      );
       setBusy(false);
       onClose();
-      show(`${formatPrice(amount, currency)} added to your balance`, 'success');
+      show(`${formatPrice(amount, currency)} added to your demo balance`, 'success');
     }, 500);
   };
 
@@ -60,15 +90,11 @@ export function TopUpSheet({ open, onClose, currency }: TopUpSheetProps) {
           ))}
         </div>
 
-        <div className="mt-5 flex items-center gap-3 rounded-lg border border-border px-4 py-3.5">
-          <Icon name="card" size={20} className="text-text-secondary" />
-          <div className="flex-1">
-            <p className="text-body-emphasis font-medium text-text-primary">
-              {bank?.brand === 'visa' ? 'Visa' : 'Card'} •••• {bank?.last4 ?? '4521'}
-            </p>
-            <p className="text-caption text-text-muted">Charged to your default card</p>
-          </div>
-        </div>
+        <p className="mt-5 flex items-start gap-1.5 text-caption text-text-muted">
+          <Icon name="info" size={14} className="mt-0.5 shrink-0" />
+          Demo balance — no money moves. Top-ups need a payment connection this
+          build doesn&apos;t have.
+        </p>
 
         <Button
           variant="primary"

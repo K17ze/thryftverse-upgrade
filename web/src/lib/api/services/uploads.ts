@@ -43,13 +43,51 @@ export async function finalizeUpload(uploadId: string): Promise<{ url: string }>
 }
 
 /**
+ * PUT the file bytes to the presigned target over XHR — the only transport
+ * that exposes real upload byte progress. `onProgress` receives the
+ * transmitted fraction 0..1, or null while the total is unknown (the caller
+ * falls back to an indeterminate state — never a fabricated percentage).
+ */
+function putWithProgress(
+  presigned: PresignResponse,
+  file: File,
+  onProgress: (ratio: number | null) => void,
+): Promise<void> {
+  return new Promise((resolve, reject) => {
+    const xhr = new XMLHttpRequest();
+    xhr.open(presigned.method ?? 'PUT', presigned.uploadUrl);
+    const headers = presigned.headers ?? { 'Content-Type': file.type };
+    for (const [key, value] of Object.entries(headers)) {
+      xhr.setRequestHeader(key, value);
+    }
+    xhr.upload.onprogress = (e) => {
+      onProgress(e.lengthComputable && e.total > 0 ? e.loaded / e.total : null);
+    };
+    xhr.onload = () => {
+      if (xhr.status >= 200 && xhr.status < 300) {
+        resolve();
+      } else {
+        reject(new Error(`Upload failed (${xhr.status})`));
+      }
+    };
+    xhr.onerror = () => reject(new Error('Upload failed'));
+    xhr.send(file);
+  });
+}
+
+/**
  * Full single-file upload: presign → PUT bytes → finalize. Small images go
  * through this; large videos should use the multipart flow (out of scope
  * for the first sell-flow wiring pass).
+ *
+ * Pass `onProgress` for real byte-level progress (0..1 of the PUT body);
+ * the callback may receive null when the presigned target doesn't report a
+ * total — callers should render that as indeterminate, not 0%.
  */
 export async function uploadImageFile(
   file: File,
   purpose = 'listing',
+  onProgress?: (ratio: number | null) => void,
 ): Promise<string> {
   const presigned = await presignUpload({
     fileName: file.name,
@@ -58,13 +96,17 @@ export async function uploadImageFile(
     purpose,
   });
 
-  const put = await fetch(presigned.uploadUrl, {
-    method: presigned.method ?? 'PUT',
-    headers: presigned.headers ?? { 'Content-Type': file.type },
-    body: file,
-  });
-  if (!put.ok) {
-    throw new Error(`Upload failed (${put.status})`);
+  if (onProgress) {
+    await putWithProgress(presigned, file, onProgress);
+  } else {
+    const put = await fetch(presigned.uploadUrl, {
+      method: presigned.method ?? 'PUT',
+      headers: presigned.headers ?? { 'Content-Type': file.type },
+      body: file,
+    });
+    if (!put.ok) {
+      throw new Error(`Upload failed (${put.status})`);
+    }
   }
 
   const finalized = await finalizeUpload(presigned.uploadId);

@@ -21,7 +21,9 @@ import { formatCount, formatPrice } from '@/lib/utils/format';
 import {
   draftToPreviewListing,
   isSizelessCategory,
+  listingSustainabilityTags,
   parsePriceInput,
+  SUSTAINABILITY_TAG_OPTIONS,
   type SellDraft,
 } from './constants';
 import { SellPreviewCard } from './SellPreviewCard';
@@ -79,6 +81,16 @@ export function SellPreview({ draft, seller, publishing, editing, onBack, onPubl
   const shipping = shippingSpecs(draft);
   const methodKnown = draft.shippingMethod !== '';
   const freeShipping = draft.shippingPayer === 'seller';
+  // The preview projection only carries an RRP that honestly outranks the
+  // ask — draftToPreviewListing drops anything else before it gets here.
+  const rrp = listing.originalPrice;
+  const rrpDiscount =
+    rrp != null && price != null && rrp > price
+      ? Math.round(((rrp - price) / rrp) * 100)
+      : null;
+  const sustainabilityLabels = SUSTAINABILITY_TAG_OPTIONS.filter((t) =>
+    listingSustainabilityTags(listing).includes(t.id),
+  );
 
   return (
     <div className="mx-auto w-full max-w-[1080px] px-4 pb-16 sm:px-6">
@@ -127,8 +139,20 @@ export function SellPreview({ draft, seller, publishing, editing, onBack, onPubl
 
           <div className="mt-3">
             {price != null ? (
-              <span className="tnum text-price-hero font-bold text-text-primary">
-                {formatPrice(price)}
+              <span className="flex items-baseline gap-2.5">
+                <span className="tnum text-price-hero font-bold text-text-primary">
+                  {formatPrice(price)}
+                </span>
+                {rrp != null ? (
+                  <>
+                    <s className="tnum text-body text-text-muted">{formatPrice(rrp)}</s>
+                    {rrpDiscount != null ? (
+                      <span className="tnum rounded-full bg-success-subtle px-2 py-0.5 text-meta font-semibold text-success-text">
+                        −{rrpDiscount}%
+                      </span>
+                    ) : null}
+                  </>
+                ) : null}
               </span>
             ) : (
               <span className="text-price-hero font-bold text-text-muted">—</span>
@@ -207,6 +231,30 @@ export function SellPreview({ draft, seller, publishing, editing, onBack, onPubl
                   </div>
                 ))}
               </dl>
+            </section>
+          ) : null}
+
+          {/* Sustainability — seller-asserted attributes rendered as a
+              labelled claim strip, never a verified badge. */}
+          {sustainabilityLabels.length ? (
+            <section className="border-b border-border-subtle py-4" aria-label="Sustainability">
+              <h3 className="mb-1 flex items-center gap-1.5 text-body-emphasis font-semibold text-text-primary">
+                <Icon name="leaf" size={16} className="text-success-text" />
+                Sustainability
+              </h3>
+              <ul className="mt-1.5 flex flex-wrap gap-1.5">
+                {sustainabilityLabels.map((t) => (
+                  <li
+                    key={t.id}
+                    className="rounded-full bg-success-subtle px-3 py-1 text-caption font-medium text-success-text"
+                  >
+                    {t.label}
+                  </li>
+                ))}
+              </ul>
+              <p className="mt-2 text-meta text-text-muted">
+                Seller-provided claims — not independently verified.
+              </p>
             </section>
           ) : null}
 

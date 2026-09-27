@@ -3,19 +3,37 @@
 /**
  * StoryRail — port of HomeStoryRail: tall poster cards (76×135 ratio),
  * unwatched ring, unwatched-first ordering, horizontal scroll.
+ * Data comes through the client (`data.posterStories()`) so fixture and
+ * live modes share the surface — no direct fixture imports.
  */
 
+import { useMemo } from 'react';
 import Link from 'next/link';
+import { useQuery } from '@tanstack/react-query';
 import { AppImage } from '@/components/ui/AppImage';
 import { Skeleton } from '@/components/ui/Skeleton';
-import { STORY_RAIL } from '@/lib/data/fixtures';
-import { Avatar } from '@/components/ui/Avatar';
+import { Button } from '@/components/ui/Button';
+import { data } from '@/lib/api/client';
 
-export function StoryRail({ loading }: { loading?: boolean }) {
-  const stories = [...STORY_RAIL].sort((a, b) => Number(a.seen ?? false) - Number(b.seen ?? false));
-  const unwatched = stories.filter((s) => !s.seen).length;
+export function StoryRail() {
+  const {
+    data: stories,
+    isLoading,
+    isError,
+    refetch,
+  } = useQuery({
+    queryKey: ['poster-stories'],
+    queryFn: () => data.posterStories(),
+    staleTime: 60_000,
+  });
 
-  if (loading) {
+  const sorted = useMemo(
+    () => [...(stories ?? [])].sort((a, b) => Number(a.seen ?? false) - Number(b.seen ?? false)),
+    [stories],
+  );
+  const unwatched = sorted.filter((s) => !s.seen).length;
+
+  if (isLoading) {
     return (
       <div className="flex gap-2 overflow-hidden px-4 py-3">
         {Array.from({ length: 6 }).map((_, i) => (
@@ -25,7 +43,19 @@ export function StoryRail({ loading }: { loading?: boolean }) {
     );
   }
 
-  if (stories.length === 0) return null;
+  if (isError) {
+    // A rail degrades to a slim inline row — the feed below still works.
+    return (
+      <div className="flex items-center gap-3 px-4 py-3 sm:px-6" role="status">
+        <span className="text-caption text-text-muted">Stories couldn&rsquo;t load</span>
+        <Button variant="quiet" size="sm" icon="refresh" onClick={() => void refetch()}>
+          Retry
+        </Button>
+      </div>
+    );
+  }
+
+  if (sorted.length === 0) return null;
 
   return (
     <div
@@ -33,45 +63,53 @@ export function StoryRail({ loading }: { loading?: boolean }) {
       role="list"
       aria-label="Poster stories"
     >
-      {stories.map((story, idx) => {
+      {sorted.map((story, idx) => {
         const isUnwatched = !story.seen;
+        // The count badge rides the first unwatched tile (mobile parity).
         const showBadge = isUnwatched && idx === 0 && unwatched > 1;
         return (
           <Link
             key={story.id}
             href={`/poster/${story.id}`}
             role="listitem"
-            aria-label={`Open poster story by @${story.username}${isUnwatched ? ', new' : ''}`}
+            aria-label={`Open poster story${story.username ? ` by @${story.username}` : ''}${isUnwatched ? ', new' : ''}`}
             className="pressable group relative shrink-0"
           >
+            {/* Ring state — solid brand while unwatched, hairline once
+                seen (mobile posterTileRing/posterTileSeen). */}
             <div
-              className={`h-[135px] w-[76px] overflow-hidden rounded-lg p-[2px] ${
-                isUnwatched ? 'bg-gradient-to-b from-brand to-brand/40' : 'bg-border-subtle'
+              className={`h-[135px] w-[76px] rounded-lg p-[2px] ${
+                isUnwatched ? 'bg-brand' : 'bg-border-subtle'
               }`}
             >
-              <div className="relative h-full w-full overflow-hidden rounded-[10px]">
+              <div className="relative h-full w-full overflow-hidden rounded-[10px] bg-surface-alt">
                 <AppImage
                   src={story.coverUri}
-                  alt={`${story.username} poster`}
+                  alt={`${story.username || 'Poster'} story`}
                   fill
                   sizes="76px"
-                  className="h-full w-full"
+                  priority={idx < 4}
+                  className="h-full w-full media-zoom"
                 />
-                <div className="absolute inset-x-0 bottom-0 bg-gradient-to-t from-media-overlay-scrim to-transparent p-1.5 pt-6">
-                  <span className="clamp-1 block text-[10px] font-medium text-scrim-text-primary">
-                    {story.username}
+                {/* Name chip — scrim pill + fresh/seen status dot */}
+                <div className="absolute inset-x-1 bottom-1 flex items-center gap-1 rounded-md bg-overlay px-1.5 py-1">
+                  <span className="clamp-1 min-w-0 flex-1 text-meta font-semibold text-scrim-text-primary">
+                    @{story.username || 'member'}
                   </span>
+                  <span
+                    aria-hidden
+                    className={`h-[7px] w-[7px] shrink-0 rounded-full ${
+                      isUnwatched ? 'bg-brand' : 'bg-scrim-text-tertiary'
+                    }`}
+                  />
                 </div>
-                <div className="absolute left-1 top-1">
-                  <Avatar src={story.avatar} name={story.username} size={20} ring />
-                </div>
+                {showBadge ? (
+                  <span className="absolute right-1 top-1 rounded-md bg-brand px-1.5 py-0.5 text-micro font-semibold text-text-inverse">
+                    {unwatched} new
+                  </span>
+                ) : null}
               </div>
             </div>
-            {showBadge ? (
-              <span className="absolute -top-1.5 left-1/2 -translate-x-1/2 rounded-full bg-brand px-2 py-0.5 text-[9px] font-bold uppercase tracking-wide text-text-inverse">
-                New
-              </span>
-            ) : null}
           </Link>
         );
       })}

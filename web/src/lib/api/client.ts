@@ -13,6 +13,7 @@ import type {
   Conversation,
   DiscoveryFeedUnit,
   Listing,
+  NotificationEntry,
   Order,
   User,
   Review,
@@ -23,7 +24,9 @@ import {
   LISTINGS,
   MY_LISTINGS,
   NOTIFICATIONS,
+  NOTIFICATION_FEED,
   ORDERS,
+  STORY_RAIL,
   USERS,
   listingById,
   listingsBySeller,
@@ -97,6 +100,38 @@ async function fetchFeedFixture(_cursor?: string): Promise<FeedPage> {
         ownerUsername: userById(moodboard.ownerId)?.username ?? null,
       });
     }
+    if (i === 23) {
+      units.push({
+        type: 'editorial',
+        id: 'editorial-galleria-aw',
+        mediaUri:
+          'https://images.unsplash.com/photo-1539109136881-3be0616acf4b?auto=format&fit=crop&w=900&q=80',
+        aspectRatio: 0.75,
+        headline: 'The Autumn Issue',
+        kicker: 'Galleria',
+        href: '/galleria',
+      });
+    }
+    if (i === 28) {
+      const picks = [...listings]
+        .sort((a, b) => (b.likes ?? 0) - (a.likes ?? 0))
+        .slice(0, 4);
+      if (picks.length) {
+        units.push({
+          type: 'recommendation_break',
+          id: 'rec-break-most-wanted',
+          headline: 'Most wanted this week',
+          listings: picks,
+        });
+      }
+    }
+  });
+  // Featured rhythm — occasional double-width listing breaks the uniform
+  // scan pattern (mobile FEATURED_RHYTHM parity; span lands on a media-
+  // strong tile so the composition stays editorial, not promotional).
+  [7, 15].forEach((idx) => {
+    const unit = units[idx];
+    if (unit?.type === 'listing') unit.span = 2;
   });
   return { units, nextCursor: null };
 }
@@ -244,6 +279,38 @@ export const data = {
     return NOTIFICATIONS;
   },
 
+  /** Structured notification feed — the canonical render contract for
+   * /notifications (kind, text, time, image, href, unread). */
+  async notificationEntries(): Promise<NotificationEntry[]> {
+    if (DATA_MODE === 'live') {
+      const page = await notificationsService.fetchNotificationEvents();
+      return page.entries;
+    }
+    await tick();
+    return NOTIFICATION_FEED;
+  },
+
+  /** Story rail entries — poster stories surfaced on the home feed. */
+  async posterStories(): Promise<
+    { id: string; username: string; avatar: string; coverUri: string; seen?: boolean }[]
+  > {
+    if (DATA_MODE === 'live') {
+      // No dedicated stories endpoint verified — derive from feed poster
+      // units. Author fields the live mapper doesn't carry stay null-safe.
+      const page = await feedService.fetchHomeFeed(undefined, {});
+      return page.units
+        .filter((u) => u.kind === 'poster' && u.poster)
+        .map((u) => ({
+          id: u.poster!.id,
+          username: '',
+          avatar: '',
+          coverUri: u.poster!.coverUri,
+        }));
+    }
+    await tick();
+    return STORY_RAIL;
+  },
+
   async orders(): Promise<Order[]> {
     if (DATA_MODE === 'live') {
       const page = await commerceService.fetchOrders();
@@ -262,9 +329,13 @@ export const data = {
     return MY_LISTINGS;
   },
 
-  async sendMessage(conversationId: string, text: string, currentUserId?: string): Promise<void> {
+  async sendMessage(
+    conversationId: string,
+    input: { text?: string; mediaUri?: string; mediaType?: 'image' | 'video' },
+    currentUserId?: string,
+  ): Promise<void> {
     if (DATA_MODE === 'live') {
-      await chatService.sendChatMessage(conversationId, text, currentUserId);
+      await chatService.sendChatMessage(conversationId, input, currentUserId);
       return;
     }
     await tick(60);
@@ -273,7 +344,10 @@ export const data = {
       id: `local-${Date.now()}`,
       senderId: 'me',
       sender: 'me',
-      text,
+      text: input.text,
+      mediaUri: input.mediaUri,
+      mediaType: input.mediaType,
+      type: input.mediaUri ? 'media' : 'text',
       timestamp: new Date().toISOString(),
       readStatus: 'sent',
     });

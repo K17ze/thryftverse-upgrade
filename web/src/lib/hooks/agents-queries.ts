@@ -12,17 +12,21 @@
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import type {
   AgentBot,
+  AgentMemory,
+  AgentMemorySettings,
   AgentPurposeId,
   AgentRunEntry,
   AgentTriggerId,
 } from '@/lib/contracts/agents';
 import { purposeById, DEFAULT_MODEL } from '@/lib/contracts/agents';
 import { AGENT_BOTS, AGENT_RUNS } from '@/lib/data/fixtures-agents';
+import { AGENT_MEMORIES, AGENT_MEMORY_SETTINGS } from '@/lib/data/fixtures-agents-memory';
 import { DATA_MODE } from '@/lib/api/client';
 import * as agentsService from '@/lib/api/services/agents';
 
 const BOTS_KEY = ['agent-bots'] as const;
 const RUNS_KEY = ['agent-runs'] as const;
+const MEMORY_KEY = ['agent-memory'] as const;
 
 const tick = (ms = 320) => new Promise((r) => setTimeout(r, ms));
 
@@ -40,6 +44,22 @@ async function fetchRuns(): Promise<AgentRunEntry[]> {
   }
   await tick();
   return AGENT_RUNS.map((r) => ({ ...r }));
+}
+
+export interface AgentMemoryState {
+  settings: AgentMemorySettings;
+  memories: AgentMemory[];
+}
+
+async function fetchMemory(): Promise<AgentMemoryState> {
+  if (DATA_MODE === 'live') {
+    return agentsService.fetchAgentMemory();
+  }
+  await tick();
+  return {
+    settings: { ...AGENT_MEMORY_SETTINGS },
+    memories: AGENT_MEMORIES.map((m) => ({ ...m })),
+  };
 }
 
 // ---------------------------------------------------------------------------
@@ -76,6 +96,95 @@ export function useAgentLedger(botId?: string) {
     gcTime: DATA_MODE === 'live' ? undefined : Infinity,
     select: (runs) => (botId ? runs.filter((r) => r.botId === botId) : runs),
   });
+}
+
+/**
+ * Memory + settings for /agents/memory — the react-query cache is the
+ * session store, so forget/clear survive navigation and a hard reload
+ * re-seeds in fixture mode (same honesty as the bots cache).
+ */
+export function useAgentMemory() {
+  return useQuery({
+    queryKey: MEMORY_KEY,
+    queryFn: fetchMemory,
+    staleTime: DATA_MODE === 'live' ? undefined : Infinity,
+    gcTime: DATA_MODE === 'live' ? undefined : Infinity,
+  });
+}
+
+/**
+ * Memory writes — every mutation is optimistic with rollback, exactly the
+ * mobile screen's semantics: the toggle moves now, a failed write snaps
+ * back and the caller toasts. In live mode the server stays the truth —
+ * the confirmed payload overwrites the optimistic value.
+ */
+export function useAgentMemoryActions() {
+  const queryClient = useQueryClient();
+
+  const updateMemory = (fn: (s: AgentMemoryState) => AgentMemoryState) => {
+    queryClient.setQueryData<AgentMemoryState>(MEMORY_KEY, (old) =>
+      old ? fn(old) : old,
+    );
+  };
+
+  const patchSettings = async (patch: Partial<AgentMemorySettings>) => {
+    const prev = queryClient.getQueryData<AgentMemoryState>(MEMORY_KEY);
+    updateMemory((s) => ({ ...s, settings: { ...s.settings, ...patch } }));
+    try {
+      if (DATA_MODE === 'live') {
+        const settings = await agentsService.updateAgentMemorySettings(patch);
+        updateMemory((s) => ({ ...s, settings }));
+      } else {
+        await tick(240);
+      }
+    } catch (err) {
+      if (prev) queryClient.setQueryData(MEMORY_KEY, prev);
+      throw err;
+    }
+  };
+
+  return {
+    /** "Remember me" — the master memory switch. */
+    setMemoryEnabled: (enabled: boolean) => patchSettings({ memoryEnabled: enabled }),
+    /** "Learn from chats" — extraction; disabled server-side when memory is off. */
+    setExtractionEnabled: (enabled: boolean) =>
+      patchSettings({ extractionEnabled: enabled }),
+
+    /** Retract one memory — optimistic remove, rollback on failure. */
+    forgetMemory: async (memoryId: string): Promise<void> => {
+      const prev = queryClient.getQueryData<AgentMemoryState>(MEMORY_KEY);
+      updateMemory((s) => ({
+        ...s,
+        memories: s.memories.filter((m) => m.id !== memoryId),
+      }));
+      try {
+        if (DATA_MODE === 'live') {
+          await agentsService.retractAgentMemory(memoryId);
+        } else {
+          await tick(240);
+        }
+      } catch (err) {
+        if (prev) queryClient.setQueryData(MEMORY_KEY, prev);
+        throw err;
+      }
+    },
+
+    /** Clear every memory — the danger-zone action. */
+    clearAllMemories: async (): Promise<void> => {
+      const prev = queryClient.getQueryData<AgentMemoryState>(MEMORY_KEY);
+      updateMemory((s) => ({ ...s, memories: [] }));
+      try {
+        if (DATA_MODE === 'live') {
+          await agentsService.clearAgentMemories();
+        } else {
+          await tick(320);
+        }
+      } catch (err) {
+        if (prev) queryClient.setQueryData(MEMORY_KEY, prev);
+        throw err;
+      }
+    },
+  };
 }
 
 // ---------------------------------------------------------------------------

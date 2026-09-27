@@ -325,6 +325,18 @@ export function BundleUpsellRow({ listing }: { listing: Listing }) {
         </p>
       ) : null}
 
+      {/* Deep link into the dedicated builder — the full closet, not just
+          the rail window; ?item= pre-stages the piece they came from. */}
+      {sellerUsername ? (
+        <Link
+          href={`/u/${sellerUsername}/bundle?item=${listing.id}`}
+          className="pressable mt-3 inline-flex items-center gap-1 text-caption font-medium text-text-secondary hover:text-text-primary"
+        >
+          Build a bundle
+          <Icon name="forward" size={13} />
+        </Link>
+      ) : null}
+
       {/* Bundle ledger + bulk action — appears once a pick is staged */}
       {selectedIds.size > 0 ? (
         <div className="mt-3 border-t border-border-subtle pt-3">

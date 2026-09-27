@@ -690,10 +690,29 @@ export function matchIntent(intent: ParsedIntent): Listing[] {
 }
 
 // ---------------------------------------------------------------------------
-// URL hand-off — same contract SearchClient.filtersFromParams parses:
-//   ?q= &category= &condition=a|b &size= &brand= &min= &max=
+// URL hand-off — same contract filterTypes.filtersFromParams parses:
+//   ?q= &category=a,b &condition=a|b &size= &brand= &colour= &min= &max=
+// Multi-value facet params are comma-joined with each value URI-encoded —
+// the whole set replays on the /search surface, not just the first pick.
 // q carries the freest term so the surface's own text filter keeps the set.
 // ---------------------------------------------------------------------------
+
+const joinParamList = (values: string[]): string =>
+  values.map((v) => encodeURIComponent(v)).join(',');
+
+const splitParamList = (raw: string | null): string[] => {
+  if (!raw) return [];
+  return raw
+    .split(',')
+    .map((piece) => {
+      try {
+        return decodeURIComponent(piece).trim();
+      } catch {
+        return piece.trim();
+      }
+    })
+    .filter(Boolean);
+};
 
 export function searchHref(
   intent: ParsedIntent,
@@ -711,9 +730,16 @@ export function searchHref(
     normalize(rawQuery) ||
     'browse';
   params.set('q', q);
-  if (slug) params.set('category', slug);
-  if (intent.brands[0]) params.set('brand', intent.brands[0]);
-  if (intent.sizes[0]) params.set('size', intent.sizes[0].toUpperCase());
+  if (intent.categorySlugs.length > 0) {
+    params.set('category', joinParamList(intent.categorySlugs));
+  }
+  if (intent.brands.length > 0) params.set('brand', joinParamList(intent.brands));
+  if (intent.sizes.length > 0) {
+    params.set('size', joinParamList(intent.sizes.map((s) => s.toUpperCase())));
+  }
+  if (intent.colours.length > 0) {
+    params.set('colour', joinParamList(intent.colours));
+  }
   if (intent.conditions.length > 0) params.set('condition', intent.conditions.join('|'));
   if (intent.priceMin != null) params.set('min', String(intent.priceMin));
   if (intent.priceMax != null) params.set('max', String(intent.priceMax));
@@ -747,19 +773,27 @@ export function intentFromParams(
   const q = (params.get('q') ?? '').trim();
   const intent = q ? parseIntent(q) : newIntent();
 
-  const category = params.get('category');
-  if (category && !intent.categorySlugs.includes(category)) {
-    intent.categorySlugs.push(category);
+  // Facet params are comma-joined multi-value lists — replay every entry.
+  for (const slug of splitParamList(params.get('category'))) {
+    if (!intent.categorySlugs.includes(slug)) intent.categorySlugs.push(slug);
   }
-  const brand = params.get('brand');
-  if (brand) {
+  for (const brand of splitParamList(params.get('brand'))) {
     const canonical =
       BRAND_ALIASES.find(([, c]) => c.toLowerCase() === brand.toLowerCase())?.[1] ?? brand;
     if (!intent.brands.includes(canonical)) intent.brands.push(canonical);
   }
-  const size = params.get('size');
-  if (size && !intent.sizes.some((s) => s.toLowerCase() === size.toLowerCase())) {
-    intent.sizes.push(size);
+  for (const size of splitParamList(params.get('size'))) {
+    if (!intent.sizes.some((s) => s.toLowerCase() === size.toLowerCase())) {
+      intent.sizes.push(size);
+    }
+  }
+  for (const colour of splitParamList(params.get('colour'))) {
+    const canonical =
+      COLOR_VOCAB.find((c) => c.name.toLowerCase() === colour.toLowerCase())?.name ??
+      null;
+    if (canonical && !intent.colours.includes(canonical)) {
+      intent.colours.push(canonical);
+    }
   }
   const rawConditions = params.get('condition');
   for (const c of rawConditions?.split('|') ?? []) {
@@ -823,6 +857,53 @@ export function refinementsFor(intent: ParsedIntent, results: Listing[]): string
     out.push(`size ${modalSize ?? '9'}`);
   }
   return out.slice(0, 4);
+}
+
+// ---------------------------------------------------------------------------
+// Trust signal — honest per-answer confidence (mobile AITrustSignal parity)
+// ---------------------------------------------------------------------------
+
+export type AnswerConfidence = 'high' | 'medium' | 'low' | 'exploratory';
+
+export interface AnswerTrust {
+  confidence: AnswerConfidence;
+  /** Source citation — names the real matched keywords, never invented. */
+  source: string;
+  /** Progressive-disclosure reasoning — the honest mechanics of the match. */
+  expanded: string;
+}
+
+/**
+ * Confidence is derived from match quality, not fabricated: the count of
+ * constraints the parser actually extracted and whether the catalogue
+ * could satisfy them. Mirrors mobile's heuristic (≥3 matched keywords →
+ * high, 1–2 → medium, 0 → low) plus the honest 'exploratory' tier for a
+ * well-parsed query the catalogue can't satisfy.
+ */
+export function trustForAnswer(intent: ParsedIntent, results: Listing[]): AnswerTrust {
+  const chips = buildChips(intent);
+  const n = chips.length;
+  const total = results.length;
+
+  const confidence: AnswerConfidence =
+    n === 0 ? 'low' : total === 0 ? 'exploratory' : n >= 3 ? 'high' : 'medium';
+
+  const source =
+    n === 0
+      ? 'No keywords caught in that message'
+      : `Matched keywords: ${chips
+          .slice(0, 3)
+          .map((c) => c.label)
+          .join(', ')}${n > 3 ? ` +${n - 3} more` : ''}`;
+
+  const expanded =
+    n === 0
+      ? 'Nothing in that message mapped to a brand, category, colour, size or price — try naming one.'
+      : total === 0
+        ? `${n} keyword${n === 1 ? '' : 's'} matched, but the catalogue holds nothing for this combination right now — removing a chip widens the net.`
+        : `${n} keyword${n === 1 ? '' : 's'} matched ${total} listing${total === 1 ? '' : 's'} — ranked by likes, most-matched first.`;
+
+  return { confidence, source, expanded };
 }
 
 /** Most common whole-digit size in the result set — the honest "size N"

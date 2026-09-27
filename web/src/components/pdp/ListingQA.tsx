@@ -5,32 +5,49 @@
  * Port of the mobile ListingQA semantics: ask composer at the top, threads
  * below with seller answers marked by a success accent, "awaiting seller
  * response" honesty for unanswered questions, and an inline answer composer
- * when the viewer owns the listing. Questions persist for the session in
- * local state — design-mode counterpart of POST /listings/:id/questions.
+ * when the viewer owns the listing.
+ *
+ * Live mode is real persistence: reads come from GET /listings/:id/questions
+ * and writes from POST — a question that fails server-side (moderation,
+ * auth, offline) surfaces an error, never a fake "posted" state. Held-for-
+ * review rows render with their quarantine marker, author-visible only —
+ * the same predicate the backend applies. Fixture mode keeps LISTING_QA as
+ * session-local truth so design mode can still demonstrate the flow.
  */
 
 import { useState } from 'react';
 import { useRouter } from 'next/navigation';
-import type { Listing, ListingQuestion } from '@/lib/contracts/domain';
-import { LISTING_QA } from '@/lib/data/fixtures';
+import type { Listing } from '@/lib/contracts/domain';
 import { Avatar } from '@/components/ui/Avatar';
 import { Icon } from '@/components/ui/Icon';
+import { Skeleton } from '@/components/ui/Skeleton';
 import { useToast } from '@/components/ui/Toast';
 import { useSession } from '@/lib/session/SessionProvider';
+import { parseApiError } from '@/lib/api/http';
+import {
+  useAnswerListingQuestion,
+  useListingQuestions,
+  usePostListingQuestion,
+} from '@/lib/hooks/pdp-queries';
 import { timeAgo } from '@/lib/utils/format';
 
 interface ListingQAProps {
   listing: Listing;
+  /** Viewer blocked this seller — the ask composer is suppressed and the
+   *  relationship stated plainly (mobile ListingQA parity, S20-06). */
+  isSellerBlocked?: boolean;
 }
 
-export function ListingQA({ listing }: ListingQAProps) {
+export function ListingQA({ listing, isSellerBlocked = false }: ListingQAProps) {
   const router = useRouter();
   const { show } = useToast();
   const { user, isGuest } = useSession();
 
-  const [questions, setQuestions] = useState<ListingQuestion[]>(
-    () => LISTING_QA.filter((q) => q.listingId === listing.id),
-  );
+  const questionsQuery = useListingQuestions(listing.id);
+  const questions = questionsQuery.data ?? [];
+  const postQuestion = usePostListingQuestion(listing.id);
+  const answerQuestion = useAnswerListingQuestion(listing.id);
+
   const [askText, setAskText] = useState('');
   const [answeringId, setAnsweringId] = useState<string | null>(null);
   const [answerText, setAnswerText] = useState('');
@@ -40,29 +57,33 @@ export function ListingQA({ listing }: ListingQAProps) {
   const handleAsk = () => {
     const trimmed = askText.trim();
     if (!trimmed) return;
-    if (trimmed.length < 5) {
-      show('Question must be at least 5 characters', 'error');
-      return;
-    }
     if (isGuest) {
       router.push('/auth');
       return;
     }
-    setQuestions((prev) => [
-      {
-        id: `q-local-${Date.now()}`,
-        listingId: listing.id,
-        askerId: user?.id,
-        askerName: user?.username ?? 'You',
-        askerAvatar: user?.avatar,
-        text: trimmed,
-        createdAt: new Date().toISOString(),
-        answer: null,
+    // Same bounds as the backend schema (min 5, max 300) — client-side so
+    // the error lands before the wire, not after a 400.
+    if (trimmed.length < 5) {
+      show('Question must be at least 5 characters', 'error');
+      return;
+    }
+    postQuestion.mutate(trimmed, {
+      onSuccess: (question) => {
+        setAskText('');
+        show(
+          question.moderationState === 'pending_review'
+            ? 'Question sent — it appears once review clears'
+            : 'Question posted',
+          'success',
+        );
       },
-      ...prev,
-    ]);
-    setAskText('');
-    show('Question posted', 'success');
+      onError: (error) => {
+        show(
+          parseApiError(error, 'Could not post the question — try again.').message,
+          'error',
+        );
+      },
+    });
   };
 
   const handleAnswer = (questionId: string) => {
@@ -72,23 +93,27 @@ export function ListingQA({ listing }: ListingQAProps) {
       show('Answer must be at least 3 characters', 'error');
       return;
     }
-    setQuestions((prev) =>
-      prev.map((q) =>
-        q.id === questionId
-          ? {
-              ...q,
-              answer: {
-                text: trimmed,
-                responderName: user?.username ?? 'Seller',
-                createdAt: new Date().toISOString(),
-              },
-            }
-          : q,
-      ),
+    answerQuestion.mutate(
+      { questionId, text: trimmed },
+      {
+        onSuccess: ({ answer }) => {
+          setAnswerText('');
+          setAnsweringId(null);
+          show(
+            answer.moderationState === 'pending_review'
+              ? 'Answer sent — it appears once review clears'
+              : 'Answer posted',
+            'success',
+          );
+        },
+        onError: (error) => {
+          show(
+            parseApiError(error, 'Could not post the answer — try again.').message,
+            'error',
+          );
+        },
+      },
     );
-    setAnswerText('');
-    setAnsweringId(null);
-    show('Answer posted', 'success');
   };
 
   return (
@@ -111,40 +136,79 @@ export function ListingQA({ listing }: ListingQAProps) {
         ) : null}
       </div>
 
-      {/* Ask composer — submit gated on auth like the rest of the PDP */}
-      <form
-        className="mb-4 flex items-end gap-2"
-        onSubmit={(e) => {
-          e.preventDefault();
-          handleAsk();
-        }}
-      >
-        <textarea
-          value={askText}
-          onChange={(e) => setAskText(e.target.value)}
-          rows={1}
-          maxLength={300}
-          placeholder="Ask a question about this item…"
-          aria-label="Ask a question"
-          className="max-h-28 min-h-[42px] flex-1 resize-none rounded-md bg-surface-alt px-3.5 py-2.5 text-body text-input-text placeholder:text-text-muted focus:outline-none focus:ring-1 focus:ring-border"
-        />
-        <button
-          type="submit"
-          disabled={!askText.trim()}
-          aria-label="Post question"
-          className="pressable flex h-[42px] w-[42px] shrink-0 items-center justify-center rounded-md bg-brand text-text-inverse disabled:pointer-events-none disabled:bg-surface-alt disabled:text-text-muted"
+      {/* Ask composer — buyers only (the backend 403s the seller asking on
+          their own listing); guests route through auth on submit. A
+          blocked seller's public Q&A stays readable, but the submission
+          affordance is gated with the relationship stated plainly. */}
+      {isSellerBlocked ? (
+        <p className="mb-4 flex items-center gap-2 text-caption text-text-muted">
+          <Icon name="ban" size={16} className="shrink-0" />
+          You blocked this seller — unblock them to ask a question.
+        </p>
+      ) : !isSeller ? (
+        <form
+          className="mb-4 flex items-end gap-2"
+          onSubmit={(e) => {
+            e.preventDefault();
+            handleAsk();
+          }}
         >
-          <Icon name="send" size={16} />
-        </button>
-      </form>
+          <textarea
+            value={askText}
+            onChange={(e) => setAskText(e.target.value)}
+            rows={1}
+            maxLength={300}
+            placeholder="Ask a question about this item…"
+            aria-label="Ask a question"
+            className="max-h-28 min-h-11 flex-1 resize-none rounded-md bg-surface-alt px-3.5 py-2.5 text-body text-input-text placeholder:text-text-muted focus:outline-none focus:ring-1 focus:ring-border"
+          />
+          <button
+            type="submit"
+            disabled={!askText.trim() || postQuestion.isPending}
+            aria-label="Post question"
+            className="pressable flex h-11 w-11 shrink-0 items-center justify-center rounded-md bg-brand text-text-inverse disabled:pointer-events-none disabled:bg-surface-alt disabled:text-text-muted"
+          >
+            <Icon name="send" size={16} />
+          </button>
+        </form>
+      ) : null}
 
       {/* Threads — hairline-separated, answers carry a success accent */}
-      {questions.length === 0 ? (
+      {questionsQuery.isPending ? (
+        <div className="flex flex-col gap-5 py-2" aria-busy aria-label="Loading questions">
+          {[0, 1].map((i) => (
+            <div key={i} className="flex flex-col gap-2">
+              <div className="flex items-center gap-2.5">
+                <Skeleton className="h-7 w-7 rounded-full" />
+                <Skeleton className="h-3.5 w-24" />
+              </div>
+              <Skeleton className="h-3.5 w-4/5" />
+            </div>
+          ))}
+        </div>
+      ) : questionsQuery.isError ? (
+        <div className="flex flex-col items-center gap-2 py-6 text-center">
+          <p className="text-body text-text-secondary">
+            {parseApiError(questionsQuery.error, 'Questions could not be loaded.').message}
+          </p>
+          <button
+            type="button"
+            onClick={() => void questionsQuery.refetch()}
+            className="pressable rounded-md px-3 py-1.5 text-caption font-semibold text-text-secondary hover:text-text-primary"
+          >
+            Try again
+          </button>
+        </div>
+      ) : questions.length === 0 ? (
         <div className="flex flex-col items-center gap-1.5 py-6">
           <Icon name="chat" size={28} className="text-text-muted" />
           <p className="text-body text-text-muted">No questions yet</p>
           <p className="text-meta text-text-muted">
-            Be the first to ask the seller about this item
+            {isSeller
+              ? 'Buyer questions land here — answer them inline'
+              : isSellerBlocked
+                ? 'Questions and seller answers appear here'
+                : 'Be the first to ask the seller about this item'}
           </p>
         </div>
       ) : (
@@ -167,13 +231,20 @@ export function ListingQA({ listing }: ListingQAProps) {
                 </div>
               </div>
               <p className="text-body leading-relaxed text-text-primary">{q.text}</p>
+              {/* Quarantined rows are author-visible only — label the hold
+                  instead of implying the question is public. */}
+              {q.moderationState === 'pending_review' ? (
+                <p className="mt-1.5 text-meta font-medium text-text-muted">
+                  Under review — only you can see this for now
+                </p>
+              ) : null}
 
               {q.answer ? (
                 <div className="ml-3 mt-3 border-l-2 border-success pl-3">
                   <div className="mb-1 flex items-center gap-1.5">
                     <Icon name="verified" size={12} className="shrink-0 text-success-text" />
                     <p className="flex-1 text-meta font-medium text-success-text">
-                      Seller · {q.answer.responderName}
+                      Seller{q.answer.responderName ? ` · ${q.answer.responderName}` : ''}
                     </p>
                     {q.answer.createdAt ? (
                       <p className="text-meta text-text-muted">
@@ -184,6 +255,11 @@ export function ListingQA({ listing }: ListingQAProps) {
                   <p className="text-caption leading-relaxed text-text-secondary">
                     {q.answer.text}
                   </p>
+                  {q.answer.moderationState === 'pending_review' ? (
+                    <p className="mt-1.5 text-meta font-medium text-text-muted">
+                      Under review — only you can see this for now
+                    </p>
+                  ) : null}
                 </div>
               ) : isSeller ? (
                 answeringId === q.id ? (
@@ -211,11 +287,11 @@ export function ListingQA({ listing }: ListingQAProps) {
                       </button>
                       <button
                         type="button"
-                        disabled={!answerText.trim()}
+                        disabled={!answerText.trim() || answerQuestion.isPending}
                         onClick={() => handleAnswer(q.id)}
                         className="pressable rounded-md bg-brand px-3.5 py-1.5 text-caption font-semibold text-text-inverse disabled:pointer-events-none disabled:opacity-40"
                       >
-                        Post
+                        {answerQuestion.isPending ? 'Posting…' : 'Post'}
                       </button>
                     </div>
                   </div>

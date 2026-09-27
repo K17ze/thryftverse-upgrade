@@ -201,22 +201,31 @@ export function buildItemDetailDerived(
     return undefined;
   })();
 
-  // ── Social proof line (truthful) ──
-  // Built only from real engagement data — never fabricated. Combines
-  // active offers (scarcity urgency) and cumulative views (popularity)
-  // into a single muted line below the price. Each signal is only
-  // included when the backend provides a positive count.
-  const socialProofLine = (() => {
-    const parts: string[] = [];
+  // ── Conversational signal line (dock beat) ──
+  // The eBay VI conversational line that sits directly under the buy
+  // buttons. Every clause comes from a real contract counter — active
+  // offers, views, likes, sold comparables — never fabricated. Resale
+  // stock is one-of-one, so the scarcity clause is structural truth.
+  // Self-omits for the owner and sold states: their docks are factual
+  // state surfaces, not conversion beats.
+  const signalLine = (() => {
+    if (capabilities.isOwner || capabilities.isSold) return undefined;
+    const demand: string[] = [];
     const activeOffers = listingEngagement?.activeOfferCount;
     if (activeOffers != null && activeOffers > 0) {
-      parts.push(`${activeOffers} offer${activeOffers > 1 ? 's' : ''} active`);
+      demand.push(`${activeOffers} offer${activeOffers > 1 ? 's' : ''} active`);
     }
-    const views = item.views;
-    if (views != null && views > 0) {
-      parts.push(`${views} view${views > 1 ? 's' : ''}`);
+    if (item.views != null && item.views > 0) {
+      demand.push(`${item.views} view${item.views > 1 ? 's' : ''}`);
     }
-    return parts.length > 0 ? parts.join(' · ') : undefined;
+    if (item.likes > 0) {
+      demand.push(item.likes === 1 ? '1 person likes this' : `${item.likes} people like this`);
+    }
+    if (soldComps && soldComps.sampleSize >= 2) {
+      demand.push(`${soldComps.sampleSize} similar sold`);
+    }
+    if (demand.length === 0) return 'One only — once it\u2019s gone, it\u2019s gone';
+    return `One only · ${demand.slice(0, 2).join(' · ')}`;
   })();
 
   // Condition is deliberately absent here — the condition chip in the
@@ -423,7 +432,7 @@ export function buildItemDetailDerived(
     bundleItems,
     seenInLooksItems,
     interestSignal,
-    socialProofLine,
+    socialProofLine: signalLine,
     attributeLine,
     conditionMeta,
     secondaryLine,

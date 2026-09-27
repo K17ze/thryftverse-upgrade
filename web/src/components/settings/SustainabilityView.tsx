@@ -4,8 +4,10 @@
  * SustainabilityView — the /settings/sustainability surface.
  *
  * Web port of the mobile SustainabilityPreferencesScreen: carbon-saving
- * target, secondhand ratio goal, packaging preference, badges, impact
- * tracking and local-first ordering — persisted via settingsPrefs.
+ * target, secondhand ratio goal, packaging preference, badges and impact
+ * tracking — persisted via settingsPrefs. The mobile "local first"
+ * ordering toggle is deliberately absent: it claims to reorder search
+ * and feed results, which this surface has no honest way to honour.
  *
  * Honest impact treatment: mobile reads a verified impact ledger from the
  * backend. The web fixture layer has no such ledger, so the hero reports
@@ -21,6 +23,7 @@ import { Chip } from '@/components/ui/Chip';
 import { Icon } from '@/components/ui/Icon';
 import { Skeleton } from '@/components/ui/Skeleton';
 import { useHydrated } from '@/lib/store/useStore';
+import { useSession } from '@/lib/session/SessionProvider';
 import { useSettingsPrefs, type SustainabilityPrefs } from '@/lib/store/settingsPrefs';
 import { ORDERS } from '@/lib/data/fixtures';
 
@@ -30,7 +33,9 @@ const RATIO_TARGETS: (number | null)[] = [null, 25, 50, 75, 100];
 const METHODOLOGY_TEXT =
   'ThryftVerse calculates net avoided emissions using verified emissions factors (DEFRA 2024, Higg MSI v3.7). We subtract resale shipping and packaging emissions from the avoided production and end-of-life emissions, applying a displacement rate and rebound effect based on WRAP/Vestiaire methodology.';
 
-type ToggleKey = 'plasticFreePackaging' | 'showBadges' | 'trackImpact' | 'localFirst';
+// 'localFirst' stays in the store for the feed workstream — no honest
+// surface here to consume it, so it is not a rendered toggle.
+type ToggleKey = 'plasticFreePackaging' | 'showBadges' | 'trackImpact';
 
 interface ToggleRow {
   key: ToggleKey;
@@ -65,12 +70,6 @@ const TOGGLE_GROUPS: { section: string; rows: ToggleRow[] }[] = [
         label: 'Impact tracking',
         sub: 'Track your personal sustainability impact',
         icon: 'analytics',
-      },
-      {
-        key: 'localFirst',
-        label: 'Local first',
-        sub: 'Prioritise local listings in search and feed',
-        icon: 'location',
       },
     ],
   },
@@ -112,18 +111,23 @@ function GoalChips<T extends number | null>({
 
 export function SustainabilityView() {
   const hydrated = useHydrated();
+  const { user } = useSession();
   const sustainability = useSettingsPrefs((s) => s.sustainability);
   const setSustainability = useSettingsPrefs((s) => s.setSustainability);
   const [methodologyOpen, setMethodologyOpen] = useState(false);
 
   // Real figure available in fixture mode: completed resales involving the
-  // member — buying and selling both keep an item in circulation.
+  // member — buying and selling both keep an item in circulation. The 'me'
+  // records belong to the demo account only — guests and live accounts get
+  // an honest zero, not a stranger's impact.
   const keptInCirculation = useMemo(
     () =>
-      ORDERS.filter(
-        (o) => (o.buyerId === 'me' || o.sellerId === 'me') && o.status === 'delivered',
-      ).length,
-    [],
+      user?.id === 'me'
+        ? ORDERS.filter(
+            (o) => (o.buyerId === 'me' || o.sellerId === 'me') && o.status === 'delivered',
+          ).length
+        : 0,
+    [user?.id],
   );
 
   const set = (patch: Partial<SustainabilityPrefs>) => setSustainability(patch);

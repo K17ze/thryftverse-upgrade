@@ -12,8 +12,21 @@
  * A seeded PRNG keeps every read of a session identical.
  */
 
-import { MY_LISTINGS, USERS, WALLET_BALANCE } from '@/lib/data/fixtures';
-import { OFFERS, protectionFeeFor } from '@/lib/data/fixtures-commerce';
+import {
+  CURRENT_USER,
+  LISTINGS,
+  MY_DRAFT_LISTINGS,
+  MY_LISTINGS,
+  USERS,
+  WALLET_BALANCE,
+} from '@/lib/data/fixtures';
+import {
+  OFFERS,
+  allCommerceOrders,
+  markOrderDispatched,
+  protectionFeeFor,
+} from '@/lib/data/fixtures-commerce';
+import { DISPATCH_SLA_DAYS } from '@/lib/commerce/dispatch';
 import type { Listing } from '@/lib/contracts/domain';
 
 const img = (id: string, w = 400) =>
@@ -42,6 +55,9 @@ export interface SellerMetric {
   value: string;
   /** % change vs the previous window of the same length. */
   delta: number | null;
+  /** True when the number is a demo estimate rather than a measured count —
+   *  the UI labels it instead of presenting it as live telemetry. */
+  estimated?: boolean;
 }
 
 export interface ListingPerformanceRow {
@@ -80,18 +96,25 @@ export interface PayoutEntry {
   title: string;
   soldAt: string;
   itemPrice: number;
-  /** Buyer-protection deduction — 5% + £0.70 via the shared commerce helper. */
-  protectionFee: number;
-  net: number;
+  /** Buyer-protection deduction — 5% + £0.70 via the shared commerce helper.
+   *  Null when the live order contract doesn't expose the fee split —
+   *  the renderer says so rather than printing an invented £0.00. */
+  protectionFee: number | null;
+  net: number | null;
   releaseAt: string;
 }
 
 export interface PayoutSchedule {
-  nextDate: string;
-  nextAmount: number;
-  method: string;
+  /** Server-provided payout timing — null when no payout is scheduled. */
+  nextDate: string | null;
+  nextAmount: number | null;
+  method: string | null;
+  /** True when `method` is fixture-authored, not a real payout account —
+   *  the UI must label it demo rather than present it as a real bank. */
+  methodIsDemo?: boolean;
   pendingTotal: number;
-  lifetimeSales: number;
+  /** Lifetime sales — null when the live API does not expose it. */
+  lifetimeSales: number | null;
   /** Wallet available balance — mirrors the shared WALLET_BALANCE fixture. */
   available: number;
 }
@@ -310,8 +333,29 @@ export function sellerPerformanceRows(period: SellerPeriod): ListingPerformanceR
 // FULFILMENT QUEUE
 // ============================================================================
 
-const coverFor = (listingId: string) =>
-  MY_LISTINGS.find((l) => l.id === listingId)?.images[0] ?? '';
+/**
+ * Resolve a queue listing id against every seller-owned collection —
+ * active rows live in MY_LISTINGS, sold/archived rows in ARCHIVE_SALES.
+ * Joining only the live closet produced blank covers and £0 payout math
+ * for the posted/delivered archive jobs.
+ */
+function saleRecordFor(
+  listingId: string,
+): { price: number; image: string; priceWithProtection?: number } | null {
+  const active = MY_LISTINGS.find((l) => l.id === listingId);
+  if (active) {
+    return {
+      price: active.price,
+      image: active.images[0] ?? '',
+      priceWithProtection: active.priceWithProtection,
+    };
+  }
+  const sold = ARCHIVE_SALES.find((s) => s.id === listingId);
+  if (sold) return { price: sold.price, image: sold.image };
+  return null;
+}
+
+const coverFor = (listingId: string) => saleRecordFor(listingId)?.image ?? '';
 
 /**
  * The dispatch queue. ml1/ml2 carry open orders — the listing stays live
@@ -341,7 +385,7 @@ export const FULFILMENT_QUEUE: FulfilmentJob[] = [
     service: 'Tracked 48',
     stage: 'to-post',
     orderedAt: hoursAgoIso(7),
-    shipBy: daysFromNowIso(2),
+    shipBy: daysFromNowIso(DISPATCH_SLA_DAYS),
   },
   {
     id: 'fq-3',
@@ -390,14 +434,68 @@ export const FULFILMENT_QUEUE: FulfilmentJob[] = [
   },
 ];
 
+/** Carrier-flavoured tracking numbers — Royal Mail for Tracked 48, Evri
+ *  for the Evri service (the queue's only two carriers). */
+function generateTrackingNumber(service: string): string {
+  const digits = Math.floor(100_000_000 + Math.random() * 899_999_999);
+  return service.toLowerCase().startsWith('evri')
+    ? `EVR${digits}GB`
+    : `RM48${digits}GB`;
+}
+
+export interface ShippingLabel {
+  jobId: string;
+  orderRef: string;
+  service: string;
+  trackingNumber: string;
+  itemTitle: string;
+  paid: number;
+  buyerName: string;
+  sellerName: string;
+  shipBy: string;
+}
+
+/**
+ * Fixture-mode label generation — the print surface reads this. Mints the
+ * job's tracking number once (the same reference "Mark posted" keeps), so
+ * the label, the queue and the posted row stay one truth.
+ */
+export function shippingLabelFor(jobId: string): ShippingLabel | null {
+  const job = FULFILMENT_QUEUE.find((j) => j.id === jobId);
+  if (!job) return null;
+  if (!job.trackingNumber) job.trackingNumber = generateTrackingNumber(job.service);
+  return {
+    jobId: job.id,
+    orderRef: job.id.toUpperCase(),
+    service: job.service,
+    trackingNumber: job.trackingNumber,
+    itemTitle: job.title,
+    paid: job.paid,
+    buyerName: job.buyer.name,
+    sellerName: CURRENT_USER.username,
+    shipBy: job.shipBy,
+  };
+}
+
 /** Fixture-mode dispatch — flips a job to posted with a generated tracking
- *  number, the same session-local truth pattern as recordOrder(). */
+ *  number, the same session-local truth pattern as recordOrder(). A
+ *  number already minted by "Print label" is kept, not regenerated. */
 export function markJobPosted(jobId: string): FulfilmentJob | null {
   const job = FULFILMENT_QUEUE.find((j) => j.id === jobId);
   if (!job || job.stage !== 'to-post') return null;
   job.stage = 'posted';
   job.postedAt = new Date().toISOString();
-  job.trackingNumber = `RM48${Math.floor(100_000_000 + Math.random() * 899_999_999)}GB`;
+  job.trackingNumber = job.trackingNumber ?? generateTrackingNumber(job.service);
+  // The fulfilment queue and the buyer-visible order are one truth — a paid
+  // commerce order for the same listing flips to shipped with the same
+  // tracking reference.
+  const order = allCommerceOrders().find(
+    (o) =>
+      o.sellerId === 'me' &&
+      o.listingId === job.listingId &&
+      ['created', 'pending', 'paid'].includes(o.status),
+  );
+  if (order) markOrderDispatched(order.id, job.trackingNumber);
   return job;
 }
 
@@ -407,12 +505,11 @@ export function markJobPosted(jobId: string): FulfilmentJob | null {
 
 const CLEARANCE_DAYS = 2;
 
-const priceOf = (listingId: string) =>
-  MY_LISTINGS.find((l) => l.id === listingId)?.price ?? 0;
+const priceOf = (listingId: string) => saleRecordFor(listingId)?.price ?? 0;
 
 const feeFor = (listingId: string) => {
-  const listing = MY_LISTINGS.find((l) => l.id === listingId);
-  return listing ? protectionFeeFor(listing) : 0;
+  const record = saleRecordFor(listingId);
+  return record ? protectionFeeFor(record) : 0;
 };
 
 /**
@@ -439,19 +536,27 @@ export function payoutEntries(): PayoutEntry[] {
     .sort((a, b) => Date.parse(a.releaseAt) - Date.parse(b.releaseAt));
 }
 
-/** Next payout: the first Tuesday on or after the earliest clearance date. */
+/**
+ * Next payout: proceeds land the day their clearance window ends, so the
+ * scheduled date is the earliest pending release. When nothing is in
+ * clearance there is no payout to schedule — null, not an invented date,
+ * so the page can render its honest "nothing scheduled" state.
+ */
 export function payoutSchedule(): PayoutSchedule {
   const entries = payoutEntries();
   const earliest = entries.reduce<string | null>(
     (acc, e) => (!acc || Date.parse(e.releaseAt) < Date.parse(acc) ? e.releaseAt : acc),
     null,
   );
-  const nextDate = earliest ?? daysFromNowIso(3);
-  const nextAmount = round2(
-    entries
-      .filter((e) => Date.parse(e.releaseAt) <= Date.parse(nextDate))
-      .reduce((s, e) => s + e.net, 0),
-  );
+  const nextDate = earliest;
+  const nextAmount =
+    nextDate === null
+      ? null
+      : round2(
+          entries
+            .filter((e) => Date.parse(e.releaseAt) <= Date.parse(nextDate))
+            .reduce((s, e) => s + (e.net ?? 0), 0),
+        );
   const lifetimeSales = round2(
     FULFILMENT_QUEUE.filter((j) => j.stage === 'delivered').reduce(
       (s, j) => s + priceOf(j.listingId) - feeFor(j.listingId),
@@ -461,8 +566,11 @@ export function payoutSchedule(): PayoutSchedule {
   return {
     nextDate,
     nextAmount,
+    // Fixture-authored destination — marked so every surface that prints
+    // it also discloses it; no real payout account exists in demo mode.
     method: 'Bank account •••• 4521',
-    pendingTotal: round2(entries.reduce((s, e) => s + e.net, 0)),
+    methodIsDemo: true,
+    pendingTotal: round2(entries.reduce((s, e) => s + (e.net ?? 0), 0)),
     lifetimeSales,
     available: WALLET_BALANCE.available,
   };
@@ -509,7 +617,7 @@ export function sellerTodos(): SellerTodo[] {
         overdue > 0
           ? `${overdue} order${overdue === 1 ? '' : 's'} past dispatch deadline`
           : `${toPost.length} order${toPost.length === 1 ? '' : 's'} to post`,
-      meta: 'Tracked 48 · post within 2 days of sale',
+      meta: `Tracked 48 · post within ${DISPATCH_SLA_DAYS} days of sale`,
       href: '/seller-hub/fulfilment',
       count: toPost.length,
       tone: overdue > 0 ? 'danger' : 'warning',
@@ -538,4 +646,291 @@ export function sellerTodos(): SellerTodo[] {
     });
   }
   return radar;
+}
+
+// ============================================================================
+// SELLER DRAFTS — composer ↔ hub reconciliation
+// ============================================================================
+
+/**
+ * MY_DRAFT_LISTINGS (fixtures.ts) is the hub's draft shelf — the
+ * management table reads it and the sell composer hydrates from it via
+ * /sell?draft=<id>. These are its only mutation paths, the same
+ * session-local write pattern as updateListing() on MY_LISTINGS. The
+ * composer upserts on every autosave and removes on publish/discard, so
+ * a draft authored on either surface resumes on the other.
+ */
+export function sellerDraftById(id: string): Listing | undefined {
+  return MY_DRAFT_LISTINGS.find((l) => l.id === id);
+}
+
+export function upsertSellerDraft(listing: Listing): void {
+  const index = MY_DRAFT_LISTINGS.findIndex((l) => l.id === listing.id);
+  if (index >= 0) MY_DRAFT_LISTINGS[index] = listing;
+  else MY_DRAFT_LISTINGS.unshift(listing);
+}
+
+export function removeSellerDraft(id: string): void {
+  const index = MY_DRAFT_LISTINGS.findIndex((l) => l.id === id);
+  if (index >= 0) MY_DRAFT_LISTINGS.splice(index, 1);
+}
+
+// ============================================================================
+// BULK LISTING MUTATIONS — fixture-side of POST /seller-hub/batch-command
+// ============================================================================
+
+/**
+ * Per-item receipt — the same vocabulary the live batch-command endpoint
+ * returns, so the UI reports fixture and live results identically.
+ */
+export interface BulkItemReceipt {
+  listingId: string;
+  state: 'applied' | 'rejected';
+  reason?: string;
+  newStatus?: string;
+}
+
+/**
+ * Fixture-mode pause — 'paused' is a real Listing.status; a paused row
+ * stays owned, stops being buyable (capabilities.ts) and resumes cleanly.
+ * Only active listings can pause.
+ */
+export function pauseFixtureListing(id: string): BulkItemReceipt {
+  const listing = MY_LISTINGS.find((l) => l.id === id);
+  if (!listing) return { listingId: id, state: 'rejected', reason: 'not_found' };
+  if (listing.status !== 'active' || listing.isSold)
+    return {
+      listingId: id,
+      state: 'rejected',
+      reason: listing.isSold || listing.status === 'sold' ? 'already_sold' : 'not_active',
+    };
+  listing.status = 'paused';
+  return { listingId: id, state: 'applied', newStatus: 'paused' };
+}
+
+/** Fixture-mode resume — paused → active. */
+export function resumeFixtureListing(id: string): BulkItemReceipt {
+  const listing = MY_LISTINGS.find((l) => l.id === id);
+  if (!listing) return { listingId: id, state: 'rejected', reason: 'not_found' };
+  if (listing.status !== 'paused')
+    return { listingId: id, state: 'rejected', reason: 'not_paused' };
+  listing.status = 'active';
+  return { listingId: id, state: 'applied', newStatus: 'active' };
+}
+
+/**
+ * Fixture-mode delete — the row leaves MY_LISTINGS entirely (mirrors the
+ * backend's 'deleted' end-state: gone from management and discovery).
+ * Sold listings carry order history and stay — rejected, not removed.
+ */
+export function deleteFixtureListing(id: string): BulkItemReceipt {
+  const listing = MY_LISTINGS.find((l) => l.id === id);
+  if (!listing) return { listingId: id, state: 'rejected', reason: 'not_found' };
+  if (listing.isSold || listing.status === 'sold')
+    return { listingId: id, state: 'rejected', reason: 'sold_kept_for_order_history' };
+  const index = MY_LISTINGS.findIndex((l) => l.id === id);
+  MY_LISTINGS.splice(index, 1);
+  return { listingId: id, state: 'applied', newStatus: 'deleted' };
+}
+
+// ============================================================================
+// AWAY MODE — seller-declared shop pause
+// ============================================================================
+
+/**
+ * The seller's away state. Mirrors the mobile accountPreferences slice and
+ * the live `/users/me/preferences` contract: holidayMode + an optional
+ * return date and buyer-facing note. Turning it off always clears the
+ * stored date — a stale "until" can never resurrect an away state.
+ */
+export interface SellerAwayState {
+  holidayMode: boolean;
+  holidayModeUntil: string | null;
+  awayMessage: string | null;
+}
+
+const AWAY_STORAGE_KEY = 'thryftverse.web.seller-away';
+
+export function loadSellerAwayState(): SellerAwayState {
+  const empty: SellerAwayState = { holidayMode: false, holidayModeUntil: null, awayMessage: null };
+  if (typeof window === 'undefined') return empty;
+  try {
+    const raw = window.localStorage.getItem(AWAY_STORAGE_KEY);
+    if (!raw) return empty;
+    const parsed = JSON.parse(raw) as Partial<SellerAwayState>;
+    return {
+      holidayMode: parsed.holidayMode === true,
+      holidayModeUntil:
+        typeof parsed.holidayModeUntil === 'string' ? parsed.holidayModeUntil : null,
+      awayMessage: typeof parsed.awayMessage === 'string' ? parsed.awayMessage : null,
+    };
+  } catch {
+    return empty;
+  }
+}
+
+/**
+ * Fixture-mode write — persists the away state on this device AND projects
+ * it onto the fixture listings' seller record, so the buyer-side gate
+ * (capabilities.ts → `seller.holidayMode`) reads the same truth and buy
+ * buttons genuinely pause across the demo closet.
+ */
+export function saveSellerAwayState(next: SellerAwayState): void {
+  if (typeof window !== 'undefined') {
+    try {
+      window.localStorage.setItem(AWAY_STORAGE_KEY, JSON.stringify(next));
+    } catch {
+      /* storage unavailable — the in-memory projection still applies */
+    }
+  }
+  applyAwayStateToFixtures(next);
+}
+
+/** Project the away flag onto every seller-owned fixture listing — the
+ *  commerce capability gate reads `listing.seller?.holidayMode`. */
+export function applyAwayStateToFixtures(state: SellerAwayState): void {
+  const away = state.holidayMode === true;
+  for (const l of [...LISTINGS, ...MY_LISTINGS, ...MY_DRAFT_LISTINGS]) {
+    if (l.sellerId === 'me' && l.seller) {
+      l.seller.holidayMode = away ? true : undefined;
+    }
+  }
+}
+
+// ============================================================================
+// PROMOTIONS — session-local "Sponsored" management store
+// ============================================================================
+
+/**
+ * Fixture-mode mirror of the live /seller/promotions surface (flat-fee
+ * Sponsored placement). Rows created here are session-local: no spend is
+ * debited, no placement is delivered — `demo` marks every row so the UI
+ * discloses it, and impressions/clicks stay at their honest zero rather
+ * than a manufactured engagement curve.
+ */
+export interface SellerPromotionFixture {
+  id: string;
+  listingId: string;
+  status: 'active' | 'paused' | 'ended';
+  dailyBudgetGbp: number;
+  durationDays: number;
+  startsAt: string;
+  endsAt: string;
+  createdAt: string;
+  /** Always true — the manage surface renders the demo disclosure. */
+  demo: true;
+}
+
+const SELLER_PROMOTIONS: SellerPromotionFixture[] = [];
+
+export function sellerPromotions(): SellerPromotionFixture[] {
+  // Retire rows whose window has passed — same truth rule as the backend,
+  // which ends a promotion at ends_at rather than leaving it 'active'.
+  const now = Date.now();
+  for (const p of SELLER_PROMOTIONS) {
+    if (p.status !== 'ended' && Date.parse(p.endsAt) <= now) p.status = 'ended';
+  }
+  return [...SELLER_PROMOTIONS].sort(
+    (a, b) => Date.parse(b.createdAt) - Date.parse(a.createdAt),
+  );
+}
+
+export function createSellerPromotion(input: {
+  listingId: string;
+  dailyBudgetGbp: number;
+  durationDays: 7 | 14 | 30;
+}): SellerPromotionFixture | null {
+  const listing = MY_LISTINGS.find((l) => l.id === input.listingId);
+  if (!listing || listing.status !== 'active' || listing.isSold) return null;
+  if (
+    SELLER_PROMOTIONS.some(
+      (p) => p.listingId === input.listingId && p.status !== 'ended',
+    )
+  )
+    return null;
+  const now = Date.now();
+  const row: SellerPromotionFixture = {
+    id: `promo-local-${now.toString(36)}`,
+    listingId: input.listingId,
+    status: 'active',
+    dailyBudgetGbp: round2(input.dailyBudgetGbp),
+    durationDays: input.durationDays,
+    startsAt: new Date(now).toISOString(),
+    endsAt: new Date(now + input.durationDays * DAY_MS).toISOString(),
+    createdAt: new Date(now).toISOString(),
+    demo: true,
+  };
+  SELLER_PROMOTIONS.unshift(row);
+  listing.promoted = true;
+  return row;
+}
+
+export function setSellerPromotionStatus(
+  id: string,
+  action: 'pause' | 'resume' | 'end',
+): SellerPromotionFixture | null {
+  const row = SELLER_PROMOTIONS.find((p) => p.id === id);
+  if (!row) return null;
+  if (action === 'pause' && row.status === 'active') row.status = 'paused';
+  if (action === 'resume' && row.status === 'paused') {
+    // A resumable window is an honest one — ended promotions stay ended.
+    if (Date.parse(row.endsAt) <= Date.now()) row.status = 'ended';
+    else row.status = 'active';
+  }
+  if (action === 'end' && row.status !== 'ended') row.status = 'ended';
+  const listing = MY_LISTINGS.find((l) => l.id === row.listingId);
+  if (listing) {
+    listing.promoted = SELLER_PROMOTIONS.some(
+      (p) => p.listingId === row.listingId && p.status === 'active',
+    );
+  }
+  return row;
+}
+
+// ============================================================================
+// OFFERS FUNNEL + SELLER STANDARDS — derived from real fixture records
+// ============================================================================
+
+/** Received offers created inside the period window — the funnel's offers
+ *  stage. Real OFFERS rows, not a synthetic ratio. */
+export function sellerOffersReceived(period: SellerPeriod): number {
+  const days = period === '7d' ? 7 : period === '30d' ? 30 : 90;
+  const cutoff = Date.now() - days * DAY_MS;
+  return OFFERS.filter(
+    (o) => o.sellerId === 'me' && Date.parse(o.createdAt) >= cutoff,
+  ).length;
+}
+
+export interface SellerStandardsFixture {
+  /** Computed from the queue's real postedAt−orderedAt deltas. */
+  averageShipTimeDays: number | null;
+  ordersShipped: number;
+  /** No cancelled orders exist in the fixture queue — 0 is the true value. */
+  cancellationRate: number;
+  /** Returns aren't modelled in the fixtures — null, not an invented 0. */
+  returnCaseRate: null;
+}
+
+/**
+ * Seller standards from fixture facts — ship time is the mean
+ * ordered→posted delta across posted/delivered jobs; null when nothing
+ * has shipped yet. Program tier isn't evaluated in demo mode (the live
+ * /sellers/:id/standards endpoint owns it), so callers render metrics only.
+ */
+export function sellerStandardsFixture(): SellerStandardsFixture {
+  const shipped = FULFILMENT_QUEUE.filter((j) => j.postedAt);
+  const avgDays = shipped.length
+    ? round1(
+        shipped.reduce(
+          (s, j) => s + (Date.parse(j.postedAt!) - Date.parse(j.orderedAt)) / DAY_MS,
+          0,
+        ) / shipped.length,
+      )
+    : null;
+  return {
+    averageShipTimeDays: avgDays,
+    ordersShipped: shipped.length,
+    cancellationRate: 0,
+    returnCaseRate: null,
+  };
 }

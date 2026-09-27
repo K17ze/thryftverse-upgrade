@@ -16,8 +16,18 @@
 import { use, useCallback, useEffect, useRef, useState } from 'react';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
-import { useQuery } from '@tanstack/react-query';
-import { POSTERS, STORY_RAIL, USERS, userById } from '@/lib/data/fixtures';
+import { useQuery, useQueryClient } from '@tanstack/react-query';
+import {
+  appendFixtureMessage,
+  POSTERS,
+  STORY_RAIL,
+  USERS,
+  userById,
+} from '@/lib/data/fixtures';
+import { DATA_MODE } from '@/lib/api/client';
+import * as chatService from '@/lib/api/services/chat';
+import { useCreateConversation } from '@/lib/hooks/queries';
+import { useSignupWall } from '@/components/auth/SignupWall';
 import { POSTER_SLIDES } from '@/lib/data/fixtures-media';
 import {
   archiveStoryById,
@@ -35,6 +45,7 @@ import { Sheet } from '@/components/ui/Sheet';
 import { Skeleton } from '@/components/ui/Skeleton';
 import { EmptyState } from '@/components/ui/EmptyState';
 import { useToast } from '@/components/ui/Toast';
+import { useShare } from '@/components/profile/useShare';
 import { ConfirmSheet, type ConfirmSheetState } from '@/components/orders/ConfirmSheet';
 import { timeAgo } from '@/lib/utils/format';
 
@@ -103,15 +114,21 @@ export default function PosterPage({ params }: { params: Promise<{ id: string }>
   const { id } = use(params);
   const router = useRouter();
   const { show } = useToast();
+  const share = useShare();
   const { user: me } = useSession();
   const hydrated = useHydrated();
   const { data, isLoading } = usePoster(id);
+  const queryClient = useQueryClient();
+  const { requireAuth, wall } = useSignupWall();
+  const createConversation = useCreateConversation();
 
   const [frame, setFrame] = useState(0);
   const [progress, setProgress] = useState(0);
   const [paused, setPaused] = useState(false);
   const [optionsOpen, setOptionsOpen] = useState(false);
   const [confirm, setConfirm] = useState<ConfirmSheetState | null>(null);
+  const [replyDraft, setReplyDraft] = useState('');
+  const [sendingReply, setSendingReply] = useState(false);
   const holdTimer = useRef<number | null>(null);
   const heldRef = useRef(false);
   const suppressClick = useRef(false);
@@ -233,14 +250,21 @@ export default function PosterPage({ params }: { params: Promise<{ id: string }>
 
   const author = userById(data.authorId);
   const authorHref = data.authorId === 'me' ? '/profile' : `/u/${author?.username ?? ''}`;
+  // Reply affordance (IG story grammar): non-owners get a composer that
+  // opens the DM thread with the reply already sent. The fixture 'me'
+  // author is the demo member — a viewer can't DM it.
+  const canReply = !!author && data.authorId !== 'me' && data.authorId !== me?.id;
   const caption = data.frameCaptions[frame] ?? data.caption;
   const expiresAt = data.story ? new Date(data.story.expiresAt).getTime() : 0;
   const hoursLeft = Math.max(0, Math.ceil((expiresAt - Date.now()) / 3600e3));
 
+  const posterUrl = `${window.location.origin}/poster/${id}`;
+  // Share icon → native sheet with clipboard fallback (one share grammar);
+  // the options-sheet row keeps an explicit "Copy link" affordance.
+  const sharePoster = () => share({ url: posterUrl, title: 'Poster on ThryftVerse' });
   const copyLink = async () => {
-    const url = `${window.location.origin}/poster/${id}`;
     try {
-      await navigator.clipboard.writeText(url);
+      await navigator.clipboard.writeText(posterUrl);
       show('Link copied', 'success');
     } catch {
       show('Could not copy link', 'error');
@@ -265,6 +289,47 @@ export default function PosterPage({ params }: { params: Promise<{ id: string }>
     archiveStory(id);
     setOptionsOpen(false);
     show('Story archived', 'info');
+  };
+
+  /** Story reply → DM: create (or reuse) the thread with the author, post
+   *  the reply as the first message, then land on the conversation so the
+   *  write is visible. Same endpoints the inbox composer writes. */
+  const sendReply = async () => {
+    const text = replyDraft.trim();
+    if (!text || sendingReply) return;
+    if (!requireAuth('message_seller')) return;
+    setSendingReply(true);
+    try {
+      const conversation = await createConversation.mutateAsync({
+        memberIds: [data.authorId],
+      });
+      if (DATA_MODE === 'live') {
+        await chatService.sendChatMessage(conversation.id, { text }, me?.id);
+      } else {
+        appendFixtureMessage(conversation.id, {
+          id: `local-${Date.now()}`,
+          senderId: me?.id ?? 'me',
+          sender: 'me',
+          text,
+          type: 'text',
+          timestamp: new Date().toISOString(),
+          readStatus: 'sent',
+        });
+        // Re-issue the inbox/thread caches so the new message reads fresh
+        // (same keys the useSendChatMessage onSuccess touches).
+        const userKey = me?.id ?? 'guest';
+        void queryClient.invalidateQueries({ queryKey: ['conversations', userKey] });
+        void queryClient.invalidateQueries({
+          queryKey: ['conversation', conversation.id, userKey],
+        });
+      }
+      setReplyDraft('');
+      router.push(`/inbox/${conversation.id}`);
+    } catch {
+      show('Could not send the reply', 'error');
+    } finally {
+      setSendingReply(false);
+    }
   };
 
   return (
@@ -334,7 +399,7 @@ export default function PosterPage({ params }: { params: Promise<{ id: string }>
         ) : null}
 
         {/* Top chrome — progress segments + author row */}
-        <div className="pointer-events-none absolute inset-x-0 top-0 bg-gradient-to-b from-black/60 via-black/25 to-transparent px-3 pb-10 pt-3">
+        <div className="pointer-events-none absolute inset-x-0 top-0 bg-gradient-to-b from-media-overlay-scrim to-transparent px-3 pb-10 pt-3">
           {frameCount > 1 ? (
             <div className="flex gap-1.5" role="progressbar" aria-valuemin={0} aria-valuemax={frameCount} aria-valuenow={frame + 1} aria-label={`Frame ${frame + 1} of ${frameCount}`}>
               {slides.map((_, i) => (
@@ -378,7 +443,7 @@ export default function PosterPage({ params }: { params: Promise<{ id: string }>
                 ) : null}
               </span>
             </Link>
-            <IconButton name="share" aria-label="Copy poster link" onMedia onClick={copyLink} />
+            <IconButton name="share" aria-label="Share poster" onMedia onClick={sharePoster} />
             {isOwn ? (
               <IconButton
                 name="more"
@@ -391,9 +456,9 @@ export default function PosterPage({ params }: { params: Promise<{ id: string }>
           </div>
         </div>
 
-        {/* Caption + lifecycle meta — bottom scrim */}
-        {caption || data.story ? (
-          <div className="pointer-events-none absolute inset-x-0 bottom-0 bg-gradient-to-t from-black/70 to-transparent px-4 pb-6 pt-14">
+        {/* Caption + lifecycle meta + reply — bottom scrim */}
+        {caption || data.story || canReply ? (
+          <div className="pointer-events-none absolute inset-x-0 bottom-0 bg-gradient-to-t from-media-overlay-scrim to-transparent px-4 pb-6 pt-14">
             {caption ? (
               <p className="text-body-large font-medium text-scrim-text-primary">{caption}</p>
             ) : null}
@@ -408,6 +473,32 @@ export default function PosterPage({ params }: { params: Promise<{ id: string }>
                   <span className="tnum"> · {frame + 1} / {frameCount}</span>
                 ) : null}
               </p>
+            ) : null}
+            {canReply ? (
+              <form
+                className="pointer-events-auto mt-3 flex items-center gap-2"
+                onSubmit={(e) => {
+                  e.preventDefault();
+                  void sendReply();
+                }}
+              >
+                <input
+                  value={replyDraft}
+                  onChange={(e) => setReplyDraft(e.target.value)}
+                  placeholder={`Reply to @${author?.username ?? 'author'}…`}
+                  aria-label={`Reply to @${author?.username ?? 'author'}`}
+                  maxLength={500}
+                  className="h-10 min-w-0 flex-1 rounded-full bg-overlay px-4 text-body text-scrim-text-primary outline-none placeholder:text-scrim-text-secondary focus:ring-1 focus:ring-white/60"
+                />
+                <button
+                  type="submit"
+                  disabled={!replyDraft.trim() || sendingReply}
+                  aria-label="Send reply"
+                  className="pressable flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-overlay text-scrim-text-primary transition-opacity disabled:opacity-50"
+                >
+                  <Icon name="send" size={17} />
+                </button>
+              </form>
             ) : null}
           </div>
         ) : null}
@@ -426,6 +517,17 @@ export default function PosterPage({ params }: { params: Promise<{ id: string }>
           >
             <Icon name="link" size={20} />
             Copy link
+          </button>
+          <button
+            type="button"
+            onClick={() => {
+              setOptionsOpen(false);
+              router.push(`/poster/${id}/activity`);
+            }}
+            className="pressable flex w-full items-center gap-3 rounded-md py-3 text-left text-body-emphasis text-text-primary"
+          >
+            <Icon name="analytics" size={20} />
+            View activity
           </button>
           {storyStatus === 'active' ? (
             <button
@@ -452,6 +554,7 @@ export default function PosterPage({ params }: { params: Promise<{ id: string }>
       </Sheet>
 
       <ConfirmSheet sheet={confirm} onDismiss={() => setConfirm(null)} />
+      {wall}
     </div>
   );
 }

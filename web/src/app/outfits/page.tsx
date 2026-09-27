@@ -14,16 +14,23 @@ import { Sheet } from '@/components/ui/Sheet';
 import { Skeleton } from '@/components/ui/Skeleton';
 import { useToast } from '@/components/ui/Toast';
 import { OutfitCard } from '@/components/outfits/OutfitCard';
+import { useSignupWall } from '@/components/auth/SignupWall';
 import { useOutfits, type SavedOutfit } from '@/lib/store/outfits';
 import { useHydrated } from '@/lib/store/useStore';
 
 export default function OutfitsPage() {
   const router = useRouter();
   const { show } = useToast();
+  const { requireAuth, wall } = useSignupWall();
   const hydrated = useHydrated();
   const outfits = useOutfits((s) => s.outfits);
   const removeOutfit = useOutfits((s) => s.removeOutfit);
   const [pendingDelete, setPendingDelete] = useState<SavedOutfit | null>(null);
+
+  /** Creating an outfit is account-bound — guests get the soft wall. */
+  const requestCreate = () => {
+    if (requireAuth('save_item')) router.push('/outfits/builder');
+  };
 
   const sorted = useMemo(
     () =>
@@ -52,7 +59,7 @@ export default function OutfitsPage() {
           size="sm"
           icon="plus"
           className="rounded-full"
-          onClick={() => router.push('/outfits/builder')}
+          onClick={requestCreate}
         >
           New outfit
         </Button>
@@ -71,7 +78,7 @@ export default function OutfitsPage() {
             title="No outfits yet"
             subtitle="Build outfits from items you've saved."
             actionLabel="New outfit"
-            onAction={() => router.push('/outfits/builder')}
+            onAction={requestCreate}
           />
         ) : (
           <div className="grid grid-cols-2 gap-3 px-4 sm:grid-cols-3 sm:px-6 lg:grid-cols-4">
@@ -111,6 +118,7 @@ export default function OutfitsPage() {
           </div>
         </div>
       </Sheet>
+      {wall}
     </div>
   );
 }

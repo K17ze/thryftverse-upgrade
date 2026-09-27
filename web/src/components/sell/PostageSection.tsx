@@ -8,7 +8,7 @@
  * Costs stay honest: nothing is quoted here, checkout prices it.
  */
 
-import { Icon } from '@/components/ui/Icon';
+import { Icon, type AppIconName } from '@/components/ui/Icon';
 import {
   SHIPPING_METHOD_OPTIONS,
   SHIPPING_PAYER_OPTIONS,
@@ -24,12 +24,14 @@ interface PostageSectionProps {
 interface OptionRowProps {
   label: string;
   hint: string;
+  icon: AppIconName;
   selected: boolean;
   onSelect: () => void;
 }
 
-/** Same radio-card grammar as the condition picker — one border, one check. */
-function OptionRow({ label, hint, selected, onSelect }: OptionRowProps) {
+/** Same radio-card grammar as the condition picker — leading glyph, one
+ *  border, one check. Icons mirror the mobile shipping sheet's options. */
+function OptionRow({ label, hint, icon, selected, onSelect }: OptionRowProps) {
   return (
     <button
       type="button"
@@ -42,9 +44,16 @@ function OptionRow({ label, hint, selected, onSelect }: OptionRowProps) {
           : 'border-border hover:border-text-muted'
       }`}
     >
-      <span>
-        <span className="block text-body font-medium text-text-primary">{label}</span>
-        <span className="mt-0.5 block text-caption text-text-muted">{hint}</span>
+      <span className="flex items-start gap-3">
+        <Icon
+          name={icon}
+          size={20}
+          className={`mt-0.5 shrink-0 ${selected ? 'text-text-primary' : 'text-text-muted'}`}
+        />
+        <span>
+          <span className="block text-body font-medium text-text-primary">{label}</span>
+          <span className="mt-0.5 block text-caption text-text-muted">{hint}</span>
+        </span>
       </span>
       {selected ? (
         <Icon name="check" size={16} className="mt-0.5 shrink-0 text-success-text" />
@@ -72,6 +81,7 @@ export function PostageSection({ draft, update }: PostageSectionProps) {
                 key={opt.value}
                 label={opt.label}
                 hint={opt.hint}
+                icon={opt.icon}
                 selected={draft.shippingMethod === opt.value}
                 onSelect={() => update({ shippingMethod: opt.value })}
               />
@@ -89,6 +99,7 @@ export function PostageSection({ draft, update }: PostageSectionProps) {
                 key={opt.value}
                 label={opt.label}
                 hint={opt.hint}
+                icon={opt.icon}
                 selected={draft.shippingPayer === opt.value}
                 onSelect={() => update({ shippingPayer: opt.value })}
               />

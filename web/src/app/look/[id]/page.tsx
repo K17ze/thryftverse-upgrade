@@ -10,10 +10,11 @@ import { use, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import Link from 'next/link';
 import { useQuery } from '@tanstack/react-query';
-import { LOOKS, listingById, userById } from '@/lib/data/fixtures';
+import { listingById, userById } from '@/lib/data/fixtures';
+import { lookById } from '@/lib/data/fixtures-content';
 import { DATA_MODE } from '@/lib/api/client';
 import * as socialService from '@/lib/api/services/social';
-import { mapListingToDiscoverySummary, type Look } from '@/lib/contracts/domain';
+import { mapListingToDiscoverySummary } from '@/lib/contracts/domain';
 import { AppImage } from '@/components/ui/AppImage';
 import { Avatar } from '@/components/ui/Avatar';
 import { Icon } from '@/components/ui/Icon';
@@ -22,19 +23,25 @@ import { Skeleton } from '@/components/ui/Skeleton';
 import { EmptyState } from '@/components/ui/EmptyState';
 import { ProductTile } from '@/components/cards/ProductTile';
 import { useStore, useHydrated } from '@/lib/store/useStore';
+import { useFollows } from '@/lib/store/follows';
 import { useToast } from '@/components/ui/Toast';
 import { useSignupWall } from '@/components/auth/SignupWall';
 import { formatCount, timeAgo } from '@/lib/utils/format';
+import { useShare } from '@/components/profile/useShare';
+import { LookCommentsSheet } from '@/components/look/LookCommentsSheet';
+import { RelatedLooks } from '@/components/look/RelatedLooks';
+import { lookCommentCount } from '@/lib/fixtures-social';
+import type { LookWithCounts } from '@/lib/api/services/social';
 
 const tick = (ms = 280) => new Promise((r) => setTimeout(r, ms));
 
 function useLook(id: string) {
-  return useQuery<Look | null>({
+  return useQuery<LookWithCounts | null>({
     queryKey: ['look', id, DATA_MODE],
     queryFn: async () => {
       if (DATA_MODE === 'live') return socialService.fetchLook(id);
       await tick();
-      return LOOKS.find((l) => l.id === id) ?? null;
+      return lookById(id) ?? null;
     },
   });
 }
@@ -62,8 +69,9 @@ export default function LookPage({ params }: { params: Promise<{ id: string }> }
   const { id } = use(params);
   const router = useRouter();
   const { show } = useToast();
+  const share = useShare();
   const { requireAuth, wall } = useSignupWall();
-  const { data: look, isLoading } = useLook(id);
+  const { data: look, isLoading, isError, refetch } = useLook(id);
 
   const hydrated = useHydrated();
   const likedLook = useStore((s) => s.likedLooks.includes(id));
@@ -72,9 +80,26 @@ export default function LookPage({ params }: { params: Promise<{ id: string }> }
   const toggleSaved = useStore((s) => s.toggleSaved);
   const liked = hydrated && likedLook;
   const saved = hydrated && savedLook;
-  const [following, setFollowing] = useState(false);
+  // Persisted follow state — same store PulseFeed/profiles write to, so
+  // the creator stays followed across surfaces and reloads.
+  const followingIds = useFollows((s) => s.followingIds);
+  const toggleFollow = useFollows((s) => s.toggleFollow);
+  const [commentsOpen, setCommentsOpen] = useState(false);
 
   if (isLoading) return <LookSkeleton />;
+
+  // Error is not absence — a failed fetch gets a retry, not a gravestone.
+  if (isError) {
+    return (
+      <EmptyState
+        icon="warning"
+        title="Couldn't load this look"
+        subtitle="Check your connection and try again."
+        actionLabel="Try again"
+        onAction={() => void refetch()}
+      />
+    );
+  }
 
   if (!look) {
     return (
@@ -89,12 +114,17 @@ export default function LookPage({ params }: { params: Promise<{ id: string }> }
   }
 
   const creator = userById(look.creatorId);
+  const following = hydrated && followingIds.includes(look.creatorId);
   const items = look.itemIds
     .map(listingById)
     .filter((l): l is NonNullable<typeof l> => l != null)
     .map(mapListingToDiscoverySummary);
 
   const likeCount = (look.likeCount ?? 0) + (liked ? 1 : 0);
+  // Comment count — live rows carry comment_count; fixtures resolve the
+  // seeded + session comments through fixtures-social.
+  const commentCount =
+    DATA_MODE === 'live' ? look.commentCount ?? 0 : lookCommentCount(id);
 
   const handleLike = () => {
     if (!requireAuth('save_item')) return;
@@ -106,14 +136,9 @@ export default function LookPage({ params }: { params: Promise<{ id: string }> }
     toggleSaved(id);
     show(saved ? 'Removed from saved' : 'Look saved', 'info');
   };
-  const handleShare = async () => {
-    try {
-      await navigator.clipboard.writeText(window.location.href);
-      show('Link copied', 'success');
-    } catch {
-      show('Could not copy link', 'error');
-    }
-  };
+  // One share grammar across surfaces — native sheet → clipboard (useShare).
+  const handleShare = () =>
+    share({ title: look.title ?? 'Look on ThryftVerse' });
 
   return (
     <div className="mx-auto w-full max-w-3xl px-4 pb-16 pt-4 sm:px-6 md:pt-6">
@@ -157,7 +182,7 @@ export default function LookPage({ params }: { params: Promise<{ id: string }> }
           className="ml-auto rounded-full"
           onClick={() => {
             if (!requireAuth('follow_seller')) return;
-            setFollowing((f) => !f);
+            toggleFollow(look.creatorId);
           }}
         >
           {following ? 'Following' : 'Follow'}
@@ -187,6 +212,19 @@ export default function LookPage({ params }: { params: Promise<{ id: string }> }
           <span className="tnum text-body font-medium text-text-primary">
             {formatCount(likeCount)}
           </span>
+        </button>
+        <button
+          type="button"
+          onClick={() => setCommentsOpen(true)}
+          aria-label={`View comments${commentCount ? ` (${commentCount})` : ''}`}
+          className="pressable flex h-11 items-center gap-1.5 px-3"
+        >
+          <Icon name="comment" size={22} className="text-text-primary" />
+          {commentCount > 0 ? (
+            <span className="tnum text-body font-medium text-text-primary">
+              {formatCount(commentCount)}
+            </span>
+          ) : null}
         </button>
         <button
           type="button"
@@ -221,6 +259,16 @@ export default function LookPage({ params }: { params: Promise<{ id: string }> }
           </div>
         </section>
       ) : null}
+
+      {/* Related looks — server-ranked rail mirroring mobile's
+          useRelatedLooks feed */}
+      <RelatedLooks look={look} />
+
+      <LookCommentsSheet
+        lookId={id}
+        open={commentsOpen}
+        onClose={() => setCommentsOpen(false)}
+      />
 
       {wall}
     </div>

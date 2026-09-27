@@ -21,9 +21,6 @@ export const FEE_BPS = 100;
 /** Fixed rate timestamp — deterministic across SSR and client. */
 export const RATE_AS_OF = '2026-09-24T09:41:00Z';
 
-/** Open-order hold on the fiat pocket (mobile: reservedForOrders). */
-export const GBP_RESERVED = 18.5;
-
 /** 1ZE pocket seed — Co-Own settlement units. */
 export const IZE_POCKET_SEED = { settled: 128.4, pending: 6, reserved: 0 };
 

@@ -102,7 +102,7 @@ export function TagField({ tags, onChange }: TagFieldProps) {
                 type="button"
                 aria-label={`Remove tag ${tag}`}
                 onClick={() => remove(tag)}
-                className="pressable -mr-0.5 flex h-5 w-5 items-center justify-center rounded-sm text-text-muted hover:text-text-primary"
+                className="pressable relative -mr-0.5 flex h-5 w-5 items-center justify-center rounded-sm text-text-muted after:absolute after:-inset-3 after:content-[''] hover:text-text-primary"
               >
                 <Icon name="close" size={12} />
               </button>

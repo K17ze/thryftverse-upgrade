@@ -11,8 +11,9 @@
 
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
-import { LIVE_SESSION_PRODUCTS, type LiveSession } from '@/lib/data/fixtures-media';
+import type { LiveSession } from '@/lib/data/fixtures-media';
 import { listingById } from '@/lib/data/fixtures';
+import { useSessionPins } from './livePins';
 import { AppImage } from '@/components/ui/AppImage';
 import { Icon } from '@/components/ui/Icon';
 import { useToast } from '@/components/ui/Toast';
@@ -33,7 +34,10 @@ export function LiveProductRail({ session }: LiveProductRailProps) {
   const bag = useStore((s) => s.bag);
   const addToBag = useStore((s) => s.addToBag);
 
-  const items = (LIVE_SESSION_PRODUCTS[session.id] ?? [])
+  // Shared pins store — authored fixtures for seeded shows, live host
+  // writes for session streams; a host pinning mid-show lands here.
+  const pinIds = useSessionPins(session.id);
+  const items = pinIds
     .map((id) => listingById(id))
     .filter((l): l is NonNullable<typeof l> => l != null);
 

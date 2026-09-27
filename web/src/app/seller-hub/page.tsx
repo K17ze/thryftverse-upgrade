@@ -23,10 +23,11 @@ import {
   useSellerOverview,
   useSellerListingPerformance,
   useSellerTodos,
+  useSellerEarnings,
   useFulfilmentCounts,
 } from '@/lib/hooks/seller-queries';
 import type { SellerPeriod } from '@/lib/data/fixtures-seller';
-import { formatPrice, formatCount } from '@/lib/utils/format';
+import { formatPrice, formatCount, formatDate } from '@/lib/utils/format';
 import { getListingCoverUri } from '@/lib/utils/media';
 
 const PERIODS: { value: SellerPeriod; label: string }[] = [
@@ -84,6 +85,9 @@ export default function SellerHubPage() {
   const performance = useSellerListingPerformance(period);
   const todos = useSellerTodos();
   const counts = useFulfilmentCounts();
+  // Payout schedule — the same escrow-ledger truth /seller-hub/earnings
+  // renders, lifted here as the "next payout" line.
+  const earnings = useSellerEarnings();
 
   const isLoading = overview.isLoading || performance.isLoading;
   const isError = overview.isError || performance.isError;
@@ -141,6 +145,41 @@ export default function SellerHubPage() {
                   </span>{' '}
                   lifetime sales
                 </p>
+                {/* Payout schedule — the ledger's own next-amount/date, not
+                    a restated balance. Links through to the full earnings
+                    breakdown rather than duplicating it. */}
+                {earnings.data &&
+                (earnings.data.schedule.nextAmount != null ||
+                  earnings.data.schedule.nextDate != null) ? (
+                  <Link
+                    href="/seller-hub/earnings"
+                    className="pressable mt-2 inline-flex items-center gap-1.5 text-caption text-text-secondary hover:text-text-primary"
+                  >
+                    <Icon name="payout" size={14} className="text-text-muted" />
+                    {earnings.data.schedule.nextAmount != null ? (
+                      <>
+                        Next payout{' '}
+                        <span className="tnum font-medium text-text-primary">
+                          {formatPrice(
+                            earnings.data.schedule.nextAmount,
+                            overview.data!.currency,
+                          )}
+                        </span>
+                      </>
+                    ) : (
+                      'Next payout'
+                    )}
+                    {earnings.data.schedule.nextDate
+                      ? ` on ${formatDate(earnings.data.schedule.nextDate)}`
+                      : ''}
+                    {earnings.data.schedule.method
+                      ? ` · ${earnings.data.schedule.method}${
+                          earnings.data.schedule.methodIsDemo ? ' (demo)' : ''
+                        }`
+                      : ''}
+                    <Icon name="forward" size={12} className="text-text-muted" />
+                  </Link>
+                ) : null}
               </div>
               <SegmentedControl options={PERIODS} value={period} onChange={setPeriod} />
             </div>
@@ -209,6 +248,9 @@ export default function SellerHubPage() {
                 <div key={m.key} className="bg-background p-4">
                   <p className="text-label font-semibold uppercase tracking-wider text-text-muted">
                     {m.label}
+                    {m.estimated ? (
+                      <span className="ml-1 normal-case tracking-normal">· est.</span>
+                    ) : null}
                   </p>
                   <p className="tnum mt-1.5 text-price-list font-semibold text-text-primary">
                     {m.value}
@@ -219,6 +261,27 @@ export default function SellerHubPage() {
                 </div>
               ))}
             </div>
+
+            {/* The funnel the metrics report — same numbers, in order.
+                Offers are real offer records; a failed live fetch is an
+                honest "—", never an interpolated count. */}
+            <p className="tnum mt-3 text-meta text-text-muted">
+              <span className="font-semibold text-text-secondary">
+                {period === '7d' ? '7-day' : period === '90d' ? '90-day' : '30-day'} funnel
+              </span>
+              {' — '}
+              {formatCount(overview.data!.funnel.views)} views →{' '}
+              {formatCount(overview.data!.funnel.watchers)} watching →{' '}
+              {overview.data!.funnel.offers != null
+                ? `${formatCount(overview.data!.funnel.offers)} offers`
+                : '— offers'}{' '}
+              → {formatCount(overview.data!.funnel.orders)} sold
+            </p>
+            {overview.data!.metrics.some((m) => m.estimated) ? (
+              <p className="mt-1.5 text-meta text-text-muted">
+                Watchers is estimated from saves — demo telemetry, not a measured count.
+              </p>
+            ) : null}
           </section>
 
           {/* ── Listings performance — sortable hairline table ── */}

@@ -42,6 +42,8 @@ export const AUCTIONS: AuctionMarketItem[] = [
     currentBid: 196,
     bidCount: 9,
     buyNowPrice: 240,
+    // Reserve met — the hammer already passed the floor.
+    reservePrice: 150,
   },
   {
     id: 'a2',
@@ -54,6 +56,8 @@ export const AUCTIONS: AuctionMarketItem[] = [
     startingBid: 95,
     currentBid: 174,
     bidCount: 6,
+    // Reserve live but not yet met — the honest "Reserve not met" state.
+    reservePrice: 200,
   },
   {
     id: 'a3',
@@ -104,6 +108,37 @@ export const AUCTIONS: AuctionMarketItem[] = [
     currentBid: 340,
     bidCount: 5,
     buyNowPrice: 420,
+  },
+  {
+    // Ended below reserve — the viewer ('me') holds the highest bid, so
+    // the detail surface resolves to "Reserve not met · the seller may
+    // accept your bid" rather than a win.
+    id: 'a7',
+    listingId: 'l4',
+    sellerId: 'u3',
+    title: 'Corduroy Trucker Jacket',
+    image: 'https://images.unsplash.com/photo-1551028719-00167b16eac5?auto=format&fit=crop&w=900&q=80',
+    startsAt: toIso(-12 * HOUR),
+    endsAt: toIso(-12 * HOUR + AUCTION_WINDOW_MS),
+    startingBid: 40,
+    currentBid: 92,
+    bidCount: 5,
+    reservePrice: 150,
+  },
+  {
+    // Cancelled mid-window by the seller — terminalReason is authoritative
+    // over the still-future endsAt.
+    id: 'a8',
+    listingId: 'l7',
+    sellerId: 'u2',
+    title: 'Silk Slip Midi Dress',
+    image: 'https://images.unsplash.com/photo-1595777457583-95e059d581b8?auto=format&fit=crop&w=900&q=80',
+    startsAt: toIso(-2 * HOUR),
+    endsAt: toIso(-2 * HOUR + AUCTION_WINDOW_MS),
+    startingBid: 55,
+    currentBid: 68,
+    bidCount: 2,
+    terminalReason: 'cancelled',
   },
   // ── The seller's own board (sellerId 'me') — one of each outcome so the
   // /seller-hub/auctions management surface is demonstrable: a live window
@@ -212,6 +247,16 @@ export const AUCTION_BIDS: AuctionBid[] = [
   bid('b6-3', 'a6', 'u5', 260, 490),
   bid('b6-5', 'a6', 'me', 310, 440),
   bid('b6-6', 'a6', 'u5', 340, 385),
+  // a7 — ended under the £150 reserve; the viewer topped at £92 but no
+  // sale happened. Exercises the reserve-not-met ended grammar.
+  bid('b7-1', 'a7', 'u2', 40, 610),
+  bid('b7-2', 'a7', 'u6', 52, 560),
+  bid('b7-3', 'a7', 'me', 66, 505),
+  bid('b7-4', 'a7', 'u4', 80, 470),
+  bid('b7-5', 'a7', 'me', 92, 430),
+  // a8 — cancelled mid-run; the two standing bids lapse with the auction.
+  bid('b8-1', 'a8', 'u3', 55, 105),
+  bid('b8-2', 'a8', 'u5', 68, 80),
   // sa1 — live (opened ~5h25m ago), ladder to £42
   bid('sa1-1', 'sa1', 'u3', 18, 300),
   bid('sa1-2', 'sa1', 'u5', 22, 240),
@@ -235,6 +280,19 @@ export const AUCTION_BIDS: AuctionBid[] = [
 // LIFECYCLE + FORMATTING — pure helpers shared by hub, detail and my-bids
 // ============================================================================
 
+/** Server lifecycle values that mean "this auction is over" regardless of
+ *  the timestamps (reserve_not_met, awaiting_payment, payment_expired,
+ *  second_chance_offered, settled, cancelled). A cancelled auction can
+ *  still carry a future endsAt — the server state wins. */
+const ENDED_SERVER_STATES: ReadonlySet<string> = new Set([
+  'ended',
+  'reserve_not_met',
+  'awaiting_payment',
+  'payment_expired',
+  'second_chance_offered',
+  'settled',
+]);
+
 export function toViewModel(
   auction: AuctionMarketItem,
   now: number,
@@ -251,11 +309,75 @@ export function toViewModel(
   if (msToStart <= 0 && msToEnd > 0) lifecycle = 'live';
   else if (msToEnd <= 0) lifecycle = 'ended';
 
+  // The server's post-end lifecycle is authoritative — a cancelled or
+  // reserve-not-met auction can still carry a future endsAt.
+  const server = auction.serverLifecycle;
+  const terminal = auction.terminalReason;
+  if (
+    (server != null && (ENDED_SERVER_STATES.has(server) || server === 'cancelled')) ||
+    terminal === 'cancelled' ||
+    terminal === 'seller_cancelled'
+  ) {
+    lifecycle = 'ended';
+  } else if (server === 'live') {
+    lifecycle = 'live';
+  } else if (server === 'upcoming' || server === 'scheduled') {
+    lifecycle = 'upcoming';
+  }
+
   const windowMs = Math.max(MIN, effectiveEndMs - startsAtMs);
   const elapsedMs = Math.min(windowMs, Math.max(0, now - startsAtMs));
   const progress = Math.min(1, Math.max(0, elapsedMs / windowMs));
 
   return { ...auction, lifecycle, msToStart, msToEnd, progress };
+}
+
+// ============================================================================
+// ENDED OUTCOME — one honest resolution per closed auction
+// ============================================================================
+
+/** How an ended auction resolved. Drives every result surface (detail
+ *  banner, results ledger, seller board, my-bids rows). */
+export type AuctionOutcome =
+  | 'sold'
+  | 'reserve_not_met'
+  | 'cancelled'
+  | 'payment_expired'
+  | 'no_bids';
+
+export function auctionOutcome(auction: AuctionViewModel): AuctionOutcome | null {
+  if (auction.lifecycle !== 'ended') return null;
+  const server = auction.serverLifecycle;
+  const reason = auction.terminalReason;
+  if (server === 'cancelled' || reason === 'cancelled' || reason === 'seller_cancelled') {
+    return 'cancelled';
+  }
+  if (server === 'reserve_not_met' || reason === 'reserve_not_met') {
+    return 'reserve_not_met';
+  }
+  if (server === 'payment_expired' || reason === 'payment_expired') {
+    return 'payment_expired';
+  }
+  // A winner exists: settled, awaiting_payment and second_chance_offered
+  // all resolve through the sold grammar (the payment state layers on).
+  if (
+    server === 'settled' ||
+    server === 'awaiting_payment' ||
+    server === 'second_chance_offered' ||
+    reason === 'settled' ||
+    reason === 'buy_now' ||
+    reason === 'second_chance' ||
+    reason === 'seller_accepted_below_reserve'
+  ) {
+    return 'sold';
+  }
+  if (auction.bidCount === 0) return 'no_bids';
+  // Fixture/legacy derivation — a reserve only counts as met when the
+  // hammer reached it (the server reports reserve_not_met explicitly).
+  if (auction.reservePrice != null && auction.currentBid < auction.reservePrice) {
+    return 'reserve_not_met';
+  }
+  return 'sold';
 }
 
 /** Live first (ending soonest), then upcoming (starting soonest), then ended. */
@@ -271,8 +393,10 @@ export function sortAuctions(auctions: AuctionViewModel[]): AuctionViewModel[] {
   });
 }
 
-/** Next valid bid: the opening bid before activity, then +5% rounded up. */
+/** Next valid bid: the server's floor when it reports one, else the
+ *  opening bid before activity, then +5% rounded up. */
 export function minNextBid(auction: AuctionMarketItem): number {
+  if (auction.minimumNextBid != null) return auction.minimumNextBid;
   if (auction.bidCount === 0) return auction.startingBid;
   return Math.ceil(auction.currentBid * (1 + BID_INCREMENT_RATE));
 }
@@ -347,9 +471,12 @@ export function myBidRows(
     const auction = byId.get(auctionId);
     if (!auction) continue;
     const leading = entry.amount >= auction.currentBid;
+    // Ended: only a genuinely sold auction crowns its top bidder — a
+    // reserve-not-met or cancelled run means nobody won.
+    const outcome = auctionOutcome(auction);
     const status: MyBidStatus =
       auction.lifecycle === 'ended'
-        ? leading
+        ? leading && outcome === 'sold'
           ? 'won'
           : 'lost'
         : leading
@@ -380,5 +507,6 @@ export function buildAuction(input: CreateAuctionInput): AuctionMarketItem | nul
     currentBid: input.startingBid,
     bidCount: 0,
     ...(input.buyNowPrice != null ? { buyNowPrice: input.buyNowPrice } : {}),
+    ...(input.reservePrice != null ? { reservePrice: input.reservePrice } : {}),
   };
 }

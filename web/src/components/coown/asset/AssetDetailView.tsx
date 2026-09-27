@@ -5,27 +5,29 @@
  * left, sticky trade composer on the right, tabs below, related rail, risk
  * band. Mobile collapses the composer into a sticky dock + Sheet.
  *
- * All market data comes from the shared coown hooks; order placement and
- * cancellation are session-local mutations with toast feedback.
+ * All market data — orders included — comes from the shared coown hooks,
+ * and every write (place, cancel) routes through the trading mutation in
+ * components/trading, so this surface and Portfolio always agree.
  */
 
-import { useEffect, useRef, useState } from 'react';
+import { useRef, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { Button } from '@/components/ui/Button';
 import { EmptyState } from '@/components/ui/EmptyState';
 import { Icon } from '@/components/ui/Icon';
 import { Sheet } from '@/components/ui/Sheet';
 import { useToast } from '@/components/ui/Toast';
-import type { CoOwnOrder, PriceWindow } from '@/lib/contracts/coown';
+import { useCancelCoOwnOrder } from '@/components/trading/useCoOwnTrading';
+import type { PriceWindow } from '@/lib/contracts/coown';
 import {
   useCoOwnActivity,
   useCoOwnAsset,
   useCoOwnAssets,
   useCoOwnOrders,
   useCoOwnPositions,
-  useCorporateActions,
   useDistributions,
   useDueDiligence,
+  useGovernanceActions,
   useMarketLedger,
   useOrderBook,
   usePriceHistory,
@@ -33,7 +35,7 @@ import {
 import { gbp } from '../format';
 import { useCoOwnWatchlist } from '@/lib/store/coownWatchlist';
 import { useHydrated } from '@/lib/store/useStore';
-import { useCoOwnAlerts } from '../alertStore';
+import { useCoOwnAlerts, useEvaluateCoOwnAlerts } from '../alertStore';
 import { CreateAlertSheet } from '../CreateAlertSheet';
 import { MovePill } from '../MovePill';
 import { ActivityTab } from './ActivityTab';
@@ -66,12 +68,14 @@ export function AssetDetailView({ id }: { id: string }) {
   // chart is zoomed out to a wider window.
   const { data: dayHistory } = usePriceHistory(id, '1D');
   const { data: positions } = useCoOwnPositions();
-  const { data: fetchedOrders } = useCoOwnOrders();
+  const { data: allOrders } = useCoOwnOrders();
   const { data: activity } = useCoOwnActivity(id);
   const { data: ledger } = useMarketLedger(id);
   const { data: diligence } = useDueDiligence(id);
   const { data: distributions } = useDistributions(id);
-  const { data: actions } = useCorporateActions(id);
+  // Governance overlay — persisted ballots fold into each row so the
+  // activity list shows the recorded vote, not the raw fixture.
+  const { data: actions } = useGovernanceActions(id);
   const { data: allAssets } = useCoOwnAssets();
   const hydrated = useHydrated();
   // Persisted read — gate behind hydration so SSR and first paint agree.
@@ -82,32 +86,29 @@ export function AssetDetailView({ id }: { id: string }) {
   const storedWatching = useCoOwnWatchlist((s) => s.watchedIds.includes(id));
   const toggleWatch = useCoOwnWatchlist((s) => s.toggleWatch);
   const watching = hydrated && storedWatching;
+  // A session fill moves unitPriceGbp through this same query data —
+  // evaluate alerts every time the snapshot refreshes.
+  useEvaluateCoOwnAlerts();
 
   const [tab, setTab] = useState<Tab>('overview');
-  const [orders, setOrders] = useState<CoOwnOrder[] | null>(null);
   const [prefill, setPrefill] = useState<TradePrefill | null>(null);
   const [composerOpen, setComposerOpen] = useState(false);
   const [alertSheetOpen, setAlertSheetOpen] = useState(false);
   const seq = useRef(0);
   const { show } = useToast();
+  const { cancelOrder } = useCancelCoOwnOrder();
 
-  useEffect(() => {
-    if (fetchedOrders) setOrders(fetchedOrders.filter((o) => o.assetId === id));
-  }, [fetchedOrders, id]);
+  // Resting orders for this market — read straight from the shared cache
+  // so the list stays in step with Portfolio and open-orders surfaces.
+  const orders = (allOrders ?? []).filter(
+    (o) => o.assetId === id && (o.status === 'open' || o.status === 'partially_filled'),
+  );
 
   const position = positions?.find((p) => p.assetId === id) ?? null;
 
-  const placeOrder = (order: CoOwnOrder) => {
-    setOrders((prev) => [order, ...(prev ?? [])]);
-    show(
-      `Order resting — ${order.side === 'buy' ? 'Buy' : 'Sell'} ${order.units} @ £${order.unitPriceGbp.toFixed(2)}`,
-      'success',
-    );
-  };
-
-  const cancelOrder = (orderId: string) => {
-    setOrders((prev) => (prev ? prev.filter((o) => o.id !== orderId) : prev));
-    show('Order cancelled', 'info');
+  const cancel = async (orderId: string) => {
+    const ok = await cancelOrder(orderId);
+    show(ok ? 'Order cancelled — remainder released' : 'Could not cancel that order', ok ? 'info' : 'error');
   };
 
   const pickLevel = (price: number, side: 'buy' | 'sell') => {
@@ -141,7 +142,6 @@ export function AssetDetailView({ id }: { id: string }) {
       bids={book?.bids ?? []}
       asks={book?.asks ?? []}
       position={position}
-      onPlaced={placeOrder}
       prefill={prefill}
     />
   );
@@ -177,7 +177,7 @@ export function AssetDetailView({ id }: { id: string }) {
             />
           </div>
 
-          {orders != null && orders.length > 0 ? (
+          {orders.length > 0 ? (
             <section className="mt-10" aria-labelledby="resting-heading">
               <div className="flex items-baseline justify-between">
                 <h2
@@ -208,9 +208,11 @@ export function AssetDetailView({ id }: { id: string }) {
                     </p>
                     <div className="flex items-center gap-3">
                       <span className="text-meta text-text-muted">
-                        {o.status === 'open' ? 'Open' : o.status}
+                        {o.status === 'open'
+                          ? 'Open'
+                          : `Partial — ${o.filledUnits} of ${o.units} filled`}
                       </span>
-                      <Button size="sm" variant="outline" onClick={() => cancelOrder(o.id)}>
+                      <Button size="sm" variant="outline" onClick={() => void cancel(o.id)}>
                         Cancel
                       </Button>
                     </div>

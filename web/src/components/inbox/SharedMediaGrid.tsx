@@ -17,6 +17,7 @@ import { createPortal } from 'react-dom';
 import { DATA_MODE } from '@/lib/api/client';
 import type { Conversation, Message } from '@/lib/contracts/domain';
 import { isVideoUri } from '@/lib/utils/media';
+import { lockBodyScroll } from '@/lib/a11y/scrollLock';
 import { AppImage } from '@/components/ui/AppImage';
 import { Icon } from '@/components/ui/Icon';
 import { IconButton } from '@/components/ui/IconButton';
@@ -36,7 +37,16 @@ function isMine(m: Message): boolean {
   return m.sender === 'me' || m.senderId === 'me';
 }
 
-function toItem(c: Conversation, m: Message): SharedMediaItem | null {
+/**
+ * sharedMediaItemFor — one Message → SharedMediaItem mapping for every
+ * media surface (the info grid and the inline thread lightbox share it,
+ * so a deleted message's payload can't survive in either).
+ */
+export function sharedMediaItemFor(
+  c: Conversation,
+  m: Message,
+): SharedMediaItem | null {
+  if (m.isDeleted) return null;
   if (!m.mediaUri) return null;
   return {
     id: m.id,
@@ -47,9 +57,9 @@ function toItem(c: Conversation, m: Message): SharedMediaItem | null {
   };
 }
 
-function collectMedia(c: Conversation): SharedMediaItem[] {
+export function sharedMediaItemsFor(c: Conversation): SharedMediaItem[] {
   return (c.messages ?? [])
-    .map((m) => toItem(c, m))
+    .map((m) => sharedMediaItemFor(c, m))
     .filter((x): x is SharedMediaItem => x !== null);
 }
 
@@ -98,44 +108,138 @@ export function useSharedMedia(conversation: Conversation | null | undefined) {
 
   return useMemo(() => {
     if (!conversation) return [];
-    const local = collectMedia(conversation);
+    const local = sharedMediaItemsFor(conversation);
     const seen = new Set(local.map((m) => m.id));
     return [...local, ...remote.filter((m) => !seen.has(m.id))];
   }, [conversation, remote]);
 }
 
-export function SharedMediaGrid({ items }: { items: SharedMediaItem[] }) {
+export function SharedMediaGrid({
+  items,
+  onDeleteItems,
+}: {
+  items: SharedMediaItem[];
+  /**
+   * Manage mode's trash action — the parent owns the write (delete-for-me
+   * per message id). When absent the grid stays view-only and no Select
+   * affordance renders.
+   */
+  onDeleteItems?: (items: SharedMediaItem[]) => void;
+}) {
   const [viewerIndex, setViewerIndex] = useState<number | null>(null);
+  // Mobile SharedConversationMediaScreen grammar: Select mode swaps the
+  // header to "{n} selected" + trash, tiles toggle instead of opening the
+  // viewer, the check overlay is the selected state.
+  const [selecting, setSelecting] = useState(false);
+  const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
+
+  const toggle = (id: string) =>
+    setSelectedIds((prev) => {
+      const next = new Set(prev);
+      if (next.has(id)) next.delete(id);
+      else next.add(id);
+      return next;
+    });
+
+  const exitSelection = () => {
+    setSelecting(false);
+    setSelectedIds(new Set());
+  };
+
+  const deleteSelected = () => {
+    if (selectedIds.size === 0 || !onDeleteItems) return;
+    const chosen = items.filter((it) => selectedIds.has(it.id));
+    exitSelection();
+    onDeleteItems(chosen);
+  };
 
   return (
     <>
+      {onDeleteItems ? (
+        selecting ? (
+          <div className="flex items-center justify-between px-4 pb-2">
+            <div className="flex items-center gap-1">
+              <IconButton
+                name="close"
+                aria-label="Exit selection"
+                onClick={exitSelection}
+                className="-ml-2"
+              />
+              <span className="tnum text-body-emphasis font-semibold text-text-primary">
+                {selectedIds.size} selected
+              </span>
+            </div>
+            <IconButton
+              name="trash"
+              aria-label={`Remove ${selectedIds.size} selected ${
+                selectedIds.size === 1 ? 'item' : 'items'
+              }`}
+              disabled={selectedIds.size === 0}
+              onClick={deleteSelected}
+            />
+          </div>
+        ) : (
+          <div className="flex justify-end px-4 pb-1">
+            <button
+              type="button"
+              onClick={() => setSelecting(true)}
+              className="pressable min-h-[44px] px-2 text-meta font-semibold text-brand"
+            >
+              Select
+            </button>
+          </div>
+        )
+      ) : null}
       <div className="grid grid-cols-3 gap-0.5 px-4" role="list" aria-label="Shared media">
-        {items.map((item, i) => (
-          <button
-            key={item.id}
-            type="button"
-            role="listitem"
-            onClick={() => setViewerIndex(i)}
-            aria-label={item.isVideo ? 'View shared video' : 'View shared photo'}
-            className="pressable relative aspect-square overflow-hidden rounded-sm border border-border bg-surface-alt"
-          >
-            {item.isVideo && !isLocalUri(item.uri) ? (
-              <span className="flex h-full w-full items-center justify-center text-text-muted">
-                <Icon name="videocam" size={22} />
-              </span>
-            ) : isLocalUri(item.uri) ? (
-              // eslint-disable-next-line @next/next/no-img-element -- local pick, not optimizable
-              <img src={item.uri} alt="" className="h-full w-full object-cover" />
-            ) : (
-              <AppImage src={item.uri} alt="" fill sizes="120px" className="h-full w-full" />
-            )}
-            {item.isVideo ? (
-              <span className="absolute bottom-1 right-1 flex h-[18px] w-[18px] items-center justify-center rounded-full bg-media-overlay-scrim text-scrim-text-primary">
-                <Icon name="play" size={10} filled />
-              </span>
-            ) : null}
-          </button>
-        ))}
+        {items.map((item, i) => {
+          const selected = selectedIds.has(item.id);
+          return (
+            <button
+              key={item.id}
+              type="button"
+              onClick={() => (selecting ? toggle(item.id) : setViewerIndex(i))}
+              aria-label={
+                selecting
+                  ? `${selected ? 'Deselect' : 'Select'} ${item.isVideo ? 'video' : 'photo'}`
+                  : item.isVideo
+                    ? 'View shared video'
+                    : 'View shared photo'
+              }
+              aria-pressed={selecting ? selected : undefined}
+              className={`pressable relative aspect-square overflow-hidden rounded-sm border bg-surface-alt ${
+                selecting && selected ? 'border-2 border-brand' : 'border-border'
+              }`}
+            >
+              {item.isVideo && !isLocalUri(item.uri) ? (
+                <span className="flex h-full w-full items-center justify-center text-text-muted">
+                  <Icon name="videocam" size={22} />
+                </span>
+              ) : isLocalUri(item.uri) ? (
+                // eslint-disable-next-line @next/next/no-img-element -- local pick, not optimizable
+                <img src={item.uri} alt="" className="h-full w-full object-cover" />
+              ) : (
+                <AppImage src={item.uri} alt="" fill sizes="120px" className="h-full w-full" />
+              )}
+              {item.isVideo && !selecting ? (
+                <span className="absolute bottom-1 right-1 flex h-[18px] w-[18px] items-center justify-center rounded-full bg-media-overlay-scrim text-scrim-text-primary">
+                  <Icon name="play" size={10} filled />
+                </span>
+              ) : null}
+              {selecting ? (
+                <span
+                  aria-hidden="true"
+                  className={`absolute right-1 top-1 flex h-[20px] w-[20px] items-center justify-center rounded-full border ${
+                    selected
+                      ? 'border-brand bg-brand text-text-inverse'
+                      : 'border-scrim-text-primary bg-media-overlay-scrim text-transparent'
+                  }`}
+                >
+                  <Icon name="check" size={12} />
+                </span>
+              ) : null}
+            </button>
+          );
+        })}
       </div>
       {viewerIndex !== null ? (
         <MediaLightbox
@@ -165,9 +269,10 @@ function formatStamp(iso?: string): string {
  * MediaLightbox — fullscreen viewer for shared media: scrim click and
  * Escape close, arrows page the set, sender + timestamp in the top chrome.
  * blob: URIs and videos render through plain media elements (not
- * optimizable through next/image).
+ * optimizable through next/image). Exported — ChatPanel opens the same
+ * viewer for inline message media (mobile ChatMediaPreviewScreen parity).
  */
-function MediaLightbox({
+export function MediaLightbox({
   items,
   index,
   onIndexChange,
@@ -197,10 +302,12 @@ function MediaLightbox({
       if (e.key === 'ArrowLeft') step(-1);
     };
     document.addEventListener('keydown', onKey);
-    document.body.style.overflow = 'hidden';
+    // Refcounted body lock — a direct `overflow = ''` write would drop a
+    // sibling overlay's lock while the lightbox is still open.
+    const releaseScroll = lockBodyScroll();
     return () => {
       document.removeEventListener('keydown', onKey);
-      document.body.style.overflow = '';
+      releaseScroll();
       prev?.focus();
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps

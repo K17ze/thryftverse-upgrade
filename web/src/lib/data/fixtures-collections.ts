@@ -30,18 +30,11 @@ export interface UserCollection {
   updatedAt: string;
 }
 
-/** Privacy per seeded board — the identity fixture doesn't model it. */
-const SEED_PRIVACY: Record<string, boolean> = {
-  'col-tailoring': false,
-  'col-rotation': false,
-  'col-watchlist': true,
-};
-
 export const USER_COLLECTION_SEED: UserCollection[] = COLLECTIONS.map((c) => ({
   id: c.id,
   name: c.title,
   description: null,
-  isPrivate: SEED_PRIVACY[c.id] ?? false,
+  isPrivate: c.isPrivate ?? false,
   itemIds: [...c.itemIds],
   createdAt: c.createdAt,
   updatedAt: c.createdAt,
@@ -59,6 +52,7 @@ export function ensureCollectionResolvable(c: UserCollection): void {
       id: c.id,
       title: c.name,
       itemIds: [...c.itemIds],
+      isPrivate: c.isPrivate,
       createdAt: c.createdAt,
     });
   }

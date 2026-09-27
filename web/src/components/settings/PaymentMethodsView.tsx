@@ -6,8 +6,15 @@
  * tokenised contract), set-default and remove per row, the balance-first
  * preference toggle, and add via the shared checkout card sheet.
  *
- * Mobile's Apple Pay / Google Pay rows and biometric gate are platform-only
- * and are honestly absent on web.
+ * Fixture truth is the local overlay (useSavedPaymentMethods via
+ * useManagedPaymentMethods). Live truth is the Stripe-projected
+ * GET /v2/payments/methods rail — remove detaches at the provider and
+ * set-default PATCHes the provider-bound route (both keyed by the pm_*
+ * ref the hook resolves from a fresh read). There is no web card-add
+ * rail — the legacy create route is permanently 410 — so "Add card"
+ * opens the shared sheet's honest tokenisation notice instead of a
+ * localStorage form. Mobile's Apple Pay / Google Pay rows and biometric
+ * gate are platform-only and are honestly absent on web.
  */
 
 import { useState } from 'react';
@@ -20,7 +27,8 @@ import { Icon } from '@/components/ui/Icon';
 import { IconButton } from '@/components/ui/IconButton';
 import { useToast } from '@/components/ui/Toast';
 import { useHydrated } from '@/lib/store/useStore';
-import { useSavedPaymentMethods } from '@/lib/store/userPaymentData';
+import { useManagedPaymentMethods } from '@/lib/hooks/instrument-queries';
+import { parseApiError } from '@/lib/api/http';
 import { AddCardSheet } from '@/components/checkout/AddPaymentSheets';
 import { ConfirmSheet, type ConfirmSheetState } from '@/components/orders/ConfirmSheet';
 import type { PaymentMethod } from '@/lib/contracts/domain';
@@ -83,18 +91,24 @@ function MethodRow({
 export function PaymentMethodsView() {
   const hydrated = useHydrated();
   const {
+    mode,
     methods,
+    isLoading,
+    isError,
+    providerUnavailable,
+    refetch,
     useBalanceFirst,
     setUseBalanceFirst,
     addPaymentMethod,
     removePaymentMethod,
     setDefaultPaymentMethod,
-  } = useSavedPaymentMethods();
+  } = useManagedPaymentMethods();
   const { show } = useToast();
   const [addOpen, setAddOpen] = useState(false);
   const [confirm, setConfirm] = useState<ConfirmSheetState | null>(null);
+  const [confirmBusy, setConfirmBusy] = useState(false);
 
-  if (!hydrated) {
+  if (!hydrated || isLoading) {
     return (
       <div aria-busy aria-label="Loading payment methods" className="mt-2 space-y-px">
         {[0, 1].map((i) => (
@@ -111,18 +125,28 @@ export function PaymentMethodsView() {
       confirmLabel: 'Remove',
       variant: 'destructive',
       onConfirm: () => {
-        const result = removePaymentMethod(method.id);
-        setConfirm(null);
-        if (result.ok) {
-          show(
-            result.promotedToDefault
-              ? 'Payment method removed — next card is now default'
-              : 'Payment method removed',
-            'success',
-          );
-        } else {
-          show('Could not remove this payment method', 'error');
-        }
+        // Fixture resolves on a microtask; live detaches at the provider
+        // and re-reads the rail before the toast reports the outcome.
+        setConfirmBusy(true);
+        void removePaymentMethod(method.id)
+          .then((result) => {
+            setConfirm(null);
+            if (result.ok) {
+              show(
+                result.promotedToDefault
+                  ? 'Payment method removed — next card is now default'
+                  : 'Payment method removed',
+                'success',
+              );
+            } else {
+              show('Could not remove this payment method', 'error');
+            }
+          })
+          .catch(() => {
+            setConfirm(null);
+            show('Could not remove this payment method', 'error');
+          })
+          .finally(() => setConfirmBusy(false));
       },
     });
 
@@ -135,11 +159,32 @@ export function PaymentMethodsView() {
         Cards are tokenised — only the last four digits are ever stored.
       </p>
 
-      {methods.length === 0 ? (
+      {isError ? (
+        <EmptyState
+          icon="card"
+          title={
+            providerUnavailable
+              ? 'Cards are managed in the app'
+              : 'Couldn’t load payment methods'
+          }
+          subtitle={
+            providerUnavailable
+              ? 'Cards are added and managed through secure tokenisation in the ThryftVerse app — saved cards still work on web checkout.'
+              : 'Check your connection and try again.'
+          }
+          actionLabel={providerUnavailable ? undefined : 'Try again'}
+          onAction={providerUnavailable ? undefined : refetch}
+          compact
+        />
+      ) : methods.length === 0 ? (
         <EmptyState
           icon="card"
           title="No payment methods"
-          subtitle="Add a card for faster checkout."
+          subtitle={
+            mode === 'live'
+              ? 'Cards are added through secure tokenisation in the ThryftVerse app — anything you save appears here.'
+              : 'Add a card for faster checkout.'
+          }
           actionLabel="Add card"
           onAction={() => setAddOpen(true)}
           compact
@@ -152,8 +197,14 @@ export function PaymentMethodsView() {
                 key={pm.id}
                 method={pm}
                 onSetDefault={() => {
-                  setDefaultPaymentMethod(pm.id);
-                  show(`${methodLabel(pm)} is now your default`, 'success');
+                  void setDefaultPaymentMethod(pm.id)
+                    .then(() => show(`${methodLabel(pm)} is now your default`, 'success'))
+                    .catch((error) =>
+                      show(
+                        parseApiError(error, 'Could not update the default card').message,
+                        'error',
+                      ),
+                    );
                 }}
                 onRemove={() => requestRemove(pm)}
               />
@@ -187,13 +238,16 @@ export function PaymentMethodsView() {
         open={addOpen}
         onClose={() => setAddOpen(false)}
         onSave={(p) => {
+          // Live never reaches here — the sheet self-gates into the
+          // tokenisation notice (no web card rail). Fixture-only write.
+          if (!addPaymentMethod) return;
           const created = addPaymentMethod(p);
-          if (methods.length === 0) setDefaultPaymentMethod(created.id);
+          if (methods.length === 0) void setDefaultPaymentMethod(created.id);
           show('Card saved', 'success');
         }}
       />
 
-      <ConfirmSheet sheet={confirm} onDismiss={() => setConfirm(null)} />
+      <ConfirmSheet sheet={confirm} busy={confirmBusy} onDismiss={() => setConfirm(null)} />
     </>
   );
 }

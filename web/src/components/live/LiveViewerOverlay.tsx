@@ -10,7 +10,7 @@
  * exits. The overlay owns presence — playback is a real-app concern.
  */
 
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import type { LiveSession } from '@/lib/data/fixtures-media';
 import { userById } from '@/lib/data/fixtures';
 import { AppImage } from '@/components/ui/AppImage';
@@ -19,12 +19,17 @@ import { Icon } from '@/components/ui/Icon';
 import { IconButton } from '@/components/ui/IconButton';
 import { useToast } from '@/components/ui/Toast';
 import { useSignupWall } from '@/components/auth/SignupWall';
+import { useFollows } from '@/lib/store/follows';
+import { useHydrated } from '@/lib/store/useStore';
 import { LiveBadge } from './LiveBadge';
 import { LiveChatRail } from './LiveChatRail';
+import { LiveLotDock } from './LiveLotDock';
 import { LiveProductRail } from './LiveProductRail';
 import { LiveReactions } from './LiveReactions';
 import { useLiveChat } from './useLiveChat';
 import { useLivePresence } from './useLivePresence';
+import { usePinnedChatNote } from './livePins';
+import { lockBodyScroll } from '@/lib/a11y/scrollLock';
 import { formatCount } from '@/lib/utils/format';
 
 interface LiveViewerOverlayProps {
@@ -37,30 +42,60 @@ export function LiveViewerOverlay({ session, onClose }: LiveViewerOverlayProps) 
   const { requireAuth, wall } = useSignupWall();
   const viewers = useLivePresence(session);
   const { messages, send } = useLiveChat(session);
-  const [following, setFollowing] = useState(false);
+  // Host-pinned chat note — the shared store the host console writes to,
+  // so a line pinned mid-show lands here while the overlay is open.
+  const pinnedNote = usePinnedChatNote(session?.id ?? '');
+  // Follow is account state — the persisted store, hydration-gated, not a
+  // per-open local flag.
+  const hydrated = useHydrated();
+  const followingIds = useFollows((s) => s.followingIds);
+  const toggleFollow = useFollows((s) => s.toggleFollow);
   const [chatOpen, setChatOpen] = useState(false);
+  const dialogRef = useRef<HTMLDivElement>(null);
 
   // Per-session chrome resets when a different show opens.
   useEffect(() => {
-    setFollowing(false);
     setChatOpen(false);
   }, [session?.id]);
 
+  // Dialog semantics — Escape to exit, focus captured inside while open
+  // (same trap grammar as the Sheet primitive), restored on close.
   useEffect(() => {
     if (!session) return;
+    const prev = document.activeElement as HTMLElement | null;
+    dialogRef.current?.focus();
     const onKey = (e: KeyboardEvent) => {
       if (e.key === 'Escape') onClose();
+      if (e.key === 'Tab' && dialogRef.current) {
+        const focusables = dialogRef.current.querySelectorAll<HTMLElement>(
+          'button, [href], input, select, textarea, [tabindex]:not([tabindex="-1"])',
+        );
+        if (focusables.length === 0) return;
+        const first = focusables[0];
+        const last = focusables[focusables.length - 1];
+        if (e.shiftKey && document.activeElement === first) {
+          e.preventDefault();
+          last.focus();
+        } else if (!e.shiftKey && document.activeElement === last) {
+          e.preventDefault();
+          first.focus();
+        }
+      }
     };
     document.addEventListener('keydown', onKey);
-    document.body.style.overflow = 'hidden';
+    // Shared refcounted lock — a direct overflow write would clobber any
+    // overlay stacked underneath (Sheet, lightbox) when this one closes.
+    const releaseScroll = lockBodyScroll();
     return () => {
       document.removeEventListener('keydown', onKey);
-      document.body.style.overflow = '';
+      releaseScroll();
+      prev?.focus();
     };
   }, [session, onClose]);
 
   if (!session) return null;
   const seller = userById(session.sellerId);
+  const following = hydrated && session.sellerId !== '' && followingIds.includes(session.sellerId);
   const live = session.status === 'live';
 
   // Chat is an account-bound write — guests hit the wall on send, same
@@ -91,7 +126,9 @@ export function LiveViewerOverlay({ session, onClose }: LiveViewerOverlayProps) 
 
   return (
     <div
-      className="fixed inset-0 z-overlay bg-black"
+      ref={dialogRef}
+      tabIndex={-1}
+      className="fixed inset-0 z-overlay bg-black outline-none"
       role="dialog"
       aria-modal="true"
       aria-label={`${live ? 'Live' : 'Replay'} — ${session.title}`}
@@ -127,7 +164,7 @@ export function LiveViewerOverlay({ session, onClose }: LiveViewerOverlayProps) 
             aria-pressed={following}
             onClick={() => {
               if (!requireAuth('follow_seller')) return;
-              setFollowing((f) => !f);
+              toggleFollow(session.sellerId);
             }}
             className={`pressable ml-1 h-8 shrink-0 rounded-full px-3.5 text-caption font-semibold ${
               following
@@ -170,6 +207,7 @@ export function LiveViewerOverlay({ session, onClose }: LiveViewerOverlayProps) 
               <LiveChatRail
                 messages={messages}
                 onSend={sendGuarded}
+                pinned={pinnedNote}
                 listClassName="max-h-[30vh] lg:max-h-[34vh]"
               />
             </div>
@@ -190,6 +228,12 @@ export function LiveViewerOverlay({ session, onClose }: LiveViewerOverlayProps) 
           <h2 className="clamp-1 mt-3 text-body-emphasis font-semibold text-scrim-text-primary sm:mt-4 sm:text-item-title">
             {session.title}
           </h2>
+          {/* In-show lot auction — live backend sessions only; the dock
+              hides itself on fixture/demo shows rather than faking a
+              queue. */}
+          <div className="mt-2.5">
+            <LiveLotDock session={session} />
+          </div>
           <div className="mt-2.5">
             <LiveProductRail session={session} />
           </div>
@@ -216,6 +260,7 @@ export function LiveViewerOverlay({ session, onClose }: LiveViewerOverlayProps) 
           <LiveChatRail
             messages={messages}
             onSend={sendGuarded}
+            pinned={pinnedNote}
             className="flex-1 px-4 pb-3"
             listClassName="max-h-none"
           />

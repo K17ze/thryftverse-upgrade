@@ -59,7 +59,7 @@ export function PdpGallery({ listing }: PdpGalleryProps) {
   useEffect(() => {
     for (const rail of [desktopRailRef.current, mobileRailRef.current]) {
       rail
-        ?.querySelector('[aria-selected="true"]')
+        ?.querySelector('[aria-pressed="true"]')
         ?.scrollIntoView({ block: 'nearest', inline: 'nearest' });
     }
   }, [current]);
@@ -71,15 +71,14 @@ export function PdpGallery({ listing }: PdpGalleryProps) {
         <div
           ref={desktopRailRef}
           className="no-scrollbar hidden w-[72px] shrink-0 flex-col gap-2 lg:flex lg:max-h-[75vh] lg:overflow-y-auto"
-          role="tablist"
+          role="group"
           aria-label="Item photos"
         >
           {images.map((src, i) => (
             <button
               key={src + i}
               type="button"
-              role="tab"
-              aria-selected={i === current}
+              aria-pressed={i === current}
               aria-label={`Photo ${i + 1}`}
               onClick={() => setActive(i)}
               className={`pressable relative overflow-hidden rounded-md ${
@@ -159,15 +158,14 @@ export function PdpGallery({ listing }: PdpGalleryProps) {
           <div
             ref={mobileRailRef}
             className="no-scrollbar mt-2 flex gap-2 overflow-x-auto lg:hidden"
-            role="tablist"
+            role="group"
             aria-label="Item photos"
           >
             {images.map((src, i) => (
               <button
                 key={src + i}
                 type="button"
-                role="tab"
-                aria-selected={i === current}
+                aria-pressed={i === current}
                 aria-label={`Photo ${i + 1}`}
                 onClick={() => setActive(i)}
                 className={`pressable relative w-16 shrink-0 overflow-hidden rounded-md ${

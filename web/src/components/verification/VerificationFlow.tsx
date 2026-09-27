@@ -31,6 +31,8 @@ import { IdentityStep } from './IdentityStep';
 import { DocumentStep, type KycDocumentFile } from './DocumentStep';
 import { ReviewStep } from './ReviewStep';
 import { StatusView } from './StatusView';
+import { DemandsEntryRow } from './DemandList';
+import { Dac7Section } from './Dac7Section';
 
 const EMPTY_FIELDS: KycIdentityFields = {
   fullName: '',
@@ -273,6 +275,16 @@ export function VerificationFlow() {
           ) : null}
         </>
       )}
+
+      {/* Seller verification requests + DAC7 tax info — mobile renders the
+          DAC7 section below the KYC surface in every state, same here. The
+          demands row only appears when the seller actually has requests. */}
+      {hydrated ? (
+        <div className="mt-4">
+          <DemandsEntryRow />
+          <Dac7Section />
+        </div>
+      ) : null}
     </>
   );
 }

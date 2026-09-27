@@ -63,7 +63,7 @@ export async function createCollection(input: {
 
 export async function updateCollection(
   collectionId: string,
-  patch: { name?: string; description?: string; isPrivate?: boolean },
+  patch: { name?: string; description?: string | null; isPrivate?: boolean },
 ): Promise<ApiCollection> {
   const res = await fetchJson<{ ok: true; collection: ApiCollection }>(
     `/collections/${encodeURIComponent(collectionId)}`,

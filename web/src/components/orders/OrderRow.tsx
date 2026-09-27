@@ -128,7 +128,7 @@ export function OrderRow({
     <li>
       <Link
         href={href}
-        className="pressable flex items-center gap-3 py-3 hover:bg-row-pressed sm:gap-4"
+        className="pressable flex items-center gap-3 py-[var(--density-row-py)] hover:bg-row-pressed sm:gap-4"
       >
         <span className="w-14 shrink-0 overflow-hidden rounded-md">
           <AppImage

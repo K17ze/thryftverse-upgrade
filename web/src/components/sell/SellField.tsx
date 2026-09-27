@@ -4,12 +4,15 @@
  */
 
 import type { ReactNode } from 'react';
+import { Icon } from '@/components/ui/Icon';
 
 interface SellFieldProps {
   id: string;
   label: string;
   required?: boolean;
   optional?: boolean;
+  /** Field satisfied — the mobile flow's quiet done-check replaces "Required". */
+  done?: boolean;
   error?: string;
   hint?: string;
   children: ReactNode;
@@ -20,14 +23,16 @@ export const INPUT_CLASS =
 
 export const INPUT_ERROR_CLASS = 'border-danger-border';
 
-export function SellField({ id, label, required, optional, error, hint, children }: SellFieldProps) {
+export function SellField({ id, label, required, optional, done, error, hint, children }: SellFieldProps) {
   return (
     <div>
       <div className="mb-1.5 flex items-baseline justify-between">
         <label htmlFor={id} className="text-caption font-medium text-text-secondary">
           {label}
         </label>
-        {required ? (
+        {required && done ? (
+          <Icon name="check" size={14} className="text-success-text" />
+        ) : required ? (
           <span className="text-micro text-text-muted">Required</span>
         ) : optional ? (
           <span className="text-micro text-text-muted">Optional</span>

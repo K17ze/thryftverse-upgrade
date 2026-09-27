@@ -15,6 +15,7 @@ import {
   useCoOwnAssets,
   useDistributionReceipts,
 } from '@/lib/hooks/coown-queries';
+import { useSession } from '@/lib/session/SessionProvider';
 import type { DistributionReceipt } from '@/lib/contracts/coown';
 import { gbp } from './format';
 
@@ -35,10 +36,27 @@ function shortDate(iso: string | null): string {
 
 export function DistributionsView() {
   const router = useRouter();
+  const { isGuest, sessionLoading } = useSession();
   const assetsQ = useCoOwnAssets();
   const receiptsQ = useDistributionReceipts();
 
-  const loading = assetsQ.isLoading || receiptsQ.isLoading;
+  const loading = sessionLoading || assetsQ.isLoading || receiptsQ.isLoading;
+
+  // Income receipts are account-bound — guests sign in rather than read
+  // the demo identity's distribution history.
+  if (!loading && isGuest) {
+    return (
+      <div className="mx-auto w-full max-w-5xl px-4 pb-20 pt-8 sm:px-6 md:pt-10">
+        <EmptyState
+          icon="payout"
+          title="Sign in to see your income"
+          subtitle="Distribution receipts are tied to your Co-Own holdings."
+          actionLabel="Sign in"
+          onAction={() => router.push('/auth')}
+        />
+      </div>
+    );
+  }
 
   if (loading) {
     return (

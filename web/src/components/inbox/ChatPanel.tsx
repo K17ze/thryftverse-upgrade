@@ -7,21 +7,40 @@
  * bar for groups — listing context card, in-thread message search with
  * match highlighting, date-separated message stream with offer cards,
  * image bubbles, receipts and a quiet copy action, optimistic composer
- * with staged photo attach. Fixture mode mutates locally — outgoing
- * messages are appended optimistically and reconciled once the store
- * write lands; offer resolutions are local overrides.
+ * with staged photo attach. Opening an unread thread fires the mark-read
+ * write so the row/header/tab badges clear — a "New messages" divider
+ * stays anchored at the first unread incoming message for the visit.
+ * Hovering a message reveals the quiet gutter (React / Reply / Copy), and
+ * long-press or right-click opens the actions menu — quick-react row,
+ * Reply, Copy, Edit (own text inside the backend's 15-minute window),
+ * Delete for me / Delete for everyone — the desktop and touch analogues
+ * of the mobile long-press sheet; the quoted compose bar sends
+ * replyToMessageId and tapping a quote scrolls back to the parent with a
+ * flash. Older history pages in from the server envelope's oldestCursor
+ * (scroll-top auto-load + an explicit button, scroll position preserved
+ * across the prepend). An in-thread safety banner appears only when an
+ * incoming message matches the ported off-platform-payment/pressure
+ * detector. Fixture mode mutates locally — outgoing messages are appended
+ * optimistically and reconciled once the store write lands. Offer cards
+ * run the real lifecycle: the standing CommerceOffer behind the message
+ * resolves through useChatOffers (offerId, else the thread's listing) and
+ * accept/decline/counter write through the same path /offers uses, so an
+ * accept lands a recorded order before the card can claim it.
  */
 
-import { useEffect, useMemo, useRef, useState } from 'react';
+import { useEffect, useMemo, useRef, useState, type UIEvent } from 'react';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import type { Message } from '@/lib/contracts/domain';
 import {
   useConversation,
+  useConversations,
+  useMarkConversationRead,
   useSendChatMessage,
   useUser,
   type SendChatMessageInput,
 } from '@/lib/hooks/queries';
+import { marketplaceMeta } from '@/lib/api/services/chat';
 import { useSession } from '@/lib/session/SessionProvider';
 import { useHydrated } from '@/lib/store/useStore';
 import { useToast } from '@/components/ui/Toast';
@@ -34,11 +53,47 @@ import { IconButton } from '@/components/ui/IconButton';
 import { Skeleton } from '@/components/ui/Skeleton';
 import { formatPrice } from '@/lib/utils/format';
 import { Composer } from './Composer';
+import { ConfirmSheet, CLOSED_CONFIRM, type ConfirmSheetState } from './ConfirmSheet';
 import { GroupAvatarMosaic } from './GroupAvatarMosaic';
-import { MessageBubble } from './MessageBubble';
+import { ChatSafetyBanner } from './ChatSafetyBanner';
+import { detectThreadSafetyWarning } from './chatSafety';
+import {
+  MESSAGE_EDIT_WINDOW_MS,
+  QUICK_REACTIONS,
+  forwardableMessage,
+  reportChatMessage,
+  useForwardMessage,
+  useMessageHistory,
+  usePinnedMessage,
+  useThreadActions,
+  writePinnedMessage,
+} from '@/lib/hooks/chat-queries';
+import {
+  DeletedMessageTombstone,
+  MessageActionsMenu,
+  MessageBubble,
+  type MessageCluster,
+} from './MessageBubble';
+import { MediaLightbox, sharedMediaItemFor, type SharedMediaItem } from './SharedMediaGrid';
+import { ForwardSheet } from './ForwardSheet';
+import { isGroupManager, useGroupAdminStore } from './groupAdmin';
+import { ListingShareCard } from './ListingShareCard';
 import { OfferCard } from './OfferCard';
+import { OfferSheet } from '@/components/pdp/OfferSheet';
+import {
+  effectiveOfferStatus,
+  resolveOfferActions,
+} from '@/components/orders/OfferRow';
+import { listingById } from '@/lib/data/fixtures';
+import type { OfferWithOrder } from '@/lib/commerce/offerAcceptance';
 import { useInboxSafety } from './inboxSafety';
+import { useReadReceiptsEnabled } from '@/lib/store/chatPrefs';
 import { useGroupCapabilities } from './useConversationAdmin';
+import {
+  offerResolutionForMessage,
+  useChatOfferActions,
+  useChatOffers,
+} from './useChatOffers';
 import {
   conversationTitle,
   isGroupConversation,
@@ -46,8 +101,6 @@ import {
   mosaicMembers,
   senderLabelFor,
 } from './inboxModel';
-
-type OfferStatus = NonNullable<Message['offerStatus']>;
 
 // ── Date separators ─────────────────────────────────────────────────────
 
@@ -110,120 +163,651 @@ function isSystem(m: Message): boolean {
   return m.isSystem === true || m.type === 'system' || m.sender === 'system';
 }
 
+/**
+ * Same-sender run test — system rows and tombstones break a cluster (they
+ * carry their own chrome), everything else that shares a senderId and
+ * direction continues it.
+ */
+function sameRun(a: Message, b: Message): boolean {
+  return (
+    !isSystem(a) &&
+    !isSystem(b) &&
+    !a.isDeleted &&
+    !b.isDeleted &&
+    a.senderId === b.senderId &&
+    isMine(a) === isMine(b)
+  );
+}
+
+/**
+ * "New messages" divider — the mobile UnreadMessagesDivider grammar: brand
+ * hairlines flanking a quiet pill. Rendered above the anchored message.
+ */
+function NewMessagesDivider() {
+  return (
+    <div role="separator" className="my-3 flex items-center gap-2" aria-label="New messages">
+      <span className="h-px flex-1 bg-brand" aria-hidden />
+      <span className="rounded-full bg-brand-subtle px-2.5 py-1 text-meta font-semibold text-brand">
+        New messages
+      </span>
+      <span className="h-px flex-1 bg-brand" aria-hidden />
+    </div>
+  );
+}
+
 // ── Component ────────────────────────────────────────────────────────────
+
+/**
+ * Near-bottom threshold — inside this distance from the stream tail the
+ * viewer is treated as "at the latest", so an appended message keeps
+ * them pinned; further up, arrivals raise the jump pill instead of
+ * yanking the viewport.
+ */
+const NEAR_BOTTOM_PX = 80;
 
 export function ChatPanel({ conversationId }: { conversationId: string }) {
   const router = useRouter();
   const toast = useToast();
   const hydrated = useHydrated();
-  const { user } = useSession();
-  const { data: conversation, isLoading } = useConversation(conversationId);
+  const { user, isGuest } = useSession();
+  const viewerId = user?.id ?? '';
+  const { data: conversation, isLoading, isError, refetch } =
+    useConversation(conversationId);
   const isGroup = conversation ? isGroupConversation(conversation) : false;
   const { data: participant } = useUser(conversation?.participantId ?? '');
   const sendMessage = useSendChatMessage(conversationId);
-  const { capabilities } = useGroupCapabilities(conversation, user?.id ?? 'me');
+  const markConversationRead = useMarkConversationRead();
+  const { capabilities } = useGroupCapabilities(conversation, viewerId);
   const blockedUserIds = useInboxSafety((s) => s.blockedUserIds);
   const toggleBlocked = useInboxSafety((s) => s.toggleBlocked);
+  const receiptsEnabled = useReadReceiptsEnabled();
+  // Offer cards run the real lifecycle — the standing record behind each
+  // offer message resolves from the shared offer list and actions write
+  // through the same path /offers uses.
+  const { data: chatOffers } = useChatOffers();
+  const { respond: respondToOffer, sendCounter } = useChatOfferActions(conversationId);
+  const [counterTarget, setCounterTarget] = useState<OfferWithOrder | null>(null);
+  // Shared clock — lazily-expired standing offers stop offering actions.
+  const [nowMs, setNowMs] = useState(() => Date.now());
+  useEffect(() => {
+    const id = setInterval(() => setNowMs(Date.now()), 30_000);
+    return () => clearInterval(id);
+  }, []);
 
   const [pending, setPending] = useState<Message[]>([]);
-  const [offerStatus, setOfferStatus] = useState<Record<string, OfferStatus>>({});
   const [descDismissed, setDescDismissed] = useState(false);
   const [searchOpen, setSearchOpen] = useState(false);
   const [query, setQuery] = useState('');
+  const [replyTarget, setReplyTarget] = useState<Message | null>(null);
+  // Long-press / right-click action menu — keyed to a message id at the
+  // press point; the touch + desktop analogue of the mobile long-press sheet.
+  const [msgMenu, setMsgMenu] = useState<{ id: string; x: number; y: number } | null>(null);
+  const [editing, setEditing] = useState<Message | null>(null);
+  const [confirm, setConfirm] = useState<ConfirmSheetState>(CLOSED_CONFIRM);
+  const [safetyDismissed, setSafetyDismissed] = useState<string | null>(null);
+  const [flashId, setFlashId] = useState<string | null>(null);
+  // Inline media → shared MediaLightbox (mobile ChatMediaPreviewScreen):
+  // the tapped message pages the full thread media set.
+  const [mediaIndex, setMediaIndex] = useState<number | null>(null);
   const scrollRef = useRef<HTMLDivElement>(null);
+  // Scroll-preservation anchor — captured before an older page lands so
+  // the prepend can restore the viewport to the same message.
+  const prependAnchor = useRef<{ height: number; top: number } | null>(null);
+  // Tail tracking — `nearBottom` mirrors the scroll position; `newBelow`
+  // shows the jump pill when messages arrive while the viewer reads up.
+  const nearBottom = useRef(true);
+  const [newBelow, setNewBelow] = useState(false);
+  // Older-history pagination — pages fetched with `before=oldestCursor`
+  // live outside the conversation cache so the 15s poll can't drop them.
+  const history = useMessageHistory(conversationId, conversation);
+  // Reactions / edit / delete — the message-level write paths.
+  const threadActions = useThreadActions(conversationId, history.patchOlder);
+  // Forward — the real recipient picker rides on the conversations list.
+  const { data: allConversations } = useConversations();
+  const forwardMessage = useForwardMessage();
+  const [forwardTarget, setForwardTarget] = useState<Message | null>(null);
+  // Failed outgoing sends stay in the stream until retried or discarded —
+  // the mobile send-failure grammar (a ! marker + the menu's Retry row).
+  // The original send payload rides in a ref map so retry re-runs the
+  // identical write without holding input state in render.
+  const [failedIds, setFailedIds] = useState<ReadonlySet<string>>(new Set());
+  const pendingInputs = useRef(new Map<string, SendChatMessageInput>());
+  // Pin — group admins/owners only; the backend enforces the same gate
+  // (ensureGroupManagementAccess), so the menu entry never renders in DMs.
+  const roleOverrides = useGroupAdminStore((s) =>
+    conversation ? s.roleOverrides[conversation.id] : undefined,
+  );
+  const canPinMessage =
+    !!conversation && isGroup && isGroupManager(conversation, viewerId, roleOverrides);
+  // The poll tick doubles as the pin convergence trigger — other admins'
+  // pins arrive on the conversation's refetch cadence.
+  const { pin, refresh: refreshPinned } = usePinnedMessage(
+    conversationId,
+    isGroup,
+    hydrated && !isGuest,
+    conversation,
+  );
   const searchInputRef = useRef<HTMLInputElement>(null);
   const didMountScroll = useRef(false);
+  const flashTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+  // "New messages" divider anchor — snapshot once per thread visit, keyed
+  // to a message id so a mark-read refetch can't move or lose it (the
+  // mobile useUnreadDividerAnchor pattern).
+  const unreadAnchor = useRef<{ cid: string; taken: boolean; id: string | null }>({
+    cid: conversationId,
+    taken: false,
+    id: null,
+  });
 
   // Reset thread-local state when switching conversations.
   useEffect(() => {
     setPending([]);
-    setOfferStatus({});
+    setFailedIds(new Set());
+    pendingInputs.current.clear();
+    setForwardTarget(null);
+    setCounterTarget(null);
     setDescDismissed(false);
     setSearchOpen(false);
     setQuery('');
+    setReplyTarget(null);
+    setMsgMenu(null);
+    setEditing(null);
+    setConfirm(CLOSED_CONFIRM);
+    setSafetyDismissed(null);
+    setFlashId(null);
+    setMediaIndex(null);
     didMountScroll.current = false;
+    prependAnchor.current = null;
+    nearBottom.current = true;
+    setNewBelow(false);
+    if (flashTimer.current) clearTimeout(flashTimer.current);
+    unreadAnchor.current = { cid: conversationId, taken: false, id: null };
   }, [conversationId]);
+
+  useEffect(
+    () => () => {
+      if (flashTimer.current) clearTimeout(flashTimer.current);
+    },
+    [],
+  );
 
   // Focus the search field when the in-thread search opens.
   useEffect(() => {
     if (searchOpen) searchInputRef.current?.focus();
   }, [searchOpen]);
 
-  // Reconcile optimistic sends: once the fixture write (id `local-*`)
-  // refetches into the query result, drop the matching pending bubble.
-  // Media pairs match on text + mediaUri so a captioned photo can't be
-  // swallowed by an unrelated text send.
+  // Opening a thread marks it read — the write clears the fixture/server
+  // unread flag and the row/header/tab badges drop on the same write.
+  const needsRead = !!conversation && (conversation.unread || (conversation.unreadCount ?? 0) > 0);
+  useEffect(() => {
+    if (needsRead) markConversationRead(conversationId);
+  }, [conversationId, needsRead, markConversationRead]);
+
+  // Reconcile optimistic sends: once the outgoing write refetches into the
+  // query result, drop the matching pending bubble. Matches on text +
+  // media presence + send order (server/fixture timestamps are at-or-after
+  // the optimistic stamp) rather than a fixture-only id prefix, so live
+  // sends reconcile the same way.
   useEffect(() => {
     if (!conversation) return;
     setPending((p) =>
-      p.filter(
-        (pm) =>
-          !conversation.messages.some(
-            (dm) =>
-              dm.id.startsWith('local-') &&
-              dm.sender === 'me' &&
-              dm.text === pm.text &&
-              (dm.mediaUri ?? '') === (pm.mediaUri ?? ''),
-          ),
-      ),
+      p.filter((pm) => {
+        const sentAt = new Date(pm.timestamp).getTime();
+        const attachmentUri = (m: Message) =>
+          m.mediaUri ?? m.documentUri ?? m.voiceUri ?? '';
+        const keep = !conversation.messages.some(
+          (dm) =>
+            !dm.id.startsWith('opt-') &&
+            dm.sender === 'me' &&
+            (dm.text ?? '') === (pm.text ?? '') &&
+            (dm.type ?? 'text') === (pm.type ?? 'text') &&
+            Boolean(attachmentUri(dm)) === Boolean(attachmentUri(pm)) &&
+            (Number.isNaN(sentAt) ||
+              Number.isNaN(new Date(dm.timestamp).getTime()) ||
+              new Date(dm.timestamp).getTime() >= sentAt - 5_000),
+        );
+        // Reconciled sends — the server copy landed, so the stashed retry
+        // payload is dead weight. Idempotent, safe under StrictMode replays.
+        if (!keep) {
+          pendingInputs.current.delete(pm.id);
+          setFailedIds((s) => {
+            if (!s.has(pm.id)) return s;
+            const n = new Set(s);
+            n.delete(pm.id);
+            return n;
+          });
+        }
+        return keep;
+      }),
     );
   }, [conversation]);
 
-  const messages = useMemo(
-    () => [...(conversation?.messages ?? []), ...pending],
-    [conversation, pending],
+  // The rendered stream — paged history prepends before the polled page 1
+  // and optimistic sends tail it. Dedupe by id keeps the first-seen slot
+  // (prepend ordering) but a later copy wins the payload — a boundary
+  // message sitting in both an older page and page 1 renders the fresher
+  // page-1 snapshot, not the stale prepend.
+  const messages = useMemo(() => {
+    const merged: Message[] = [];
+    const indexById = new Map<string, number>();
+    for (const m of [...history.older, ...(conversation?.messages ?? []), ...pending]) {
+      const at = indexById.get(m.id);
+      if (at === undefined) {
+        indexById.set(m.id, merged.length);
+        merged.push(m);
+      } else {
+        merged[at] = m;
+      }
+    }
+    return merged;
+  }, [history.older, conversation, pending]);
+
+  // Thread media set — the same mapping the shared-media grid uses, so
+  // the inline lightbox pages the identical items (deleted messages can
+  // never surface through either surface).
+  const mediaItems = useMemo<SharedMediaItem[]>(
+    () =>
+      conversation
+        ? messages
+            .map((m) => sharedMediaItemFor(conversation, m))
+            .filter((x): x is SharedMediaItem => x !== null)
+        : [],
+    [conversation, messages],
   );
+  const openMediaFor = (m: Message) => {
+    const at = mediaItems.findIndex((it) => it.id === m.id);
+    if (at >= 0) setMediaIndex(at);
+  };
+
+  // In-thread safety prompt — the mobile detectChatSafetyWarning gate:
+  // the buyer side of a marketplace thread only. The marketplace signal
+  // is the thread's listing link — fixture `listing`, live `itemId`/
+  // `context.listing`. The seller proof chains airtight first — the
+  // catalog listing's sellerId, then a standing offer on the listing
+  // (server-bound buyerId/sellerId) — then the payload's ownerId, the
+  // mobile classifier's `sellerId ?? ownerId` proxy. An unproven role
+  // suppresses the banner rather than show buyer-protection copy to a
+  // possible seller; a viewer-authored offer or counterparty-seller
+  // listing-share is the fallback proof of the buyer seat.
+  const meta = marketplaceMeta(conversation);
+  const safetyListingId =
+    conversation?.listing?.id ?? meta.itemId ?? meta.listingId;
+  const threadListing = safetyListingId ? listingById(safetyListingId) : undefined;
+  const threadOffer = useMemo(
+    () =>
+      safetyListingId
+        ? chatOffers?.find((o) => o.listingId === safetyListingId)
+        : undefined,
+    [chatOffers, safetyListingId],
+  );
+  const metaOwnerId = meta.ownerId;
+  const safetyWarning = useMemo(() => {
+    if (!conversation || isGroup || !safetyListingId) return null;
+    const sellerId = threadListing?.sellerId ?? threadOffer?.sellerId ?? metaOwnerId;
+    const isSelling = sellerId
+      ? sellerId === viewerId
+      : !messages.some(
+            (m) => isMine(m) && (m.type === 'offer' || m.offerPrice != null),
+          ) &&
+          !messages.some(
+            (m) => m.listing?.sellerId === conversation.participantId,
+          );
+    return detectThreadSafetyWarning(messages, {
+      isMarketplace: true,
+      isSelling,
+    });
+  }, [
+    conversation,
+    isGroup,
+    safetyListingId,
+    threadListing,
+    threadOffer,
+    metaOwnerId,
+    messages,
+    viewerId,
+  ]);
 
   // In-thread search — client-side filter over message text (WhatsApp's
   // conversation search). System rows search on their title; media-only
-  // messages carry no text and honestly never match.
+  // messages carry no text and honestly never match; deleted payloads are
+  // tombstones — the removed body never surfaces through search.
   const searchQuery = query.trim();
   const matches = useMemo(() => {
     if (!searchQuery) return messages;
     const needle = searchQuery.toLowerCase();
-    return messages.filter((m) => (m.text ?? m.systemTitle ?? '').toLowerCase().includes(needle));
+    return messages.filter(
+      (m) => !m.isDeleted && (m.text ?? m.systemTitle ?? '').toLowerCase().includes(needle),
+    );
   }, [messages, searchQuery]);
 
-  // Auto-scroll — instant on first paint, smooth on new messages. Skipped
-  // while searching so opening the filter doesn't yank the viewport.
+  // Reply previews — resolve replyToMessageId against the loaded set. A
+  // parent that scrolled out of the fetch window renders no quote rather
+  // than a fabricated one; a deleted parent quotes as its tombstone.
+  const messageById = useMemo(() => new Map(messages.map((m) => [m.id, m])), [messages]);
+
+  const senderNameFor = (m: Message): string =>
+    !conversation
+      ? 'Member'
+      : isMine(m)
+        ? 'You'
+        : isGroup
+          ? senderLabelFor(conversation, m.senderId)
+          : conversation.participantName;
+
+  // The one-line reply label — the message's own noun grammar, never a
+  // fabricated body (deleted payloads stay tombstoned).
+  const previewTextFor = (m: Message): string =>
+    m.isDeleted
+      ? 'This message was deleted'
+      : m.text ??
+        (m.mediaType === 'video'
+          ? 'Video'
+          : m.mediaUri
+            ? 'Photo'
+            : m.type === 'voice' || m.voiceUri
+              ? 'Voice message'
+              : m.type === 'document' || m.documentUri
+                ? (m.documentName ?? 'Document')
+                : m.systemTitle ?? 'Message');
+
+  const replyInfoFor = (m: Message): { senderName: string; text: string } | undefined => {
+    if (!m.replyToMessageId) return undefined;
+    const parent = messageById.get(m.replyToMessageId);
+    if (!parent) return undefined;
+    return { senderName: senderNameFor(parent), text: previewTextFor(parent) };
+  };
+
+  // Pinned bar view-model — the loaded stream copy wins; the live pin
+  // response carries the serialized message for pins outside the loaded
+  // window. An unresolvable pin renders nothing rather than a fabricated
+  // preview.
+  const pinnedView = useMemo(() => {
+    if (!pin) return null;
+    const m = messageById.get(pin.messageId) ?? pin.message;
+    if (!m || m.isDeleted) return null;
+    return {
+      messageId: pin.messageId,
+      senderLabel: senderNameFor(m),
+      text: previewTextFor(m),
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- senderNameFor/previewTextFor are render-closures over the same conversation/message set
+  }, [pin, messageById]);
+
+  /**
+   * Unread divider anchor — resolved on the first populated render while
+   * the thread still reports unread, before the open-time mark-read write
+   * lands. unreadCount counts back over incoming non-system messages (the
+   * server read cursor); a bare `unread` flag anchors at the last incoming
+   * message — the conservative point it can prove (mobile's fallback).
+   */
+  if (unreadAnchor.current.cid !== conversationId) {
+    unreadAnchor.current = { cid: conversationId, taken: false, id: null };
+  }
+  if (!unreadAnchor.current.taken && conversation && conversation.messages.length > 0) {
+    unreadAnchor.current.taken = true;
+    if (conversation.unread || (conversation.unreadCount ?? 0) > 0) {
+      const incoming = conversation.messages.filter(
+        (m) => !isMine(m) && !isSystem(m) && !m.isDeleted,
+      );
+      const count = conversation.unreadCount ?? 0;
+      const anchor =
+        count > 0
+          ? incoming[Math.max(0, incoming.length - count)]
+          : incoming[incoming.length - 1];
+      unreadAnchor.current.id = anchor?.id ?? null;
+    }
+  }
+
+  const scrollToMessage = (id: string) => {
+    const el = scrollRef.current?.querySelector(`[data-mid="${CSS.escape(id)}"]`);
+    if (!el) {
+      // The parent scrolled out of the loaded window — honest no-op, not
+      // a fabricated jump.
+      toast.show('Original message is outside the loaded history', 'info');
+      return;
+    }
+    el.scrollIntoView({ behavior: 'smooth', block: 'center' });
+    setFlashId(id);
+    if (flashTimer.current) clearTimeout(flashTimer.current);
+    flashTimer.current = setTimeout(() => setFlashId(null), 1400);
+  };
+
+  const copyMessageText = async (text: string) => {
+    try {
+      await navigator.clipboard.writeText(text);
+      toast.show('Message copied', 'success');
+    } catch {
+      toast.show("Couldn't copy — clipboard access was blocked", 'error');
+    }
+  };
+
+  // Fetch the next older page — captures the scroll anchor first so the
+  // prepend restores the viewport instead of jumping to the top.
+  const loadOlder = () => {
+    if (!history.hasMore || history.loading) return;
+    const el = scrollRef.current;
+    if (el) prependAnchor.current = { height: el.scrollHeight, top: el.scrollTop };
+    history.loadOlder();
+  };
+
+  // Auto-scroll — instant on first paint; afterwards an appended message
+  // pulls the stream down only when the viewer is already near the
+  // bottom or the arrival is their own send. A 15s-poll arrival while
+  // they're reading history raises the "New messages" pill instead of
+  // dragging the viewport. A prepend (older history landing) restores
+  // the captured anchor; a same-window refetch changes nothing.
+  const prevWindow = useRef<{ first?: string; last?: string; count: number }>({ count: 0 });
   useEffect(() => {
     const el = scrollRef.current;
-    if (!el || messages.length === 0 || searchOpen) return;
-    el.scrollTo({ top: el.scrollHeight, behavior: didMountScroll.current ? 'smooth' : 'auto' });
-    didMountScroll.current = true;
-  }, [messages.length, searchOpen]);
+    const first = messages[0]?.id;
+    const last = messages[messages.length - 1]?.id;
+    const prev = prevWindow.current;
+    const prepended =
+      prev.count > 0 &&
+      messages.length > prev.count &&
+      prev.last === last &&
+      prev.first !== first;
+    // Tail moved forward without the list shrinking — an optimistic send
+    // reconciling to its server id counts (count can stay flat); a
+    // delete-for-me dropping the tail does not.
+    const appended =
+      didMountScroll.current && prev.last !== last && messages.length >= prev.count;
+    if (el && messages.length > 0 && !searchOpen) {
+      if (prepended && prependAnchor.current) {
+        const a = prependAnchor.current;
+        el.scrollTop = a.top + (el.scrollHeight - a.height);
+      } else if (!didMountScroll.current) {
+        el.scrollTo({ top: el.scrollHeight });
+        didMountScroll.current = true;
+        nearBottom.current = true;
+      } else if (appended) {
+        const lastMessage = messages[messages.length - 1];
+        if (lastMessage && (nearBottom.current || isMine(lastMessage))) {
+          el.scrollTo({ top: el.scrollHeight, behavior: 'smooth' });
+          nearBottom.current = true;
+        } else {
+          setNewBelow(true);
+        }
+      }
+    }
+    if (!prepended) prependAnchor.current = null;
+    prevWindow.current = { first, last, count: messages.length };
+  }, [messages, searchOpen]);
+
+  // Scroll-to-top auto-load — the WhatsApp grammar; the "Load older"
+  // button below stays the explicit affordance for keyboard users. The
+  // same event keeps `nearBottom` honest and clears the jump pill once
+  // the viewer scrolls back to the tail themselves.
+  const onStreamScroll = (e: UIEvent<HTMLDivElement>) => {
+    const el = e.currentTarget;
+    if (el.scrollTop < 64) loadOlder();
+    const near = el.scrollHeight - el.scrollTop - el.clientHeight <= NEAR_BOTTOM_PX;
+    nearBottom.current = near;
+    if (near) setNewBelow(false);
+  };
+
+  // Jump-pill action — smooth-scroll to the tail and drop the affordance.
+  const jumpToLatest = () => {
+    const el = scrollRef.current;
+    if (el) {
+      el.scrollTo({ top: el.scrollHeight, behavior: 'smooth' });
+      nearBottom.current = true;
+    }
+    setNewBelow(false);
+  };
 
   const send = (input: SendChatMessageInput) => {
+    const replyToMessageId = replyTarget?.id;
+    // Same narrowing the mutation's fixture write applies — document/voice
+    // ride their own uri fields + type tag; mediaType is image|video only.
+    const isDoc = input.mediaType === 'document';
+    const isVoice = input.mediaType === 'voice';
     const optimistic: Message = {
       id: `opt-${Date.now()}`,
-      senderId: 'me',
+      senderId: viewerId,
       sender: 'me',
       text: input.text,
-      mediaUri: input.mediaUri,
-      mediaType: input.mediaType,
-      type: input.mediaUri ? 'media' : 'text',
+      mediaUri: !isDoc && !isVoice ? input.mediaUri : undefined,
+      mediaType:
+        input.mediaType === 'image' || input.mediaType === 'video'
+          ? input.mediaType
+          : undefined,
+      documentUri: isDoc ? input.mediaUri : undefined,
+      documentName: isDoc ? input.documentName : undefined,
+      documentMimeType: isDoc ? input.documentMimeType : undefined,
+      voiceUri: isVoice ? input.mediaUri : undefined,
+      voiceDurationMs: isVoice ? input.voiceDurationMs : undefined,
+      voiceWaveform: isVoice ? input.voiceWaveform : undefined,
+      replyToMessageId,
+      type: isDoc
+        ? 'document'
+        : isVoice
+          ? 'voice'
+          : input.mediaUri
+            ? 'media'
+            : 'text',
       timestamp: new Date().toISOString(),
       readStatus: 'sending',
     };
     setPending((p) => [...p, optimistic]);
-    sendMessage.mutate(input, {
-      onError: () => {
-        setPending((p) => p.filter((m) => m.id !== optimistic.id));
-        toast.show("Message couldn't be sent", 'error');
+    setReplyTarget(null);
+    pendingInputs.current.set(optimistic.id, { ...input, replyToMessageId });
+    sendMessage.mutate(
+      { ...input, replyToMessageId },
+      {
+        onError: () => {
+          // The send failed — keep the optimistic bubble in place marked
+          // failed (the mobile send-failure grammar: the message stays
+          // put, the menu offers Retry / Remove instead of silently
+          // dropping the draft).
+          setFailedIds((s) => new Set(s).add(optimistic.id));
+          toast.show("Message couldn't be sent", 'error');
+        },
       },
+    );
+  };
+
+  // Retry a failed send — re-runs the identical mutation; the failed row
+  // drops now and the fresh optimistic send takes its place at the tail.
+  const retryPending = (m: Message) => {
+    const input = pendingInputs.current.get(m.id);
+    setPending((p) => p.filter((x) => x.id !== m.id));
+    setFailedIds((s) => {
+      const n = new Set(s);
+      n.delete(m.id);
+      return n;
+    });
+    pendingInputs.current.delete(m.id);
+    if (input) send(input);
+  };
+
+  // Remove a failed pending send — local discard, no server edge exists
+  // for a message that never landed.
+  const discardPending = (m: Message) => {
+    setPending((p) => p.filter((x) => x.id !== m.id));
+    setFailedIds((s) => {
+      const n = new Set(s);
+      n.delete(m.id);
+      return n;
+    });
+    pendingInputs.current.delete(m.id);
+  };
+
+  // Pin / unpin — the write is group-admin-gated server-side; the menu
+  // entry only exists when canPinMessage held at render time.
+  const togglePin = (m: Message) => {
+    const isPinned = pin?.messageId === m.id;
+    void writePinnedMessage(conversationId, m.id, isPinned).then((ok) => {
+      if (ok) {
+        refreshPinned();
+        toast.show(isPinned ? 'Message unpinned' : 'Message pinned', 'success');
+      } else {
+        toast.show(
+          isPinned
+            ? "Couldn't unpin the message — try again"
+            : "Couldn't pin the message — try again",
+          'error',
+        );
+      }
     });
   };
 
-  const resolveOffer = (m: Message, status: OfferStatus) => {
-    setOfferStatus((s) => ({ ...s, [m.id]: status }));
-    if (status === 'accepted') {
-      toast.show(`Offer accepted — ${formatPrice(m.offerPrice)} agreed`, 'success');
-    } else if (status === 'declined') {
-      toast.show('Offer declined', 'info');
-    }
+  // Message report — the mobile ChatSheets grammar: fixed 'other' reason,
+  // the message id as the evidence reference, deterministic idempotency
+  // key. Fire-and-acknowledge, no sheet.
+  const reportMessage = (m: Message) => {
+    void reportChatMessage(conversationId, m.id).then((ok) =>
+      toast.show(
+        ok
+          ? 'Report submitted. Thank you.'
+          : "Couldn't submit the report — try again",
+        ok ? 'success' : 'error',
+      ),
+    );
   };
 
+  // Forward — the sheet pick re-sends the message payload into the chosen
+  // conversation through the normal send edge (no forward endpoint).
+  const forwardPicked = (targetId: string) => {
+    const m = forwardTarget;
+    setForwardTarget(null);
+    if (!m) return;
+    forwardMessage(targetId, m)
+      .then(() => toast.show('Message forwarded', 'success'))
+      .catch(() => toast.show("Couldn't forward the message — try again", 'error'));
+  };
+
+  // Guests never reach the thread — the inbox is account-bound, so the
+  // sign-in surface replaces it rather than rendering fixture 'me' data.
+  if (isGuest) {
+    return (
+      <div className="flex h-full items-center justify-center bg-background">
+        <EmptyState
+          icon="chat"
+          title="Sign in to message"
+          subtitle="Messages and offers live on your account."
+          actionLabel="Sign in"
+          onAction={() => router.push('/auth')}
+        />
+      </div>
+    );
+  }
+
   if (isLoading) return <ChatSkeleton />;
+
+  if (isError) {
+    return (
+      <div className="flex h-full items-center justify-center bg-background">
+        <EmptyState
+          icon="alert"
+          title="Couldn't load this conversation"
+          subtitle="Check your connection and try again."
+          actionLabel="Try again"
+          onAction={() => void refetch()}
+        />
+      </div>
+    );
+  }
 
   if (!conversation) {
     return (
@@ -241,6 +825,7 @@ export function ChatPanel({ conversationId }: { conversationId: string }) {
 
   const title = conversationTitle(conversation);
   const members = memberCount(conversation);
+  const counterListing = counterTarget ? listingById(counterTarget.listingId) : undefined;
   // DM subtitle is a real presence signal; groups show the member count
   // (mobile ChatTopBar grammar — no presence on a group avatar).
   const subtitle = isGroup
@@ -255,7 +840,12 @@ export function ChatPanel({ conversationId }: { conversationId: string }) {
 
   const groups = groupByDay(matches);
   const lastMine = [...messages].reverse().find(isMine);
-  const lastMineReadId = lastMine?.readStatus === 'read' ? lastMine.id : undefined;
+  // Read receipts off (Settings → Messaging): the "Seen" caption never
+  // lands on own messages — the tick itself caps at delivered inside
+  // MessageReceipt, this gate suppresses the label everywhere
+  // (bubbles, offer cards, listing shares all key off lastMineReadId).
+  const lastMineReadId =
+    receiptsEnabled && lastMine?.readStatus === 'read' ? lastMine.id : undefined;
 
   // Composer gates — the info surface owns the toggles; the thread owns
   // the honest readout. A blocked counterparty gets an unblock control;
@@ -265,6 +855,33 @@ export function ChatPanel({ conversationId }: { conversationId: string }) {
       ? blockedUserIds.includes(conversation.participantId)
       : false;
   const groupReadOnly = isGroup && capabilities != null && !capabilities.canSendMessages;
+  const composerOpen = !counterpartyBlocked && !groupReadOnly;
+  // Reply only targets real messages — a pending optimistic id means
+  // nothing to the server, and tombstones/systems carry nothing to quote.
+  const replyable = (m: Message) =>
+    composerOpen && !isSystem(m) && !m.isDeleted && !m.id.startsWith('opt-');
+  // React/delete apply to any persisted message; pending optimistic ids
+  // mean nothing to the reactions/messages edges.
+  const actionable = (m: Message) =>
+    !isSystem(m) && !m.isDeleted && !m.id.startsWith('opt-');
+  // Edit is sender-only, text bodies only, inside the backend's 15-minute
+  // window — an unparseable timestamp honestly can't prove its age.
+  const editable = (m: Message) =>
+    isMine(m) &&
+    actionable(m) &&
+    Boolean(m.text) &&
+    !m.mediaUri &&
+    !isOffer(m) &&
+    m.type !== 'listing_share' &&
+    m.type !== 'voice' &&
+    m.type !== 'document' &&
+    !Number.isNaN(Date.parse(m.timestamp)) &&
+    Date.now() - Date.parse(m.timestamp) >= 0 &&
+    Date.now() - Date.parse(m.timestamp) < MESSAGE_EDIT_WINDOW_MS;
+
+  // The press-menu's message — resolved at render so a refetch that drops
+  // the message closes the menu instead of acting on a ghost.
+  const menuMessage = msgMenu ? messages.find((mm) => mm.id === msgMenu.id) : undefined;
 
   return (
     <div className="flex h-full min-w-0 flex-col bg-background">
@@ -286,7 +903,7 @@ export function ChatPanel({ conversationId }: { conversationId: string }) {
           <span className="relative shrink-0">
             {isGroup ? (
               <GroupAvatarMosaic
-                members={mosaicMembers(conversation)}
+                members={mosaicMembers(conversation, viewerId)}
                 size={40}
                 groupPhoto={conversation.avatar}
                 fallbackName={title}
@@ -316,13 +933,8 @@ export function ChatPanel({ conversationId }: { conversationId: string }) {
             {subtitle ? <p className="text-meta text-text-muted">{subtitle}</p> : null}
           </div>
         </Link>
-        {!isGroup ? (
-          <IconButton
-            name="phone"
-            aria-label="Start a call"
-            onClick={() => toast.show('Calling is coming soon', 'info')}
-          />
-        ) : null}
+        {/* No call surface exists — the phone control was removed rather
+            than toasting "coming soon" on an actionable affordance. */}
         <IconButton
           name="search"
           aria-label={searchOpen ? 'Close search' : 'Search in conversation'}
@@ -395,6 +1007,38 @@ export function ChatPanel({ conversationId }: { conversationId: string }) {
         </div>
       ) : null}
 
+      {/* Pinned message bar — group admins pin from the actions menu;
+          tapping scrolls to the message, the trailing control unpins. */}
+      {pinnedView ? (
+        <div className="flex shrink-0 items-center gap-2 border-b border-border-subtle bg-surface-alt px-4 py-2">
+          <Icon name="pin" size={14} className="shrink-0 text-text-muted" aria-hidden />
+          <button
+            type="button"
+            onClick={() => scrollToMessage(pinnedView.messageId)}
+            className="pressable min-w-0 flex-1 text-left"
+          >
+            <span className="block truncate text-meta text-text-secondary">
+              <span className="font-semibold text-text-primary">
+                {pinnedView.senderLabel}
+              </span>{' '}
+              {pinnedView.text}
+            </span>
+          </button>
+          {canPinMessage ? (
+            <IconButton
+              name="close"
+              size={14}
+              aria-label="Unpin message"
+              className="h-8 w-8 shrink-0"
+              onClick={() => {
+                const m = messageById.get(pinnedView.messageId) ?? pin?.message;
+                if (m) togglePin(m);
+              }}
+            />
+          ) : null}
+        </div>
+      ) : null}
+
       {/* Listing context card */}
       {conversation.listing ? (
         <div className="flex shrink-0 items-center gap-3 border-b border-border-subtle px-3 py-2.5 md:px-4">
@@ -426,8 +1070,51 @@ export function ChatPanel({ conversationId }: { conversationId: string }) {
         </div>
       ) : null}
 
-      {/* Message stream */}
-      <div ref={scrollRef} className="min-h-0 flex-1 overflow-y-auto px-3 py-4 md:px-4">
+      {/* In-thread safety prompt — rendered only when the detector fired
+          on incoming content; danger pins, caution dismisses. */}
+      {safetyWarning && safetyDismissed !== safetyWarning.level ? (
+        <ChatSafetyBanner
+          warning={safetyWarning}
+          onDismiss={
+            safetyWarning.dismissible
+              ? () => setSafetyDismissed(safetyWarning.level)
+              : undefined
+          }
+        />
+      ) : null}
+
+      {/* Message stream — the relative wrapper anchors the jump pill
+          without the pill taking part in scroll layout. */}
+      <div className="relative min-h-0 flex-1">
+        <div
+          ref={scrollRef}
+          onScroll={onStreamScroll}
+          className="h-full overflow-y-auto px-3 py-4 md:px-4"
+        >
+        {/* Older-history affordance — the button is the keyboard-explicit
+            path; scrolling to the top auto-loads too. An exhausted
+            history reads its end state once. */}
+        {history.hasMore || history.loading ? (
+          <div className="mb-1 flex justify-center">
+            <button
+              type="button"
+              onClick={loadOlder}
+              disabled={history.loading}
+              aria-live="polite"
+              className="pressable relative rounded-full border border-border-subtle bg-surface px-3.5 py-1.5 text-meta font-semibold text-text-secondary after:absolute after:-inset-y-2 after:content-[''] hover:text-text-primary disabled:opacity-60"
+            >
+              {history.loading
+                ? 'Loading…'
+                : history.error
+                  ? 'Couldn’t load — try again'
+                  : 'Load older messages'}
+            </button>
+          </div>
+        ) : history.older.length > 0 ? (
+          <p className="mb-1 text-center text-meta text-text-muted">
+            Beginning of conversation
+          </p>
+        ) : null}
         {searchQuery && matches.length === 0 ? (
           <p className="py-10 text-center text-body text-text-muted">
             No results for “{searchQuery}”
@@ -440,35 +1127,152 @@ export function ChatPanel({ conversationId }: { conversationId: string }) {
               ) : null}
               {g.messages.map((m, i) => {
                 const mine = isMine(m);
+                // Same-sender run — system rows and tombstones break the
+                // cluster; the divider sits above the anchored message.
+                const prev = g.messages[i - 1];
+                const next = g.messages[i + 1];
+                const hasPrev = !!prev && sameRun(prev, m);
+                const hasNext = !!next && sameRun(next, m);
+                const cluster: MessageCluster =
+                  !hasPrev && !hasNext
+                    ? 'single'
+                    : !hasPrev
+                      ? 'first'
+                      : !hasNext
+                        ? 'last'
+                        : 'middle';
+                const tight = cluster === 'middle' || cluster === 'last';
                 // Cluster-first incoming group message gets a sender label —
                 // the same name resolution the mobile GroupChatScreen uses.
-                const prev = g.messages[i - 1];
-                const clusterFirst = !prev || isSystem(prev) || prev.senderId !== m.senderId;
                 const senderLabel =
-                  isGroup && !mine && !isSystem(m) && clusterFirst
+                  isGroup && !mine && !isSystem(m) && !hasPrev
                     ? senderLabelFor(conversation, m.senderId)
                     : undefined;
-                return isOffer(m) ? (
-                  <OfferCard
+                const onReply = replyable(m) ? () => setReplyTarget(m) : undefined;
+                const onReplyPress = m.replyToMessageId
+                  ? () => scrollToMessage(m.replyToMessageId as string)
+                  : undefined;
+                // The actions menu opens on any persisted message, plus
+                // the two non-persisted edge cases the mobile grammar
+                // covers: a failed pending send (Retry / Discard — the
+                // only actions a message that never landed can offer) and
+                // a saved tombstone (Unsave — the backend still permits
+                // retracting a save on a deleted-for-everyone row).
+                const failed = failedIds.has(m.id);
+                const menuable =
+                  actionable(m) ||
+                  failed ||
+                  (m.isDeleted === true && threadActions.isSaved(m));
+                const openMenu = (x: number, y: number) =>
+                  setMsgMenu({ id: m.id, x, y });
+                const onReact = menuable
+                  ? (anchor: { x: number; y: number }) => openMenu(anchor.x, anchor.y)
+                  : undefined;
+                return (
+                  <div
                     key={m.id}
-                    message={m}
-                    mine={mine}
-                    showSeen={m.id === lastMineReadId}
-                    status={offerStatus[m.id] ?? m.offerStatus ?? 'pending'}
-                    highlight={searchQuery || undefined}
-                    onAccept={() => resolveOffer(m, 'accepted')}
-                    onDecline={() => resolveOffer(m, 'declined')}
-                    onCounter={() => toast.show('Send your counter-offer in the chat', 'info')}
-                  />
-                ) : (
-                  <MessageBubble
-                    key={m.id}
-                    message={m}
-                    mine={mine}
-                    showSeen={m.id === lastMineReadId}
-                    senderLabel={senderLabel}
-                    highlight={searchQuery || undefined}
-                  />
+                    data-mid={m.id}
+                    onContextMenu={
+                      menuable
+                        ? (e) => {
+                            // Touch long-press / right-click opens the
+                            // actions menu — the web analogue of the mobile
+                            // long-press sheet.
+                            e.preventDefault();
+                            openMenu(e.clientX, e.clientY);
+                          }
+                        : undefined
+                    }
+                    className={`-mx-2 rounded-xl px-2 transition-colors duration-300 ${
+                      flashId === m.id ? 'bg-brand-subtle' : ''
+                    }`}
+                  >
+                    {m.id === unreadAnchor.current.id ? <NewMessagesDivider /> : null}
+                    {m.isDeleted ? (
+                      <DeletedMessageTombstone mine={mine} senderLabel={senderLabel} tight={tight} />
+                    ) : isOffer(m) ? (
+                      (() => {
+                        // The standing record drives the card — effective
+                        // status, amount and the legal action set all come
+                        // from it; an unresolvable message renders read-only.
+                        // `via` keeps the provenance: a listing-fallback
+                        // card is labelled the standing offer, not the
+                        // offer this message described.
+                        const resolution = offerResolutionForMessage(
+                          m,
+                          conversation,
+                          chatOffers,
+                        );
+                        const offer = resolution.offer;
+                        return (
+                          <OfferCard
+                            message={m}
+                            mine={mine}
+                            offer={offer}
+                            standing={resolution.via === 'listing'}
+                            showSeen={m.id === lastMineReadId}
+                            status={
+                              offer
+                                ? effectiveOfferStatus(offer, nowMs)
+                                : (m.offerStatus ?? 'pending')
+                            }
+                            actions={offer ? resolveOfferActions(offer, viewerId, nowMs) : []}
+                            ownMove={offer ? offer.offeredByUserId === viewerId : mine}
+                            highlight={searchQuery || undefined}
+                            onReply={onReply}
+                            onReact={onReact}
+                            tight={tight}
+                            onAction={(action) => {
+                              if (!offer) return;
+                              if (action === 'counter') setCounterTarget(offer);
+                              else respondToOffer(offer, action);
+                            }}
+                          />
+                        );
+                      })()
+                    ) : m.type === 'listing_share' && m.listing ? (
+                      <ListingShareCard
+                        message={m}
+                        mine={mine}
+                        showSeen={m.id === lastMineReadId}
+                        senderLabel={senderLabel}
+                        onReply={onReply}
+                        onReact={onReact}
+                        tight={tight}
+                      />
+                    ) : (
+                      <MessageBubble
+                        message={m}
+                        mine={mine}
+                        failed={failed}
+                        showSeen={m.id === lastMineReadId}
+                        senderLabel={senderLabel}
+                        highlight={searchQuery || undefined}
+                        replyTo={replyInfoFor(m)}
+                        onReplyPress={onReplyPress}
+                        onReply={onReply}
+                        onReact={onReact}
+                        onMediaPress={m.mediaUri ? openMediaFor : undefined}
+                        onToggleReaction={
+                          menuable
+                            ? (emoji) => threadActions.toggleReaction(m, emoji)
+                            : undefined
+                        }
+                        cluster={cluster}
+                      />
+                    )}
+                    {failedIds.has(m.id) ? (
+                      <div className={`flex ${mine ? 'justify-end' : 'justify-start'}`}>
+                        <button
+                          type="button"
+                          onClick={(e) => openMenu(e.clientX, e.clientY)}
+                          className="pressable mt-0.5 flex items-center gap-1 text-meta text-danger-text"
+                        >
+                          <Icon name="alert" size={13} aria-hidden /> Not delivered
+                        </button>
+                      </div>
+                    ) : null}
+                  </div>
                 );
               })}
             </div>
@@ -479,7 +1283,134 @@ export function ChatPanel({ conversationId }: { conversationId: string }) {
             Say hello to {title}.
           </p>
         ) : null}
+        </div>
+
+        {/* Jump-to-latest — appears only when arrivals land while the
+            viewer is reading up; pressing it smooth-scrolls to the tail.
+            The polite live region announces it without moving focus, and
+            the overlay never blocks or shifts the stream. */}
+        <div
+          aria-live="polite"
+          className="pointer-events-none absolute inset-x-0 bottom-3 flex justify-center"
+        >
+          {newBelow ? (
+            <button
+              type="button"
+              onClick={jumpToLatest}
+              className="pressable pointer-events-auto flex items-center gap-1.5 rounded-full bg-brand px-3.5 py-2 text-meta font-semibold text-text-inverse shadow-lg"
+            >
+              <Icon name="chevronDown" size={14} aria-hidden />
+              New messages
+            </button>
+          ) : null}
+        </div>
       </div>
+
+      {msgMenu && menuMessage
+        ? (() => {
+            const menuFailed = failedIds.has(menuMessage.id);
+            return (
+              <MessageActionsMenu
+                anchor={{ x: msgMenu.x, y: msgMenu.y }}
+                reactions={
+                  menuFailed
+                    ? undefined
+                    : QUICK_REACTIONS.map((emoji) => ({
+                        emoji,
+                        reactedByMe: threadActions.hasReacted(menuMessage, emoji),
+                      }))
+                }
+                onReact={
+                  menuFailed
+                    ? undefined
+                    : (emoji) => threadActions.toggleReaction(menuMessage, emoji)
+                }
+                onRetry={menuFailed ? () => retryPending(menuMessage) : undefined}
+                onRemove={menuFailed ? () => discardPending(menuMessage) : undefined}
+                onReply={
+                  menuFailed || !replyable(menuMessage)
+                    ? undefined
+                    : () => setReplyTarget(menuMessage)
+                }
+                onForward={
+                  menuFailed || !forwardableMessage(menuMessage)
+                    ? undefined
+                    : () => setForwardTarget(menuMessage)
+                }
+                onPin={
+                  menuFailed || !canPinMessage || !actionable(menuMessage)
+                    ? undefined
+                    : () => togglePin(menuMessage)
+                }
+                pinned={pin?.messageId === menuMessage.id}
+                hasReacted={(emoji) => threadActions.hasReacted(menuMessage, emoji)}
+                saved={threadActions.isSavedByMe(menuMessage)}
+                onSave={
+                  // Tombstones offer only Unsave (the mobile grammar —
+                  // retracting a save is the sole action a deleted row
+                  // can take); persisted messages always offer the save
+                  // toggle.
+                  actionable(menuMessage) ||
+                  (menuMessage.isDeleted === true && threadActions.isSaved(menuMessage))
+                    ? () => threadActions.toggleSave(menuMessage)
+                    : undefined
+                }
+                onReport={
+                  menuFailed || isMine(menuMessage) || isSystem(menuMessage)
+                    ? undefined
+                    : () => reportMessage(menuMessage)
+                }
+                onCopy={
+                  menuFailed || !menuMessage.text
+                    ? undefined
+                    : () => void copyMessageText(menuMessage.text as string)
+                }
+                onEdit={
+                  !menuFailed && editable(menuMessage)
+                    ? () => {
+                        // One composer staging at a time — a staged edit
+                        // replaces a staged reply (the reply bar would hide
+                        // behind the edit bar anyway).
+                        setReplyTarget(null);
+                        setEditing(menuMessage);
+                      }
+                    : undefined
+                }
+                onDeleteForMe={
+                  menuFailed
+                    ? undefined
+                    : () =>
+                        setConfirm({
+                          open: true,
+                          title: 'Delete for me?',
+                          message:
+                            'The message is removed from your view — everyone else in the conversation still sees it.',
+                          confirmLabel: 'Delete for me',
+                          variant: 'danger',
+                          onConfirm: () =>
+                            threadActions.deleteMessage(menuMessage.id, 'me'),
+                        })
+                }
+                onDeleteForEveryone={
+                  !menuFailed && isMine(menuMessage)
+                    ? () =>
+                        setConfirm({
+                          open: true,
+                          title: 'Delete for everyone?',
+                          message:
+                            'The message is removed for all participants and can’t be undone.',
+                          confirmLabel: 'Delete for everyone',
+                          variant: 'danger',
+                          onConfirm: () =>
+                            threadActions.deleteMessage(menuMessage.id, 'everyone'),
+                        })
+                    : undefined
+                }
+                onClose={() => setMsgMenu(null)}
+              />
+            );
+          })()
+        : null}
 
       {counterpartyBlocked ? (
         <div className="flex shrink-0 items-center justify-between gap-3 border-t border-border-subtle px-4 py-3">
@@ -499,8 +1430,64 @@ export function ChatPanel({ conversationId }: { conversationId: string }) {
           Only admins can send messages in this group.
         </p>
       ) : (
-        <Composer sending={sendMessage.isPending} onSend={send} />
+        <Composer
+          threadId={conversationId}
+          sending={sendMessage.isPending}
+          onSend={send}
+          replyTo={
+            replyTarget
+              ? { senderName: senderNameFor(replyTarget), text: previewTextFor(replyTarget) }
+              : null
+          }
+          onCancelReply={() => setReplyTarget(null)}
+          editTarget={editing ? { id: editing.id, text: editing.text ?? '' } : null}
+          onEditSubmit={(id, text) => {
+            threadActions.editMessage(id, text);
+            setEditing(null);
+          }}
+          onCancelEdit={() => setEditing(null)}
+        />
       )}
+
+      <ConfirmSheet state={confirm} onClose={() => setConfirm(CLOSED_CONFIRM)} />
+
+      {/* Forward picker — the message payload re-sends into the chosen
+          conversation through the normal send edge. */}
+      <ForwardSheet
+        open={forwardTarget !== null}
+        onClose={() => setForwardTarget(null)}
+        targets={(allConversations ?? []).filter((c) => c.id !== conversationId)}
+        onSelect={forwardPicked}
+      />
+
+      {/* Inline media viewer — the same MediaLightbox the info panel's
+          shared-media grid opens; arrows page the whole thread set. */}
+      {mediaIndex !== null ? (
+        <MediaLightbox
+          items={mediaItems}
+          index={mediaIndex}
+          onIndexChange={setMediaIndex}
+          onClose={() => setMediaIndex(null)}
+        />
+      ) : null}
+
+      {/* Counter sheet — reuses the PDP / /offers offer grammar against
+          the standing record; the send goes through the same respond path. */}
+      {counterTarget && counterListing ? (
+        <OfferSheet
+          open
+          onClose={() => setCounterTarget(null)}
+          listing={counterListing}
+          counterTo={{
+            amount: counterTarget.amount,
+            label: counterTarget.counterRound > 0 ? 'Their counter' : 'Their offer',
+          }}
+          onSend={(amount, expiryHours) => {
+            sendCounter(counterTarget, amount, expiryHours);
+            setCounterTarget(null);
+          }}
+        />
+      ) : null}
     </div>
   );
 }

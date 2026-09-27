@@ -129,14 +129,17 @@ export function BagSellerGroup({
 }) {
   const username = group.seller?.username ?? null;
   const missing = Math.max(0, BUNDLE_RULE.minItems - group.items.length);
-  // Only dangle the "add one more" link when the seller actually has
-  // other active stock — a hint to an empty shelf isn't one.
+  // Only dangle the "add more" link when the seller actually has enough
+  // stock to reach the tier — a hint to an empty shelf isn't one.
   const hasMoreStock =
-    missing === 1 &&
-    bundleSuggestions(group.sellerId, new Set(group.items.map((i) => i.id)), 1)
-      .length > 0;
+    missing > 0 &&
+    bundleSuggestions(
+      group.sellerId,
+      new Set(group.items.map((i) => i.id)),
+      missing,
+    ).length >= missing;
   const hintHref = username
-    ? `/u/${username}`
+    ? `/u/${username}/bundle`
     : `/item/${group.items[0]?.id ?? ''}#bundle`;
 
   return (
@@ -193,7 +196,7 @@ export function BagSellerGroup({
             href={hintHref}
             className="pressable inline-flex items-center gap-1 font-medium text-text-secondary hover:text-text-primary"
           >
-            Add 1 more for {pctLabel} off
+            Add {missing} more for {pctLabel} off
             <Icon name="forward" size={13} />
           </Link>
         </p>

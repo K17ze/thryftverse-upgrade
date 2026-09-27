@@ -28,11 +28,12 @@ import { useImportDraftActions, useImportDrafts } from './useImportDrafts';
 import { StartStep } from './StartStep';
 import { ConsentStep } from './ConsentStep';
 import { ReviewStep } from './ReviewStep';
+import { ItemStep } from './ItemStep';
 import { ProgressStep } from './ProgressStep';
 import { SummaryStep } from './SummaryStep';
 import { DraftsView } from './DraftsView';
 
-type Step = 'start' | 'consent' | 'review' | 'progress' | 'summary' | 'drafts';
+type Step = 'start' | 'consent' | 'review' | 'item' | 'progress' | 'summary' | 'drafts';
 
 export function CatalogImportFlow() {
   const router = useRouter();
@@ -45,6 +46,8 @@ export function CatalogImportFlow() {
   const [batch, setBatch] = useState<ImportBatch | null>(null);
   const [rows, setRows] = useState<ImportRow[]>([]);
   const [outcome, setOutcome] = useState<ImportOutcome | null>(null);
+  /** Index into `rows` while the per-item editor is open. */
+  const [inspectIndex, setInspectIndex] = useState(0);
 
   const restart = useCallback(() => {
     setBatch(null);
@@ -91,6 +94,7 @@ export function CatalogImportFlow() {
   if (step === 'start') onBack = () => router.back();
   else if (step === 'consent') onBack = () => setStep('start');
   else if (step === 'review') onBack = () => setStep('consent');
+  else if (step === 'item') onBack = () => setStep('review');
   else if (step === 'summary') onBack = () => router.push('/seller-hub');
   else if (step === 'drafts') onBack = () => setStep(outcome ? 'summary' : 'start');
   // Progress gets no back affordance — the sequence is seconds and commits
@@ -121,7 +125,24 @@ export function CatalogImportFlow() {
         />
       ) : null}
       {step === 'review' ? (
-        <ReviewStep rows={rows} onRowsChange={setRows} onConfirm={handleConfirm} />
+        <ReviewStep
+          rows={rows}
+          onRowsChange={setRows}
+          onConfirm={handleConfirm}
+          onInspect={(row) => {
+            setInspectIndex(rows.findIndex((r) => r.id === row.id));
+            setStep('item');
+          }}
+        />
+      ) : null}
+      {step === 'item' ? (
+        <ItemStep
+          rows={rows}
+          index={inspectIndex}
+          onRowsChange={setRows}
+          onIndexChange={setInspectIndex}
+          onBack={() => setStep('review')}
+        />
       ) : null}
       {step === 'progress' ? (
         <ProgressStep source={batch?.source ?? 'csv'} onDone={handleProgressDone} />

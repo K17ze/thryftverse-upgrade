@@ -9,7 +9,26 @@
 
 import { Icon } from '@/components/ui/Icon';
 import type { AuctionLifecycle, CountdownUrgency } from '@/lib/contracts/auction';
-import { formatClock } from '@/lib/data/fixtures-auctions';
+
+/** Sentence grammar — "2d 5h" / "2h 14m" / "12m 08s" — the web port of
+ *  the native formatCountdownSentence
+ *  (frontend/src/utils/auctionDetailLogic.ts:1203). Zero-padded seconds
+ *  keep the per-second tick from shifting layout. */
+function formatCountdownSentence(ms: number): string {
+  if (ms <= 0) return 'Ended';
+  const totalSeconds = Math.floor(ms / 1000);
+  const days = Math.floor(totalSeconds / 86_400);
+  const hours = Math.floor((totalSeconds % 86_400) / 3_600);
+  const minutes = Math.floor((totalSeconds % 3_600) / 60);
+  const seconds = totalSeconds % 60;
+  if (days > 0) return `${days}d ${hours}h`;
+  if (hours > 0) return `${hours}h ${minutes}m`;
+  return `${minutes}m ${String(seconds).padStart(2, '0')}s`;
+}
+
+/** Under an hour to the hammer — the native countdown bar's danger
+ *  threshold (AuctionCountdownBar.tsx:26). */
+const URGENT_MS = 60 * 60_000;
 
 const CHIP_TONE: Record<CountdownUrgency, string> = {
   normal: 'text-scrim-text-primary',
@@ -35,8 +54,10 @@ export function AuctionCountdownChip({
 }
 
 /**
- * Detail clock — ticking H:MM:SS. The visible digits are aria-hidden; the
- * sr-only live region re-renders only when the whole-minute value changes.
+ * Detail clock — sentence grammar ("Ends in 2h 14m" / "12m 08s"), matching
+ * the native countdown bar. A live clock under an hour turns danger-red;
+ * the visible digits are aria-hidden while the sr-only live region
+ * re-renders only when the whole-minute value changes.
  */
 export function AuctionCountdownClock({
   ms,
@@ -47,6 +68,7 @@ export function AuctionCountdownClock({
 }) {
   const ended = lifecycle === 'ended';
   const minutes = Math.max(1, Math.ceil(ms / 60_000));
+  const urgent = lifecycle === 'live' && !ended && ms > 0 && ms < URGENT_MS;
 
   return (
     <div className="flex items-baseline gap-2" role="timer">
@@ -56,16 +78,13 @@ export function AuctionCountdownClock({
       <span
         aria-hidden
         className={`tnum text-price-hero font-bold leading-none ${
-          ended ? 'text-text-muted' : 'text-text-primary'
+          ended ? 'text-text-muted' : urgent ? 'text-danger-text' : 'text-text-primary'
         }`}
       >
-        {ended ? 'Ended' : formatClock(ms)}
+        {ended
+          ? 'Ended'
+          : `${lifecycle === 'live' ? 'Ends in' : 'Starts in'} ${formatCountdownSentence(ms)}`}
       </span>
-      {!ended ? (
-        <span className="text-meta font-medium uppercase tracking-wide text-text-muted">
-          {lifecycle === 'live' ? 'left' : 'to start'}
-        </span>
-      ) : null}
     </div>
   );
 }

@@ -76,13 +76,16 @@ export function OutfitCard({ outfit, onDelete }: OutfitCardProps) {
         </p>
       </Link>
       {onDelete ? (
+        /* 44px hit area, restrained glyph — drop-scrim legibility on media,
+           no chrome circle (ProductTile/EditableTile grammar). quick-actions
+           keeps it visible on touch, hover/focus-gated on pointer devices. */
         <button
           type="button"
           onClick={() => onDelete(outfit)}
           aria-label={`Delete outfit ${outfit.name}`}
-          className="pressable absolute left-2 top-2 z-elevated flex h-8 w-8 items-center justify-center rounded-full bg-overlay text-scrim-text-primary opacity-0 transition-opacity focus-visible:opacity-100 group-hover:opacity-100"
+          className="quick-actions pressable absolute left-0 top-0 z-elevated flex h-11 w-11 items-center justify-center transition-opacity"
         >
-          <Icon name="trash" size={15} />
+          <Icon name="trash" size={17} className="text-scrim-text-primary drop-scrim" />
         </button>
       ) : null}
     </div>

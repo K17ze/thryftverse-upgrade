@@ -11,11 +11,14 @@
 import { useEffect, useRef, useState, type FormEvent } from 'react';
 import { Icon } from '@/components/ui/Icon';
 import type { LiveChatMessage } from './useLiveChat';
+import type { PinnedChatNote } from './livePins';
 
 interface LiveChatRailProps {
   messages: LiveChatMessage[];
   /** null → read-only transcript (replays), no composer. */
   onSend: ((text: string) => void) | null;
+  /** A chat line the host pinned for the room — rendered above the feed. */
+  pinned?: PinnedChatNote | null;
   className?: string;
   /** Sizing for the scroll area — e.g. a max-height bound per placement. */
   listClassName?: string;
@@ -24,6 +27,7 @@ interface LiveChatRailProps {
 export function LiveChatRail({
   messages,
   onSend,
+  pinned = null,
   className = '',
   listClassName = '',
 }: LiveChatRailProps) {
@@ -50,6 +54,18 @@ export function LiveChatRail({
 
   return (
     <div className={`flex min-h-0 flex-col ${className}`}>
+      {/* Host-pinned note — Whatnot grammar; only renders when the host
+          actually pinned a line this session. */}
+      {pinned ? (
+        <div className="mb-2 flex items-start gap-2 rounded-md bg-white/10 px-3 py-2">
+          <Icon name="pin" filled size={13} className="mt-0.5 shrink-0 text-scrim-text-secondary" />
+          <p className="min-w-0 flex-1 text-caption text-scrim-text-primary">
+            <span className="font-semibold">{pinned.user}</span>
+            <span className="text-scrim-text-secondary">{' · '}</span>
+            {pinned.text}
+          </p>
+        </div>
+      ) : null}
       <div
         ref={scrollRef}
         role="log"
@@ -67,14 +83,14 @@ export function LiveChatRail({
               key={m.id}
               className="border-b border-white/10 py-1.5 text-body leading-snug last:border-b-0"
             >
-              {m.seller ? (
-                <span className="text-label font-bold uppercase tracking-[0.06em] text-warning-text">
-                  Seller ·{' '}
-                </span>
-              ) : null}
               <span className="font-semibold text-scrim-text-secondary">
                 {m.mine ? 'you' : m.user}
               </span>
+              {m.seller ? (
+                <span className="ml-1.5 rounded-sm bg-white/15 px-1 py-px text-micro font-bold uppercase tracking-[0.08em] text-scrim-text-primary">
+                  Host
+                </span>
+              ) : null}
               <span className="text-scrim-text-tertiary">{'  '}</span>
               <span className="text-scrim-text-primary">{m.text}</span>
             </p>

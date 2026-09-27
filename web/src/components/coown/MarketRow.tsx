@@ -2,7 +2,7 @@
 
 import Link from 'next/link';
 import { Icon } from '@/components/ui/Icon';
-import { priceWindow } from '@/lib/data/fixtures-coown';
+import { usePriceHistory } from '@/lib/hooks/coown-queries';
 import type { CoOwnAsset } from '@/lib/contracts/coown';
 import { formatCount } from '@/lib/utils/format';
 import { AssetThumb } from './AssetThumb';
@@ -59,6 +59,36 @@ function WatchStar({
   );
 }
 
+/**
+ * Per-row 7d sparkline — the query layer owns the data, so live mode reads
+ * the price-history endpoint rather than fixtures. Until the series lands
+ * the cell stays empty: an absent sparkline beats a fabricated one.
+ */
+function MarketSparkline({
+  assetId,
+  title,
+  width,
+  height,
+}: {
+  assetId: string;
+  title: string;
+  width: number;
+  height: number;
+}) {
+  const { data } = usePriceHistory(assetId, '1W');
+  if (!data || data.length < 2) {
+    return <span className="inline-block" style={{ width, height }} aria-hidden="true" />;
+  }
+  return (
+    <Sparkline
+      candles={data}
+      width={width}
+      height={height}
+      label={`${title} 7-day trend`}
+    />
+  );
+}
+
 export function MarketRow({
   asset,
   watched,
@@ -68,7 +98,6 @@ export function MarketRow({
   watched: boolean;
   onToggleWatch: (assetId: string) => void;
 }) {
-  const week = priceWindow(asset.id, '1W');
   const tier = asset.issuer.verificationTier;
 
   return (
@@ -106,7 +135,7 @@ export function MarketRow({
             <p className="text-body-emphasis text-text-primary tnum">{gbp(asset.unitPriceGbp)}</p>
             <MovePill pct={asset.marketMovePct24h} className="mt-1" />
           </div>
-          <Sparkline candles={week} width={96} height={28} />
+          <MarketSparkline assetId={asset.id} title={asset.title} width={96} height={28} />
         </div>
         <div className="mt-3 flex items-center gap-3">
           <AllocationMeter pct={pctAllocated(asset)} />
@@ -127,6 +156,9 @@ export function MarketRow({
               {tier ? (
                 <Icon name="verified" size={13} className="shrink-0 text-commerce-trust" aria-label={tier} />
               ) : null}
+              {/* Halted/closed grammar — same tag the mobile card shows on
+                  every row, rendered inline at desktop density. */}
+              <LifecycleTag asset={asset} />
             </p>
           </div>
         </div>
@@ -134,7 +166,7 @@ export function MarketRow({
           <p className="text-body-emphasis text-text-primary tnum">{gbp(asset.unitPriceGbp)}</p>
           <MovePill pct={asset.marketMovePct24h} className="mt-1" />
         </div>
-        <Sparkline candles={week} width={76} height={26} />
+        <MarketSparkline assetId={asset.id} title={asset.title} width={76} height={26} />
         <p className="hidden text-body text-text-secondary tnum lg:block">{formatCount(asset.holders)}</p>
         <p className="text-body text-text-secondary tnum">{gbpCompact(asset.volume24hGbp)}</p>
         <div className="hidden lg:block">

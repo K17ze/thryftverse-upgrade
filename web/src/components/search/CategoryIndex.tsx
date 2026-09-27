@@ -10,16 +10,11 @@
 import { useState } from 'react';
 import Link from 'next/link';
 import { Icon } from '@/components/ui/Icon';
-import { CATEGORIES, LISTINGS } from '@/lib/data/fixtures';
-import { subcategoriesFor, subcategoryCount } from './taxonomy';
+import { CATEGORIES } from '@/lib/data/fixtures';
+import { CATEGORY_DIRECTORY, subcategoriesFor, subcategoryCount } from './taxonomy';
 
-const ITEM_COUNTS = (() => {
-  const counts = new Map<string, number>();
-  for (const l of LISTINGS) {
-    counts.set(l.category, (counts.get(l.category) ?? 0) + 1);
-  }
-  return counts;
-})();
+/** Live counts — the same fixture truth the directory tiles publish. */
+const ITEM_COUNTS = new Map(CATEGORY_DIRECTORY.map((c) => [c.slug, c.count]));
 
 export function CategoryIndex() {
   const [openSlug, setOpenSlug] = useState<string | null>(null);

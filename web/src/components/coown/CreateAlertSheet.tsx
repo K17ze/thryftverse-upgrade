@@ -28,6 +28,12 @@ export function CreateAlertSheet({
 
   const target = Number(targetText);
   const valid = Number.isFinite(target) && target > 0;
+  // Already crossed? Say so honestly — it fires on the next price check.
+  const inTheMoney =
+    valid &&
+    (direction === 'above'
+      ? asset.unitPriceGbp >= target
+      : asset.unitPriceGbp <= target);
 
   const submit = (e: React.FormEvent) => {
     e.preventDefault();
@@ -43,7 +49,7 @@ export function CreateAlertSheet({
   return (
     <form onSubmit={submit} className="p-5" aria-label={`Price alert for ${asset.title}`}>
       <p className="text-body text-text-secondary">
-        Saved to this device — triggers when the last-trade price{' '}
+        Evaluates on this device — fires when the last-trade price{' '}
         {direction === 'above' ? 'rises above' : 'drops below'} your target.
       </p>
 
@@ -85,7 +91,7 @@ export function CreateAlertSheet({
                     : 'border-border-subtle text-text-secondary hover:text-text-primary'
                 }`}
               >
-                <Icon name={up ? 'arrowUp' : 'chevronDown'} size={16} />
+                <Icon name={up ? 'chevronUp' : 'chevronDown'} size={16} />
                 {up ? 'Above' : 'Below'}
               </button>
             );
@@ -111,6 +117,11 @@ export function CreateAlertSheet({
           placeholder="e.g. 145.00"
           className="mt-2 h-11 w-full rounded-lg bg-input px-3 text-body-emphasis text-input-text tnum outline-none focus:ring-2 focus:ring-text-primary"
         />
+        {inTheMoney ? (
+          <p className="mt-2 text-meta text-text-muted" role="status">
+            The last-trade price is already {direction === 'above' ? 'at or above' : 'at or below'} that target — it fires on the next price check.
+          </p>
+        ) : null}
       </div>
 
       <div className="mt-6 flex gap-2">

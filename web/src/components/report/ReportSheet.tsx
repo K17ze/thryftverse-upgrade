@@ -10,9 +10,11 @@
 import { useEffect, useRef, useState } from 'react';
 import { Button } from '@/components/ui/Button';
 import { Sheet } from '@/components/ui/Sheet';
+import { useToast } from '@/components/ui/Toast';
+import { useSupportActions } from '@/components/support/useSupportTickets';
 import {
   MAX_REPORT_EVIDENCE,
-  newReportReference,
+  REPORT_REASONS,
   reportTitleFor,
   type EvidenceItem,
   type ReportReason,
@@ -32,12 +34,14 @@ export function ReportSheet({ open, onClose, target }: ReportSheetProps) {
   const [reason, setReason] = useState<ReportReason | null>(null);
   const [details, setDetails] = useState('');
   const [evidence, setEvidence] = useState<EvidenceItem[]>([]);
+  const { createTicket } = useSupportActions();
+  const toast = useToast();
   const [sending, setSending] = useState(false);
   const [reportId, setReportId] = useState<string | null>(null);
+  const [ticketId, setTicketId] = useState<string | null>(null);
   const [submittedAt, setSubmittedAt] = useState<string | null>(null);
 
   const objectUrlsRef = useRef<Set<string>>(new Set());
-  const timerRef = useRef<number | null>(null);
 
   const done = reportId != null;
   const canSubmit = reason != null && !sending;
@@ -50,20 +54,17 @@ export function ReportSheet({ open, onClose, target }: ReportSheetProps) {
     setEvidence([]);
     setSending(false);
     setReportId(null);
+    setTicketId(null);
     setSubmittedAt(null);
   }, [open]);
 
   // Evidence previews are session object URLs — release them when the
-  // sheet closes or unmounts, and cancel a pending staged send.
+  // sheet closes or unmounts.
   useEffect(() => {
     const urls = objectUrlsRef.current;
     return () => {
       urls.forEach((uri) => URL.revokeObjectURL(uri));
       urls.clear();
-      if (timerRef.current != null) {
-        window.clearTimeout(timerRef.current);
-        timerRef.current = null;
-      }
     };
   }, [open]);
 
@@ -93,20 +94,37 @@ export function ReportSheet({ open, onClose, target }: ReportSheetProps) {
     });
   };
 
-  const submit = () => {
-    if (!canSubmit) return;
+  const submit = async () => {
+    if (!canSubmit || !reason) return;
     setSending(true);
-    // Staged send — the receipt lands only after the request completes, so
-    // the success view is an honest receipt, not an optimistic claim.
-    timerRef.current = window.setTimeout(() => {
-      timerRef.current = null;
-      setReportId(newReportReference());
+    const reasonLabel =
+      REPORT_REASONS.find((r) => r.key === reason)?.label ?? 'Report';
+    try {
+      // A real support case — the ref on the receipt is the case thread's,
+      // and /support/[id] holds the thread for follow-up.
+      const ticket = await createTicket({
+        topicId: reason === 'counterfeit' ? 'verification' : 'other',
+        orderRef: null,
+        message:
+          `${reportTitleFor(target.type)} — ${reasonLabel}` +
+          (target.label ? ` · ${target.label}` : '') +
+          ` (${target.type} ${target.id})` +
+          (details.trim() ? ` — ${details.trim()}` : '') +
+          (evidence.length
+            ? ` [${evidence.length} attachment(s) uploaded by reporter]`
+            : ''),
+      });
+      setReportId(ticket.ref ?? ticket.id.toUpperCase());
+      setTicketId(ticket.id);
       setSubmittedAt(
         new Date().toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' }),
       );
       setEvidence((prev) => prev.map((e) => ({ ...e, state: 'submitted' })));
+    } catch {
+      toast.show('Could not send the report — try again.', 'error');
+    } finally {
       setSending(false);
-    }, 700);
+    }
   };
 
   return (
@@ -116,6 +134,7 @@ export function ReportSheet({ open, onClose, target }: ReportSheetProps) {
           reportId={reportId}
           submittedAt={submittedAt}
           evidenceItems={evidence}
+          caseHref={ticketId ? `/support/${ticketId}` : undefined}
           onDone={onClose}
         />
       ) : (
@@ -151,7 +170,7 @@ export function ReportSheet({ open, onClose, target }: ReportSheetProps) {
             size="lg"
             fullWidth
             disabled={!canSubmit}
-            onClick={submit}
+            onClick={() => void submit()}
             className="mt-5"
           >
             {sending ? 'Sending…' : 'Send report'}

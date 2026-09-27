@@ -69,7 +69,7 @@ export function OwnershipTab({
         </ul>
         <p className="mt-4 text-meta text-text-secondary tnum">
           {asset.holders} {asset.holders === 1 ? 'holder' : 'holders'} ·{' '}
-          {position
+          {position && position.units > 0
             ? `you hold ${position.units} ${position.units === 1 ? 'unit' : 'units'} at ${gbp(position.avgEntryPriceGbp)} avg`
             : 'you hold no units yet'}
         </p>

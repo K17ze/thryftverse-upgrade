@@ -12,6 +12,7 @@ import {
   USER_COLLECTION_SEED,
   type UserCollection,
 } from '@/lib/data/fixtures-collections';
+import { patchCollectionFixture } from '@/components/profile/fixtures';
 import { DATA_MODE } from '@/lib/api/client';
 import * as collectionsService from '@/lib/api/services/collections';
 
@@ -38,10 +39,11 @@ async function fetchCollections(): Promise<UserCollection[]> {
 
 /** Session-scoped collection list — create/update persists until reload
  *  (fixture) or until the backend row changes (live). */
-export function useUserCollections() {
+export function useUserCollections(opts?: { enabled?: boolean }) {
   return useQuery({
     queryKey: COLLECTIONS_KEY,
     queryFn: fetchCollections,
+    enabled: opts?.enabled,
     staleTime: DATA_MODE === 'live' ? undefined : Infinity,
     gcTime: DATA_MODE === 'live' ? undefined : Infinity,
   });
@@ -50,6 +52,12 @@ export function useUserCollections() {
 export interface NewCollectionInput {
   name: string;
   isPrivate: boolean;
+}
+
+export interface CollectionPatch {
+  name?: string;
+  description?: string | null;
+  isPrivate?: boolean;
 }
 
 /** Collection mutations — live mode posts to /collections and invalidates;
@@ -96,6 +104,52 @@ export function useCollectionActions() {
       // Keep /collection/[id] + the saved boards grid able to resolve it.
       ensureCollectionResolvable(collection);
       return collection;
+    },
+
+    /** PATCH /collections/:id — name/description/isPrivate are the writable
+     *  fields. Fixture mode patches the session cache and the resolvable
+     *  fixture rows so every board surface agrees for the session. */
+    updateCollection: (
+      id: string,
+      patch: CollectionPatch,
+    ): Promise<UserCollection | null> | UserCollection | null => {
+      const apply = (c: UserCollection): UserCollection => ({
+        ...c,
+        name: patch.name !== undefined ? patch.name.trim() : c.name,
+        description: patch.description !== undefined ? patch.description : c.description,
+        isPrivate: patch.isPrivate !== undefined ? patch.isPrivate : c.isPrivate,
+        updatedAt: new Date().toISOString(),
+      });
+      if (DATA_MODE === 'live') {
+        return collectionsService
+          .updateCollection(id, patch)
+          .then((updated) => {
+            void queryClient.invalidateQueries({ queryKey: COLLECTIONS_KEY });
+            return apply({
+              id: updated.id,
+              name: updated.name,
+              description: updated.description,
+              isPrivate: updated.isPrivate,
+              itemIds: updated.itemIds,
+              createdAt: updated.createdAt,
+              updatedAt: updated.updatedAt,
+            });
+          })
+          .catch(() => null);
+      }
+      update((collections) => collections.map((c) => (c.id === id ? apply(c) : c)));
+      const seed = USER_COLLECTION_SEED.find((c) => c.id === id);
+      if (seed) Object.assign(seed, apply(seed));
+      // The detail route + profile boards resolve through the identity
+      // fixture arrays — keep them in step (same posture as delete).
+      patchCollectionFixture(id, {
+        title: patch.name?.trim(),
+        isPrivate: patch.isPrivate,
+      });
+      return (
+        queryClient.getQueryData<UserCollection[]>(COLLECTIONS_KEY)?.find((c) => c.id === id) ??
+        (seed ? apply(seed) : null)
+      );
     },
   };
 }

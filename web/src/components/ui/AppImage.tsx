@@ -7,8 +7,12 @@
  */
 
 import Image from 'next/image';
-import { useState } from 'react';
-import { focalPointToObjectPosition, isUsableUri } from '@/lib/utils/media';
+import { useEffect, useState } from 'react';
+import {
+  focalPointToObjectPosition,
+  isLocalMediaUri,
+  isUsableUri,
+} from '@/lib/utils/media';
 import { Icon, type AppIconName } from './Icon';
 
 interface AppImageProps {
@@ -47,7 +51,16 @@ export function AppImage({
 }: AppImageProps) {
   const [failed, setFailed] = useState(false);
   const [loaded, setLoaded] = useState(false);
+
+  // A new src invalidates the previous load/fail state — without this a
+  // failed URI sticks the fallback even after a valid src arrives.
+  useEffect(() => {
+    setFailed(false);
+    setLoaded(false);
+  }, [src]);
+
   const usable = isUsableUri(src) && !failed;
+  const local = usable && isLocalMediaUri(src);
 
   const objectPosition = focalPointToObjectPosition(focalPoint);
 
@@ -57,25 +70,42 @@ export function AppImage({
       style={aspectRatio ? { aspectRatio: String(aspectRatio) } : undefined}
     >
       {usable ? (
-        <Image
-          src={src}
-          alt={alt}
-          fill={fill ?? !width}
-          width={!fill && width ? width : undefined}
-          height={!fill && height ? height : undefined}
-          sizes={sizes}
-          quality={quality}
-          priority={priority}
-          placeholder={blurDataURL ? 'blur' : 'empty'}
-          blurDataURL={blurDataURL ?? undefined}
-          onLoad={() => setLoaded(true)}
-          onError={() => setFailed(true)}
-          className={`img-fade object-cover ${imgClassName}`}
-          style={{
-            objectPosition,
-            opacity: loaded ? 1 : 0,
-          }}
-        />
+        local ? (
+          // Local file picks (blob:/data:) bypass next/image — the optimizer
+          // can only fetch http(s) sources and would 500 on these.
+          // eslint-disable-next-line @next/next/no-img-element
+          <img
+            src={src}
+            alt={alt}
+            onLoad={() => setLoaded(true)}
+            onError={() => setFailed(true)}
+            className={`img-fade h-full w-full object-cover ${imgClassName}`}
+            style={{
+              objectPosition,
+              opacity: loaded ? 1 : 0,
+            }}
+          />
+        ) : (
+          <Image
+            src={src}
+            alt={alt}
+            fill={fill ?? !width}
+            width={!fill && width ? width : undefined}
+            height={!fill && height ? height : undefined}
+            sizes={sizes}
+            quality={quality}
+            priority={priority}
+            placeholder={blurDataURL ? 'blur' : 'empty'}
+            blurDataURL={blurDataURL ?? undefined}
+            onLoad={() => setLoaded(true)}
+            onError={() => setFailed(true)}
+            className={`img-fade object-cover ${imgClassName}`}
+            style={{
+              objectPosition,
+              opacity: loaded ? 1 : 0,
+            }}
+          />
+        )
       ) : (
         // Premium placeholder — quiet geometric frame + icon, never a
         // grey box with text. Same role as mobile's ImageEmptyGraphic.

@@ -7,18 +7,19 @@
  * Group: 2×2 member mosaic (or group photo), group title, "{n} members"
  * label ahead of the preview — no presence dot, no verified badge.
  * The preview follows the per-kind grammar ("You sent an offer · £32",
- * "📷 Photo") and a delivery glyph leads it when the last message is ours.
+ * "Photo") and a delivery glyph leads it when the last message is ours.
  * Flat row, no card chrome — hairlines come from the parent list.
  */
 
 import Link from 'next/link';
 import type { Conversation } from '@/lib/contracts/domain';
+import { useSession } from '@/lib/session/SessionProvider';
+import { useReadReceiptsEnabled } from '@/lib/store/chatPrefs';
 import { Avatar } from '@/components/ui/Avatar';
 import { AppImage } from '@/components/ui/AppImage';
 import { Icon } from '@/components/ui/Icon';
 import { GroupAvatarMosaic } from './GroupAvatarMosaic';
-import { useInboxPrefs } from '@/lib/store/inboxPrefs';
-import { useHydrated } from '@/lib/store/useStore';
+import { useConversationPrefs } from './useConversationPrefs';
 import {
   conversationTitle,
   deriveDeliveryStatus,
@@ -33,10 +34,15 @@ import {
 /** Delivery glyph — one small status mark before the preview, matching the
  *  thread's receipt grammar (check / double-check / clock). */
 function DeliveryGlyph({ status }: { status: InboxDeliveryStatus }) {
-  if (status === 'sending') {
+  // Read receipts off → the row glyph stops at "delivered", same cap the
+  // thread's MessageReceipt applies (chatPrefs is the one flag).
+  const receiptsEnabled = useReadReceiptsEnabled();
+  const effective =
+    !receiptsEnabled && status === 'read' ? 'delivered' : status;
+  if (effective === 'sending') {
     return <Icon name="clock" size={12} className="shrink-0 text-text-muted" aria-label="Sending" />;
   }
-  if (status === 'read') {
+  if (effective === 'read') {
     return (
       <span className="inline-flex shrink-0 text-brand" aria-label="Read">
         <Icon name="check" size={13} />
@@ -46,9 +52,9 @@ function DeliveryGlyph({ status }: { status: InboxDeliveryStatus }) {
   }
   // sent + delivered — muted single/double check
   return (
-    <span className="inline-flex shrink-0 text-text-muted" aria-label={status === 'delivered' ? 'Delivered' : 'Sent'}>
+    <span className="inline-flex shrink-0 text-text-muted" aria-label={effective === 'delivered' ? 'Delivered' : 'Sent'}>
       <Icon name="check" size={13} />
-      {status === 'delivered' ? <Icon name="check" size={13} className="-ml-2.5" /> : null}
+      {effective === 'delivered' ? <Icon name="check" size={13} className="-ml-2.5" /> : null}
     </span>
   );
 }
@@ -56,35 +62,40 @@ function DeliveryGlyph({ status }: { status: InboxDeliveryStatus }) {
 interface ConversationRowProps {
   conversation: Conversation;
   active?: boolean;
+  /** Untransformed unread state — useConversations zeroes muted threads
+   *  for badge surfaces; the row keeps the badge visible-but-dimmed from
+   *  the source record (mobile InboxConversationRow grammar). */
+  rawUnread?: { unread: boolean; count: number };
 }
 
-export function ConversationRow({ conversation: c, active }: ConversationRowProps) {
+export function ConversationRow({ conversation: c, active, rawUnread }: ConversationRowProps) {
+  const { user } = useSession();
   const group = isGroupConversation(c);
   const title = conversationTitle(c);
   const preview = lastMessagePreview(c);
   const delivery = deriveDeliveryStatus(c);
   const count = group ? memberCount(c) : 0;
-  const unreadCount = c.unread ? (c.unreadCount ?? 0) : 0;
-  const hydrated = useHydrated();
-  const mutedIds = useInboxPrefs((s) => s.mutedIds);
-  const muted = hydrated && mutedIds.includes(c.id);
-  // Muted threads keep the row but lose the badge and bold — the preview
-  // is still there when you open it (Instagram's muted-chat grammar).
-  const unread = c.unread && !muted;
+  const { isMuted, isPinned } = useConversationPrefs();
+  const muted = isMuted(c);
+  const pinned = isPinned(c);
+  // Unread stays true on a muted thread — only the badge dims; the count
+  // reads from the raw record since the shared query suppresses it.
+  const unread = rawUnread ? rawUnread.unread : c.unread || (c.unreadCount ?? 0) > 0;
+  const unreadCount = rawUnread ? rawUnread.count : c.unread ? (c.unreadCount ?? 0) : 0;
 
   return (
     <Link
       href={`/inbox/${c.id}`}
       aria-current={active ? 'page' : undefined}
-      aria-label={`${title}${group && count ? `, group, ${count} members` : ''}${unread ? ', unread' : ''}`}
-      className={`pressable flex items-center gap-3 px-4 py-3 ${
+      aria-label={`${title}${group && count ? `, group, ${count} members` : ''}${unread ? ', unread' : ''}${muted ? ', muted' : ''}`}
+      className={`pressable flex min-h-[var(--density-row-height)] items-center gap-3 px-4 py-[var(--density-row-py)] ${
         active ? 'bg-surface-alt' : 'hover:bg-row-pressed'
       }`}
     >
       <div className="relative shrink-0">
         {group ? (
           <GroupAvatarMosaic
-            members={mosaicMembers(c)}
+            members={mosaicMembers(c, user?.id ?? 'me')}
             size={40}
             groupPhoto={c.avatar}
             fallbackName={title}
@@ -119,6 +130,9 @@ export function ConversationRow({ conversation: c, active }: ConversationRowProp
             {muted ? (
               <Icon name="notificationsOff" size={13} className="shrink-0 text-text-muted" aria-label="Muted" />
             ) : null}
+            {pinned ? (
+              <Icon name="pin" size={13} className="shrink-0 text-text-muted" aria-label="Pinned" />
+            ) : null}
           </span>
           <span
             className={`tnum shrink-0 text-meta ${
@@ -144,7 +158,11 @@ export function ConversationRow({ conversation: c, active }: ConversationRowProp
           </span>
           {unread ? (
             <span
-              className="flex h-[18px] min-w-[18px] shrink-0 items-center justify-center rounded-full bg-brand px-1 text-micro font-semibold text-text-inverse"
+              className={`flex h-[18px] min-w-[18px] shrink-0 items-center justify-center rounded-full px-1 text-micro font-semibold ${
+                // Muted keeps the unread marker at a subdued weight —
+                // "unread" is still true, just quiet (mobile parity).
+                muted ? 'bg-surface-alt text-text-muted' : 'bg-brand text-text-inverse'
+              }`}
               aria-label={unreadCount > 1 ? `${unreadCount} unread` : 'Unread'}
             >
               {unreadCount > 1 ? (unreadCount > 99 ? '99+' : unreadCount) : null}

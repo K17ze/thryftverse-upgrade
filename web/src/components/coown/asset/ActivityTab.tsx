@@ -2,14 +2,14 @@
 
 /**
  * ActivityTab — the trade ledger for this asset (the public tape), its
- * distribution history and open corporate actions. Non-trade events
- * (tranche listings, vote milestones) stay as a quiet notices list.
- * Votes are session-local: one tap, then locked.
+ * distribution history and corporate actions. Non-trade events (tranche
+ * listings, vote milestones) stay as a quiet notices list. Actions link
+ * to the dedicated record + ballot routes — casting a vote lives there
+ * and persists through the governance store, never session-local here.
  */
 
-import { useState } from 'react';
+import Link from 'next/link';
 import { Badge } from '@/components/ui/Badge';
-import { Button } from '@/components/ui/Button';
 import { Icon, type AppIconName } from '@/components/ui/Icon';
 import type {
   ActivityEvent,
@@ -66,11 +66,6 @@ export function ActivityTab({
   distributions: Distribution[] | undefined;
   actions: CorporateAction[] | undefined;
 }) {
-  const [votes, setVotes] = useState<Record<string, 'for' | 'against'>>({});
-
-  const castVote = (id: string, vote: 'for' | 'against') =>
-    setVotes((prev) => (prev[id] ? prev : { ...prev, [id]: vote }));
-
   // Trades live in the ledger; the notices list keeps everything else.
   const notices = events?.filter((e) => e.kind !== 'buy' && e.kind !== 'sell');
 
@@ -125,56 +120,16 @@ export function ActivityTab({
           {actions === undefined ? (
             <div className="mt-3 space-y-1.5" aria-hidden="true">
               {[0, 1].map((i) => (
-                <div key={i} className="skeleton h-24 rounded-lg" />
+                <div key={i} className="skeleton h-16 rounded-lg" />
               ))}
             </div>
           ) : actions.length === 0 ? (
-            <p className="mt-3 text-body text-text-secondary">No open actions.</p>
+            <p className="mt-3 text-body text-text-secondary">No corporate actions.</p>
           ) : (
-            <ul className="mt-3 space-y-6">
-              {actions.map((a) => {
-                const voted = votes[a.id] ?? a.yourVote;
-                const locked = voted != null;
-                const forCount = a.votesFor + (voted === 'for' && a.yourVote !== 'for' ? 1 : 0);
-                const againstCount =
-                  a.votesAgainst + (voted === 'against' && a.yourVote !== 'against' ? 1 : 0);
-                return (
-                  <article key={a.id}>
-                    <div className="flex flex-wrap items-baseline justify-between gap-x-4 gap-y-1">
-                      <h4 className="text-body-emphasis font-semibold text-text-primary">{a.title}</h4>
-                      <span className="text-meta text-text-muted tnum">
-                        Closes {shortDate(a.closesAt)}
-                      </span>
-                    </div>
-                    <p className="mt-1.5 text-body text-text-secondary">{a.description}</p>
-                    <div className="mt-3 flex flex-wrap items-center gap-2">
-                      <Button
-                        size="sm"
-                        variant={voted === 'for' ? 'primary' : 'outline'}
-                        disabled={locked}
-                        aria-pressed={voted === 'for'}
-                        onClick={() => castVote(a.id, 'for')}
-                      >
-                        For · {forCount}
-                      </Button>
-                      <Button
-                        size="sm"
-                        variant={voted === 'against' ? 'secondary' : 'outline'}
-                        disabled={locked}
-                        aria-pressed={voted === 'against'}
-                        onClick={() => castVote(a.id, 'against')}
-                      >
-                        Against · {againstCount}
-                      </Button>
-                      {locked ? (
-                        <span className="text-meta text-text-muted">
-                          You voted {voted}
-                        </span>
-                      ) : null}
-                    </div>
-                  </article>
-                );
-              })}
+            <ul className="mt-1 divide-y divide-border-subtle border-y border-border-subtle">
+              {actions.map((a) => (
+                <CorporateActionRow key={a.id} action={a} />
+              ))}
             </ul>
           )}
         </section>
@@ -210,5 +165,62 @@ export function ActivityTab({
         ) : null}
       </div>
     </div>
+  );
+}
+
+const ACTION_STATUS: Record<CorporateAction['status'], { label: string; variant: 'success' | 'neutral' | 'warning' }> = {
+  open: { label: 'Voting open', variant: 'success' },
+  passed: { label: 'Passed', variant: 'neutral' },
+  rejected: { label: 'Rejected', variant: 'neutral' },
+  pending_tally: { label: 'Tally pending', variant: 'warning' },
+};
+
+/**
+ * One corporate action — a compact record row that links to the dedicated
+ * detail route, where the tally, quorum and ballot live. `action` arrives
+ * already folded with the persisted ballot (useGovernanceActions), so
+ * "You voted …" survives a reload without this list owning any state.
+ */
+function CorporateActionRow({ action }: { action: CorporateAction }) {
+  const closesMs = Date.parse(action.closesAt);
+  const closed =
+    action.status !== 'open' ||
+    (Number.isFinite(closesMs) && closesMs <= Date.now());
+  const status = closed && action.status === 'open'
+    ? { label: 'Voting closed', variant: 'neutral' as const }
+    : ACTION_STATUS[action.status];
+
+  return (
+    <li>
+      <Link
+        href={`/co-own/${action.assetId}/actions/${action.id}`}
+        className="block py-3.5 transition-colors hover:bg-row"
+      >
+        <div className="flex flex-wrap items-baseline justify-between gap-x-4 gap-y-1">
+          <p className="clamp-1 flex-1 text-body-emphasis font-semibold text-text-primary">
+            {action.title}
+          </p>
+          <Badge variant={status.variant}>{status.label}</Badge>
+        </div>
+        <p className="mt-1 flex flex-wrap items-center gap-x-2 gap-y-0.5 text-meta text-text-secondary">
+          <span className="tnum">
+            {action.votesFor.toLocaleString()} for ·{' '}
+            {action.votesAgainst.toLocaleString()} against
+          </span>
+          <span aria-hidden="true" className="text-text-muted">·</span>
+          <span className="tnum">
+            {closed ? 'Closed' : 'Closes'} {shortDate(action.closesAt)}
+          </span>
+          {action.yourVote ? (
+            <>
+              <span aria-hidden="true" className="text-text-muted">·</span>
+              <span className="font-medium text-text-primary">
+                You voted {action.yourVote}
+              </span>
+            </>
+          ) : null}
+        </p>
+      </Link>
+    </li>
   );
 }

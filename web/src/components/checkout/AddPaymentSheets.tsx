@@ -8,10 +8,13 @@
  */
 
 import { useEffect, useState } from 'react';
+import { DATA_MODE } from '@/lib/api/client';
 import { Button } from '@/components/ui/Button';
+import { Icon } from '@/components/ui/Icon';
 import { Sheet } from '@/components/ui/Sheet';
 import { SellField, INPUT_CLASS, INPUT_ERROR_CLASS } from '@/components/sell/SellField';
 import { Switch } from '@/components/settings/Switch';
+import { derivePostcodeSuggestion } from '@/lib/utils/postcodeLookup';
 import type { Address, PaymentMethod } from '@/lib/contracts/domain';
 
 // ---------------------------------------------------------------------------
@@ -30,7 +33,10 @@ export function AddAddressSheet({
 }: {
   open: boolean;
   onClose: () => void;
-  onSave: (a: Omit<Address, 'id' | 'isDefault'>, makeDefault: boolean) => void;
+  /** Sync save (fixture overlay) closes immediately; a returned promise
+   *  keeps the sheet open and busy until the server row lands — a rejected
+   *  save stays open so the entered details aren't lost. */
+  onSave: (a: Omit<Address, 'id' | 'isDefault'>, makeDefault: boolean) => void | Promise<void>;
   /** Edit mode — prefills the form and retitles the sheet. */
   initial?: Address | null;
   /** Management surfaces opt in to the "set as default" toggle; checkout
@@ -40,6 +46,7 @@ export function AddAddressSheet({
   const [form, setForm] = useState<AddressForm>(EMPTY_ADDRESS);
   const [makeDefault, setMakeDefault] = useState(false);
   const [errors, setErrors] = useState<Partial<AddressForm>>({});
+  const [saving, setSaving] = useState(false);
 
   useEffect(() => {
     if (open) {
@@ -55,11 +62,18 @@ export function AddAddressSheet({
       );
       setMakeDefault(initial?.isDefault ?? false);
       setErrors({});
+      setSaving(false);
     }
   }, [open, initial]);
 
   const set = (k: keyof AddressForm) => (e: React.ChangeEvent<HTMLInputElement>) =>
     setForm((f) => ({ ...f, [k]: e.target.value }));
+
+  // UK postcode lookup — suggests the town/city once the outcode resolves
+  // (mobile AddressFormScreen's PostcodeSuggestionRow). Client-side table,
+  // never a network call; it omits itself when the typed city already
+  // matches so a manual override is never re-suggested.
+  const postcodeSuggestion = derivePostcodeSuggestion(form);
 
   const submit = () => {
     const next: Partial<AddressForm> = {};
@@ -70,7 +84,7 @@ export function AddAddressSheet({
       next.postcode = 'Enter a valid UK postcode';
     setErrors(next);
     if (Object.keys(next).length > 0) return;
-    onSave(
+    const saved = onSave(
       {
         name: form.name.trim(),
         street: form.street.trim(),
@@ -79,6 +93,16 @@ export function AddAddressSheet({
       },
       makeDefault,
     );
+    if (saved && typeof saved.then === 'function') {
+      // Async (live server) save — hold the sheet open until the write is
+      // confirmed; a failure keeps the form so nothing entered is lost.
+      setSaving(true);
+      saved
+        .then(() => onClose())
+        .catch(() => {})
+        .finally(() => setSaving(false));
+      return;
+    }
     onClose();
   };
 
@@ -104,6 +128,21 @@ export function AddAddressSheet({
             <input id="addr-postcode" className={`${INPUT_CLASS} ${errors.postcode ? INPUT_ERROR_CLASS : ''}`} value={form.postcode} onChange={set('postcode')} placeholder="E2 7DD" autoComplete="shipping postal-code" />
           </SellField>
         </div>
+        {postcodeSuggestion ? (
+          <button
+            type="button"
+            onClick={() => setForm((f) => ({ ...f, city: postcodeSuggestion.city }))}
+            aria-label={`Use ${postcodeSuggestion.city}, ${postcodeSuggestion.region} for this postcode`}
+            className="pressable -mt-1 flex min-h-11 items-center gap-1.5 self-start rounded-md px-1 text-caption text-brand"
+          >
+            <Icon name="location" size={14} className="shrink-0" />
+            <span>
+              Use <span className="font-semibold">{postcodeSuggestion.city}</span>
+              {postcodeSuggestion.region ? `, ${postcodeSuggestion.region}` : ''}
+            </span>
+            <Icon name="forward" size={14} className="shrink-0" />
+          </button>
+        ) : null}
         {showDefaultToggle ? (
           <div className="flex min-h-[44px] items-center gap-3">
             <div className="min-w-0 flex-1">
@@ -117,8 +156,8 @@ export function AddAddressSheet({
             />
           </div>
         ) : null}
-        <Button variant="primary" size="lg" fullWidth className="mt-1" onClick={submit}>
-          {initial ? 'Save changes' : 'Save address'}
+        <Button variant="primary" size="lg" fullWidth className="mt-1" onClick={submit} disabled={saving}>
+          {saving ? 'Saving…' : initial ? 'Save changes' : 'Save address'}
         </Button>
       </div>
     </Sheet>
@@ -208,6 +247,36 @@ export function AddCardSheet({
     });
     onClose();
   };
+
+  // Live mode: cards only exist through provider-hosted tokenisation
+  // (Stripe SetupIntent — the app opens the payment sheet). Web has no
+  // hosted-card rail and the legacy write route is permanently 410, so a
+  // local form would mint a row checkout could never charge. The sheet
+  // says so instead of collecting a PAN it cannot use.
+  if (DATA_MODE === 'live') {
+    return (
+      <Sheet open={open} onClose={onClose} title="Add payment card">
+        <div className="flex flex-col items-start gap-4">
+          <div className="flex items-start gap-3">
+            <Icon name="lock" size={18} className="mt-0.5 shrink-0 text-commerce-trust" />
+            <div>
+              <p className="text-body-emphasis text-text-primary">
+                Cards are added through secure tokenisation
+              </p>
+              <p className="mt-1 text-caption text-text-secondary">
+                We never store card numbers — new cards are collected by our payment provider.
+                Add a card in the ThryftVerse app and it appears here automatically. Saved cards
+                and the 1ZE wallet still work on web checkout.
+              </p>
+            </div>
+          </div>
+          <Button variant="secondary" size="lg" fullWidth onClick={onClose}>
+            Got it
+          </Button>
+        </div>
+      </Sheet>
+    );
+  }
 
   return (
     <Sheet open={open} onClose={onClose} title="Add payment card">

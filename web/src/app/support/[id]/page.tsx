@@ -1,9 +1,15 @@
-'use client';
-
-import { useParams } from 'next/navigation';
+import type { Metadata } from 'next';
 import { TicketThread } from '@/components/support/TicketThread';
 
-export default function SupportCasePage() {
-  const params = useParams<{ id: string }>();
-  return <TicketThread ticketId={params?.id ?? ''} />;
+export const metadata: Metadata = {
+  title: 'Support case',
+};
+
+export default async function SupportCasePage({
+  params,
+}: {
+  params: Promise<{ id: string }>;
+}) {
+  const { id } = await params;
+  return <TicketThread ticketId={id} />;
 }

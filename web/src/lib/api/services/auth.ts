@@ -147,27 +147,49 @@ export async function logout(): Promise<void> {
   }
 }
 
+/** Contact fields `/users/me` carries but the public `User` contract
+ *  drops — the settings "Personal info" surface reads them here. Mirrors
+ *  the mobile profileApi ProfileUser (email, emailVerified, phone). */
+export interface AccountIdentity {
+  email: string | null;
+  emailVerified: boolean;
+  phone: string | null;
+}
+
+export interface MeResult {
+  user: User | null;
+  account: AccountIdentity | null;
+}
+
 /** Fetch the authenticated user's profile — `/users/me` is the richer
- *  profile surface; falls back to `/auth/me` for identity when needed. */
-export async function fetchMe(signal?: AbortSignal): Promise<User | null> {
+ *  profile surface; falls back to `/auth/me` for identity when needed.
+ *  Returns the mapped public `User` plus the private contact fields the
+ *  account surfaces need. */
+export async function fetchMe(signal?: AbortSignal): Promise<MeResult> {
   const session = await getAuthSession();
-  if (!session?.accessToken) return null;
+  if (!session?.accessToken) return { user: null, account: null };
   try {
-    const res = await fetchJson<{ ok: boolean; user?: ProfileUserApi }>(
-      '/users/me',
-      undefined,
-      { signal, maxRetries: 0 },
-    );
+    const res = await fetchJson<{
+      ok: boolean;
+      user?: ProfileUserApi & { phone?: string | null };
+    }>('/users/me', undefined, { signal, maxRetries: 0 });
     if (res.ok && res.user) {
       if (!session.userId && res.user.id) {
         await setAuthSession({ ...session, userId: res.user.id });
       }
-      return mapProfileUserToUser(res.user);
+      return {
+        user: mapProfileUserToUser(res.user),
+        account: {
+          email: res.user.email ?? null,
+          emailVerified: res.user.emailVerified === true,
+          phone: res.user.phone ?? null,
+        },
+      };
     }
-    return null;
+    return { user: null, account: null };
   } catch (e) {
     const parsed = parseApiError(e);
-    if (parsed.status === 401) return null;
+    if (parsed.status === 401) return { user: null, account: null };
     throw e;
   }
 }

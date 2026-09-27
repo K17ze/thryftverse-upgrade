@@ -22,9 +22,9 @@ import { EmptyState } from '@/components/ui/EmptyState';
 import { IconButton } from '@/components/ui/IconButton';
 import { Icon } from '@/components/ui/Icon';
 import { useAuction, useAuctionBids } from '@/lib/hooks/auction-queries';
+import { usePdpSimilarListings } from '@/lib/hooks/pdp-market-queries';
 import { useSession } from '@/lib/session/SessionProvider';
 import { listingById, userById } from '@/lib/data/fixtures';
-import { similarListings } from '@/lib/data/fixtures-commerce';
 import { mapListingToDiscoverySummary } from '@/lib/contracts/domain';
 import { formatPrice } from '@/lib/utils/format';
 
@@ -33,14 +33,23 @@ export default function AuctionDetailPage() {
   const router = useRouter();
   const id = params?.id ?? '';
   const { user } = useSession();
-  const viewerId = user?.id ?? 'me';
+  // Guests carry no bidder identity — never borrow the fixture 'me' id or
+  // authored fixture bids would masquerade as theirs.
+  const viewerId = user?.id;
 
-  const { auction, isLoading } = useAuction(id);
-  const { data: bids, isLoading: bidsLoading } = useAuctionBids(id);
+  const { auction, isLoading, isError, refetch } = useAuction(id);
+  const {
+    data: bids,
+    isLoading: bidsLoading,
+    isError: bidsError,
+    refetch: refetchBids,
+  } = useAuctionBids(id);
 
   const listing = auction ? (listingById(auction.listingId) ?? null) : null;
   const seller = auction ? (userById(auction.sellerId) ?? null) : null;
-  const similar = useMemo(() => (listing ? similarListings(listing, 8) : []), [listing]);
+  // Live mode resolves the real related-listings endpoint — the fixture
+  // scorer would deep-link fixture ids into live 404s.
+  const { items: similar } = usePdpSimilarListings(listing, 8);
 
   const [activeImage, setActiveImage] = useState(0);
   const images = listing?.images?.length ? listing.images : auction ? [auction.image] : [];
@@ -60,6 +69,19 @@ export default function AuctionDetailPage() {
 
   if (isLoading) {
     return <AuctionDetailSkeleton />;
+  }
+
+  // A failed fetch is not a missing auction — retry, don't misreport.
+  if (isError) {
+    return (
+      <EmptyState
+        icon="alert"
+        title="Couldn't load this auction"
+        subtitle="Check your connection and try again."
+        actionLabel="Try again"
+        onAction={() => void refetch()}
+      />
+    );
   }
 
   if (!auction) {
@@ -99,13 +121,12 @@ export default function AuctionDetailPage() {
           </div>
 
           {images.length > 1 ? (
-            <div className="mt-2 flex gap-2" role="tablist" aria-label="Auction media">
+            <div className="mt-2 flex gap-2" role="group" aria-label="Auction media">
               {images.map((src, index) => (
                 <button
                   key={src}
                   type="button"
-                  role="tab"
-                  aria-selected={index === activeImage}
+                  aria-pressed={index === activeImage}
                   aria-label={`View image ${index + 1}`}
                   onClick={() => setActiveImage(index)}
                   className={`pressable h-16 w-16 overflow-hidden rounded-md border ${
@@ -166,6 +187,7 @@ export default function AuctionDetailPage() {
         <aside className="mt-2 lg:sticky lg:top-20 lg:mt-0 lg:self-start">
           <BidPanel
             auction={auction}
+            listing={listing}
             hasListing={!!listing}
             viewerMaxBid={viewerMaxBid}
             topBidderName={topBidderName}
@@ -178,7 +200,13 @@ export default function AuctionDetailPage() {
               </span>
             </div>
             <div className="mt-3">
-              <BidHistory bids={bids ?? []} viewerId={viewerId} isLoading={bidsLoading} />
+              <BidHistory
+                bids={bids ?? []}
+                viewerId={viewerId}
+                isLoading={bidsLoading}
+                isError={bidsError}
+                onRetry={() => void refetchBids()}
+              />
             </div>
           </section>
         </aside>

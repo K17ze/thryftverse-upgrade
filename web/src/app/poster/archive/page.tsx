@@ -233,7 +233,7 @@ export default function PosterArchivePage() {
                 type="button"
                 onClick={() => setQuery('')}
                 aria-label="Clear search"
-                className="pressable flex h-8 w-8 items-center justify-center text-text-muted"
+                className="pressable -mr-2 flex h-11 w-11 items-center justify-center text-text-muted"
               >
                 <Icon name="closeCircle" filled size={18} />
               </button>

@@ -6,8 +6,10 @@ import Link from 'next/link';
 import { EmptyState } from '@/components/ui/EmptyState';
 import { Icon } from '@/components/ui/Icon';
 import type { CoOwnAsset, CoOwnPosition } from '@/lib/contracts/coown';
+import { deriveLifecycleState } from '@/lib/contracts/coown';
 import { usePriceHistory } from '@/lib/hooks/coown-queries';
 import { AssetThumb } from './AssetThumb';
+import { LifecycleTag } from './LifecycleTag';
 import { Sparkline } from './Sparkline';
 import { gbp, signedGbp, signedPct } from './format';
 
@@ -40,11 +42,18 @@ function issuerName(asset: CoOwnAsset): string {
 }
 
 /** Per-row price-history query — the sparkline's data source. */
-function PositionSparkline({ assetId }: { assetId: string }) {
+function PositionSparkline({ assetId, assetTitle }: { assetId: string; assetTitle: string }) {
   const history = usePriceHistory(assetId, '1M');
+  const candles = history.data;
+  if (!candles || candles.length < 2) return <span className="inline-block h-6 w-20" />;
+  const first = candles[0]!.c;
+  const last = candles[candles.length - 1]!.c;
+  const movePct = first > 0 ? ((last - first) / first) * 100 : 0;
+  const trend =
+    Math.abs(movePct) < 0.05 ? 'flat' : movePct > 0 ? `up ${movePct.toFixed(1)}%` : `down ${Math.abs(movePct).toFixed(1)}%`;
   return (
     <span className="inline-block h-6 w-20">
-      {history.data && history.data.length > 1 ? <Sparkline candles={history.data} /> : null}
+      <Sparkline candles={candles} label={`${assetTitle} 1-month trend — ${trend}`} />
     </span>
   );
 }
@@ -191,6 +200,10 @@ export function PositionsTable({ rows }: { rows: PositionRow[] }) {
         {sorted.map(({ position, asset, value, plGbp, plPct }) => {
           const up = plGbp >= 0;
           const tone = up ? 'text-coown-up' : 'text-coown-down';
+          // Halted/exiting holdings carry the tag — a live position doesn't
+          // need the noise.
+          const halted = deriveLifecycleState(asset) !== 'secondaryTrading'
+            && deriveLifecycleState(asset) !== 'initialOffering';
           return (
             <li key={asset.id} className="group relative transition-colors hover:bg-row">
               <Link
@@ -214,9 +227,10 @@ export function PositionsTable({ rows }: { rows: PositionRow[] }) {
                     <p className="mt-0.5 text-meta text-text-muted tnum">
                       avg {gbp(position.avgEntryPriceGbp)} · last {gbp(asset.unitPriceGbp)}
                     </p>
+                    {halted ? <LifecycleTag asset={asset} className="mt-1" /> : null}
                   </div>
                   <div className="shrink-0 text-right">
-                    <PositionSparkline assetId={asset.id} />
+                    <PositionSparkline assetId={asset.id} assetTitle={asset.title} />
                     <p className="mt-1 text-body-emphasis text-text-primary tnum">{gbp(value)}</p>
                     <p className={`mt-0.5 text-meta font-semibold tnum ${tone}`}>
                       {signedGbp(plGbp)} ({signedPct(plPct)})
@@ -232,7 +246,10 @@ export function PositionsTable({ rows }: { rows: PositionRow[] }) {
                     <p className="clamp-1 text-body-emphasis font-semibold text-text-primary">
                       {asset.title}
                     </p>
-                    <p className="clamp-1 text-meta text-text-secondary">{issuerName(asset)}</p>
+                    <p className="clamp-1 flex items-center gap-1.5 text-meta text-text-secondary">
+                      <span className="truncate">{issuerName(asset)}</span>
+                      {halted ? <LifecycleTag asset={asset} /> : null}
+                    </p>
                   </div>
                 </div>
                 <p className="text-right text-body text-text-primary tnum">{position.units}</p>
@@ -248,7 +265,7 @@ export function PositionsTable({ rows }: { rows: PositionRow[] }) {
                   <span className="ml-1.5 text-meta text-text-secondary">{signedPct(plPct)}</span>
                 </p>
                 <div className="justify-self-end">
-                  <PositionSparkline assetId={asset.id} />
+                  <PositionSparkline assetId={asset.id} assetTitle={asset.title} />
                 </div>
               </div>
             </li>

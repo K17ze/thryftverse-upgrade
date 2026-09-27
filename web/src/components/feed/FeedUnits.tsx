@@ -31,22 +31,24 @@ function UnitTypeChip({ icon, label }: { icon: AppIconName; label: string }) {
       role="img"
       aria-label={label}
       title={label}
-      className="absolute right-2 top-2 flex h-7 w-7 items-center justify-center rounded-full bg-black/55 text-scrim-text-primary"
+      className="absolute right-2 top-2 flex h-7 w-7 items-center justify-center rounded-full bg-overlay text-scrim-text-primary"
     >
       <Icon name={icon} size={15} />
     </span>
   );
 }
 
-export function LookTile({ unit }: { unit: LookFeedUnit }) {
+export function LookTile({ unit, priority }: { unit: LookFeedUnit; priority?: boolean }) {
   return (
-    <Link href={`/look/${unit.lookId}`} className="group block" aria-label="Open look">
+    <Link href={`/look/${unit.lookId}`} className="pressable group block" aria-label="Open look">
       <div className="relative overflow-hidden rounded-lg bg-surface-alt">
         <AppImage
           src={unit.coverImageUri}
           alt="Look"
           aspectRatio={unit.coverAspectRatio ?? 0.75}
           sizes="(max-width: 640px) 50vw, (max-width: 1024px) 33vw, 20vw"
+          priority={priority}
+          className="media-zoom"
         />
         <UnitTypeChip icon="layers" label="Look" />
         <div className="absolute inset-x-0 bottom-0 bg-gradient-to-t from-media-overlay-scrim to-transparent px-2.5 pb-2 pt-8">
@@ -70,15 +72,17 @@ export function LookTile({ unit }: { unit: LookFeedUnit }) {
   );
 }
 
-export function PosterTile({ unit }: { unit: PosterFeedUnit }) {
+export function PosterTile({ unit, priority }: { unit: PosterFeedUnit; priority?: boolean }) {
   return (
-    <Link href={`/poster/${unit.storyId}`} className="group block" aria-label="Open poster story">
+    <Link href={`/poster/${unit.storyId}`} className="pressable group block" aria-label="Open poster story">
       <div className="relative overflow-hidden rounded-lg bg-surface-alt">
         <AppImage
           src={unit.coverUri}
           alt="Poster"
           aspectRatio={unit.aspectRatio ?? 0.75}
           sizes="(max-width: 640px) 50vw, (max-width: 1024px) 33vw, 20vw"
+          priority={priority}
+          className="media-zoom"
         />
         <UnitTypeChip icon="play" label="Poster story" />
         <div className="absolute left-2 top-2 flex items-center gap-1.5">
@@ -94,15 +98,17 @@ export function PosterTile({ unit }: { unit: PosterFeedUnit }) {
   );
 }
 
-export function MoodboardTile({ unit }: { unit: MoodboardFeedUnit }) {
+export function MoodboardTile({ unit, priority }: { unit: MoodboardFeedUnit; priority?: boolean }) {
   return (
-    <Link href={`/moodboard/${unit.moodboardId}`} className="group block" aria-label={`Open moodboard ${unit.title ?? ''}`}>
+    <Link href={`/moodboard/${unit.moodboardId}`} className="pressable group block" aria-label={`Open moodboard ${unit.title ?? ''}`}>
       <div className="relative overflow-hidden rounded-lg bg-surface-alt">
         <AppImage
           src={unit.coverUri}
           alt={unit.title ?? 'Moodboard'}
           aspectRatio={unit.aspectRatio ?? 0.8}
           sizes="(max-width: 640px) 50vw, (max-width: 1024px) 33vw, 20vw"
+          priority={priority}
+          className="media-zoom"
         />
         <UnitTypeChip icon="images" label="Moodboard" />
         <div className="absolute inset-x-0 bottom-0 bg-gradient-to-t from-media-overlay-scrim to-transparent px-2.5 pb-2 pt-8">
@@ -115,7 +121,7 @@ export function MoodboardTile({ unit }: { unit: MoodboardFeedUnit }) {
   );
 }
 
-export function EditorialTile({ unit }: { unit: EditorialFeedUnit }) {
+export function EditorialTile({ unit, priority }: { unit: EditorialFeedUnit; priority?: boolean }) {
   const inner = (
     <div className="relative overflow-hidden rounded-xl bg-surface-alt">
       <AppImage
@@ -123,15 +129,17 @@ export function EditorialTile({ unit }: { unit: EditorialFeedUnit }) {
         alt={unit.headline ?? 'Editorial'}
         aspectRatio={unit.aspectRatio ?? 1.9}
         sizes="(max-width: 640px) 100vw, 90vw"
+        priority={priority}
+        className="media-zoom"
       />
       <div className="absolute inset-x-0 bottom-0 bg-gradient-to-t from-media-overlay-scrim to-transparent px-5 pb-4 pt-12">
         {unit.kicker ? (
-          <span className="text-label font-semibold uppercase tracking-wider text-scrim-text-secondary">
+          <span className="text-label text-scrim-text-secondary">
             {unit.kicker}
           </span>
         ) : null}
         {unit.headline ? (
-          <h3 className="mt-1 text-editorial-title text-scrim-text-primary">
+          <h3 className="clamp-2 mt-1 text-editorial-title text-scrim-text-primary">
             {unit.headline}
           </h3>
         ) : null}
@@ -139,7 +147,7 @@ export function EditorialTile({ unit }: { unit: EditorialFeedUnit }) {
     </div>
   );
   return unit.href ? (
-    <Link href={unit.href} className="group block">
+    <Link href={unit.href} className="pressable group block">
       {inner}
     </Link>
   ) : (
@@ -147,11 +155,23 @@ export function EditorialTile({ unit }: { unit: EditorialFeedUnit }) {
   );
 }
 
+/**
+ * RecommendationBreak — a quiet "more like this" strip, always rendered
+ * full-bleed (MasonryGrid force-spans it). Flat-canvas grammar: hairline
+ * top, section title, media-only tiles — the same band chrome as the
+ * home modules, not a card.
+ */
 export function RecommendationBreak({ unit }: { unit: RecommendationBreakFeedUnit }) {
+  if (unit.listings.length === 0) return null;
   return (
-    <section className="rounded-xl bg-surface px-4 py-5">
-      <h3 className="text-section-title font-semibold text-text-primary">{unit.headline}</h3>
-      <div className="mt-3 grid grid-cols-3 gap-2 sm:grid-cols-4 md:grid-cols-6">
+    <section
+      aria-label={unit.headline}
+      className="border-t border-border-subtle px-2.5 py-5 sm:px-4 sm:py-6"
+    >
+      <h3 className="mb-3 text-section-title font-semibold text-text-primary">
+        {unit.headline}
+      </h3>
+      <div className="grid grid-cols-[repeat(auto-fit,minmax(132px,1fr))] gap-2">
         {unit.listings.slice(0, 6).map((l) => (
           <ProductTile key={l.id} item={l} visualOnly />
         ))}

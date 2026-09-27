@@ -12,6 +12,7 @@ import { useEffect, useRef, useState } from 'react';
 import { HOST_CHAT_LINES } from '@/lib/data/fixtures-livehost';
 import { Icon } from '@/components/ui/Icon';
 import { seededRandom } from '@/components/live/useLivePresence';
+import { setPinnedChatNote } from '@/components/live/livePins';
 
 interface HostChatMessage {
   id: string;
@@ -74,10 +75,26 @@ export function HostChatPanel({ sessionId, active }: HostChatPanelProps) {
 
   const pinned = pinnedId ? messages.find((m) => m.id === pinnedId) ?? null : null;
 
+  // Pin/unpin writes through to the shared pins store — the viewer's chat
+  // rail shows the same note, so a host pin reaches the audience mid-show.
+  const pin = (msg: HostChatMessage) => {
+    setPinnedId(msg.id);
+    setPinnedChatNote(sessionId, { user: msg.user, text: msg.text });
+  };
+
+  const unpin = () => {
+    setPinnedId(null);
+    setPinnedChatNote(sessionId, null);
+  };
+
   const hide = (id: string) => {
     setHidden((h) => new Set(h).add(id));
-    if (pinnedId === id) setPinnedId(null);
+    if (pinnedId === id) unpin();
   };
+
+  // Leaving the room releases the note — a pinned line must not outlive
+  // the show it was pinned on.
+  useEffect(() => () => setPinnedChatNote(sessionId, null), [sessionId]);
 
   return (
     <section aria-label="Viewer chat moderation" className="flex min-h-0 flex-1 flex-col">
@@ -94,7 +111,7 @@ export function HostChatPanel({ sessionId, active }: HostChatPanelProps) {
           </p>
           <button
             type="button"
-            onClick={() => setPinnedId(null)}
+            onClick={unpin}
             aria-label="Unpin message"
             className={actionBtn}
           >
@@ -126,9 +143,14 @@ export function HostChatPanel({ sessionId, active }: HostChatPanelProps) {
               <div className="flex shrink-0 items-center">
                 <button
                   type="button"
-                  onClick={() => setPinnedId(msg.id)}
-                  aria-label={`Pin message from ${msg.user}`}
-                  title="Pin"
+                  onClick={() => (pinnedId === msg.id ? unpin() : pin(msg))}
+                  aria-label={
+                    pinnedId === msg.id
+                      ? `Unpin message from ${msg.user}`
+                      : `Pin message from ${msg.user}`
+                  }
+                  aria-pressed={pinnedId === msg.id}
+                  title="Pin for viewers"
                   className={actionBtn}
                 >
                   <Icon name="pin" filled={pinnedId === msg.id} size={14} />

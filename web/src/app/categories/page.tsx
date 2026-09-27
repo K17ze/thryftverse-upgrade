@@ -15,7 +15,7 @@ export default function CategoriesPage() {
   const liveItems = CATEGORY_DIRECTORY.reduce((n, c) => n + c.count, 0);
 
   return (
-    <div className="mx-auto max-w-[1600px] px-4 pb-10 pt-6 sm:px-6">
+    <div className="mx-auto max-w-[1440px] px-4 pb-10 pt-6 sm:px-6">
       <h1 className="text-screen-title font-bold text-text-primary">
         Categories
       </h1>

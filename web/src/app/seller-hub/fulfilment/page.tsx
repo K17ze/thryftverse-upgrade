@@ -3,11 +3,13 @@
 /**
  * /seller-hub/fulfilment — the dispatch queue. To post / Posted / Delivered
  * tabs over flat hairline rows; "Mark posted" is optimistic with a generated
- * tracking number, "Print label" simulates the printer handoff. Overdue
- * deadlines take the danger accent. Skeleton, per-tab empty states.
+ * tracking number, "Print label" opens the printable label sheet (fixture
+ * mode mints the tracking number once and keeps it). Overdue deadlines
+ * take the danger accent. Skeleton, per-tab empty states.
  */
 
 import { useMemo, useState } from 'react';
+import { useRouter } from 'next/navigation';
 import { SellerSectionNav } from '@/components/seller/SellerSectionNav';
 import { FulfilmentRow } from '@/components/seller/FulfilmentRow';
 import { SegmentedControl } from '@/components/feed/SegmentedControl';
@@ -18,6 +20,7 @@ import { useFulfilmentQueue, useMarkPosted } from '@/lib/hooks/seller-queries';
 
 type Tab = 'to-post' | 'posted' | 'delivered';
 
+// Tab badges mirror the mobile fulfilment header counts.
 const TABS: { value: Tab; label: string }[] = [
   { value: 'to-post', label: 'To post' },
   { value: 'posted', label: 'Posted' },
@@ -40,9 +43,10 @@ const EMPTY_COPY: Record<Tab, { title: string; subtitle: string }> = {
 };
 
 export default function FulfilmentPage() {
+  const router = useRouter();
+  const { show } = useToast();
   const { data: jobs, isLoading, isError, refetch } = useFulfilmentQueue();
   const markPosted = useMarkPosted();
-  const { show } = useToast();
   const [tab, setTab] = useState<Tab>('to-post');
 
   const visible = useMemo(() => (jobs ?? []).filter((j) => j.stage === tab), [jobs, tab]);
@@ -55,14 +59,27 @@ export default function FulfilmentPage() {
     [jobs],
   );
 
+  const markJobPosted = (jobId: string) => {
+    markPosted.mutate(jobId, {
+      onSuccess: (job) =>
+        show(
+          job?.trackingNumber
+            ? `Marked posted — tracking ${job.trackingNumber}`
+            : 'Marked posted',
+          'success',
+        ),
+      onError: () => show('Could not mark posted — try again', 'error'),
+    });
+  };
+
   return (
     <div className="mx-auto w-full max-w-3xl px-4 pb-16 pt-8 sm:px-6 md:pt-12">
       <h1 className="text-screen-title font-semibold text-text-primary">Fulfilment</h1>
-      <SellerSectionNav />
+      <SellerSectionNav toPost={counts['to-post']} posted={counts.posted} />
 
       <div className="mt-6 flex flex-wrap items-center justify-between gap-3">
         <SegmentedControl
-          options={TABS}
+          options={TABS.map((t) => ({ ...t, count: counts[t.value] }))}
           value={tab}
           onChange={setTab}
         />
@@ -106,8 +123,10 @@ export default function FulfilmentPage() {
               <FulfilmentRow
                 key={job.id}
                 job={job}
-                onPrintLabel={(j) => show(`Label for ${j.title} sent to your printer`, 'info')}
-                onMarkPosted={(id) => markPosted.mutate(id)}
+                onPrintLabel={(j) =>
+                  router.push(`/seller-hub/fulfilment/label?job=${encodeURIComponent(j.id)}`)
+                }
+                onMarkPosted={markJobPosted}
                 isMarking={markPosted.isPending}
               />
             ))}

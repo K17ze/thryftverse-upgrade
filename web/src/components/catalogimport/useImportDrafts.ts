@@ -12,6 +12,7 @@ import { useQuery, useQueryClient } from '@tanstack/react-query';
 import type { Listing } from '@/lib/contracts/domain';
 
 const DRAFTS_KEY = ['catalog-import-drafts'] as const;
+export const IMPORT_DRAFTS_KEY = DRAFTS_KEY;
 
 const tick = (ms = 240) => new Promise((r) => setTimeout(r, ms));
 
@@ -41,6 +42,21 @@ export function useImportDraftActions() {
         ...drafts,
         ...(old ?? []),
       ]);
+    },
+    /**
+     * The sell composer writes back through this when a resumed imported
+     * draft is edited — the draft keeps living in its source store.
+     */
+    updateDraft: (id: string, patch: Partial<Listing>) => {
+      queryClient.setQueryData<Listing[]>(DRAFTS_KEY, (old) =>
+        (old ?? []).map((d) => (d.id === id ? { ...d, ...patch, id: d.id } : d)),
+      );
+    },
+    /** Publish or discard — the draft leaves the shelf. */
+    removeDraft: (id: string) => {
+      queryClient.setQueryData<Listing[]>(DRAFTS_KEY, (old) =>
+        (old ?? []).filter((d) => d.id !== id),
+      );
     },
   };
 }

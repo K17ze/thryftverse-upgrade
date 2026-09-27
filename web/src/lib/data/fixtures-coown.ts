@@ -18,7 +18,6 @@ import type {
   OrderBookLevel,
   OrderBookSnapshot,
   PriceWindow,
-  StoredPriceAlert,
   TradeLedgerEntry,
 } from '@/lib/contracts/coown';
 
@@ -410,40 +409,83 @@ export const DISTRIBUTIONS: Distribution[] = [
 
 export const CORPORATE_ACTIONS: CorporateAction[] = [
   {
+    // Open ballot, viewer hasn't voted. 400 units issued; quorum is half
+    // the supply, the offer redeems at offer ÷ units.
     id: 'ca-v1',
     assetId: 'co1',
     kind: 'sale_vote',
     title: 'Private sale offer — £15,400',
-    description: 'A verified collector has offered £15,000 for the bag outright. If the vote passes, units redeem at £62.50 per unit plus accrued income.',
-    closesAt: '2026-10-02T18:00:00Z',
+    description:
+      'A verified collector has offered £15,400 for the bag outright. If the vote passes, units redeem at £38.50 per unit plus accrued income.',
+    closesAt: new Date(Date.now() + 5 * 24 * 3_600_000).toISOString(),
     status: 'open',
     yourVote: null,
     votesFor: 224,
     votesAgainst: 38,
+    votesAbstain: 9,
+    quorumUnits: 200,
+    passThresholdPct: 60,
+    perUnitValueGbp: 38.5,
+    totalValueGbp: 15400,
   },
   {
+    // Open ballot, viewer already voted 'for' — change-vote path.
     id: 'ca-v2',
     assetId: 'co4',
     kind: 'authentication',
     title: 'Re-authentication with Nike TAG',
-    description: 'Proposal to spend £180 from the asset reserve on a fresh Nike TAG authentication ahead of a consignment offer.',
-    closesAt: '2026-09-30T18:00:00Z',
+    description:
+      'Proposal to spend £180 from the asset reserve on a fresh Nike TAG authentication ahead of a consignment offer.',
+    closesAt: new Date(Date.now() + 3 * 24 * 3_600_000).toISOString(),
     status: 'open',
     yourVote: 'for',
     votesFor: 401,
     votesAgainst: 22,
+    votesAbstain: 14,
+    quorumUnits: 250,
+    passThresholdPct: 50,
+    perUnitValueGbp: null,
+    totalValueGbp: 180,
   },
   {
+    // Ballot closed, tally pending — est. figures stay in prose, not as
+    // contract values.
     id: 'ca-v3',
     assetId: 'co6',
     kind: 'exit',
     title: 'Structured exit — auction consignment',
-    description: 'Exit via premium auction house (est. hammer £19,200). Fees 12%. Tally pending.',
+    description:
+      'Exit via premium auction house (est. hammer £19,200). Fees 12%. Tally pending.',
     closesAt: '2026-09-20T18:00:00Z',
     status: 'pending_tally',
     yourVote: 'for',
     votesFor: 141,
     votesAgainst: 60,
+    votesAbstain: 0,
+    quorumUnits: 100,
+    passThresholdPct: 66,
+    perUnitValueGbp: null,
+    totalValueGbp: null,
+  },
+  {
+    // Decided ballot on an asset the viewer holds none of — closed
+    // governance history coverage.
+    id: 'ca-v4',
+    assetId: 'co8',
+    kind: 'insurance_renewal',
+    title: 'Insurance renewal — Heathrow Vault 2',
+    description:
+      'Renewal of the all-risk policy on the Kelly 25 ahead of the September policy lapse.',
+    closesAt: '2026-09-12T18:00:00Z',
+    status: 'passed',
+    yourVote: null,
+    votesFor: 168,
+    votesAgainst: 12,
+    votesAbstain: 6,
+    quorumUnits: 80,
+    passThresholdPct: 50,
+    perUnitValueGbp: null,
+    totalValueGbp: null,
   },
 ];
 
@@ -899,29 +941,6 @@ export const DISTRIBUTION_RECEIPTS: DistributionReceipt[] = [
     exDate: '2026-01-30',
     paidAt: '2026-02-03T10:00:00Z',
     status: 'paid',
-  },
-];
-
-// ── Price alerts — seed for the persisted store ───────────────────────
-// Honest start state: two alerts so the surface isn't blank on first run;
-// delivery isn't wired so the copy says saved-locally, not "will notify".
-
-export const PRICE_ALERT_SEED: StoredPriceAlert[] = [
-  {
-    id: 'pa1',
-    assetId: 'co1',
-    direction: 'below',
-    targetPriceGbp: 138.0,
-    active: true,
-    createdAt: '2026-09-22T14:10:00Z',
-  },
-  {
-    id: 'pa2',
-    assetId: 'co4',
-    direction: 'above',
-    targetPriceGbp: 110.0,
-    active: false,
-    createdAt: '2026-09-18T09:32:00Z',
   },
 ];
 

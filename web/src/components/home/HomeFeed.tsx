@@ -18,12 +18,20 @@
  *
  * A module only renders when the feed actually continues past its
  * breakpoint, so filtered/short feeds stay clean.
+ *
+ * Refresh grammar (mobile FRESH-02 parity): a failed refresh on a
+ * populated feed keeps the last-good units and renders an inline retry
+ * banner — never an error panel replacing content. Pagination uses an
+ * IntersectionObserver sentinel: more units append while the server has
+ * a nextCursor; the honest end marker only shows when it doesn't.
  */
 
-import { Fragment, useMemo } from 'react';
+import { Fragment, useEffect, useMemo, useRef } from 'react';
 import type { DiscoveryFeedUnit } from '@/lib/contracts/domain';
 import { MasonryGrid } from '@/components/feed/MasonryGrid';
 import { MasonrySkeleton, Skeleton } from '@/components/ui/Skeleton';
+import { EmptyState } from '@/components/ui/EmptyState';
+import { Icon } from '@/components/ui/Icon';
 import { RecentlyViewedRail } from './modules/RecentlyViewedRail';
 import { FreshDropsRail } from './modules/FreshDropsRail';
 import { LooksRail } from './modules/LooksRail';
@@ -35,6 +43,21 @@ interface HomeFeedProps {
   units: DiscoveryFeedUnit[];
   columns: number;
   isLoading?: boolean;
+  /** Fetch failure — renders a real error state with retry, never the
+   *  empty copy (an error is not "nothing here"). */
+  isError?: boolean;
+  onRetry?: () => void;
+  /** A refresh on a populated feed failed — the last-good units stay on
+   *  screen and this inline retry banner renders above them. */
+  refreshError?: boolean;
+  onRefreshRetry?: () => void;
+  /** Pagination — sentinel fires onLoadMore while the server has a
+   *  nextCursor; absent/false renders the honest end marker. */
+  hasMore?: boolean;
+  isLoadingMore?: boolean;
+  /** A page-append failed — inline retry at the tail, content untouched. */
+  loadMoreError?: boolean;
+  onLoadMore?: () => void;
   /** Caller-owned empty state (e.g. the Following tab's recovery CTA). */
   empty?: {
     title: string;
@@ -80,7 +103,40 @@ function HomeFeedSkeleton({ columns }: { columns: number }) {
   );
 }
 
-export function HomeFeed({ units, columns, isLoading, empty }: HomeFeedProps) {
+export function HomeFeed({
+  units,
+  columns,
+  isLoading,
+  isError,
+  onRetry,
+  refreshError,
+  onRefreshRetry,
+  hasMore,
+  isLoadingMore,
+  loadMoreError,
+  onLoadMore,
+  empty,
+}: HomeFeedProps) {
+  const sentinelRef = useRef<HTMLDivElement>(null);
+
+  // Infinite scroll — the sentinel sits ahead of the end marker so the
+  // next page starts arriving before the marker reaches the viewport.
+  // A failed append pauses auto-loading (manual retry only) — otherwise
+  // the sentinel would re-fire on every intersection while it sits in view.
+  useEffect(() => {
+    if (!hasMore || !onLoadMore || loadMoreError) return;
+    const el = sentinelRef.current;
+    if (!el || typeof IntersectionObserver === 'undefined') return;
+    const io = new IntersectionObserver(
+      (entries) => {
+        if (entries.some((e) => e.isIntersecting)) onLoadMore();
+      },
+      { rootMargin: '600px 0px' },
+    );
+    io.observe(el);
+    return () => io.disconnect();
+  }, [hasMore, onLoadMore, loadMoreError]);
+
   // Split the feed at the module breakpoints → chunks interleaved with bands.
   const chunks = useMemo(() => {
     const bounds = [0, ...MODULE_BANDS.map((m) => m.after), units.length];
@@ -95,11 +151,32 @@ export function HomeFeed({ units, columns, isLoading, empty }: HomeFeedProps) {
     return <HomeFeedSkeleton columns={columns} />;
   }
 
+  if (isError) {
+    // Session memory survives a failed fetch — the rail still renders
+    // above the error state, same as the empty branch.
+    return (
+      <div className="flex flex-col">
+        <RecentlyViewedRail />
+        <EmptyState
+          icon="warning"
+          title="Couldn’t load the feed"
+          subtitle="Check your connection and try again."
+          actionLabel={onRetry ? 'Try again' : undefined}
+          onAction={onRetry}
+          compact
+        />
+      </div>
+    );
+  }
+
   if (units.length === 0) {
     // Session memory survives an empty/filtered feed — the rail still
     // renders above the empty state when it has entries.
     return (
       <div className="flex flex-col">
+        {refreshError ? (
+          <RefreshErrorBanner onRetry={onRefreshRetry} />
+        ) : null}
         <RecentlyViewedRail />
         <MasonryGrid
           units={[]}
@@ -115,6 +192,9 @@ export function HomeFeed({ units, columns, isLoading, empty }: HomeFeedProps) {
 
   return (
     <div className="flex flex-col">
+      {refreshError ? (
+        <RefreshErrorBanner onRetry={onRefreshRetry} />
+      ) : null}
       <RecentlyViewedRail />
       <FreshDropsRail />
       {chunks.map((chunk, i) => {
@@ -128,11 +208,64 @@ export function HomeFeed({ units, columns, isLoading, empty }: HomeFeedProps) {
           </Fragment>
         );
       })}
-      {/* Honest finite-feed marker — port of the mobile list footer. */}
-      <div className="flex flex-col items-center gap-2.5 px-4 py-10 sm:px-6">
-        <span className="h-px w-10 bg-border-subtle" aria-hidden />
-        <p className="text-meta text-text-muted">You&apos;ve reached the end</p>
-      </div>
+
+      {/* Tail: sentinel while more pages exist, honest end marker at the
+          terminus, inline retry if a page-append failed. */}
+      {hasMore ? (
+        <>
+          <div ref={sentinelRef} className="h-px" aria-hidden />
+          <div className="flex flex-col items-center gap-2 px-4 py-8">
+            {loadMoreError ? (
+              <>
+                <p className="text-meta text-text-muted">Couldn’t load more</p>
+                <button
+                  type="button"
+                  onClick={onLoadMore}
+                  className="pressable -my-1 min-h-11 rounded-full px-4 text-body font-semibold text-brand"
+                >
+                  Try again
+                </button>
+              </>
+            ) : isLoadingMore ? (
+              <>
+                <Icon name="refresh" size={18} className="animate-spin text-text-muted" />
+                <p className="sr-only" role="status">
+                  Loading more items
+                </p>
+              </>
+            ) : null}
+          </div>
+        </>
+      ) : (
+        <div className="flex flex-col items-center gap-2.5 px-4 py-10 sm:px-6">
+          <span className="h-px w-10 bg-border-subtle" aria-hidden />
+          <p className="text-meta text-text-muted">You&apos;ve reached the end</p>
+        </div>
+      )}
+    </div>
+  );
+}
+
+/** Last-good refresh failure — a quiet inline note, not an error panel. */
+function RefreshErrorBanner({ onRetry }: { onRetry?: () => void }) {
+  return (
+    <div
+      role="status"
+      className="mx-4 mt-3 flex items-center gap-2 rounded-lg border border-border-subtle px-3 py-2 sm:mx-6"
+    >
+      <Icon name="warning" size={16} className="shrink-0 text-text-muted" />
+      <p className="min-w-0 flex-1 text-meta text-text-secondary">
+        Couldn’t refresh — showing what was already here
+      </p>
+      {onRetry ? (
+        <button
+          type="button"
+          onClick={onRetry}
+          className="pressable -my-1 min-h-9 shrink-0 rounded-full px-3 text-caption font-semibold text-brand"
+        >
+          Try again
+        </button>
+      ) : null}
     </div>
   );
 }

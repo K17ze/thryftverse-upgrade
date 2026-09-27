@@ -8,7 +8,7 @@
  * Items is the active-listings grid; Sold carries the sold-marker closet.
  */
 
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import Link from 'next/link';
 import { useParams, useRouter } from 'next/navigation';
 import { useSession } from '@/lib/session/SessionProvider';
@@ -16,12 +16,20 @@ import { useReviews, useSellerListings, useUserByUsername } from '@/lib/hooks/qu
 import { LOOKS } from '@/lib/data/fixtures';
 import { boardsForOwner } from '@/components/profile/fixtures';
 import { boardHref } from '@/components/profile/profileViewModel';
-import { ProfileHero } from '@/components/profile/ProfileHero';
+import { ProfileHero, type ProfileStatKey } from '@/components/profile/ProfileHero';
+import { HighlightsRail } from '@/components/profile/HighlightsRail';
+import { useProfileHighlights } from '@/components/profile/useProfileHighlights';
+import { ShopRail } from '@/components/profile/ShopRail';
 import { ProfileTabs } from '@/components/profile/ProfileTabs';
 import { ClosetGridSkeleton } from '@/components/profile/ClosetGrid';
-import { ClosetListingsSection } from '@/components/closet';
+import {
+  ClosetListingsSection,
+  closetMosaicCells,
+  CLOSET_MOSAIC_MIN,
+} from '@/components/closet';
 import { LooksGrid } from '@/components/profile/LooksGrid';
 import { ReviewList, ReviewListSkeleton, ReviewSummary } from '@/components/profile/ReviewList';
+import { ProfileAbout } from '@/components/profile/ProfileAbout';
 import { BoardCard, BoardGrid } from '@/components/profile/BoardGrid';
 import { ProfileHeroSkeleton } from '@/components/profile/ProfileSkeleton';
 import { AppImage } from '@/components/ui/AppImage';
@@ -30,7 +38,7 @@ import { Icon } from '@/components/ui/Icon';
 import { getListingCoverUri } from '@/lib/utils/media';
 import { listingCoverThumbs } from '@/components/profile/boardMedia';
 
-type TabKey = 'items' | 'sold' | 'looks' | 'boards' | 'reviews';
+type TabKey = 'items' | 'sold' | 'looks' | 'boards' | 'about' | 'reviews';
 const CLOSET_BANNER_MIN = 10;
 
 export default function PublicProfilePage() {
@@ -40,9 +48,10 @@ export default function PublicProfilePage() {
   const { user: me } = useSession();
   const [tab, setTab] = useState<TabKey>('items');
 
-  const { data: user, isLoading, isFetched } = useUserByUsername(username);
+  const { data: user, isLoading, isFetched, isError, refetch } = useUserByUsername(username);
   const { data: listings, isLoading: listingsLoading } = useSellerListings(user?.id ?? '');
   const { data: reviews, isLoading: reviewsLoading } = useReviews(user?.id ?? '');
+  const tabContentRef = useRef<HTMLDivElement>(null);
 
   // Viewing your own public page routes to the owner surface.
   useEffect(() => {
@@ -58,6 +67,7 @@ export default function PublicProfilePage() {
     () => (user?.id ? boardsForOwner(user.id, false) : []),
     [user?.id],
   );
+  const { highlights } = useProfileHighlights(user?.id ?? '');
 
   if (isLoading) {
     return (
@@ -67,6 +77,21 @@ export default function PublicProfilePage() {
         <div className="py-4">
           <ClosetGridSkeleton />
         </div>
+      </div>
+    );
+  }
+
+  // Error is not absence — a failed fetch gets a retry, not a gravestone.
+  if (isError) {
+    return (
+      <div className="mx-auto max-w-[1200px]">
+        <EmptyState
+          icon="warning"
+          title="Couldn't load this profile"
+          subtitle="Check your connection and try again."
+          actionLabel="Try again"
+          onAction={() => void refetch()}
+        />
       </div>
     );
   }
@@ -87,14 +112,32 @@ export default function PublicProfilePage() {
 
   if (!user || user.id === me?.id) return null;
 
+  // Stat seams land on the matching tab and scroll content into view —
+  // scroll-mt clears the sticky header + tab rail (~112px).
+  const onStatPress = (stat: ProfileStatKey) => {
+    setTab(stat === 'sold' ? 'sold' : stat === 'reviews' ? 'reviews' : 'items');
+    requestAnimationFrame(() =>
+      tabContentRef.current?.scrollIntoView({ behavior: 'smooth', block: 'start' }),
+    );
+  };
+
   const closetListings = listings ?? [];
   const forSale = closetListings.filter((l) => !l.isSold);
   const soldListings = closetListings.filter((l) => l.isSold);
   const reviewRows = reviews ?? [];
   const shopTab: 'items' | 'sold' = tab === 'sold' ? 'sold' : 'items';
 
+  // Media-mosaic hero — for-sale covers lead the collage so the band is
+  // shoppable, sold items fill behind them. It subsumes the text banner's
+  // "browse the full closet" affordance when it renders.
+  const closetMediaPool = [...forSale, ...soldListings];
+  const showMosaic =
+    !user.coverPhoto && closetMosaicCells(closetMediaPool).length >= CLOSET_MOSAIC_MIN;
+
+  // Mobile shop grammar — the Listings tab's For sale/Sold segments are
+  // tabs here; About carries the bio/policies block mobile renders.
   const tabs: { key: TabKey; label: string; count?: number }[] = [
-    { key: 'items', label: 'Items', count: listingsLoading ? undefined : forSale.length },
+    { key: 'items', label: 'For sale', count: listingsLoading ? undefined : forSale.length },
     { key: 'sold', label: 'Sold', count: listingsLoading ? undefined : soldListings.length },
     ...(looks.length > 0
       ? [{ key: 'looks' as const, label: 'Looks', count: looks.length }]
@@ -102,6 +145,7 @@ export default function PublicProfilePage() {
     ...(boards.length > 0
       ? [{ key: 'boards' as const, label: 'Boards', count: boards.length }]
       : []),
+    { key: 'about', label: 'About' },
     {
       key: 'reviews',
       label: 'Reviews',
@@ -117,10 +161,17 @@ export default function PublicProfilePage() {
         forSaleCount={listingsLoading ? undefined : forSale.length}
         soldCount={listingsLoading ? undefined : soldListings.length}
         variant="public"
+        onStatPress={onStatPress}
+        closetMedia={closetMediaPool}
       />
 
-      {/* Closet banner — only when the closet is deep enough to browse */}
-      {closetListings.length >= CLOSET_BANNER_MIN ? (
+      <HighlightsRail highlights={highlights} />
+
+      <ShopRail ownerId={user.id} />
+
+      {/* Closet banner — only when the closet is deep enough to browse and
+          the mosaic hero isn't already serving the same destination. */}
+      {closetListings.length >= CLOSET_BANNER_MIN && !showMosaic ? (
         <Link
           href={`/collection/closet-${user.id}`}
           className="pressable mx-4 mt-4 flex items-center justify-between gap-3 border-y border-border-subtle py-3 sm:mx-6"
@@ -151,7 +202,7 @@ export default function PublicProfilePage() {
         <ProfileTabs tabs={tabs} active={tab} onChange={setTab} />
       </div>
 
-      <div className="py-4">
+      <div className="scroll-mt-28 py-4" ref={tabContentRef}>
         {tab === 'items' || tab === 'sold' ? (
           /* key resets closet filters when the shop tab changes */
           <ClosetListingsSection
@@ -199,6 +250,8 @@ export default function PublicProfilePage() {
             </BoardGrid>
           )
         ) : null}
+
+        {tab === 'about' ? <ProfileAbout user={user} variant="public" /> : null}
 
         {tab === 'reviews' ? (
           reviewsLoading ? (

@@ -18,11 +18,12 @@ import { Skeleton } from '@/components/ui/Skeleton';
 import { useToast } from '@/components/ui/Toast';
 import { BagSellerGroup } from '@/components/bag/BagSellerGroup';
 import { useStore } from '@/lib/store/useStore';
-import { BUNDLE_RULE_LABEL, listingById, sellerGroups } from '@/lib/data/fixtures';
-import { bundleSuggestions, orderTotals } from '@/lib/data/fixtures-commerce';
+import { useBagListings } from '@/lib/store/useBagListings';
+import { BUNDLE_RULE_LABEL, sellerGroups } from '@/lib/data/fixtures';
+import { bundleSuggestions, AUTHENTICATION_THRESHOLD_GBP } from '@/lib/data/fixtures-commerce';
+import { checkoutTotals } from '@/lib/commerce/postage';
 import { formatPrice } from '@/lib/utils/format';
 import { getCategoryFocalPoint, getListingCoverUri } from '@/lib/utils/media';
-import type { Listing } from '@/lib/contracts/domain';
 
 function BagSkeleton() {
   return (
@@ -82,24 +83,17 @@ export default function BagPage() {
   const [hydrated, setHydrated] = useState(false);
   useEffect(() => setHydrated(true), []);
 
-  const items = useMemo(
-    () =>
-      bag
-        .map((b) => listingById(b.listingId))
-        .filter((l): l is Listing => !!l && !l.isSold),
-    [bag],
-  );
+  // Mode-aware resolution — fixture ids map onto the catalogue; live ids
+  // batch-fetch GET /listings/:id. A live entry that can't be resolved is
+  // dropped honestly (counted below), never replaced by a fixture row.
+  const {
+    items,
+    soldOutCount,
+    unresolvedCount,
+    isLoading: listingsLoading,
+  } = useBagListings(bag);
 
-  // Sold-out bag entries stay out of every group and total — one quiet note.
-  const soldOutCount = useMemo(
-    () =>
-      bag
-        .map((b) => listingById(b.listingId))
-        .filter((l): l is Listing => !!l && l.isSold === true).length,
-    [bag],
-  );
-
-  const totals = useMemo(() => orderTotals(items), [items]);
+  const totals = useMemo(() => checkoutTotals(items), [items]);
   const groups = useMemo(() => sellerGroups(items), [items]);
   const bundleDiscount = useMemo(
     () => groups.reduce((sum, g) => sum + g.discount, 0),
@@ -120,19 +114,25 @@ export default function BagPage() {
       .filter((g) => g.suggestions.length > 0);
   }, [items, bagIds]);
 
-  if (!hydrated) {
+  if (!hydrated || listingsLoading) {
     return <BagSkeleton />;
   }
 
   if (items.length === 0) {
+    // Live entries that resolved to nothing aren't "empty bag" — say so.
+    const pruned = soldOutCount + unresolvedCount;
     // Recovery path: items parked with "Save for later" live in /saved —
     // surface the way back when there's something to recover.
     return (
       <>
         <EmptyState
           icon="bag"
-          title="Your bag is empty"
-          subtitle="Save items to your bag and check out in one go — bundles from the same seller ship together."
+          title={pruned > 0 ? 'Nothing left in your bag' : 'Your bag is empty'}
+          subtitle={
+            pruned > 0
+              ? `${pruned} ${pruned === 1 ? 'item is' : 'items are'} no longer available and ${pruned === 1 ? 'was' : 'were'} removed from view.`
+              : 'Save items to your bag and check out in one go — bundles from the same seller ship together.'
+          }
           actionLabel="Start shopping"
           onAction={() => router.push('/explore')}
         />
@@ -164,6 +164,12 @@ export default function BagPage() {
               {soldOutCount} {soldOutCount === 1 ? 'item' : 'items'} sold out — excluded from your bag.
             </p>
           ) : null}
+          {unresolvedCount > 0 ? (
+            <p className="mb-4 flex items-center gap-1.5 text-caption text-text-muted">
+              <Icon name="info" size={14} className="shrink-0" />
+              {unresolvedCount} {unresolvedCount === 1 ? 'item' : 'items'} couldn’t be loaded — not included in your totals.
+            </p>
+          ) : null}
 
           {/* Seller groups — the bundle is priced per seller */}
           <div className="flex flex-col gap-7">
@@ -189,10 +195,23 @@ export default function BagPage() {
           {/* Bundle hint — other stock from sellers already in the bag */}
           {bundleGroups.map((group) => (
             <section key={group.sellerId} className="mt-8">
-              <h2 className="flex items-center gap-1.5 text-body-emphasis text-text-primary">
-                <Icon name="pricetag" size={16} className="text-text-secondary" />
-                Add another item
-                {group.username ? ` from @${group.username}` : ' from this seller'} — {BUNDLE_RULE_LABEL}
+              <h2 className="text-body-emphasis text-text-primary">
+                {group.username ? (
+                  /* The rail is quick-add only — the heading carries the
+                     deeper affordance into the per-seller bundle builder. */
+                  <Link
+                    href={`/u/${group.username}/bundle`}
+                    className="pressable flex items-center gap-1.5 rounded-sm"
+                  >
+                    <Icon name="pricetag" size={16} className="text-text-secondary" />
+                    Add another item from @{group.username} — {BUNDLE_RULE_LABEL}
+                  </Link>
+                ) : (
+                  <span className="flex items-center gap-1.5">
+                    <Icon name="pricetag" size={16} className="text-text-secondary" />
+                    Add another item — {BUNDLE_RULE_LABEL}
+                  </span>
+                )}
               </h2>
               <div className="no-scrollbar mt-3 flex gap-2 overflow-x-auto" role="list">
                 {group.suggestions.map((s) => (
@@ -241,7 +260,11 @@ export default function BagPage() {
               <dd className="tnum text-text-primary">{formatPrice(totals.items)}</dd>
             </div>
             <div className="flex justify-between text-body text-text-secondary">
-              <dt>Postage</dt>
+              {/* One parcel per seller — the same model the checkout
+                  parcel manifest itemizes. */}
+              <dt>
+                Postage{totals.parcels > 1 ? ` · ${totals.parcels} parcels` : ''}
+              </dt>
               <dd className="tnum text-text-primary">{formatPrice(totals.shippingFee)}</dd>
             </div>
             <div className="flex justify-between text-body text-text-secondary">
@@ -266,6 +289,16 @@ export default function BagPage() {
             <Icon name="shieldCheck" size={15} className="mt-px shrink-0 text-commerce-trust" />
             Covered by Buyer Protection — full refund if an item never arrives or isn’t as described.
           </p>
+          {/* Authentication — the same threshold claim the PDP and
+              checkout make, so the promise never appears and disappears
+              between surfaces. */}
+          {items.some((l) => l.price >= AUTHENTICATION_THRESHOLD_GBP) ? (
+            <p className="mt-2 flex items-start gap-1.5 text-caption text-text-secondary">
+              <Icon name="verified" size={15} className="mt-px shrink-0 text-commerce-trust" />
+              Physical authentication included on items over{' '}
+              <span className="tnum">{formatPrice(AUTHENTICATION_THRESHOLD_GBP)}</span>.
+            </p>
+          ) : null}
           <Button
             variant="primary"
             size="lg"
@@ -273,7 +306,7 @@ export default function BagPage() {
             className="mt-4"
             onClick={() => router.push('/checkout')}
           >
-            Checkout · {formatPrice(payableTotal)}
+            Checkout · <span className="tnum">{formatPrice(payableTotal)}</span>
           </Button>
         </aside>
       </div>

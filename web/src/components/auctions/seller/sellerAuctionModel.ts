@@ -5,19 +5,26 @@
  *
  * The web auction contract models three lifecycles (upcoming/live/ended)
  * rather than mobile's richer effective states, so mobile's six buckets
- * collapse to four: pending and cancelled cannot occur on this surface —
- * an ended auction with bids is 'sold', without bids 'unsold'.
+ * collapse to four: pending collapses into scheduled, and every unsold
+ * close — cancelled, reserve-not-met, lapsed payment, no bids — lands in
+ * 'unsold'. Only auctionOutcome 'sold' counts as a sale.
  */
 
 import type { AuctionViewModel } from '@/lib/contracts/auction';
-import { countdownUrgency, formatDuration } from '@/lib/data/fixtures-auctions';
+import {
+  auctionOutcome,
+  countdownUrgency,
+  formatDuration,
+} from '@/lib/data/fixtures-auctions';
 
 export type SellerAuctionBucket = 'scheduled' | 'live' | 'sold' | 'unsold';
 
 export function sellerAuctionBucket(auction: AuctionViewModel): SellerAuctionBucket {
   if (auction.lifecycle === 'upcoming') return 'scheduled';
   if (auction.lifecycle === 'live') return 'live';
-  return auction.bidCount > 0 ? 'sold' : 'unsold';
+  // Only a real sale counts — reserve-not-met, cancelled and lapsed
+  // payments are unsold runs, not sales.
+  return auctionOutcome(auction) === 'sold' ? 'sold' : 'unsold';
 }
 
 // ── Stats — mobile computeStats: the summary header reads these ──
@@ -113,11 +120,19 @@ export function resolveSellerRowPresentation(
       showLiveDot: false,
     };
   }
+  const outcome = auctionOutcome(auction);
   return {
     stateLabel: 'Unsold',
     stateTone: 'muted',
-    leadingLabel: 'No bids received',
-    leadingTone: 'muted',
+    leadingLabel:
+      outcome === 'cancelled'
+        ? 'Cancelled'
+        : outcome === 'reserve_not_met'
+          ? `Reserve not met · ${auction.bidCount} ${auction.bidCount === 1 ? 'bid' : 'bids'}`
+          : outcome === 'payment_expired'
+            ? 'Payment expired'
+            : 'No bids received',
+    leadingTone: outcome === 'reserve_not_met' ? 'secondary' : 'muted',
     actionLabel: 'Review result',
     showLiveDot: false,
   };
@@ -128,7 +143,9 @@ export function resolveSellerRowPresentation(
 export function sellerPrice(auction: AuctionViewModel): { prefix: string; amount: number } {
   const amount = auction.bidCount > 0 ? auction.currentBid : auction.startingBid;
   if (auction.lifecycle === 'ended') {
-    return { prefix: auction.bidCount > 0 ? 'Final ' : '', amount };
+    // A hammer price only exists on a sale — unsold runs show their
+    // highest bid (or the untouched starting bid).
+    return { prefix: auctionOutcome(auction) === 'sold' ? 'Final ' : '', amount };
   }
   if (auction.lifecycle === 'live' && auction.bidCount > 0) {
     return { prefix: 'Current ', amount };

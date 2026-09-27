@@ -12,35 +12,38 @@ import { useRouter } from 'next/navigation';
 import Link from 'next/link';
 import { EmptyState } from '@/components/ui/EmptyState';
 import { useToast } from '@/components/ui/Toast';
+import { useSession } from '@/lib/session/SessionProvider';
 import {
-  useCancelCoOwnOrder,
   useCoOwnAssets,
   useCoOwnOrders,
   useCoOwnPositions,
   useDistributionReceipts,
-  useDistributions,
 } from '@/lib/hooks/coown-queries';
+import { useCancelCoOwnOrder } from '@/components/trading/useCoOwnTrading';
 import { PortfolioSummary } from './PortfolioSummary';
 import { PositionsTable, type PositionRow } from './PositionsTable';
-import { OpenOrders } from './OpenOrders';
+import { OpenOrders, OrderHistory } from './OpenOrders';
 import { DistributionsTable } from './DistributionsTable';
 import { PortfolioSkeleton } from './PortfolioSkeleton';
+import { useEvaluateCoOwnAlerts } from './alertStore';
 
 export function PortfolioView() {
   const router = useRouter();
+  const { isGuest, sessionLoading } = useSession();
   const assetsQ = useCoOwnAssets();
   const positionsQ = useCoOwnPositions();
   const ordersQ = useCoOwnOrders();
-  const distributionsQ = useDistributions();
   const receiptsQ = useDistributionReceipts();
   const { cancelOrder: cancel } = useCancelCoOwnOrder();
   const { show } = useToast();
+  // Session fills flow through the same assets snapshot — alerts evaluate
+  // on this surface too, not only on the alerts page.
+  useEvaluateCoOwnAlerts();
 
   const loading =
     assetsQ.isLoading ||
     positionsQ.isLoading ||
     ordersQ.isLoading ||
-    distributionsQ.isLoading ||
     receiptsQ.isLoading;
 
   const titleFor = useMemo(() => {
@@ -52,6 +55,9 @@ export function PortfolioView() {
     const byId = new Map((assetsQ.data ?? []).map((a) => [a.id, a] as const));
     const out: PositionRow[] = [];
     for (const position of positionsQ.data ?? []) {
+      // A full sell leaves a 0-unit row in the cache — realised P/L still
+      // counts in the summary, but it is not a live holding.
+      if (position.units <= 0) continue;
       const asset = byId.get(position.assetId);
       if (!asset) continue;
       const value = position.units * asset.unitPriceGbp;
@@ -104,10 +110,15 @@ export function PortfolioView() {
     };
   }, [rows, positionsQ.data, income]);
 
-  // Resting orders only — cancelled rows leave this list (the cache marks
-  // status 'cancelled'; a separate order history isn't part of this surface).
+  // Resting orders vs terminal ones — the cache marks 'filled' /
+  // 'cancelled'; those surface below in the order history so a cancelled
+  // order never just vanishes.
   const openOrders = useMemo(
     () => (ordersQ.data ?? []).filter((o) => o.status === 'open' || o.status === 'partially_filled'),
+    [ordersQ.data],
+  );
+  const terminalOrders = useMemo(
+    () => (ordersQ.data ?? []).filter((o) => o.status === 'filled' || o.status === 'cancelled'),
     [ordersQ.data],
   );
 
@@ -119,7 +130,23 @@ export function PortfolioView() {
     );
   };
 
-  if (loading) return <PortfolioSkeleton />;
+  if (sessionLoading || loading) return <PortfolioSkeleton />;
+
+  // Positions and orders are account-bound — guests sign in rather than
+  // read the demo identity's holdings.
+  if (isGuest) {
+    return (
+      <div className="mx-auto w-full max-w-5xl px-4 pb-20 pt-8 sm:px-6 md:pt-10">
+        <EmptyState
+          icon="layers"
+          title="Sign in to see your portfolio"
+          subtitle="Co-Own positions, orders and income live behind your account."
+          actionLabel="Sign in"
+          onAction={() => router.push('/auth')}
+        />
+      </div>
+    );
+  }
 
   if (assetsQ.isError || !assetsQ.data) {
     return (
@@ -204,9 +231,15 @@ export function PortfolioView() {
         </section>
       ) : null}
 
-      {(distributionsQ.data ?? []).length > 0 ? (
+      {terminalOrders.length > 0 ? (
         <section className="mt-10">
-          <DistributionsTable distributions={distributionsQ.data ?? []} assetTitle={titleFor} />
+          <OrderHistory orders={terminalOrders} assetTitle={titleFor} />
+        </section>
+      ) : null}
+
+      {(receiptsQ.data ?? []).length > 0 ? (
+        <section className="mt-10">
+          <DistributionsTable receipts={receiptsQ.data ?? []} assetTitle={titleFor} />
         </section>
       ) : null}
     </div>

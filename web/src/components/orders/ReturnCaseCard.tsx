@@ -156,13 +156,20 @@ export function ReturnCaseCard({ returnCase, isBuyer, isSubmitting = false, onSt
           <p className="text-body-emphasis font-medium text-text-primary">
             {getReturnCaseStatusLabel(returnCase)}
           </p>
-          <p className="text-caption text-text-muted">
+          <p className="tnum text-caption text-text-muted">
             {returnCase.requestedAmountGbp != null
               ? `Requested refund: ${formatPrice(returnCase.requestedAmountGbp)}`
               : 'Full refund requested'}
             {' · '}
             {returnCase.reasonLabel}
           </p>
+          {(returnCase.evidenceMediaUrls?.length ?? 0) > 0 ? (
+            <p className="mt-0.5 flex items-center gap-1 text-caption text-text-muted">
+              <Icon name="images" size={12} className="shrink-0" />
+              {returnCase.evidenceMediaUrls!.length} photo
+              {returnCase.evidenceMediaUrls!.length === 1 ? '' : 's'} attached
+            </p>
+          ) : null}
           {status === 'appealed' && returnCase.appealedAt ? (
             <p className="text-caption text-text-muted">
               Escalated {formatDateTime(returnCase.appealedAt)}
@@ -265,6 +272,7 @@ export function ReturnCaseCard({ returnCase, isBuyer, isSubmitting = false, onSt
               <textarea
                 className={inputCls}
                 rows={3}
+                aria-label={form === 'decision_approved' ? 'Note for the buyer' : 'Reason for declining'}
                 placeholder={form === 'decision_approved' ? 'Note for the buyer' : 'Reason for declining'}
                 value={reason}
                 onChange={(e) => setReason(e.target.value)}
@@ -285,8 +293,8 @@ export function ReturnCaseCard({ returnCase, isBuyer, isSubmitting = false, onSt
                 })
               }
             >
-              <input className={inputCls} placeholder="Carrier (e.g. Royal Mail)" value={carrier} onChange={(e) => setCarrier(e.target.value)} maxLength={100} />
-              <input className={`${inputCls} tnum`} placeholder="Tracking number" value={tracking} onChange={(e) => setTracking(e.target.value)} maxLength={200} />
+              <input className={inputCls} aria-label="Return carrier" placeholder="Carrier (e.g. Royal Mail)" value={carrier} onChange={(e) => setCarrier(e.target.value)} maxLength={100} />
+              <input className={`${inputCls} tnum`} aria-label="Return tracking number" placeholder="Tracking number" value={tracking} onChange={(e) => setTracking(e.target.value)} maxLength={200} />
             </FormShell>
           ) : null}
 
@@ -298,8 +306,8 @@ export function ReturnCaseCard({ returnCase, isBuyer, isSubmitting = false, onSt
                 submit({ type: 'inspection', condition: condition.trim(), notes: notes.trim() })
               }
             >
-              <input className={inputCls} placeholder="Condition (e.g. as described, damaged)" value={condition} onChange={(e) => setCondition(e.target.value)} maxLength={100} />
-              <textarea className={inputCls} rows={3} placeholder="Inspection notes" value={notes} onChange={(e) => setNotes(e.target.value)} maxLength={2000} />
+              <input className={inputCls} aria-label="Returned item condition" placeholder="Condition (e.g. as described, damaged)" value={condition} onChange={(e) => setCondition(e.target.value)} maxLength={100} />
+              <textarea className={inputCls} rows={3} aria-label="Inspection notes" placeholder="Inspection notes" value={notes} onChange={(e) => setNotes(e.target.value)} maxLength={2000} />
             </FormShell>
           ) : null}
 
@@ -342,13 +350,14 @@ export function ReturnCaseCard({ returnCase, isBuyer, isSubmitting = false, onSt
               {remedy === 'partial_refund' ? (
                 <input
                   className={`${inputCls} tnum`}
+                  aria-label="Refund amount in pounds"
                   placeholder="Refund amount (£)"
                   inputMode="decimal"
                   value={remedyAmount}
                   onChange={(e) => setRemedyAmount(e.target.value)}
                 />
               ) : null}
-              <textarea className={inputCls} rows={2} placeholder="Notes for the buyer (optional)" value={notes} onChange={(e) => setNotes(e.target.value)} maxLength={2000} />
+              <textarea className={inputCls} rows={2} aria-label="Notes for the buyer" placeholder="Notes for the buyer (optional)" value={notes} onChange={(e) => setNotes(e.target.value)} maxLength={2000} />
             </FormShell>
           ) : null}
         </>
@@ -357,7 +366,7 @@ export function ReturnCaseCard({ returnCase, isBuyer, isSubmitting = false, onSt
         <>
           {status === 'remedy_proposed' ? (
             <>
-              <p className="text-body-emphasis font-medium text-text-primary">
+              <p className="tnum text-body-emphasis font-medium text-text-primary">
                 {remedyLabel(returnCase.proposedRemedy)}
                 {returnCase.remedyAmountGbp != null ? ` · ${formatPrice(returnCase.remedyAmountGbp)}` : ''}
               </p>
@@ -396,6 +405,7 @@ export function ReturnCaseCard({ returnCase, isBuyer, isSubmitting = false, onSt
               <textarea
                 className={inputCls}
                 rows={3}
+                aria-label={form === 'appeal' ? 'Appeal reason' : 'Reason this remedy is not acceptable'}
                 placeholder={form === 'appeal' ? 'Why are you appealing?' : 'Why is this remedy not acceptable?'}
                 value={reason}
                 onChange={(e) => setReason(e.target.value)}

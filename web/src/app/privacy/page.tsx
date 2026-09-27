@@ -1,4 +1,5 @@
 import type { Metadata } from 'next';
+import Link from 'next/link';
 
 export const metadata: Metadata = {
   title: 'Privacy policy',
@@ -97,13 +98,21 @@ export default function PrivacyPage() {
 
       <Section title="Contact">
         <p>
-          Questions about this policy or your data:{' '}
-          <a
-            href="mailto:privacy@thryftverse.example"
+          Questions about this policy or your data — open a case in the{' '}
+          <Link
+            href="/support"
             className="text-text-primary underline decoration-border underline-offset-4 hover:decoration-text-muted"
           >
-            privacy@thryftverse.example
-          </a>
+            support centre
+          </Link>
+          . To export or delete what we hold, use{' '}
+          <Link
+            href="/settings/data"
+            className="text-text-primary underline decoration-border underline-offset-4 hover:decoration-text-muted"
+          >
+            Settings → Data &amp; export
+          </Link>
+          .
         </p>
       </Section>
     </div>

@@ -12,6 +12,7 @@ import type { User } from '@/lib/contracts/domain';
 import { useMemberDirectory } from '@/lib/hooks/queries';
 import { Avatar } from '@/components/ui/Avatar';
 import { Button } from '@/components/ui/Button';
+import { EmptyState } from '@/components/ui/EmptyState';
 import { Icon } from '@/components/ui/Icon';
 import { Sheet } from '@/components/ui/Sheet';
 import { Skeleton } from '@/components/ui/Skeleton';
@@ -33,7 +34,7 @@ export function AddMembersSheet({
   const [q, setQ] = useState('');
   const [selected, setSelected] = useState<User[]>([]);
   const [adding, setAdding] = useState(false);
-  const { data: directory, isLoading } = useMemberDirectory(q);
+  const { data: directory, isLoading, isError, refetch } = useMemberDirectory(q);
 
   useEffect(() => {
     if (open) {
@@ -109,7 +110,16 @@ export function AddMembersSheet({
         ) : null}
 
         <div className="min-h-0 flex-1 overflow-y-auto">
-          {isLoading ? (
+          {isError ? (
+            <EmptyState
+              compact
+              icon="alert"
+              title="Couldn't load people"
+              subtitle="Check your connection and try again."
+              actionLabel="Try again"
+              onAction={() => void refetch()}
+            />
+          ) : isLoading ? (
             <div className="px-4">
               {Array.from({ length: 4 }).map((_, i) => (
                 <div key={i} className="flex items-center gap-3 py-2.5">

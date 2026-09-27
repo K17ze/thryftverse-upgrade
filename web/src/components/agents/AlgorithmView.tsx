@@ -13,6 +13,8 @@ import { useRouter } from 'next/navigation';
 import { Chip } from '@/components/ui/Chip';
 import { Icon } from '@/components/ui/Icon';
 import { IconButton } from '@/components/ui/IconButton';
+import { Skeleton } from '@/components/ui/Skeleton';
+import { useHydrated } from '@/lib/store/useStore';
 import {
   discoveryLabel,
   priceComfortLabel,
@@ -266,6 +268,8 @@ function SliderRow({
 
 export function AlgorithmView() {
   const router = useRouter();
+  // Persisted store — gate so SSR and the first client render agree.
+  const hydrated = useHydrated();
   const topics = useAlgorithmPrefs((s) => s.topics);
   const brands = useAlgorithmPrefs((s) => s.brands);
   const priceComfort = useAlgorithmPrefs((s) => s.priceComfort);
@@ -280,14 +284,18 @@ export function AlgorithmView() {
   return (
     <div className="pb-16">
       <div className="flex items-center gap-1 px-2 pt-1 sm:px-4">
-        <IconButton name="back" aria-label="Back" onClick={() => router.back()} />
+        <IconButton name="back" aria-label="Back to agents" onClick={() => router.push('/agents')} />
         <h1 className="flex-1 text-screen-title font-semibold text-text-primary">
           Your algorithm
         </h1>
       </div>
       <p className="mt-1 px-4 text-caption text-text-secondary sm:px-6">
         The signals that shape your home feed and Discover.{' '}
-        {tunedCount > 0 ? `${tunedCount} tuned away from usual.` : 'Mostly untuned — a normal feed.'}
+        {hydrated
+          ? tunedCount > 0
+            ? `${tunedCount} tuned away from usual.`
+            : 'Mostly untuned — a normal feed.'
+          : null}
       </p>
 
       {/* Honesty note — device-local in fixture mode, always shown */}
@@ -299,6 +307,14 @@ export function AlgorithmView() {
         </p>
       </div>
 
+      {!hydrated ? (
+        <div aria-busy aria-label="Loading your preferences" className="mt-8 space-y-px">
+          {[0, 1, 2, 3, 4].map((i) => (
+            <Skeleton key={i} className="h-[56px] w-full rounded-none" />
+          ))}
+        </div>
+      ) : (
+        <>
       {/* Dials — continuous signals */}
       <section aria-label="Feed dials" className="mt-8">
         <div className="divide-y divide-border-subtle border-y border-border-subtle">
@@ -344,6 +360,8 @@ export function AlgorithmView() {
         suggestions={SUGGESTED_BRANDS}
         addPlaceholder="Add a brand"
       />
+        </>
+      )}
 
       <p className="px-4 pb-4 pt-8 text-center text-meta text-text-muted sm:px-6">
         Recommendations are signals, not promises — a high weight favours, it

@@ -45,7 +45,7 @@ export const TAP_FOCUS_FRACTION = 0.42;
 export const MAX_FILE_BYTES = 8 * 1024 * 1024;
 export const ACCEPTED_IMAGE_TYPES = ['image/jpeg', 'image/png', 'image/webp', 'image/avif'];
 
-export type VisualSearchErrorKind = 'unsupported' | 'too-large' | 'decode';
+export type VisualSearchErrorKind = 'unsupported' | 'too-large' | 'decode' | 'unreachable';
 
 export const ERROR_COPY: Record<VisualSearchErrorKind, { title: string; body: string }> = {
   unsupported: {
@@ -59,6 +59,10 @@ export const ERROR_COPY: Record<VisualSearchErrorKind, { title: string; body: st
   decode: {
     title: "Couldn't read that photo",
     body: 'The file looks corrupted — try a different one.',
+  },
+  unreachable: {
+    title: "Couldn't load that image",
+    body: 'The link may be private or blocked — save the photo and upload it instead.',
   },
 };
 

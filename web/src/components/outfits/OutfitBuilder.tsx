@@ -6,16 +6,21 @@
  * mobile), name field + gated save CTA under the canvas. Port of the mobile
  * OutfitBuilderScreen semantics: items are picked from saved/favourites into
  * fixed garment slots; save requires ≥2 filled slots and persists to the
- * outfits store.
+ * outfits store. Header grammar matches mobile: back/close, undo+redo once
+ * there's history to traverse, and a confirmed Clear (never a one-tap
+ * wipe of a composed outfit).
  */
 
 import { useMemo, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import type { Listing } from '@/lib/contracts/domain';
 import { Button } from '@/components/ui/Button';
+import { Sheet } from '@/components/ui/Sheet';
 import { Skeleton } from '@/components/ui/Skeleton';
 import { useToast } from '@/components/ui/Toast';
 import { INPUT_CLASS } from '@/components/sell/SellField';
+import { useSignupWall } from '@/components/auth/SignupWall';
+import { BackBar } from '@/components/profile/BackBar';
 import { listingsForIds } from '@/components/profile/fixtures';
 import { useStore, useHydrated } from '@/lib/store/useStore';
 import {
@@ -27,11 +32,15 @@ import {
 } from '@/lib/store/outfits';
 import { OutfitCanvas, type OutfitCanvasItems } from './OutfitCanvas';
 import { OutfitTray, type TrayFilter } from './OutfitTray';
+import { OutfitSuggestionCard } from './OutfitSuggestionCard';
 import { inferListingSlot, saveCtaLabel, toOutfitItems } from './outfitItems';
+import { suggestCompletion } from './styleGraph';
+import { LISTINGS } from '@/lib/data/fixtures';
 
 export function OutfitBuilder() {
   const router = useRouter();
   const { show } = useToast();
+  const { requireAuth, wall } = useSignupWall();
   const hydrated = useHydrated();
 
   const wishlist = useStore((s) => s.wishlist);
@@ -47,6 +56,36 @@ export function OutfitBuilder() {
   const [name, setName] = useState('');
   const [items, setItems] = useState<OutfitCanvasItems>({});
   const [trayFilter, setTrayFilter] = useState<TrayFilter>('all');
+  const [confirmClear, setConfirmClear] = useState(false);
+
+  // Undo/redo — snapshot history of the slot map. Every mutation goes
+  // through `apply` so the past trail and redo stack stay honest.
+  const [past, setPast] = useState<OutfitCanvasItems[]>([]);
+  const [future, setFuture] = useState<OutfitCanvasItems[]>([]);
+  const canUndo = past.length > 0;
+  const canRedo = future.length > 0;
+
+  const apply = (next: OutfitCanvasItems) => {
+    setPast((p) => [...p, items]);
+    setFuture([]);
+    setItems(next);
+  };
+
+  const undo = () => {
+    if (!canUndo) return;
+    const prev = past[past.length - 1];
+    setPast(past.slice(0, -1));
+    setFuture([items, ...future]);
+    setItems(prev);
+  };
+
+  const redo = () => {
+    if (!canRedo) return;
+    const next = future[0];
+    setFuture(future.slice(1));
+    setPast([...past, items]);
+    setItems(next);
+  };
 
   const filled = OUTFIT_SLOTS.filter((s) => items[s]).length;
   const selectedIds = useMemo(
@@ -61,16 +100,41 @@ export function OutfitBuilder() {
 
   const toggleItem = (listing: Listing) => {
     const slot = inferListingSlot(listing);
-    setItems((prev) => ({
-      ...prev,
-      [slot]: prev[slot]?.id === listing.id ? undefined : listing,
-    }));
+    apply({
+      ...items,
+      [slot]: items[slot]?.id === listing.id ? undefined : listing,
+    });
   };
 
   const removeFromSlot = (slot: OutfitSlot) =>
-    setItems((prev) => ({ ...prev, [slot]: undefined }));
+    apply({ ...items, [slot]: undefined });
+
+  /** Complete-the-look — StyleGraph heuristic over real listings. The
+   *  candidate pool is the member's own rail (saved + favourites) first,
+   *  then the wider catalogue — both resolve to real items, never
+   *  fabricated suggestions. */
+  const suggestion = useMemo(() => {
+    const placed = new Set(
+      Object.values(items)
+        .map((l) => l?.id)
+        .filter((x): x is string => Boolean(x)),
+    );
+    const pool = [
+      ...sourceItems,
+      ...LISTINGS.filter((l) => !sourceItems.some((s) => s.id === l.id)),
+    ].filter((l) => !placed.has(l.id));
+    return suggestCompletion(items, pool);
+  }, [items, sourceItems]);
+
+  const clearAll = () => {
+    apply({});
+    setConfirmClear(false);
+    show('Outfit cleared', 'info');
+  };
 
   const handleSave = () => {
+    // Save is account-bound — deep-linked guests get the soft wall.
+    if (!requireAuth('save_item')) return;
     if (filled < MIN_OUTFIT_ITEMS) return;
     const outfit = saveOutfit(name || DEFAULT_OUTFIT_NAME, toOutfitItems(items));
     show(`Saved “${outfit.name}”`, 'success');
@@ -98,23 +162,51 @@ export function OutfitBuilder() {
   }
 
   return (
-    <div className="mx-auto max-w-[1200px] px-4 pb-16 pt-5 sm:px-6">
-      <div className="flex items-center justify-between">
+    <div className="mx-auto max-w-[1200px] pb-16">
+      <BackBar
+        actions={
+          <Button
+            variant="quiet"
+            size="sm"
+            icon="trash"
+            disabled={filled === 0}
+            onClick={() => setConfirmClear(true)}
+          >
+            Clear
+          </Button>
+        }
+      />
+
+      <div className="flex items-center justify-between px-4 pt-1 sm:px-6">
         <h1 className="text-screen-title font-bold text-text-primary">
           New outfit
         </h1>
-        <Button
-          variant="quiet"
-          size="sm"
-          icon="trash"
-          disabled={filled === 0}
-          onClick={() => setItems({})}
-        >
-          Clear
-        </Button>
       </div>
 
-      <div className="mt-5 grid gap-8 lg:grid-cols-[minmax(0,1fr)_minmax(320px,380px)]">
+      {/* Undo/redo — progressive disclosure: only visible once there's
+          history to traverse (mobile OutfitBuilderUndoRedoBar). */}
+      {canUndo || canRedo ? (
+        <div className="mt-1 flex items-center gap-1 px-4 sm:px-6" role="toolbar" aria-label="Edit history">
+          <Button
+            variant="quiet"
+            size="sm"
+            disabled={!canUndo}
+            onClick={undo}
+          >
+            Undo
+          </Button>
+          <Button
+            variant="quiet"
+            size="sm"
+            disabled={!canRedo}
+            onClick={redo}
+          >
+            Redo
+          </Button>
+        </div>
+      ) : null}
+
+      <div className="mt-5 grid gap-8 px-4 sm:px-6 lg:grid-cols-[minmax(0,1fr)_minmax(320px,380px)]">
         {/* ── Composer: canvas + name + save ── */}
         <div>
           <div className="mx-auto w-full max-w-[560px]">
@@ -124,6 +216,18 @@ export function OutfitBuilder() {
               onSlotPress={(slot) => setTrayFilter(slot)}
               onRemoveItem={removeFromSlot}
             />
+
+            {/* Complete the look — shown only while a suggestion exists
+                (empty slots remain and a candidate scores). */}
+            {suggestion && filled > 0 ? (
+              <OutfitSuggestionCard
+                suggestion={suggestion}
+                onApply={() => {
+                  apply({ ...items, [suggestion.slot]: suggestion.item });
+                  show(`Added ${suggestion.item.title}`, 'success');
+                }}
+              />
+            ) : null}
           </div>
 
           <div className="mt-5">
@@ -169,6 +273,34 @@ export function OutfitBuilder() {
           />
         </div>
       </div>
+
+      {/* Clear confirmation — a composed outfit is real work; never wipe it
+          on a stray tap (mobile ConfirmationSheet parity). */}
+      <Sheet
+        open={confirmClear}
+        onClose={() => setConfirmClear(false)}
+        title="Clear outfit"
+        maxWidth={420}
+      >
+        <div className="px-5 py-5">
+          <p className="text-body text-text-secondary">
+            Remove all {filled} {filled === 1 ? 'item' : 'items'} from this outfit?
+          </p>
+          <div className="mt-5 flex gap-3">
+            <Button
+              variant="secondary"
+              fullWidth
+              onClick={() => setConfirmClear(false)}
+            >
+              Cancel
+            </Button>
+            <Button variant="danger" fullWidth onClick={clearAll}>
+              Clear
+            </Button>
+          </div>
+        </div>
+      </Sheet>
+      {wall}
     </div>
   );
 }

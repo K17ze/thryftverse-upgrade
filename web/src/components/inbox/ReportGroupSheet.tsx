@@ -10,8 +10,10 @@
 import { useEffect, useState } from 'react';
 import { Button } from '@/components/ui/Button';
 import { Sheet } from '@/components/ui/Sheet';
+import { useToast } from '@/components/ui/Toast';
+import { useSupportActions } from '@/components/support/useSupportTickets';
 import {
-  newReportReference,
+  REPORT_REASONS,
   ReportReasonList,
   ReportSuccessView,
   type ReportReason,
@@ -26,9 +28,12 @@ export function ReportGroupSheet({
   onClose: () => void;
   groupLabel: string;
 }) {
+  const { createTicket } = useSupportActions();
+  const toast = useToast();
   const [reason, setReason] = useState<ReportReason | null>(null);
   const [sending, setSending] = useState(false);
   const [reportId, setReportId] = useState<string | null>(null);
+  const [ticketId, setTicketId] = useState<string | null>(null);
   const [submittedAt, setSubmittedAt] = useState<string | null>(null);
   const done = reportId != null;
 
@@ -37,21 +42,33 @@ export function ReportGroupSheet({
     setReason(null);
     setSending(false);
     setReportId(null);
+    setTicketId(null);
     setSubmittedAt(null);
   }, [open]);
 
-  const submit = () => {
+  const submit = async () => {
     if (!reason || sending) return;
     setSending(true);
-    // Staged send — the receipt lands only after the request completes,
-    // so the success view is an honest receipt, not an optimistic claim.
-    window.setTimeout(() => {
-      setReportId(newReportReference());
+    const reasonLabel =
+      REPORT_REASONS.find((r) => r.key === reason)?.label ?? 'Report';
+    try {
+      const ticket = await createTicket({
+        topicId: 'other',
+        orderRef: null,
+        message:
+          `Group report — ${reasonLabel}` +
+          (groupLabel ? ` · ${groupLabel}` : ''),
+      });
+      setReportId(ticket.ref ?? ticket.id.toUpperCase());
+      setTicketId(ticket.id);
       setSubmittedAt(
         new Date().toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' }),
       );
+    } catch {
+      toast.show('Could not send the report — try again.', 'error');
+    } finally {
       setSending(false);
-    }, 700);
+    }
   };
 
   return (
@@ -61,6 +78,7 @@ export function ReportGroupSheet({
           reportId={reportId}
           submittedAt={submittedAt}
           evidenceItems={[]}
+          caseHref={ticketId ? `/support/${ticketId}` : undefined}
           onDone={onClose}
         />
       ) : (
@@ -83,7 +101,7 @@ export function ReportGroupSheet({
             size="lg"
             fullWidth
             disabled={!reason || sending}
-            onClick={submit}
+            onClick={() => void submit()}
             className="mt-5"
           >
             {sending ? 'Sending…' : 'Send report'}

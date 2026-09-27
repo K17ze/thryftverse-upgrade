@@ -39,6 +39,7 @@ export const USERS: User[] = [
     id: 'u1',
     username: 'mariefullery',
     avatar: img('photo-1494790108377-be9c29b29330', 200),
+    coverPhoto: img('photo-1441986300917-64674bd600d8', 1200),
     rating: 4.8,
     reviewCount: 54,
     location: 'South Elmsall, United Kingdom',
@@ -74,6 +75,7 @@ export const USERS: User[] = [
     id: 'u3',
     username: 'dankdunksuk',
     avatar: img('photo-1599566150163-29194dcaad36', 200),
+    coverPhoto: img('photo-1556906781-9a412961c28c', 1200),
     rating: 4.9,
     reviewCount: 128,
     location: 'Manchester, United Kingdom',
@@ -107,6 +109,7 @@ export const USERS: User[] = [
     id: 'u5',
     username: 'archive.thread',
     avatar: img('photo-1507003211169-0a1dd7228f2d', 200),
+    coverPhoto: img('photo-1490481651871-ab68de25d43d', 1200),
     rating: 4.9,
     reviewCount: 211,
     location: 'Leeds, United Kingdom',
@@ -125,6 +128,7 @@ export const USERS: User[] = [
     id: 'u6',
     username: 'ellawears',
     avatar: img('photo-1544005313-94ddf0286df2', 200),
+    coverPhoto: img('photo-1515886657613-9f3515b0c78f', 1200),
     rating: 4.6,
     reviewCount: 41,
     location: 'Brighton, United Kingdom',
@@ -142,6 +146,7 @@ export const USERS: User[] = [
     id: 'me',
     username: 'you',
     avatar: img('photo-1524504388940-b1c1722653e1', 200),
+    coverPhoto: img('photo-1487222477894-8943e31ef7b2', 1200),
     rating: 4.7,
     reviewCount: 12,
     location: 'London, United Kingdom',
@@ -943,8 +948,8 @@ export const NOTIFICATIONS: AppNotification[] = [
 /**
  * Extended activity feed — covers the full per-kind grammar (likes, offers,
  * price drops, follows, orders, reviews, new items, system) with explicit
- * deep links and an honest read cursor. The notifications surface merges
- * this with the legacy NOTIFICATIONS rows.
+ * deep links and an honest read cursor — the canonical feed the
+ * notifications surface renders.
  */
 export const NOTIFICATION_FEED: NotificationEntry[] = [
   { id: 'nf1', kind: 'offer', text: 'scott_art sent you an offer of £110 on Cashmere Crew Neck Jumper', time: '12m', image: img('photo-1578932750294-f5075e85f44a', 200), href: '/offers', unread: true },
@@ -1410,7 +1415,7 @@ const GROUP_CONVERSATIONS: Conversation[] = [
       { id: 'u2', username: 'scott_art', avatar: USERS[1].avatar, identityVerified: true },
       { id: 'u6', username: 'ellawears', avatar: USERS[5].avatar, identityVerified: true },
     ],
-    lastMessage: '📷 Photo',
+    lastMessage: 'Photo',
     lastMessageTime: '34m',
     unread: true,
     unreadCount: 3,
@@ -1561,10 +1566,14 @@ export function appendFixtureMessage(conversationId: string, message: Message): 
   convo.lastMessage =
     message.text ||
     (message.mediaType === 'image'
-      ? '📷 Photo'
+      ? 'Photo'
       : message.mediaType === 'video'
-        ? '🎥 Video'
-        : undefined) ||
+        ? 'Video'
+        : message.documentUri
+          ? `Document${message.documentName ? ` · ${message.documentName}` : ''}`
+          : message.voiceUri
+            ? 'Voice message'
+            : undefined) ||
     message.systemTitle ||
     (message.offerPrice != null ? `Offer ${message.offerPrice}` : 'New message');
   convo.lastMessageTime = 'now';

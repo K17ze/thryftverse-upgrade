@@ -10,6 +10,7 @@
 
 import { useEffect, useMemo, useState } from 'react';
 import { Sheet } from '@/components/ui/Sheet';
+import { Switch } from '@/components/settings/Switch';
 import { AppImage } from '@/components/ui/AppImage';
 import { Button } from '@/components/ui/Button';
 import { Icon } from '@/components/ui/Icon';
@@ -35,6 +36,9 @@ interface OfferToLikersSheetProps {
   open: boolean;
   onClose: () => void;
   listing: Pick<Listing, 'id' | 'title' | 'price' | 'images' | 'likes'>;
+  /** True while the live send is in flight — disables Send so a double-tap
+   *  can't mint a second batch. */
+  sending?: boolean;
   onSend: (params: OfferToLikersSendParams) => void;
 }
 
@@ -42,6 +46,7 @@ export function OfferToLikersSheet({
   open,
   onClose,
   listing,
+  sending = false,
   onSend,
 }: OfferToLikersSheetProps) {
   const [selectedDiscount, setSelectedDiscount] = useState(15);
@@ -84,7 +89,7 @@ export function OfferToLikersSheet({
   };
 
   const handleSend = () => {
-    if (!valid) return;
+    if (!valid || sending) return;
     const discountPercent = useCustomPrice
       ? Math.round(((askingPrice - offerPrice) / askingPrice) * 100)
       : selectedDiscount;
@@ -211,24 +216,11 @@ export function OfferToLikersSheet({
               </p>
             </div>
           </div>
-          <button
-            type="button"
-            role="switch"
-            aria-checked={includeFreeShipping}
+          <Switch
+            checked={includeFreeShipping}
+            onChange={setIncludeFreeShipping}
             aria-label="Include free shipping in offer"
-            onClick={() => setIncludeFreeShipping((v) => !v)}
-            className={`pressable flex h-6 w-11 shrink-0 items-center rounded-full border px-0.5 transition-colors ${
-              includeFreeShipping
-                ? 'justify-end border-brand bg-brand-subtle'
-                : 'justify-start border-border bg-surface'
-            }`}
-          >
-            <span
-              className={`h-5 w-5 rounded-full ${
-                includeFreeShipping ? 'bg-brand' : 'bg-text-muted'
-              }`}
-            />
-          </button>
+          />
         </div>
 
         {/* Expiry */}
@@ -288,12 +280,14 @@ export function OfferToLikersSheet({
           size="lg"
           fullWidth
           icon="send"
-          disabled={!valid}
+          disabled={!valid || sending}
           onClick={handleSend}
         >
-          {valid
-            ? `Send to ${likerCount} ${likerCount === 1 ? 'liker' : 'likers'} · ${formatPrice(offerPrice)}`
-            : `Send to ${likerCount} ${likerCount === 1 ? 'liker' : 'likers'}`}
+          {sending
+            ? 'Sending…'
+            : valid
+              ? `Send to ${likerCount} ${likerCount === 1 ? 'liker' : 'likers'} · ${formatPrice(offerPrice)}`
+              : `Send to ${likerCount} ${likerCount === 1 ? 'liker' : 'likers'}`}
         </Button>
       </div>
     </Sheet>

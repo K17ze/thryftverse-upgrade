@@ -34,6 +34,7 @@ export function CategoryTile({
   return (
     <Link
       href={`/category/${slug}`}
+      role="listitem"
       className={`group relative block shrink-0 overflow-hidden rounded-lg ${className}`}
       aria-label={
         count

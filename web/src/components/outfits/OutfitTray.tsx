@@ -69,15 +69,13 @@ export function OutfitTray({
       ) : (
         <>
           <div
-            role="tablist"
+            role="group"
             aria-label="Filter by slot"
             className="no-scrollbar -mx-4 mt-3 flex gap-2 overflow-x-auto px-4 pb-1 sm:-mx-6 sm:px-6 lg:mx-0 lg:flex-wrap lg:px-0"
           >
             {FILTERS.map((f) => (
               <Chip
                 key={f.value}
-                role="tab"
-                aria-selected={filter === f.value}
                 selected={filter === f.value}
                 onClick={() => onFilterChange(f.value)}
               >

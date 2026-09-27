@@ -10,7 +10,7 @@
  * render as stills with no fabricated playback chrome.
  */
 
-import { LISTINGS, PULSE_POSTS, userById } from '@/lib/data/fixtures';
+import { LISTINGS, PULSE_POSTS, listingById, userById } from '@/lib/data/fixtures';
 import { AUCTIONS, formatDuration, toViewModel } from '@/lib/data/fixtures-auctions';
 import { formatPrice } from '@/lib/utils/format';
 
@@ -29,6 +29,11 @@ export interface PulseCardModel {
   href: string;
   /** Short status line — countdown, price or drop percentage. */
   meta?: string;
+  /** Auction end (ms epoch) — auction_live only; the card ticks the
+   *  countdown off this rather than freezing the build-time string. */
+  endsAt?: number;
+  /** Current bid — auction_live only; paired with endsAt in the meta. */
+  currentBid?: number;
   /** Shoppable attachments — resolve via listingById. */
   itemIds: string[];
   likeCount: number;
@@ -55,8 +60,12 @@ export function buildPulseFeed(now = Date.now()): PulseCardModel[] {
       caption: a.title,
       href: `/auctions/${a.id}`,
       meta: `Ends in ${formatDuration(vm.msToEnd)} · Current bid ${formatPrice(a.currentBid)}`,
+      endsAt: new Date(a.endsAt).getTime(),
+      currentBid: a.currentBid,
       itemIds: [a.listingId],
-      likeCount: a.bidCount,
+      // Likes belong to the underlying listing — bidCount is auction
+      // activity, already reported in `meta`, not a like metric.
+      likeCount: listingById(a.listingId)?.likes ?? 0,
       timestamp: new Date(a.endsAt).getTime(),
       createdAt: a.startsAt,
     });

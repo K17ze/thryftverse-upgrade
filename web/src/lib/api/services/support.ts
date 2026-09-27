@@ -32,6 +32,10 @@ interface ApiSupportCase {
   events?: Array<{ kind?: string; label: string; detail?: string; at: string }>;
   resolution?: { disposition: string; note: string } | null;
   csat?: { rating: number; note: string } | null;
+  /** Server-returned evidence + linked commerce context (orderRef arrives
+   *  in its own field; listing/payout land here when the case carries them). */
+  evidenceMediaUrls?: string[];
+  contextLinks?: Array<{ kind: string; id: string }>;
   createdAt: string;
   updatedAt: string;
 }
@@ -92,7 +96,12 @@ function mapCase(c: ApiSupportCase): SupportTicket {
     events: (c.events ?? []).map(
       (e): SupportTicketEvent => ({
         kind:
-          e.kind === 'opened' || e.kind === 'in_review' || e.kind === 'resolved' || e.kind === 'closed'
+          e.kind === 'opened' ||
+          e.kind === 'in_review' ||
+          e.kind === 'resolved' ||
+          e.kind === 'closed' ||
+          e.kind === 'evidence' ||
+          e.kind === 'handoff'
             ? e.kind
             : 'note',
         label: e.label,
@@ -100,6 +109,17 @@ function mapCase(c: ApiSupportCase): SupportTicket {
         at: e.at,
       }),
     ),
+    // Evidence arrives as media URLs; rows render only real attached items.
+    evidence: (c.evidenceMediaUrls ?? []).map((uri, i) => ({
+      id: `ev-${i}`,
+      uri,
+    })),
+    contextLinks: (c.contextLinks ?? [])
+      .filter(
+        (l): l is { kind: 'order' | 'listing' | 'payout'; id: string } =>
+          l.kind === 'order' || l.kind === 'listing' || l.kind === 'payout',
+      )
+      .map((l) => ({ kind: l.kind, id: l.id })),
     resolution: c.resolution ?? null,
     csat: c.csat ?? null,
     createdAt: c.createdAt,
@@ -132,6 +152,8 @@ export async function createSupportCase(input: {
   topicId: SupportTopicId;
   orderRef: string | null;
   message: string;
+  /** Uploaded evidence URLs — mirrors the mobile ticket-create payload. */
+  evidenceMediaUrls?: string[];
 }): Promise<SupportTicket> {
   const payload = await fetchJson<{ ok: boolean; case?: ApiSupportCase }>('/support/cases', {
     method: 'POST',
@@ -140,10 +162,25 @@ export async function createSupportCase(input: {
       topicId: input.topicId,
       orderRef: input.orderRef,
       message: input.message,
+      evidenceMediaUrls: input.evidenceMediaUrls?.length
+        ? input.evidenceMediaUrls
+        : undefined,
     }),
   });
   if (!payload.ok || !payload.case) throw new Error('Support case was not created');
   return mapCase(payload.case);
+}
+
+/**
+ * Contest a resolved/closed decision — POST /support/cases/:id/appeal,
+ * the real case-appeal endpoint the mobile SupportCaseDetailScreen calls.
+ */
+export async function appealSupportCase(caseId: string, reason: string): Promise<void> {
+  await fetchJson(`/support/cases/${encodeURIComponent(caseId)}/appeal`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ reason }),
+  });
 }
 
 export async function postSupportCaseMessage(caseId: string, body: string): Promise<void> {

@@ -15,9 +15,14 @@ export function FollowButton({
   userId,
   size = 'sm',
   className,
+  idleVariant = 'primary',
 }: {
   userId: string;
   size?: 'sm' | 'md';
+  /** Emphasis while not following — the profile hero recedes Follow to
+   *  secondary so Message carries the conversion weight (mobile grammar);
+   *  list rows keep the primary fill. */
+  idleVariant?: 'primary' | 'secondary' | 'outline';
   className?: string;
 }) {
   const hydrated = useHydrated();
@@ -32,7 +37,7 @@ export function FollowButton({
   return (
     <>
       <Button
-        variant={effective ? 'secondary' : 'primary'}
+        variant={effective ? 'secondary' : idleVariant}
         size={size}
         icon={effective ? 'check' : 'follow'}
         className={className}

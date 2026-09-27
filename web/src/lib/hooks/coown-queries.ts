@@ -3,7 +3,8 @@
  * mode; live mode targets the shared /co-own/* surface the mobile app uses.
  */
 
-import { useQuery, useQueryClient } from '@tanstack/react-query';
+import { useMemo } from 'react';
+import { useQueries, useQuery, useQueryClient } from '@tanstack/react-query';
 import type {
   CandlePoint,
   CoOwnAsset,
@@ -17,6 +18,7 @@ import type {
   OrderBookSnapshot,
   PriceWindow,
   TradeLedgerEntry,
+  VoteChoice,
 } from '@/lib/contracts/coown';
 import {
   buyoutOffersFor,
@@ -35,6 +37,8 @@ import {
 import { DATA_MODE } from '@/lib/api/client';
 import * as coownService from '@/lib/api/services/coown';
 import { useSession } from '@/lib/session/SessionProvider';
+import { useCoOwnVotes } from '@/lib/store/coownVotes';
+import { useHydrated } from '@/lib/store/useStore';
 
 const tick = (ms = 120) => new Promise((r) => setTimeout(r, ms));
 
@@ -89,32 +93,42 @@ export function useOrderBook(assetId: string) {
 export function usePriceHistory(assetId: string, window: PriceWindow) {
   return useQuery({
     queryKey: ['coown', 'price', assetId, window],
-    queryFn: async (): Promise<CandlePoint[]> => {
-      if (DATA_MODE === 'live') {
-        const res = await fetchJsonWithCandles(assetId, WINDOW_INTERVAL[window]);
-        return res;
-      }
-      await tick(90);
-      return priceWindow(assetId, window);
-    },
+    queryFn: () => fetchCandles(assetId, window),
+  });
+}
+
+/** Candle series for a set of assets at one window — screener/leaderboard
+ *  grids read this once instead of a hook per row. */
+export function usePriceHistoryMap(assetIds: readonly string[], window: PriceWindow) {
+  return useQueries({
+    queries: assetIds.map((assetId) => ({
+      queryKey: ['coown', 'price', assetId, window] as const,
+      queryFn: () => fetchCandles(assetId, window),
+      staleTime: DATA_MODE === 'live' ? undefined : Infinity,
+    })),
+    combine: (results) =>
+      assetIds.map((id, i) => ({ assetId: id, candles: results[i]?.data ?? [] })),
   });
 }
 
 /** Backend candles arrive in minor units + ISO timestamps — the web chart
  *  works in GBP numbers + Unix ms, converted once here at the boundary. */
-async function fetchJsonWithCandles(
-  assetId: string,
-  interval: '1h' | '4h' | '1d' | '1w',
-): Promise<CandlePoint[]> {
-  const { candles } = await coownService.fetchCoOwnPriceHistory(assetId, { interval });
-  return candles.map((c) => ({
-    t: Date.parse(c.timestamp),
-    o: c.openGbpMinor / 100,
-    h: c.highGbpMinor / 100,
-    l: c.lowGbpMinor / 100,
-    c: c.closeGbpMinor / 100,
-    v: c.volumeUnits,
-  }));
+async function fetchCandles(assetId: string, window: PriceWindow): Promise<CandlePoint[]> {
+  if (DATA_MODE === 'live') {
+    const { candles } = await coownService.fetchCoOwnPriceHistory(assetId, {
+      interval: WINDOW_INTERVAL[window],
+    });
+    return candles.map((c) => ({
+      t: Date.parse(c.timestamp),
+      o: c.openGbpMinor / 100,
+      h: c.highGbpMinor / 100,
+      l: c.lowGbpMinor / 100,
+      c: c.closeGbpMinor / 100,
+      v: c.volumeUnits,
+    }));
+  }
+  await tick(90);
+  return priceWindow(assetId, window);
 }
 
 export function useCoOwnPositions() {
@@ -152,38 +166,10 @@ export function useCoOwnOrders() {
   });
 }
 
-const ORDERS_KEY = ['coown', 'orders'] as const;
-
-/**
- * Cancel a resting order. Mirrors the mobile contract
- * (cancelCoOwnOrder → the row transitions to 'cancelled' only on
- * acknowledgment; unfilled units are released). Fixture mode treats the
- * cache write as the ledger; live mode posts the cancel, marks the row
- * so the acknowledged state is visible immediately, then refetches.
- */
-export function useCancelCoOwnOrder() {
-  const queryClient = useQueryClient();
-  return {
-    async cancelOrder(orderId: string): Promise<boolean> {
-      if (DATA_MODE === 'live') {
-        try {
-          await coownService.cancelCoOwnOrder(orderId);
-        } catch {
-          return false;
-        }
-      }
-      queryClient.setQueryData<CoOwnOrder[]>(ORDERS_KEY, (old) =>
-        (old ?? CO_OWN_OPEN_ORDERS).map((o) =>
-          o.id === orderId ? { ...o, status: 'cancelled' as const } : o,
-        ),
-      );
-      if (DATA_MODE === 'live') {
-        void queryClient.invalidateQueries({ queryKey: ORDERS_KEY });
-      }
-      return true;
-    },
-  };
-}
+// Order cancellation lives in @/components/trading/useCoOwnTrading — the
+// release-aware path (restores position units / wallet reserve / book
+// depth). Do NOT re-add a status-only cancel here: it would silently
+// strand reservations for session orders.
 
 export function useCoOwnActivity(assetId?: string) {
   return useQuery({
@@ -232,6 +218,23 @@ export function useCorporateActions(assetId?: string) {
   });
 }
 
+export const corporateActionVotesKey = (actionId: string) =>
+  ['coown', 'action-votes', actionId] as const;
+
+/**
+ * Server-authoritative governance tally for one action — vote counts,
+ * the viewer's recorded vote and eligibility. Live mode only: fixture
+ * actions carry their own tallies and votes stay session-local, so the
+ * query is disabled (data stays undefined) under fixtures.
+ */
+export function useCorporateActionVotes(actionId: string) {
+  return useQuery({
+    queryKey: corporateActionVotesKey(actionId),
+    enabled: DATA_MODE === 'live',
+    queryFn: () => coownService.fetchGovernanceVotes(actionId),
+  });
+}
+
 /** The public tape for one market — masked counterparties, newest first. */
 export function useMarketLedger(assetId: string) {
   return useQuery({
@@ -243,6 +246,41 @@ export function useMarketLedger(assetId: string) {
       await tick(110);
       return MARKET_LEDGER[assetId] ?? [];
     },
+  });
+}
+
+/**
+ * The market-wide tape — every per-asset ledger folded into one stream,
+ * newest first. Fixture mode reads each asset's session cache first so
+ * prints written this session surface alongside the seeded tape; live
+ * mode aggregates the per-asset executions endpoints (there is no global
+ * tape endpoint).
+ */
+export function useMarketTape() {
+  const queryClient = useQueryClient();
+  return useQuery({
+    queryKey: ['coown', 'tape'],
+    queryFn: async (): Promise<TradeLedgerEntry[]> => {
+      if (DATA_MODE === 'live') {
+        const page = await coownService.fetchCoOwnAssets();
+        const nested = await Promise.all(
+          page.items.map((a) => coownService.fetchCoOwnExecutions(a.id).catch(() => [])),
+        );
+        return nested
+          .flat()
+          .sort((a, b) => Date.parse(b.executedAt) - Date.parse(a.executedAt));
+      }
+      await tick(120);
+      return CO_OWN_ASSETS.flatMap(
+        (a) =>
+          queryClient.getQueryData<TradeLedgerEntry[]>(['coown', 'ledger', a.id]) ??
+          MARKET_LEDGER[a.id] ??
+          [],
+      ).sort((a, b) => Date.parse(b.executedAt) - Date.parse(a.executedAt));
+    },
+    // Session prints write into this cache — it must not re-seed.
+    staleTime: DATA_MODE === 'live' ? undefined : Infinity,
+    gcTime: DATA_MODE === 'live' ? undefined : Infinity,
   });
 }
 
@@ -277,20 +315,31 @@ export function useDistributionReceipts() {
     queryKey: ['coown', 'receipts'],
     queryFn: async (): Promise<DistributionReceipt[]> => {
       if (DATA_MODE === 'live') {
-        // Receipts project from the distribution stream — per-viewer units
-        // come back with the distribution when settled.
-        const distributions = await coownService.fetchCoOwnDistributions();
-        return distributions.map((d) => ({
-          id: d.id,
-          assetId: d.assetId,
-          kind: d.kind,
-          amountPerUnitGbp: d.amountPerUnitGbp,
-          unitsHeld: 0,
-          totalGbp: d.totalPotGbp,
-          exDate: d.scheduledFor,
-          paidAt: d.paidAt,
-          status: d.status,
-        }));
+        // The distributions endpoint is platform-wide — it carries the pot
+        // and per-unit rate, not the viewer's entitlement. Project receipts
+        // only where the holding is real: a distribution on an asset the
+        // portfolio shows zero units of can't pay the viewer anything.
+        const [distributions, { positions }] = await Promise.all([
+          coownService.fetchCoOwnDistributions(),
+          coownService.fetchCoOwnPortfolio(),
+        ]);
+        const held = new Map(positions.map((p) => [p.assetId, p.units]));
+        return distributions
+          .filter((d) => (held.get(d.assetId) ?? 0) > 0)
+          .map((d) => {
+            const unitsHeld = held.get(d.assetId)!;
+            return {
+              id: d.id,
+              assetId: d.assetId,
+              kind: d.kind,
+              amountPerUnitGbp: d.amountPerUnitGbp,
+              unitsHeld,
+              totalGbp: Math.round(unitsHeld * d.amountPerUnitGbp * 100) / 100,
+              exDate: d.scheduledFor,
+              paidAt: d.paidAt,
+              status: d.status,
+            };
+          });
       }
       await tick(120);
       return [...DISTRIBUTION_RECEIPTS].sort(
@@ -433,4 +482,140 @@ export function useBuyoutActions() {
       return true;
     },
   };
+}
+
+// ── Governance votes ────────────────────────────────────────────────
+// Mirrors the mobile ballot split: the corporate-action row is the
+// record, the votes endpoint (live) / persisted store (fixture) is the
+// ballot. Re-voting while open replaces the previous choice — the
+// backend upserts, the fixture layer moves the viewer's units between
+// buckets exactly once.
+
+/**
+ * Fold the viewer's persisted ballot into an action row for display.
+ * Idempotent: when the row already carries the stored vote (post-cast
+ * cache write), the tally is left untouched — never double-counted.
+ */
+export function withViewerVote(
+  action: CorporateAction,
+  stored: { vote: VoteChoice; votingPowerUnits: number } | undefined,
+): CorporateAction {
+  if (!stored) return action;
+  if (stored.vote === action.yourVote) return { ...action, yourVote: stored.vote };
+  const power = stored.votingPowerUnits;
+  const next = { ...action };
+  if (action.yourVote === 'for') next.votesFor = Math.max(0, action.votesFor - power);
+  else if (action.yourVote === 'against') next.votesAgainst = Math.max(0, action.votesAgainst - power);
+  else if (action.yourVote === 'abstain') next.votesAbstain = Math.max(0, action.votesAbstain - power);
+  if (stored.vote === 'for') next.votesFor += power;
+  else if (stored.vote === 'against') next.votesAgainst += power;
+  else next.votesAbstain += power;
+  next.yourVote = stored.vote;
+  return next;
+}
+
+/**
+ * Corporate actions as the viewer sees them — the persisted ballot store
+ * folded into each row. In live mode the backend is authoritative and
+ * the local store is bypassed (it only echoes a just-cast vote until the
+ * refetch lands).
+ */
+export function useGovernanceActions(assetId?: string) {
+  const query = useCorporateActions(assetId);
+  const hydrated = useHydrated();
+  const stored = useCoOwnVotes((s) => s.votes);
+  const data = useMemo(
+    () =>
+      query.data?.map((a) =>
+        DATA_MODE === 'live' ? a : withViewerVote(a, hydrated ? stored[a.id] : undefined),
+      ),
+    [query.data, stored, hydrated],
+  );
+  return { ...query, data };
+}
+
+/**
+ * The live governance tally for one action — votes endpoint, enabled
+ * only when the backend is connected. Fixture mode derives the same
+ * figures from the action row + persisted store, so the views never
+ * fabricate a second source of truth.
+ */
+export function useGovernanceVotes(actionId: string) {
+  return useQuery({
+    queryKey: ['coown', 'votes', actionId],
+    queryFn: () => coownService.fetchGovernanceVotes(actionId),
+    enabled: DATA_MODE === 'live',
+  });
+}
+
+/**
+ * Cast (or re-cast) a ballot. Fixture mode writes the persisted store —
+ * the durable record — then rewrites the actions caches so the tally the
+ * viewer sees matches what the overlay will derive on remount. Live mode
+ * posts the vote and re-reads the affected queries.
+ */
+export function useCastCorporateVote() {
+  const queryClient = useQueryClient();
+  const { user } = useSession();
+  const castVoteStore = useCoOwnVotes((s) => s.castVote);
+
+  const cast = async (input: {
+    actionId: string;
+    assetId: string;
+    vote: VoteChoice;
+    votingPowerUnits: number;
+  }): Promise<boolean> => {
+    if (!user || input.votingPowerUnits <= 0) return false;
+
+    if (DATA_MODE === 'live') {
+      try {
+        await coownService.castGovernanceVote(input.actionId, {
+          assetId: input.assetId,
+          vote: input.vote,
+        });
+      } catch {
+        return false;
+      }
+      // Local echo until the refetch lands — cleared implicitly by the
+      // server-authoritative read in useGovernanceActions.
+      castVoteStore(input.actionId, input.vote, input.votingPowerUnits);
+      for (const key of [
+        ['coown', 'actions', input.assetId],
+        ['coown', 'actions', 'all'],
+        ['coown', 'votes', input.actionId],
+      ]) {
+        void queryClient.invalidateQueries({ queryKey: key });
+      }
+      return true;
+    }
+
+    const prior = useCoOwnVotes.getState().votes[input.actionId];
+    castVoteStore(input.actionId, input.vote, input.votingPowerUnits);
+
+    const apply = (list: CorporateAction[] | undefined) =>
+      (list ?? CORPORATE_ACTIONS).map((a) => {
+        if (a.id !== input.actionId) return a;
+        // Displayed truth before this cast — raw row + prior stored ballot.
+        const base = withViewerVote(a, prior);
+        const removePower = base.yourVote
+          ? (prior?.votingPowerUnits ?? input.votingPowerUnits)
+          : 0;
+        const next = { ...base };
+        if (base.yourVote === 'for') next.votesFor = Math.max(0, next.votesFor - removePower);
+        else if (base.yourVote === 'against')
+          next.votesAgainst = Math.max(0, next.votesAgainst - removePower);
+        else if (base.yourVote === 'abstain')
+          next.votesAbstain = Math.max(0, next.votesAbstain - removePower);
+        if (input.vote === 'for') next.votesFor += input.votingPowerUnits;
+        else if (input.vote === 'against') next.votesAgainst += input.votingPowerUnits;
+        else next.votesAbstain += input.votingPowerUnits;
+        next.yourVote = input.vote;
+        return next;
+      });
+    queryClient.setQueryData<CorporateAction[]>(['coown', 'actions', input.assetId], apply);
+    queryClient.setQueryData<CorporateAction[]>(['coown', 'actions', 'all'], apply);
+    return true;
+  };
+
+  return { cast };
 }

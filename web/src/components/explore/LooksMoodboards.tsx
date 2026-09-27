@@ -35,8 +35,7 @@ function LookCard({ look }: { look: Look }) {
         alt={title}
         aspectRatio={look.coverAspectRatio ?? 0.8}
         sizes="(max-width: 640px) 220px, 30vw"
-        className="w-full"
-        imgClassName="transition-transform duration-300 group-hover:scale-105"
+        className="w-full media-zoom"
       />
       <div className={scrimClass} />
       <div className="absolute inset-x-0 bottom-0 p-3.5">
@@ -73,8 +72,7 @@ function MoodboardCard({ board }: { board: Moodboard }) {
         alt={board.title}
         aspectRatio={board.aspectRatio ?? 0.8}
         sizes="(max-width: 640px) 220px, 30vw"
-        className="w-full"
-        imgClassName="transition-transform duration-300 group-hover:scale-105"
+        className="w-full media-zoom"
       />
       <div className={scrimClass} />
       <div className="absolute inset-x-0 bottom-0 p-3.5">

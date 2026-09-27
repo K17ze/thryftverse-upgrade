@@ -7,10 +7,13 @@
  * results machine. Flat canvas, spacing + labels carry the hierarchy.
  */
 
-import { useCallback, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import Link from 'next/link';
 import { Icon } from '@/components/ui/Icon';
-import { useVisualSearch } from '@/lib/hooks/visual-search-queries';
+import {
+  useSaveVisualSearch,
+  useVisualSearch,
+} from '@/lib/hooks/visual-search-queries';
 import { honestMatchNote } from './visualSearchEngine';
 import { VisualSearchDropzone } from './VisualSearchDropzone';
 import { VisualSearchQueryPanel } from './VisualSearchQueryPanel';
@@ -19,7 +22,23 @@ import { VisualSearchResults } from './VisualSearchResults';
 
 export function VisualSearchClient() {
   const vs = useVisualSearch();
+  const saveVisualSearch = useSaveVisualSearch();
   const [framing, setFraming] = useState(false);
+  // The queryId this surface already persisted — prevents duplicate saves
+  // of the same photo's derived query. Resets when a new photo lands.
+  const [savedForQuery, setSavedForQuery] = useState<string | null>(null);
+
+  // ?image=<url> deep link — the entry point a "visually similar" tile
+  // affordance targets. Read once on mount (analysis can never SSR, so a
+  // window.read is the honest path — no Suspense needed for the page).
+  const { pickImageUrl } = vs;
+  const seededRef = useRef(false);
+  useEffect(() => {
+    if (seededRef.current) return;
+    seededRef.current = true;
+    const image = new URLSearchParams(window.location.search).get('image');
+    if (image) pickImageUrl(image);
+  }, [pickImageUrl]);
 
   const handleRemove = useCallback(() => {
     setFraming(false);
@@ -38,9 +57,9 @@ export function VisualSearchClient() {
   const isActive = previewUrl !== null && vs.status !== 'idle';
 
   return (
-    <div className="mx-auto max-w-[1600px] px-4 pb-10 pt-5 sm:px-6">
+    <div className="mx-auto max-w-[1440px] px-4 pb-10 pt-5 sm:px-6">
       <div className="flex items-center justify-between gap-3">
-        <h1 className="text-section-title font-semibold text-text-primary">Search by photo</h1>
+        <h1 className="text-screen-title font-bold text-text-primary">Search by photo</h1>
         <Link
           href="/search"
           className="pressable flex items-center gap-1.5 rounded-md px-2 py-1.5 text-caption font-medium text-text-secondary hover:text-text-primary"
@@ -52,7 +71,12 @@ export function VisualSearchClient() {
 
       {!isActive ? (
         <div className="mt-10 sm:mt-16">
-          <VisualSearchDropzone error={vs.error} onPick={vs.pickFile} />
+          <VisualSearchDropzone
+            error={vs.error}
+            onPick={vs.pickFile}
+            onPickUrl={vs.pickImageUrl}
+            urlLoading={vs.urlLoading}
+          />
         </div>
       ) : (
         <div className="mt-5 grid gap-8 lg:grid-cols-[280px_minmax(0,1fr)] xl:grid-cols-[320px_minmax(0,1fr)]">
@@ -83,6 +107,42 @@ export function VisualSearchClient() {
           </aside>
 
           <section className="min-w-0">
+            {vs.status === 'populated' || vs.status === 'empty' ? (
+              <div className="mb-4 flex items-center justify-between gap-3">
+                <p className="text-meta text-text-muted">
+                  {savedForQuery !== null && savedForQuery === vs.queryId
+                    ? 'Saved — replay and alerts use the detected details, not the photo.'
+                    : 'Save the detected details to re-run this match later.'}
+                </p>
+                <button
+                  type="button"
+                  disabled={savedForQuery !== null && savedForQuery === vs.queryId}
+                  onClick={() =>
+                    setSavedForQuery(
+                      saveVisualSearch({
+                        queryId: vs.queryId,
+                        attributes: vs.attributes,
+                        inactiveKinds: vs.inactiveKinds,
+                        results: vs.results,
+                      }).queryId ?? vs.queryId,
+                    )
+                  }
+                  className="pressable flex h-11 shrink-0 items-center gap-1.5 rounded-md border border-border px-3 text-caption font-semibold text-text-primary disabled:opacity-60"
+                >
+                  <Icon
+                    name={
+                      savedForQuery !== null && savedForQuery === vs.queryId
+                        ? 'check'
+                        : 'bookmark'
+                    }
+                    size={15}
+                  />
+                  {savedForQuery !== null && savedForQuery === vs.queryId
+                    ? 'Saved'
+                    : 'Save search'}
+                </button>
+              </div>
+            ) : null}
             <VisualSearchResults
               status={vs.status}
               phase={vs.phase}

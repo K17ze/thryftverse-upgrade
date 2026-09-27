@@ -13,6 +13,9 @@ import { persist, createJSONStorage } from 'zustand/middleware';
 export interface ProfileOverlay {
   username?: string;
   avatar?: string;
+  /** Cover image URI — SessionProvider's overlay merge flows it through
+   *  to user.coverPhoto on every self-facing surface. */
+  coverPhoto?: string;
   bio?: string;
   location?: string;
   website?: string;

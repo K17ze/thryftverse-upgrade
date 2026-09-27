@@ -161,6 +161,9 @@ export interface CoOwnOrder {
   status: 'open' | 'filled' | 'partially_filled' | 'cancelled';
   feeGbp: number;
   totalGbp: number;
+  /** Time-in-force for the resting remainder (limit orders only);
+   *  'day' → GFD, 'gtc' → GTC90 on the wire. Absent on market fills. */
+  duration?: OrderDuration;
   placedAt: string;
 }
 
@@ -198,17 +201,35 @@ export interface Distribution {
   scheduledFor: string;
 }
 
+/** Ballot choices — the wire carries 'abstain' too (mobile
+ *  castGovernanceVote); it maps to no seat change but still counts
+ *  toward quorum. */
+export type VoteChoice = 'for' | 'against' | 'abstain';
+
 export interface CorporateAction {
   id: string;
   assetId: string;
   kind: 'sale_vote' | 'insurance_renewal' | 'authentication' | 'exit';
   title: string;
   description: string;
+  /** Voting deadline — ISO timestamp. */
   closesAt: string;
   status: 'open' | 'passed' | 'rejected' | 'pending_tally';
-  yourVote: 'for' | 'against' | null;
+  yourVote: VoteChoice | null;
+  /** Units of voting power tallied per side. */
   votesFor: number;
   votesAgainst: number;
+  votesAbstain: number;
+  /** Units that must vote for the ballot to count — null when the
+   *  resolution carries no quorum rule. Fails closed: never invented. */
+  quorumUnits: number | null;
+  /** Share of votes cast needed to pass (0–100) — null when unset. */
+  passThresholdPct: number | null;
+  /** Cash value per unit if the resolution passes — null when the
+   *  action carries no per-unit figure. */
+  perUnitValueGbp: number | null;
+  /** Total pot/resolution value — null when absent from the record. */
+  totalValueGbp: number | null;
 }
 
 // ── Watchlist & alerts ────────────────────────────────────────────────

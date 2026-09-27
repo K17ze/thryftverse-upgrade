@@ -38,7 +38,9 @@ export const IconButton = forwardRef<HTMLButtonElement, IconButtonProps>(functio
       ].join(' ')}
       {...rest}
     >
-      <Icon name={name} filled={filled} size={size} aria-label={rest['aria-label'] ?? name} />
+      {/* The glyph is decoration — the accessible label lives on the
+          button itself (aria-label on the SVG would duplicate it). */}
+      <Icon name={name} filled={filled} size={size} />
     </button>
   );
 });

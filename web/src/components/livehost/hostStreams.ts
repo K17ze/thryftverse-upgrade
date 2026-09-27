@@ -12,6 +12,7 @@ import type { QueryClient } from '@tanstack/react-query';
 import { LIVE_SESSIONS, type LiveSession } from '@/lib/data/fixtures-media';
 import { CURRENT_USER } from '@/lib/data/fixtures';
 import { seededRandom } from '@/components/live/useLivePresence';
+import { setLivePins } from '@/components/live/livePins';
 
 /** Simulated results captured when the host ends the show. */
 export interface HostSummaryStats {
@@ -71,6 +72,9 @@ export function createHostStream(input: HostStreamInput): HostStream {
     summaryStats: null,
   };
   hostStreams.set(id, stream);
+  // Publish to the shared pins store — the viewer rail reads this, not
+  // the host-local map, so pins reach viewers as the host sets them.
+  setLivePins(id, stream.pinIds);
   return stream;
 }
 
@@ -133,6 +137,8 @@ export function endHostStream(
 export function setHostStreamPins(id: string, pinIds: string[]): void {
   mutate(id, (s) => {
     s.pinIds = [...pinIds];
+    // Same write viewers see — host pin changes go live immediately.
+    setLivePins(id, s.pinIds);
   });
 }
 

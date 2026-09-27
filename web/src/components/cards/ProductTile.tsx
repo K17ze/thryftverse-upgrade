@@ -11,6 +11,7 @@
 
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
+import { useEffect, useRef, useState } from 'react';
 import type { DiscoveryListingSummary } from '@/lib/contracts/domain';
 import { AppImage } from '@/components/ui/AppImage';
 import { Avatar } from '@/components/ui/Avatar';
@@ -19,6 +20,7 @@ import { SustainabilityChip } from '@/components/ui/Badge';
 import { useStore, useHydrated } from '@/lib/store/useStore';
 import { useToast } from '@/components/ui/Toast';
 import { useSignupWall } from '@/components/auth/SignupWall';
+import { FeedItemMenu } from '@/components/feed/FeedItemMenu';
 import { formatPrice } from '@/lib/utils/format';
 import {
   getListingCoverUri,
@@ -55,6 +57,9 @@ export function ProductTile({ item, aspectRatio, visualOnly, priority }: Product
   const usableImages = item.images.filter(isUsableUri);
   const cover = getListingCoverUri(item.images);
   const primaryMedia = getPrimaryMedia(item);
+  /** A video cover renders a real <video> — autoplay grammar lives in
+   *  TileVideo; a non-cover video just earns the play badge. */
+  const coverIsVideo = isVideoUri(cover);
   const hasVideo = usableImages.some(isVideoUri);
   const hasMultiple = usableImages.length > 1;
   const ratio =
@@ -63,13 +68,14 @@ export function ProductTile({ item, aspectRatio, visualOnly, priority }: Product
     DEFAULT_LISTING_MEDIA_ASPECT_RATIO;
 
   const sellerUsername = item.seller?.username ?? null;
+  const isPaused = item.status === 'paused';
   const hasPriceDrop =
     typeof item.originalPrice === 'number' && item.price != null && item.originalPrice > item.price;
   const priceDropPercent = hasPriceDrop
     ? Math.round(((item.originalPrice! - item.price!) / item.originalPrice!) * 100)
     : 0;
   const showSustainability =
-    !item.isSold && (item.sustainabilityGrade === 'A' || item.sustainabilityGrade === 'B');
+    !item.isSold && !isPaused && (item.sustainabilityGrade === 'A' || item.sustainabilityGrade === 'B');
 
   const handleHeart = (e: React.MouseEvent) => {
     e.preventDefault();
@@ -121,18 +127,24 @@ export function ProductTile({ item, aspectRatio, visualOnly, priority }: Product
   return (
     <article className={`group relative ${item.isSold ? 'opacity-70' : ''}`}>
       <div className="relative overflow-hidden rounded-lg bg-surface-alt">
-        <AppImage
-          src={cover}
-          alt={item.title}
-          aspectRatio={ratio}
-          focalPoint={primaryMedia?.focalPoint ?? getCategoryFocalPoint(item.category)}
-          blurDataURL={primaryMedia?.lqip ?? null}
-          priority={priority}
-          sizes="(max-width: 640px) 50vw, (max-width: 1024px) 33vw, 20vw"
-          className="media-zoom"
-        />
+        {coverIsVideo ? (
+          <TileVideo src={cover} label={item.title} aspectRatio={ratio} />
+        ) : (
+          <AppImage
+            src={cover}
+            alt={item.title}
+            aspectRatio={ratio}
+            focalPoint={primaryMedia?.focalPoint ?? getCategoryFocalPoint(item.category)}
+            blurDataURL={primaryMedia?.lqip ?? null}
+            priority={priority}
+            sizes="(max-width: 640px) 50vw, (max-width: 1024px) 33vw, 20vw"
+            className="media-zoom"
+          />
+        )}
 
-        {/* Sold — scrim + centered label */}
+        {/* Sold — scrim + centered label. Paused — the same status
+            grammar at badge weight: a small on-media chip, no scrim, so
+            the tile stays browsable without reading as purchasable. */}
         {item.isSold ? (
           <>
             <div className="absolute inset-0 bg-overlay" />
@@ -140,10 +152,16 @@ export function ProductTile({ item, aspectRatio, visualOnly, priority }: Product
               Sold
             </span>
           </>
+        ) : isPaused ? (
+          <span className="absolute left-2 top-2 rounded-md bg-overlay px-2 py-1 text-meta font-semibold uppercase tracking-[0.08em] text-scrim-text-primary">
+            Paused
+          </span>
         ) : null}
 
-        {/* Badge cascade — price drop wins over sustainability chip */}
-        {!item.isSold && hasPriceDrop ? (
+        {/* Badge cascade — price drop wins over sustainability chip; both
+            stay off paused items (a sale badge on an unpurchasable tile
+            would overstate it). */}
+        {!item.isSold && !isPaused && hasPriceDrop ? (
           <span className="absolute left-2 top-2 rounded-md bg-overlay px-2 py-1 text-meta font-semibold text-scrim-text-primary">
             -{priceDropPercent}%
           </span>
@@ -154,12 +172,14 @@ export function ProductTile({ item, aspectRatio, visualOnly, priority }: Product
         ) : null}
 
         {/* Media indicator — video play or multi-image, one only.
-            Small on-media pill (bg-overlay grammar), not a chrome circle. */}
-        {hasVideo ? (
+            Small on-media pill (bg-overlay grammar), not a chrome circle.
+            Video covers own their badge inside TileVideo — it's suppressed
+            while the clip is actually playing. */}
+        {!coverIsVideo && hasVideo ? (
           <span className="absolute right-1.5 top-1.5 inline-flex items-center rounded-md bg-overlay px-1.5 py-1 text-scrim-text-primary">
             <Icon name="play" filled size={11} />
           </span>
-        ) : hasMultiple ? (
+        ) : !coverIsVideo && hasMultiple ? (
           <span className="absolute right-1.5 top-1.5 inline-flex items-center rounded-md bg-overlay px-1.5 py-1 text-scrim-text-primary">
             <Icon name="images" size={12} />
           </span>
@@ -167,44 +187,54 @@ export function ProductTile({ item, aspectRatio, visualOnly, priority }: Product
 
         {/* Quick actions — 44px hit areas, glyph scrim, no chrome circles.
             quick-actions reveals on hover/focus-within where hover exists;
-            touch viewports keep the cluster always visible. */}
+            touch viewports keep the cluster always visible. Sold tiles
+            suppress save/wishlist/share (native ClosetMediaMosaic ~219 —
+            the item is gone; the tile stays navigable and the PDP gates
+            purchase honestly), while feed tuning still applies. */}
         <div className="quick-actions absolute bottom-0 right-0 z-10 flex items-center transition-opacity">
-          <button
-            type="button"
-            onClick={handleShare}
-            aria-label="Share listing"
-            className="pressable flex h-11 w-11 items-center justify-center"
-          >
-            <Icon name="share" size={19} className="text-scrim-text-primary drop-scrim" />
-          </button>
-          <button
-            type="button"
-            onClick={handleSave}
-            aria-label={isSaved ? 'Remove from saved' : 'Save item'}
-            aria-pressed={isSaved}
-            className="pressable flex h-11 w-11 items-center justify-center"
-          >
-            <Icon
-              name="bookmark"
-              filled={isSaved}
-              size={20}
-              className={isSaved ? 'text-brand drop-scrim' : 'text-scrim-text-primary drop-scrim'}
-            />
-          </button>
-          <button
-            type="button"
-            onClick={handleHeart}
-            aria-label={isFav ? 'Remove from wishlist' : 'Add to wishlist'}
-            aria-pressed={isFav}
-            className="pressable flex h-11 w-11 items-center justify-center"
-          >
-            <Icon
-              name="heart"
-              filled={isFav}
-              size={21}
-              className={isFav ? 'text-danger-text drop-scrim' : 'text-scrim-text-primary drop-scrim'}
-            />
-          </button>
+          {/* Feed controls — renders only inside a feed surface
+              (FeedControlsProvider); null everywhere else. */}
+          <FeedItemMenu item={item} />
+          {item.isSold ? null : (
+            <>
+              <button
+                type="button"
+                onClick={handleShare}
+                aria-label="Share listing"
+                className="pressable flex h-11 w-11 items-center justify-center"
+              >
+                <Icon name="share" size={19} className="text-scrim-text-primary drop-scrim" />
+              </button>
+              <button
+                type="button"
+                onClick={handleSave}
+                aria-label={isSaved ? 'Remove from saved' : 'Save item'}
+                aria-pressed={isSaved}
+                className="pressable flex h-11 w-11 items-center justify-center"
+              >
+                <Icon
+                  name="bookmark"
+                  filled={isSaved}
+                  size={20}
+                  className={isSaved ? 'text-brand drop-scrim' : 'text-scrim-text-primary drop-scrim'}
+                />
+              </button>
+              <button
+                type="button"
+                onClick={handleHeart}
+                aria-label={isFav ? 'Remove from wishlist' : 'Add to wishlist'}
+                aria-pressed={isFav}
+                className="pressable flex h-11 w-11 items-center justify-center"
+              >
+                <Icon
+                  name="heart"
+                  filled={isFav}
+                  size={21}
+                  className={isFav ? 'text-danger-text drop-scrim' : 'text-scrim-text-primary drop-scrim'}
+                />
+              </button>
+            </>
+          )}
         </div>
       </div>
 
@@ -261,5 +291,92 @@ export function ProductTile({ item, aspectRatio, visualOnly, priority }: Product
 
       {wall}
     </article>
+  );
+}
+
+/**
+ * TileVideo — feed video grammar, mirrors the mobile feed's viewability
+ * autoplay: muted, inline, looping, and only while at least half the
+ * tile is on screen. Two honest gates keep it opt-out friendly —
+ * prefers-reduced-motion and the network Save-Data hint both leave the
+ * clip paused (the first frame still renders; the play badge stays so
+ * the tile still reads as video). A paused clip on scroll-away resumes
+ * on return; it never plays with sound.
+ */
+function TileVideo({
+  src,
+  label,
+  aspectRatio,
+}: {
+  src: string;
+  label: string;
+  aspectRatio: number;
+}) {
+  const videoRef = useRef<HTMLVideoElement>(null);
+  /** False until mounted + permitted — SSR never claims autoplay. */
+  const [autoplayAllowed, setAutoplayAllowed] = useState(false);
+  const [playing, setPlaying] = useState(false);
+
+  useEffect(() => {
+    const motion = window.matchMedia('(prefers-reduced-motion: reduce)');
+    const connection = (
+      navigator as Navigator & { connection?: { saveData?: boolean } }
+    ).connection;
+    const update = () =>
+      setAutoplayAllowed(!motion.matches && connection?.saveData !== true);
+    update();
+    motion.addEventListener('change', update);
+    return () => motion.removeEventListener('change', update);
+  }, []);
+
+  useEffect(() => {
+    const video = videoRef.current;
+    if (!video) return;
+    if (!autoplayAllowed) {
+      // Policy flipped mid-scroll — honour it immediately.
+      video.pause();
+      return;
+    }
+    if (!('IntersectionObserver' in window)) {
+      // No observer (very old engine) — treat as always visible.
+      void video.play().catch(() => undefined);
+      return;
+    }
+    const observer = new IntersectionObserver(
+      (entries) => {
+        for (const entry of entries) {
+          if (entry.isIntersecting && entry.intersectionRatio >= 0.5) {
+            void video.play().catch(() => undefined);
+          } else if (!video.paused) {
+            video.pause();
+          }
+        }
+      },
+      { threshold: [0, 0.5, 1] },
+    );
+    observer.observe(video);
+    return () => observer.disconnect();
+  }, [autoplayAllowed]);
+
+  return (
+    <div className="w-full" style={{ aspectRatio: String(aspectRatio) }}>
+      <video
+        ref={videoRef}
+        src={src}
+        muted
+        playsInline
+        loop
+        preload="metadata"
+        aria-label={label}
+        className="media-zoom h-full w-full object-cover"
+        onPlaying={() => setPlaying(true)}
+        onPause={() => setPlaying(false)}
+      />
+      {playing ? null : (
+        <span className="absolute right-1.5 top-1.5 inline-flex items-center rounded-md bg-overlay px-1.5 py-1 text-scrim-text-primary">
+          <Icon name="play" filled size={11} />
+        </span>
+      )}
+    </div>
   );
 }

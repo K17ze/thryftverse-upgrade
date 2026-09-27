@@ -16,6 +16,8 @@ import { Icon } from '@/components/ui/Icon';
 import { IconButton } from '@/components/ui/IconButton';
 import { Skeleton } from '@/components/ui/Skeleton';
 import { useToast } from '@/components/ui/Toast';
+import { DATA_MODE } from '@/lib/api/client';
+import { useSession } from '@/lib/session/SessionProvider';
 import { formatPrice } from '@/lib/utils/format';
 import { LedgerList } from './LedgerList';
 import { useWalletData } from './useWalletData';
@@ -61,13 +63,16 @@ function HistorySkeleton() {
 export function HistoryView() {
   const router = useRouter();
   const { show } = useToast();
+  const { isGuest, sessionLoading } = useSession();
   const { data, isLoading, isError, refetch } = useWalletData();
 
   const [filter, setFilter] = useState<LedgerFilter>('all');
   const [visibleCount, setVisibleCount] = useState(LEDGER_PAGE_SIZE);
 
+  // Live mode renders only the real fetched transactions — filter, net
+  // and CSV export all run over real rows; fixture mode is unchanged.
   const ledger = useMemo(
-    () => (data ? buildLedger(data.session, data.available) : []),
+    () => (data ? buildLedger(data.session, data.available, data.transactions) : []),
     [data],
   );
   const filtered = useMemo(() => filterLedger(ledger, filter), [ledger, filter]);
@@ -88,7 +93,21 @@ export function HistoryView() {
     show(`Exported ${filtered.length} transaction${filtered.length === 1 ? '' : 's'}`, 'success');
   };
 
-  if (isLoading) return <HistorySkeleton />;
+  if (sessionLoading || isLoading) return <HistorySkeleton />;
+
+  // The ledger is account-bound — guests sign in rather than read the
+  // demo identity's activity.
+  if (isGuest) {
+    return (
+      <EmptyState
+        icon="wallet"
+        title="Sign in to see your activity"
+        subtitle="Your wallet transactions live behind your account."
+        actionLabel="Sign in"
+        onAction={() => router.push('/auth')}
+      />
+    );
+  }
 
   if (isError || !data) {
     return (
@@ -130,9 +149,10 @@ export function HistoryView() {
         </Button>
       </div>
 
-      {/* Filter rail */}
+      {/* Filter rail — pressed-button chips, not tabs (one list below,
+          not tabpanels). */}
       <div
-        role="tablist"
+        role="group"
         aria-label="Filter transactions"
         className="no-scrollbar mt-4 flex gap-2 overflow-x-auto px-4 pb-1 sm:px-6"
       >
@@ -175,11 +195,13 @@ export function HistoryView() {
         </div>
       ) : null}
 
-      <p className="mt-10 flex items-center gap-1.5 px-4 text-caption text-text-muted sm:px-6">
-        <Icon name="info" size={14} className="shrink-0" />
-        Fixture mode — balances are reconstructed from sample data. The export downloads
-        every row matching the current filter.
-      </p>
+      {DATA_MODE !== 'live' ? (
+        <p className="mt-10 flex items-center gap-1.5 px-4 text-caption text-text-muted sm:px-6">
+          <Icon name="info" size={14} className="shrink-0" />
+          Fixture mode — balances are reconstructed from sample data. The export downloads
+          every row matching the current filter.
+        </p>
+      ) : null}
     </div>
   );
 }

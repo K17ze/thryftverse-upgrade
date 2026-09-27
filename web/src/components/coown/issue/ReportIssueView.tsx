@@ -3,10 +3,8 @@
 /**
  * /co-own/[id]/issue — port of mobile CoOwnIssueScreen. A holder or
  * watcher flags a problem on one asset: pick a category, describe what
- * happened, submit → a case reference is returned for follow-up.
- *
- * Fixture mode: nothing leaves the device — the report is stamped with a
- * local reference and the copy says so.
+ * happened, submit → a real support case is created and the receipt
+ * carries its reference with a link to the /support/[id] thread.
  */
 
 import { useState } from 'react';
@@ -17,7 +15,13 @@ import { EmptyState } from '@/components/ui/EmptyState';
 import { Icon, type AppIconName } from '@/components/ui/Icon';
 import { useToast } from '@/components/ui/Toast';
 import type { CoOwnIssueCategory } from '@/lib/contracts/coown';
+import { DATA_MODE } from '@/lib/api/client';
 import { useCoOwnAsset } from '@/lib/hooks/coown-queries';
+import { useSession } from '@/lib/session/SessionProvider';
+import {
+  useSupportActions,
+  useSupportTickets,
+} from '@/components/support/useSupportTickets';
 import { AssetThumb } from '../AssetThumb';
 
 const MIN_DESCRIPTION = 10;
@@ -51,6 +55,11 @@ function IssueSkeleton() {
 export function ReportIssueView({ id }: { id: string }) {
   const router = useRouter();
   const { show } = useToast();
+  const { isGuest, sessionLoading } = useSession();
+  const { createTicket } = useSupportActions();
+  // Subscribe so the ticket cache is warm before submit — createTicket
+  // writes through it, and the /support/[id] link reads it.
+  useSupportTickets();
   const { data: asset, isLoading, isError, refetch } = useCoOwnAsset(id);
 
   const [category, setCategory] = useState<CoOwnIssueCategory | null>(null);
@@ -58,9 +67,25 @@ export function ReportIssueView({ id }: { id: string }) {
   const [categoryError, setCategoryError] = useState<string | null>(null);
   const [descriptionError, setDescriptionError] = useState<string | null>(null);
   const [submitting, setSubmitting] = useState(false);
-  const [caseRef, setCaseRef] = useState<string | null>(null);
+  const [submitted, setSubmitted] = useState<{ ref: string; id: string } | null>(null);
 
-  if (isLoading) return <IssueSkeleton />;
+  if (sessionLoading || isLoading) return <IssueSkeleton />;
+
+  // Cases are account-bound — a guest's report would fail the live POST
+  // anyway, so the wall beats a dead-end error.
+  if (isGuest && DATA_MODE === 'live') {
+    return (
+      <div className="mx-auto w-full max-w-xl px-4 py-8 sm:px-6">
+        <EmptyState
+          icon="alert"
+          title="Sign in to report an issue"
+          subtitle="Reports open a support case on your account."
+          actionLabel="Sign in"
+          onAction={() => router.push('/auth')}
+        />
+      </div>
+    );
+  }
 
   if (isError || !asset) {
     return (
@@ -80,7 +105,7 @@ export function ReportIssueView({ id }: { id: string }) {
     );
   }
 
-  const submit = () => {
+  const submit = async () => {
     let valid = true;
     if (!category) {
       setCategoryError('Select an issue category');
@@ -93,11 +118,24 @@ export function ReportIssueView({ id }: { id: string }) {
     if (!valid) return;
 
     setSubmitting(true);
-    // Fixture mode — the case is acknowledged locally with a reference.
-    const ref = Math.random().toString(36).slice(2, 10).toUpperCase();
-    setCaseRef(ref);
-    setSubmitting(false);
-    show('Issue reported', 'success');
+    const categoryLabel = CATEGORIES.find((c) => c.value === category)?.label ?? 'Issue';
+    try {
+      // A real support case — the ref on the receipt is the case thread's,
+      // and /support/[id] holds it for follow-up. No minted local refs.
+      const ticket = await createTicket({
+        topicId: 'other',
+        orderRef: null,
+        message:
+          `Co-Own issue — ${categoryLabel} · ${asset.title} (${asset.id})` +
+          ` — ${description.trim()}`,
+      });
+      setSubmitted({ ref: ticket.ref ?? ticket.id.toUpperCase(), id: ticket.id });
+      show('Issue reported', 'success');
+    } catch {
+      show("Couldn't submit the report — check your connection and try again.", 'error');
+    } finally {
+      setSubmitting(false);
+    }
   };
 
   return (
@@ -115,28 +153,34 @@ export function ReportIssueView({ id }: { id: string }) {
         <p className="mt-2 text-meta text-text-secondary">Help us resolve your concern.</p>
       </header>
 
-      {caseRef ? (
-        /* Submitted — case reference for follow-up. */
+      {submitted ? (
+        /* Submitted — real case reference + thread link for follow-up. */
         <section className="mt-10 flex flex-col items-center pt-6 text-center" aria-live="polite">
           <span className="flex h-14 w-14 items-center justify-center rounded-full bg-success text-text-inverse">
             <Icon name="check" size={28} />
           </span>
           <h2 className="mt-5 text-section-title font-semibold text-text-primary">Case submitted</h2>
           <p className="mt-1.5 text-body font-semibold text-text-secondary tnum">
-            Reference #{caseRef}
+            Reference #{submitted.ref}
           </p>
           <p className="mt-3 max-w-sm text-body text-text-muted">
-            Demo build — the report is kept on this device. In production it goes to the support
-            team for review; keep the reference for follow-up.
+            Your report opened a support case — replies and updates appear on the case thread.
           </p>
-          <Button
-            variant="secondary"
-            size="lg"
-            className="mt-8"
-            onClick={() => router.push(`/co-own/${asset.id}`)}
-          >
-            Done
-          </Button>
+          <div className="mt-8 flex flex-col items-center gap-3">
+            <Button
+              variant="secondary"
+              size="lg"
+              onClick={() => router.push(`/co-own/${asset.id}`)}
+            >
+              Done
+            </Button>
+            <Link
+              href={`/support/${submitted.id}`}
+              className="pressable text-body font-medium text-brand underline-offset-4 hover:underline"
+            >
+              View your case
+            </Link>
+          </div>
         </section>
       ) : (
         <>
@@ -230,9 +274,8 @@ export function ReportIssueView({ id }: { id: string }) {
             <div>
               <p className="text-body font-semibold text-text-primary">How this works</p>
               <p className="mt-1 text-meta text-text-muted">
-                Your report is submitted to the support team for review — you can follow up in Help
-                &amp; Support. Demo build: nothing leaves this device; you&apos;ll get a local
-                reference back.
+                Your report opens a support case for the team to review — you can follow the thread
+                in Help &amp; Support.
               </p>
             </div>
           </div>
@@ -242,7 +285,7 @@ export function ReportIssueView({ id }: { id: string }) {
             fullWidth
             className="mt-8"
             disabled={submitting || !category || description.trim().length < MIN_DESCRIPTION}
-            onClick={submit}
+            onClick={() => void submit()}
           >
             {submitting ? 'Submitting…' : 'Submit report'}
           </Button>

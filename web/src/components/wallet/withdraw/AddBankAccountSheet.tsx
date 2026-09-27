@@ -1,10 +1,12 @@
 'use client';
 
 /**
- * Add bank account sheet — UK payout destination form. Sort code is
- * auto-formatted `XX-XX-XX` (6 digits), the account number is 8 digits and
- * only its last four are ever persisted. Validation mirrors the mobile
- * AddBankAccount copy: holder name, `00-00-00` sort code, `8 digits`.
+ * Add bank account sheet — UK payout destination form, fixture mode only
+ * (live payouts are set up through Stripe Connect — see PayoutSetupSheet).
+ * Sort code is auto-formatted `XX-XX-XX` (6 digits), the account number
+ * is 8 digits and only its last four are ever persisted. Validation
+ * mirrors the mobile AddBankAccount copy: holder name, `00-00-00` sort
+ * code, `8 digits`.
  */
 
 import { useState } from 'react';
@@ -156,7 +158,8 @@ export function AddBankAccountSheet({ open, onClose, accounts, onSave }: AddBank
 
         <p className="mt-4 flex items-start gap-1.5 text-caption text-text-muted">
           <Icon name="lock" size={14} className="mt-0.5 shrink-0" />
-          Only the last 4 digits are saved — your full account number is never stored.
+          Demo — saved on this device only, and just the last 4 digits of the account
+          number are kept.
         </p>
       </div>
     </Sheet>

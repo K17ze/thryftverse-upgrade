@@ -8,6 +8,17 @@
  * default) — never full card numbers, only last4 + brand + expiry (same
  * contract the backend would store post-tokenisation).
  *
+ * LIVE MODE: this store is fixture/demo truth only. When
+ * DATA_MODE === 'live' the read hooks resolve to EMPTY — fixture seeds and
+ * localStorage extras are never merged into a real user's rail: their ids
+ * are local strings no backend route accepts (POST /orders validates
+ * numeric addressId/paymentMethodId ownership), and a local-only card must
+ * never present as chargeable. Live checkout reads the server instead via
+ * useCheckoutInstruments (GET /users/:id/addresses, GET
+ * /v2/payments/methods). The write actions remain the fixture overlay — a
+ * live surface must not call them (the rows they produce are unreadable
+ * here by design).
+ *
  * Overlay conventions mirror components/wallet/withdraw/usePayoutAccounts:
  * seeds are filtered by removedIds, patched by overrides, and exactly one
  * default is resolved — removing the default promotes the oldest remaining
@@ -19,6 +30,10 @@ import { create } from 'zustand';
 import { persist, createJSONStorage } from 'zustand/middleware';
 import type { Address, PaymentMethod } from '@/lib/contracts/domain';
 import { ADDRESSES, PAYMENT_METHODS } from '@/lib/data/fixtures';
+import { DATA_MODE } from '@/lib/api/client';
+import { useHydrated } from './useStore';
+
+const IS_LIVE = DATA_MODE === 'live';
 
 export type RemoveEntryResult =
   | { ok: true; promotedToDefault?: string }
@@ -174,6 +189,20 @@ export const useUserPaymentData = create<UserPaymentDataState>()(
   ),
 );
 
+/** Pre-hydration reads — the persisted overlay hasn't landed yet, so SSR
+ *  and the first client render see seed truth only (no localStorage). */
+const SEED_ADDRESS_STATE: AddressSlice = {
+  extraAddresses: [],
+  removedAddressIds: [],
+  addressOverrides: {},
+  defaultAddressId: null,
+};
+const SEED_METHOD_STATE: MethodSlice = {
+  extraPaymentMethods: [],
+  removedPaymentMethodIds: [],
+  defaultPaymentMethodId: null,
+};
+
 export interface SavedAddressesData {
   /** Merged addresses with edits applied and exactly one resolved default. */
   addresses: Address[];
@@ -187,6 +216,7 @@ export interface SavedAddressesData {
 /** The management surface read — /settings/addresses consumes this so the
  * list, edits and default all share one truth. */
 export function useSavedAddresses(): SavedAddressesData {
+  const hydrated = useHydrated();
   const extraAddresses = useUserPaymentData((s) => s.extraAddresses);
   const removedAddressIds = useUserPaymentData((s) => s.removedAddressIds);
   const addressOverrides = useUserPaymentData((s) => s.addressOverrides);
@@ -196,11 +226,20 @@ export function useSavedAddresses(): SavedAddressesData {
   const removeAddress = useUserPaymentData((s) => s.removeAddress);
   const setDefaultAddress = useUserPaymentData((s) => s.setDefaultAddress);
 
-  // Memoised so effect deps downstream don't fire on every render.
+  // Memoised so effect deps downstream don't fire on every render. Live
+  // mode resolves empty — the server owns the rail (see file header); a
+  // fixture/local id presented as selectable would ship a NaN id the order
+  // route then silently drops or rejects.
   const addresses = useMemo(
     () =>
-      resolveAddresses({ extraAddresses, removedAddressIds, addressOverrides, defaultAddressId }),
-    [extraAddresses, removedAddressIds, addressOverrides, defaultAddressId],
+      IS_LIVE
+        ? []
+        : resolveAddresses(
+            hydrated
+              ? { extraAddresses, removedAddressIds, addressOverrides, defaultAddressId }
+              : SEED_ADDRESS_STATE,
+          ),
+    [hydrated, extraAddresses, removedAddressIds, addressOverrides, defaultAddressId],
   );
 
   return {
@@ -225,6 +264,7 @@ export interface SavedPaymentMethodsData {
 }
 
 export function useSavedPaymentMethods(): SavedPaymentMethodsData {
+  const hydrated = useHydrated();
   const extraPaymentMethods = useUserPaymentData((s) => s.extraPaymentMethods);
   const removedPaymentMethodIds = useUserPaymentData((s) => s.removedPaymentMethodIds);
   const defaultPaymentMethodId = useUserPaymentData((s) => s.defaultPaymentMethodId);
@@ -234,20 +274,25 @@ export function useSavedPaymentMethods(): SavedPaymentMethodsData {
   const removePaymentMethod = useUserPaymentData((s) => s.removePaymentMethod);
   const setDefaultPaymentMethod = useUserPaymentData((s) => s.setDefaultPaymentMethod);
 
+  // Live mode resolves empty — see file header. A local-only card row is
+  // never chargeable (no tokenisation rail on web; the legacy create route
+  // answers 410), so it must never reach a picker.
   const methods = useMemo(
     () =>
-      resolvePaymentMethods({
-        extraPaymentMethods,
-        removedPaymentMethodIds,
-        defaultPaymentMethodId,
-      }),
-    [extraPaymentMethods, removedPaymentMethodIds, defaultPaymentMethodId],
+      IS_LIVE
+        ? []
+        : resolvePaymentMethods(
+            hydrated
+              ? { extraPaymentMethods, removedPaymentMethodIds, defaultPaymentMethodId }
+              : SEED_METHOD_STATE,
+          ),
+    [hydrated, extraPaymentMethods, removedPaymentMethodIds, defaultPaymentMethodId],
   );
 
   return {
     methods,
     defaultMethod: methods.find((p) => p.isDefault) ?? null,
-    useBalanceFirst,
+    useBalanceFirst: hydrated ? useBalanceFirst : true,
     setUseBalanceFirst,
     addPaymentMethod,
     removePaymentMethod,

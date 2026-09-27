@@ -1,4 +1,5 @@
 import type { Metadata } from 'next';
+import { DISPATCH_SLA_DAYS } from '@/lib/commerce/dispatch';
 
 export const metadata: Metadata = {
   title: 'Terms of service',
@@ -55,7 +56,7 @@ export default function TermsPage() {
           prohibited and removed without refund of fees.
         </p>
         <p>
-          When an item sells you agree to dispatch within 5 working days using
+          When an item sells you agree to dispatch within {DISPATCH_SLA_DAYS} working days using
           the label we provide. Payment is released to your wallet on
           confirmed delivery, minus our seller fee shown at listing time.
         </p>

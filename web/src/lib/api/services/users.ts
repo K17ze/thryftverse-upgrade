@@ -93,6 +93,30 @@ export async function fetchUserReviews(
   return (payload.items ?? payload.reviews ?? []).map(mapReviewRow);
 }
 
+// ── Self profile mutations (profileApi.ts updateUserProfile) ────────────────
+// Settings-scoped writes against /users/me — the account-contact edit in
+// settings → Personal info uses this; public profile fields go through the
+// same endpoint on mobile.
+
+export interface UpdateMyProfileInput {
+  displayName?: string;
+  username?: string;
+  bio?: string;
+  location?: string;
+  website?: string;
+  /** Contact phone — editable from settings → Personal info. */
+  phone?: string;
+  avatar?: string;
+}
+
+export async function updateMyProfile(input: UpdateMyProfileInput): Promise<void> {
+  await fetchJson('/users/me', {
+    method: 'PATCH',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(input),
+  });
+}
+
 // ── Follow / mute / block (accountApi.ts) ────────────────────────────────────
 
 async function postUserAction(userId: string, action: string): Promise<void> {

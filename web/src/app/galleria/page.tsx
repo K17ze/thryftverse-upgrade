@@ -7,8 +7,8 @@
  * page; all surfaces live in components/galleria.
  */
 
-import { useState } from 'react';
 import { useQuery } from '@tanstack/react-query';
+import { useRouter } from 'next/navigation';
 import {
   GALLERIA_EDITORIALS,
   GALLERIA_FEATURED_COLLECTIONS,
@@ -29,7 +29,6 @@ import {
   type ResolvedGalleriaAsset,
 } from '@/components/galleria/GalleriaFeaturedAssets';
 import { GalleriaArchive } from '@/components/galleria/GalleriaArchive';
-import { EditorialSheet, CollectionSheet } from '@/components/galleria/GalleriaSheets';
 import { GalleriaSkeleton } from '@/components/galleria/GalleriaSkeleton';
 
 const tick = (ms = 320) => new Promise((r) => setTimeout(r, ms));
@@ -54,14 +53,9 @@ function useGalleria() {
   });
 }
 
-type GalleriaSheetState =
-  | { kind: 'editorial'; editorial: GalleriaEditorial }
-  | { kind: 'collection'; collection: GalleriaFeaturedCollection }
-  | null;
-
 export default function GalleriaPage() {
+  const router = useRouter();
   const { data, isLoading, isError, refetch } = useGalleria();
-  const [sheet, setSheet] = useState<GalleriaSheetState>(null);
 
   if (isLoading) return <GalleriaSkeleton />;
 
@@ -77,11 +71,11 @@ export default function GalleriaPage() {
     );
   }
 
+  // Stories and edits are full routes — the hub deep-links into them.
   const openEditorial = (editorial: GalleriaEditorial) =>
-    setSheet({ kind: 'editorial', editorial });
+    router.push(`/galleria/editorial/${editorial.id}`);
   const openCollection = (collection: GalleriaFeaturedCollection) =>
-    setSheet({ kind: 'collection', collection });
-  const closeSheet = () => setSheet(null);
+    router.push(`/galleria/collection/${collection.id}`);
 
   return (
     <div className="pb-20">
@@ -139,16 +133,13 @@ export default function GalleriaPage() {
           <GalleriaSectionHeader eyebrow="Back issues" title="The archive" />
           <GalleriaArchive issues={data.archive} />
         </section>
-      </div>
 
-      <EditorialSheet
-        editorial={sheet?.kind === 'editorial' ? sheet.editorial : null}
-        onClose={closeSheet}
-      />
-      <CollectionSheet
-        collection={sheet?.kind === 'collection' ? sheet.collection : null}
-        onClose={closeSheet}
-      />
+        <p className="mt-14 flex items-center gap-1.5 text-caption text-text-muted md:mt-20">
+          <Icon name="info" size={14} className="shrink-0" />
+          Preview issue — stories and collections ship as bundled editorial
+          content in this build.
+        </p>
+      </div>
     </div>
   );
 }

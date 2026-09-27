@@ -6,14 +6,12 @@
  * its own postage and bundle lines, then the checkout-wide fee ledger and
  * total. Flat hairline grammar; the Pay CTA lives on the page, not here.
  *
- * Postage honesty: the contract carries one flat postage charge per
- * checkout (orderTotals.shippingFee), not a per-parcel price — a group
- * shows the real figure only when it is the checkout's only parcel. For
- * multi-seller orders the per-parcel split doesn't exist in the contract,
- * so the line reads "Confirmed at checkout" rather than fabricating £0
- * (same fallback grammar as the sell preview). Listing carries a
- * shippingMethod label but no ETA days, so the carrier name renders when
- * the whole parcel agrees on one and no delivery estimate is ever shown.
+ * Postage honesty: the fixture postage model is one flat charge per
+ * seller parcel (lib/commerce/postage) — each parcel in the manifest
+ * shows its own real postage, free only when every item in it is
+ * seller-covered. The carrier name renders when the whole parcel agrees
+ * on one shippingMethod; per-item ETA/dispatch truth lives on the PDP
+ * delivery block and the dispatch line beside the Pay button, not here.
  */
 
 import Link from 'next/link';
@@ -21,7 +19,11 @@ import type { Listing } from '@/lib/contracts/domain';
 import { AppImage } from '@/components/ui/AppImage';
 import { Icon } from '@/components/ui/Icon';
 import { BUNDLE_RULE_LABEL, sellerGroups, type SellerGroup } from '@/lib/data/fixtures';
-import type { OrderTotals } from '@/lib/data/fixtures-commerce';
+import { type CheckoutTotals } from '@/lib/commerce/postage';
+import {
+  parcelQuote,
+  type DeliverySelection,
+} from '@/components/checkout/checkoutViewModel';
 import { formatPrice } from '@/lib/utils/format';
 import { getCategoryFocalPoint, getListingCoverUri } from '@/lib/utils/media';
 
@@ -69,19 +71,23 @@ function SummaryLineItem({ item }: { item: Listing }) {
 function SellerParcel({
   group,
   postageLabel,
+  serviceLabel,
   index,
   count,
 }: {
   group: SellerGroup;
-  /** The parcel's postage, or the honest "Confirmed at checkout" fallback
-   *  when the checkout's flat charge can't be attributed per parcel. */
+  /** The parcel's own postage — the per-seller charge, or "Free" when the
+   *  seller covers it. */
   postageLabel: string;
+  /** The chosen delivery service (carrier + service name) — wins over the
+   *  listings' static shippingMethod when the buyer picked a quote. */
+  serviceLabel?: string | null;
   /** 1-based parcel position — the manifest reads "Parcel 1 of 2". */
   index: number;
   count: number;
 }) {
   const username = group.seller?.username ?? null;
-  const carrier = sharedCarrier(group);
+  const carrier = serviceLabel ?? sharedCarrier(group);
   const combined = group.items.length > 1;
 
   return (
@@ -132,34 +138,41 @@ export function OrderSummary({
   items,
   totals,
   bundleDiscount = 0,
+  delivery = {},
+  verificationLabel,
 }: {
   items: Listing[];
-  totals: OrderTotals;
+  totals: CheckoutTotals;
   /** Total per-seller bundle deduction (BUNDLE_RULE) — itemized before the total. */
   bundleDiscount?: number;
+  /** Chosen delivery quote per parcel (sellerId → quote) — prices the
+   *  postage lines with the buyer's pick, not the flat default. */
+  delivery?: DeliverySelection;
+  /** When set, an "Item verification" ledger line renders with this value
+   *  ("Free" — the backend exposes no verification price). */
+  verificationLabel?: string;
 }) {
   const payableTotal = Math.round((totals.total - bundleDiscount) * 100) / 100;
   const groups = sellerGroups(items);
-  // The checkout's flat postage is attributable to a parcel only when the
-  // order is exactly one parcel; beyond that the contract has no per-parcel
-  // split and the honest fallback stands in.
-  const singleParcel = groups.length === 1;
-  const postageLabel = singleParcel ? formatPrice(totals.shippingFee) : 'Confirmed at checkout';
 
   return (
     <div>
       <h2 className="text-section-title font-semibold text-text-primary">Order summary</h2>
 
       <div className="mt-3 flex flex-col gap-5 border-b border-border-subtle pb-4">
-        {groups.map((group, i) => (
-          <SellerParcel
-            key={group.sellerId}
-            group={group}
-            postageLabel={postageLabel}
-            index={i + 1}
-            count={groups.length}
-          />
-        ))}
+        {groups.map((group, i) => {
+          const quote = parcelQuote(group, delivery);
+          return (
+            <SellerParcel
+              key={group.sellerId}
+              group={group}
+              postageLabel={quote ? formatPrice(quote.priceFromGbp) : 'Free — seller pays'}
+              serviceLabel={quote ? `${quote.carrierId} ${quote.serviceName}` : null}
+              index={i + 1}
+              count={groups.length}
+            />
+          );
+        })}
       </div>
 
       <dl className="mt-4 flex flex-col gap-2.5">
@@ -168,13 +181,21 @@ export function OrderSummary({
           <dd className="tnum text-text-primary">{formatPrice(totals.items)}</dd>
         </div>
         <div className="flex justify-between text-body text-text-secondary">
-          <dt>Postage</dt>
+          <dt>
+            Postage{totals.parcels > 1 ? ` · ${totals.parcels} parcels` : ''}
+          </dt>
           <dd className="tnum text-text-primary">{formatPrice(totals.shippingFee)}</dd>
         </div>
         <div className="flex justify-between text-body text-text-secondary">
           <dt>Buyer Protection fee</dt>
           <dd className="tnum text-text-primary">{formatPrice(totals.protectionFee)}</dd>
         </div>
+        {verificationLabel ? (
+          <div className="flex justify-between text-body text-text-secondary">
+            <dt>Item verification</dt>
+            <dd className="text-text-primary">{verificationLabel}</dd>
+          </div>
+        ) : null}
         {bundleDiscount > 0 ? (
           <div className="flex justify-between text-body text-text-secondary">
             <dt className="flex items-center gap-1.5">

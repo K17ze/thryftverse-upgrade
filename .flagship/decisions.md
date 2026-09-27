@@ -86,3 +86,14 @@
 **Context:** A connectivity drop aborts the transport with the same AbortError as a user cancel; previously in-flight items hung until transport timeout and burned a retry attempt.
 **Decision:** `parkForOffline()` flags in-flight items `_offlineAborted`; the catch requeues them as `pending` with `attemptCount` refunded and preserves the `_needsFinalizationOnly` checkpoint. Explicit user cancel during the abort still wins.
 **Alternatives considered:** Marking offline-parked items as `paused` � rejected; listing items have no user-visible pause affordance, pending matches retry semantics.
+
+## Web campaign decisions (2026-09-26 wave)
+
+- Live feed unit breadth: backend `/feed/*` wire carries listing|poster|look only (services/feed.ts FeedRow). Editorial/recommendation_break/moodboard units are fixture-authored; the DiscoveryFeedUnit renderer supports all six, so extending live mode is a service-mapper task when the backend emits those kinds — intentionally not scaffolded speculatively.
+- Live poster stories: no dedicated stories endpoint verified; `data.posterStories()` derives from feed poster units in live mode, fixture rail otherwise.
+- Auction watchlist: local-storage Set is render truth; live mode write-through via setAuctionWatched. Read-seeding from fetchAuctionWatchlist deferred (no merge-conflict semantics defined).
+- Host chat "pin message" → viewer: simulated per-side streams have no shared bus; left unwired rather than fabricating transport.
+- Report flows: all report surfaces (listing/user/group/app-problem) now create real support cases via useSupportActions.createTicket; the receipt ref is the case's real ref and deep-links to /support/[id]. newReportReference() deleted.
+- Voice/video call affordance: removed from chat header — no call surface exists; a "coming soon" toast on an actionable control violates the honesty contract.
+- SegmentedControl: downgraded to button/aria-pressed semantics — its ~10 consumers filter in-place content, none drive tabpanel wiring.
+- Co-Own trading: orderExecution.planExecution is the single fill/ledger engine; receipts render only post-write.

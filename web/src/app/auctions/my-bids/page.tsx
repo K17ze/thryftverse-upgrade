@@ -1,37 +1,37 @@
 'use client';
 
 /**
- * /auctions/my-bids — auction activity for the viewer. Four states derived
- * from the bid ledger: outbid, winning, won, lost. Rows land on the live
- * auction; each tab carries its own empty state.
+ * /auctions/my-bids — auction activity for the viewer, eBay/mobile
+ * grammar: Active (outbid first — those rows carry the alert), Won, Lost,
+ * and Watching (the persisted watchlist set). An ending-soonest sort chip
+ * sits on the Active scope; every row lands on its auction.
  */
 
 import { useMemo, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { SegmentedControl } from '@/components/feed/SegmentedControl';
 import { EmptyState } from '@/components/ui/EmptyState';
-import { MyBidRow, AuctionRowSkeleton } from '@/components/auctions';
-import { useMyBids } from '@/lib/hooks/auction-queries';
+import { Icon } from '@/components/ui/Icon';
+import { MyBidRow, AuctionRowSkeleton, AuctionBoardSkeleton, AuctionCard } from '@/components/auctions';
+import { useAuctionBoard, useMyBids } from '@/lib/hooks/auction-queries';
+import { useAuctionWatchlist } from '@/components/auctions/auctionWatchlist';
 import { useSession } from '@/lib/session/SessionProvider';
+import { useHydrated } from '@/lib/store/useStore';
+import type { MyBidRow as MyBidRowModel } from '@/lib/data/fixtures-auctions';
 
-type Tab = 'outbid' | 'winning' | 'won' | 'lost';
+type Tab = 'active' | 'won' | 'lost' | 'watching';
 
 const TABS: { value: Tab; label: string }[] = [
-  { value: 'outbid', label: 'Outbid' },
-  { value: 'winning', label: 'Winning' },
+  { value: 'active', label: 'Active' },
   { value: 'won', label: 'Won' },
   { value: 'lost', label: 'Lost' },
+  { value: 'watching', label: 'Watching' },
 ];
 
 const EMPTY_COPY: Record<Tab, { title: string; subtitle: string }> = {
-  outbid: {
-    title: 'No outbids',
-    subtitle:
-      'When someone passes your bid, the auction lands here for a quick second move.',
-  },
-  winning: {
-    title: 'Not leading anywhere',
-    subtitle: 'Auctions where your bid is on top will show up here.',
+  active: {
+    title: 'No active bids',
+    subtitle: 'Auctions where your bid is leading — or has been passed — land here.',
   },
   won: {
     title: 'No wins yet',
@@ -39,18 +39,69 @@ const EMPTY_COPY: Record<Tab, { title: string; subtitle: string }> = {
   },
   lost: {
     title: 'Nothing lost',
-    subtitle: 'Auctions that closed above your bids appear here.',
+    subtitle: "Auctions that closed above your bids appear here.",
+  },
+  watching: {
+    title: 'Not watching anything',
+    subtitle: 'Watch an auction from its page and it stays pinned here.',
   },
 };
 
 export default function MyBidsPage() {
   const router = useRouter();
-  const { user } = useSession();
-  const viewerId = user?.id ?? 'me';
-  const { board, isLoading } = useMyBids(viewerId);
-  const [tab, setTab] = useState<Tab>('outbid');
+  const { user, isGuest } = useSession();
+  const hydrated = useHydrated();
+  // Guests have no bid ledger — the fixture 'me' rows belong to the
+  // signed-in demo identity, never to an anonymous viewer.
+  const viewerId = user?.id;
+  const { board, isLoading, isError, refetch } = useMyBids(viewerId ?? '');
+  const {
+    auctions,
+    isError: boardError,
+    refetch: refetchBoard,
+  } = useAuctionBoard();
+  const { watched } = useAuctionWatchlist();
+  const [tab, setTab] = useState<Tab>('active');
+  const [endingSoonest, setEndingSoonest] = useState(false);
 
-  const rows = useMemo(() => board[tab], [board, tab]);
+  // Active = outbid + winning + unresolved 'active' bids merged. Outbid
+  // rows always lead — they are the alerts — then the leads, then the
+  // bids whose lead the serve couldn't resolve; each group sorted the
+  // same way.
+  const activeRows = useMemo<MyBidRowModel[]>(() => {
+    const byEnd = (a: MyBidRowModel, b: MyBidRowModel) => a.auction.msToEnd - b.auction.msToEnd;
+    const placed = (a: MyBidRowModel, b: MyBidRowModel) =>
+      Date.parse(b.placedAt) - Date.parse(a.placedAt);
+    const sort = endingSoonest ? byEnd : placed;
+    return [
+      ...[...board.outbid].sort(sort),
+      ...[...board.winning].sort(sort),
+      ...[...board.active].sort(sort),
+    ];
+  }, [board, endingSoonest]);
+
+  const rows = tab === 'active' ? activeRows : tab === 'won' ? board.won : board.lost;
+  const watchingRows = useMemo(
+    () => (hydrated ? auctions.filter((a) => watched.has(a.id)) : []),
+    [auctions, watched, hydrated],
+  );
+
+  if (isGuest) {
+    return (
+      <div className="mx-auto w-full max-w-[820px] px-4 pb-16 pt-6 sm:px-6">
+        <h1 className="text-screen-title font-bold text-text-primary">My bids</h1>
+        <div className="mt-8">
+          <EmptyState
+            icon="auction"
+            title="Sign in to see your bids"
+            subtitle="Your outbids, leads and wins settle here once you have an account."
+            actionLabel="Sign in"
+            onAction={() => router.push('/auth')}
+          />
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div className="mx-auto w-full max-w-[820px] px-4 pb-16 pt-6 sm:px-6">
@@ -59,6 +110,26 @@ export default function MyBidsPage() {
         <SegmentedControl options={TABS} value={tab} onChange={setTab} />
       </div>
 
+      {/* Ending-soonest sort — the active-scope utility toggle (mobile
+          parity), honest ordering against the real window. */}
+      {tab === 'active' && activeRows.length > 1 ? (
+        <div className="mt-4">
+          <button
+            type="button"
+            aria-pressed={endingSoonest}
+            onClick={() => setEndingSoonest((v) => !v)}
+            className={`pressable inline-flex h-9 items-center gap-1.5 rounded-full px-3.5 text-caption font-semibold ${
+              endingSoonest
+                ? 'bg-brand-subtle text-text-primary'
+                : 'bg-surface-alt text-text-secondary hover:text-text-primary'
+            }`}
+          >
+            <Icon name="clock" size={14} />
+            Ending soonest
+          </button>
+        </div>
+      ) : null}
+
       <div className="mt-5">
         {isLoading ? (
           <div className="flex flex-col">
@@ -66,6 +137,40 @@ export default function MyBidsPage() {
               <AuctionRowSkeleton key={index} />
             ))}
           </div>
+        ) : tab === 'watching' ? (
+          !hydrated ? (
+            <AuctionBoardSkeleton count={4} />
+          ) : boardError ? (
+            <EmptyState
+              icon="alert"
+              title="Couldn't load auctions"
+              subtitle="Check your connection and try again."
+              actionLabel="Try again"
+              onAction={() => void refetchBoard()}
+            />
+          ) : watchingRows.length === 0 ? (
+            <EmptyState
+              icon="eye"
+              title={EMPTY_COPY.watching.title}
+              subtitle={EMPTY_COPY.watching.subtitle}
+              actionLabel="Browse auctions"
+              onAction={() => router.push('/auctions')}
+            />
+          ) : (
+            <div className="grid grid-cols-2 gap-x-3 gap-y-8 sm:grid-cols-3">
+              {watchingRows.map((auction) => (
+                <AuctionCard key={auction.id} auction={auction} />
+              ))}
+            </div>
+          )
+        ) : isError ? (
+          <EmptyState
+            icon="alert"
+            title="Couldn't load your bids"
+            subtitle="Check your connection and try again."
+            actionLabel="Try again"
+            onAction={() => void refetch()}
+          />
         ) : rows.length === 0 ? (
           <EmptyState
             icon="auction"

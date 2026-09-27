@@ -10,6 +10,7 @@
 
 import { create } from 'zustand';
 import { persist, createJSONStorage } from 'zustand/middleware';
+import type { Dac7TaxInfo } from '@/lib/contracts/verification';
 import type { KycDocumentType, VerificationStatus } from './verificationModel';
 
 /** What a submission remembers — document metadata only, never file data. */
@@ -29,6 +30,11 @@ interface VerificationState {
   rejectionReason: string | null;
   /** Last submitted details — prefills the form on retry, shown on review. */
   record: KycSubmissionRecord | null;
+  /**
+   * Fixture-mode DAC7 record — the browser-local stand-in for the
+   * compliance API's persisted tax info. Null until the seller saves it.
+   */
+  dac7: Dac7TaxInfo | null;
 
   submitVerification: (record: KycSubmissionRecord) => void;
   /** Simulated review tick — in_review → approved. */
@@ -36,6 +42,8 @@ interface VerificationState {
   /** Simulated decline — in_review → rejected with a human reason. */
   declineReview: (reason: string) => void;
   resetVerification: () => void;
+  /** Fixture-mode DAC7 save — full record replaces the previous one. */
+  saveDac7: (info: Dac7TaxInfo) => void;
 }
 
 export const useVerificationStore = create<VerificationState>()(
@@ -45,6 +53,7 @@ export const useVerificationStore = create<VerificationState>()(
       submittedAt: null,
       rejectionReason: null,
       record: null,
+      dac7: null,
 
       submitVerification: (record) =>
         set({
@@ -61,6 +70,7 @@ export const useVerificationStore = create<VerificationState>()(
         ),
       resetVerification: () =>
         set({ status: 'not_started', submittedAt: null, rejectionReason: null, record: null }),
+      saveDac7: (info) => set({ dac7: info }),
     }),
     {
       name: 'thryftverse.web.verification',
@@ -70,6 +80,7 @@ export const useVerificationStore = create<VerificationState>()(
         submittedAt: s.submittedAt,
         rejectionReason: s.rejectionReason,
         record: s.record,
+        dac7: s.dac7,
       }),
     },
   ),

@@ -19,6 +19,7 @@ import type {
   Listing,
   ListingCondition,
   ListingMediaRecord,
+  ListingReturnPolicy,
   ListingSeller,
   Message,
   MessageReaction,
@@ -81,6 +82,19 @@ export interface BackendListingRow {
   auctionEndsAt?: string | null;
   shippingMethod?: string | null;
   shippingPayer?: string | null;
+  /** Flat delivery/returns fields — present when a payload projects the
+   *  commerce block onto the row; the /listings/:id detail path also merges
+   *  the nested `commerce` block in services/listings.ts. */
+  shippingPrice?: number | string | null;
+  shippingPriceGbp?: number | string | null;
+  estimatedDeliveryStart?: string | null;
+  estimatedDeliveryEnd?: string | null;
+  estimated_delivery_start?: string | null;
+  estimated_delivery_end?: string | null;
+  returnPolicy?: unknown;
+  return_policy?: unknown;
+  dispatchSlaDays?: number | string | null;
+  dispatch_sla_days?: number | string | null;
   seller?: ListingSeller | null;
   likes?: number | null;
   views?: number | null;
@@ -93,6 +107,45 @@ export interface BackendListingRow {
 
 function nonBlank(v: unknown): string | null {
   return typeof v === 'string' && v.trim().length > 0 ? v.trim() : null;
+}
+
+/** Normalize a wire return-policy object (camelCase commerce block, or
+ *  snake_case `returns_*` fields) to the ListingReturnPolicy contract.
+ *  Returns null when the payload can't be read as a policy. */
+export function normalizeReturnPolicy(value: unknown): ListingReturnPolicy | null {
+  if (!value || typeof value !== 'object') return null;
+  const v = value as Record<string, unknown>;
+  const acceptedRaw = v.accepted ?? v.returnsAccepted ?? v.returns_accepted;
+  const accepted =
+    typeof acceptedRaw === 'boolean'
+      ? acceptedRaw
+      : acceptedRaw === 'true'
+        ? true
+        : acceptedRaw === 'false'
+          ? false
+          : null;
+  const windowRaw = v.windowDays ?? v.returnsWindowDays ?? v.returns_window_days;
+  const windowDays = toFinitePrice(windowRaw);
+  const conditions =
+    nonBlank(v.conditions) ?? nonBlank(v.returnsConditions) ?? nonBlank(v.returns_conditions);
+  const summary = nonBlank(v.summary);
+  if (accepted === null && windowDays === null && conditions === null && summary === null) {
+    return null;
+  }
+  return {
+    accepted,
+    windowDays: windowDays !== null ? Math.round(windowDays) : null,
+    conditions,
+    summary,
+  };
+}
+
+/** Normalize an ISO timestamp field — keep only parseable dates so a
+ *  malformed string can't render a fabricated ETA. */
+function toIsoDate(value: unknown): string | null {
+  const s = nonBlank(value);
+  if (!s) return null;
+  return Number.isFinite(Date.parse(s)) ? s : null;
 }
 
 function toFinitePrice(value: unknown): number | null {
@@ -189,6 +242,16 @@ function normalizeSeller(row: BackendListingRow): ListingSeller | null {
           : null,
       location: nonBlank(seller.location),
       verified: typeof seller.verified === 'boolean' ? seller.verified : null,
+      // Buyer-side availability — honour it whenever a payload does carry
+      // it (the PDP also refreshes it via the /sellers/:id trust summary).
+      holidayMode:
+        typeof seller.holidayMode === 'boolean' ? seller.holidayMode : undefined,
+      reachState:
+        seller.reachState === 'normal' ||
+        seller.reachState === 'limited' ||
+        seller.reachState === 'suspended'
+          ? seller.reachState
+          : undefined,
     };
   }
   return null;
@@ -249,6 +312,11 @@ export function mapBackendListingToListing(row: BackendListingRow): Listing | nu
     status,
     shippingMethod: row.shippingMethod ?? null,
     shippingPayer: row.shippingPayer ?? null,
+    shippingPrice: toFinitePrice(row.shippingPrice ?? row.shippingPriceGbp),
+    estimatedDeliveryStart: toIsoDate(row.estimatedDeliveryStart ?? row.estimated_delivery_start),
+    estimatedDeliveryEnd: toIsoDate(row.estimatedDeliveryEnd ?? row.estimated_delivery_end),
+    returnPolicy: normalizeReturnPolicy(row.returnPolicy ?? row.return_policy),
+    dispatchSlaDays: toFinitePrice(row.dispatchSlaDays ?? row.dispatch_sla_days),
     featured: row.featured === true ? true : null,
     promoted: row.promoted === true ? true : undefined,
     disclosure: row.promoted === true ? nonBlank(row.disclosure) : undefined,
@@ -529,6 +597,15 @@ export interface ApiMessagePayload {
   readBy?: string[];
   isReadByMe?: boolean;
   offer?: Record<string, unknown>;
+  /** Canonical voice receipt — duration/waveform stamped server-side;
+   *  the metadata mediaUri stays the playback source. */
+  voice?: {
+    durationMs?: number;
+    waveform?: { samples?: number[] };
+    container?: string;
+    codec?: string;
+    moderationState?: string;
+  };
 }
 
 export function mapApiMessageToWebMessage(
@@ -549,7 +626,10 @@ export function mapApiMessageToWebMessage(
   const listingShare = meta.listingShare as Record<string, unknown> | undefined;
   const isListingShare = Boolean(listingShare && typeof listingShare.listingId === 'string');
   const isDocument = meta.mediaType === 'document';
-  const isVoice = meta.mediaType === 'voice' || meta.voiceMessage === true;
+  // Voice: the backend voice receipt is the truth; the metadata flags are
+  // the backwards-compatible markers (mirrors the mobile mapper).
+  const isVoice =
+    Boolean(payload.voice) || meta.voiceMessage === true || meta.mediaType === 'voice';
   const isMine = Boolean(currentUserId) && senderId === currentUserId;
 
   const type: Message['type'] =
@@ -559,11 +639,13 @@ export function mapApiMessageToWebMessage(
         ? 'offer'
         : isListingShare
           ? 'listing_share'
-          : isDocument || isVoice
-            ? 'text'
-            : typeof meta.mediaUri === 'string'
-              ? 'media'
-              : 'text';
+          : isVoice
+            ? 'voice'
+            : isDocument
+              ? 'document'
+              : typeof meta.mediaUri === 'string'
+                ? 'media'
+                : 'text';
 
   const reactions: MessageReaction[] | undefined = payload.reactions?.map((r) => ({
     emoji: r.emoji,
@@ -578,7 +660,8 @@ export function mapApiMessageToWebMessage(
     text: payload.body,
     timestamp: payload.createdAt,
     isSystem: payload.senderType === 'system',
-    systemTitle: payload.senderType === 'system' ? 'System' : undefined,
+    // The caption IS the body — never a generic 'System' placeholder.
+    systemTitle: payload.senderType === 'system' ? payload.body : undefined,
     type,
     sender: payload.senderType === 'system' ? 'system' : isMine ? 'me' : 'other',
     isEdited: Boolean(payload.editedAt) || (payload.editVersion ?? 0) > 0,
@@ -593,6 +676,25 @@ export function mapApiMessageToWebMessage(
         : undefined,
     mediaType:
       meta.mediaType === 'image' || meta.mediaType === 'video' ? meta.mediaType : undefined,
+    posterUri: typeof meta.posterUri === 'string' ? meta.posterUri : undefined,
+    voiceUri: isVoice && typeof meta.mediaUri === 'string' ? meta.mediaUri : undefined,
+    voiceDurationMs:
+      payload.voice?.durationMs ??
+      (typeof meta.durationMs === 'number' ? meta.durationMs : undefined),
+    voiceWaveform: payload.voice?.waveform?.samples,
+    documentUri: isDocument
+      ? typeof meta.documentUri === 'string'
+        ? meta.documentUri
+        : typeof meta.mediaUri === 'string'
+          ? meta.mediaUri
+          : undefined
+      : undefined,
+    documentName:
+      isDocument && typeof meta.documentName === 'string' ? meta.documentName : undefined,
+    documentMimeType:
+      isDocument && typeof meta.documentMimeType === 'string'
+        ? meta.documentMimeType
+        : undefined,
     offerPrice:
       isOffer && offerSource && typeof offerSource.offerPrice === 'number'
         ? offerSource.offerPrice
@@ -681,6 +783,8 @@ export function mapApiConversationToWeb(
       (payload.unreadCount ?? 0) > 0 || payload.unread || payload.markedUnread === true,
     unreadCount: payload.unreadCount ?? 0,
     isRequest: payload.requestStatus === 'pending',
+    isMuted: typeof payload.isMuted === 'boolean' ? payload.isMuted : undefined,
+    isArchived: typeof payload.isArchived === 'boolean' ? payload.isArchived : undefined,
     messages,
   };
 }
@@ -740,7 +844,7 @@ function eventKind(eventType: string | undefined): NotificationKind {
   if (direct) return direct;
   if (eventType.startsWith('offer')) return 'offer';
   if (eventType.startsWith('order')) return 'order';
-  if (eventType.startsWith('auction')) return 'system';
+  if (eventType.startsWith('auction')) return 'auction';
   if (eventType.includes('follow')) return 'follow';
   if (eventType.includes('like') || eventType.includes('fav')) return 'like';
   if (eventType.includes('review')) return 'review';
@@ -1194,17 +1298,50 @@ export function mapCoOwnCorporateAction(a: CoOwnCorporateActionApi): CorporateAc
         ? 'open'
         : 'pending_tally';
   const meta = a.metadata ?? {};
+  const num = (v: unknown): number | null =>
+    typeof v === 'number' && Number.isFinite(v) ? v : null;
+  const str = (v: unknown): string | null =>
+    typeof v === 'string' && v.length > 0 ? v : null;
+  const top = a as unknown as Record<string, unknown>;
   return {
     id: a.id,
     assetId: a.assetId,
     kind: kindMap[a.actionType] ?? 'sale_vote',
     title: a.title,
     description: a.description ?? '',
-    closesAt: a.payableDate ?? a.recordDate ?? a.exDate ?? a.createdAt,
+    // The voting deadline is the contract's own field; payable/record
+    // dates only stand in for older projections.
+    closesAt:
+      str(top.votingDeadline) ??
+      str(meta.votingDeadline) ??
+      a.payableDate ??
+      a.recordDate ??
+      a.exDate ??
+      a.createdAt,
     status,
-    yourVote: meta.yourVote === 'for' || meta.yourVote === 'against' ? meta.yourVote : null,
-    votesFor: typeof meta.votesFor === 'number' ? meta.votesFor : 0,
-    votesAgainst: typeof meta.votesAgainst === 'number' ? meta.votesAgainst : 0,
+    yourVote:
+      meta.yourVote === 'for' || meta.yourVote === 'against' || meta.yourVote === 'abstain'
+        ? meta.yourVote
+        : null,
+    votesFor: num(meta.votesFor) ?? 0,
+    votesAgainst: num(meta.votesAgainst) ?? 0,
+    votesAbstain: num(meta.votesAbstain) ?? 0,
+    // Wave 10/11 top-level fields preferred; metadata JSONB is the
+    // fallback for older projections — both fail closed to null.
+    quorumUnits: num(top.quorumUnits) ?? num(meta.quorumUnits),
+    passThresholdPct: num(top.passThresholdPct) ?? num(meta.passThresholdPct),
+    perUnitValueGbp:
+      num(top.perUnitValueGbpMinor) != null
+        ? num(top.perUnitValueGbpMinor)! / 100
+        : num(meta.perUnitValueGbpMinor) != null
+          ? num(meta.perUnitValueGbpMinor)! / 100
+          : null,
+    totalValueGbp:
+      num(top.totalValueGbpMinor) != null
+        ? num(top.totalValueGbpMinor)! / 100
+        : num(meta.totalValueGbpMinor) != null
+          ? num(meta.totalValueGbpMinor)! / 100
+          : null,
   };
 }
 

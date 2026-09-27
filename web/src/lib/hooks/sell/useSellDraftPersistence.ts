@@ -10,16 +10,22 @@
  *  - a pending snapshot surfaced to the screen as a Resume banner instead of
  *    being silently applied — the web route is shareable, so the draft is a
  *    decision, not ambient state
- *  - blob: photo URLs are session-scoped and never persisted; remote URLs
- *    (edit-mode listing media) round-trip fine
+ *  - blob: photo refs ARE persisted (they still resolve on same-session
+ *    resumes); dead refs are validated out on resume and counted so the
+ *    screen can show an honest "re-add these photos" notice rather than
+ *    silently dropping them
+ *  - every record carries a draftId binding it to the seller-hub draft
+ *    shelf (MY_DRAFT_LISTINGS) or the catalog-import draft store — one
+ *    draft, resumable from either surface
  *
  * Storage shape (versioned):
- *   { version: 1, savedAt: ISO, editId: string | null, ...draft fields }
+ *   { version: 1, savedAt: ISO, editId: string | null,
+ *     draftId: string | null, ...draft fields }
  */
 
 import { useCallback, useEffect, useRef, useState } from 'react';
-import type { ListingCondition } from '@/lib/contracts/domain';
-import { EMPTY_DRAFT, type SellDraft } from '@/components/sell/constants';
+import type { Listing, ListingCondition, User } from '@/lib/contracts/domain';
+import { EMPTY_DRAFT, parsePriceInput, type SellDraft } from '@/components/sell/constants';
 
 export const SELL_DRAFT_STORAGE_KEY = 'thryftverse.sell-draft';
 
@@ -31,6 +37,13 @@ export interface PersistedSellDraft {
   savedAt: string;
   /** Listing the draft was editing, when saved from the ?edit= flow. */
   editId: string | null;
+  /**
+   * The seller-draft record this snapshot belongs to — a hub shelf row
+   * (MY_DRAFT_LISTINGS), an imported draft, or the id generated on the
+   * first save of a composer draft. Null in edit mode and for records
+   * written before drafts unified across surfaces.
+   */
+  draftId?: string | null;
   photos: string[];
   title: string;
   brand: string;
@@ -41,18 +54,29 @@ export interface PersistedSellDraft {
   description: string;
   tags: string[];
   price: string;
+  /** RRP/"was" price — Listing.originalPrice (wire: originalPriceGbp). */
+  originalPrice: string;
+  /** Seller-asserted sustainability attributes (native SustainabilityTags
+   *  parity) — claims, not platform-verified facts. */
+  sustainabilityTags?: string[];
   shippingMethod: string;
   shippingPayer: string;
 }
 
-export function toPersistedDraft(draft: SellDraft, editId: string | null): PersistedSellDraft {
+export function toPersistedDraft(
+  draft: SellDraft,
+  editId: string | null,
+  draftId: string | null,
+): PersistedSellDraft {
   return {
     version: 1,
     savedAt: new Date().toISOString(),
     editId,
-    // blob: URLs are revoked with the session — persisting them would
-    // restore dead images. Remote fixture/CDN URLs survive.
-    photos: draft.photos.filter((u) => !u.startsWith('blob:')),
+    draftId,
+    // blob: refs are kept — they still resolve within the session that
+    // created them, so navigating away and back keeps previews. Refs dead
+    // after a reload are filtered on resume via livePhotosOnly().
+    photos: [...draft.photos],
     title: draft.title,
     brand: draft.brand,
     category: draft.category,
@@ -62,6 +86,8 @@ export function toPersistedDraft(draft: SellDraft, editId: string | null): Persi
     description: draft.description,
     tags: [...draft.tags],
     price: draft.price,
+    originalPrice: draft.originalPrice,
+    sustainabilityTags: [...draft.sustainabilityTags],
     shippingMethod: draft.shippingMethod,
     shippingPayer: draft.shippingPayer,
   };
@@ -80,6 +106,8 @@ export function draftFromPersisted(record: PersistedSellDraft): SellDraft {
     description: record.description ?? '',
     tags: record.tags ?? [],
     price: record.price ?? '',
+    originalPrice: record.originalPrice ?? '',
+    sustainabilityTags: record.sustainabilityTags ?? [],
     shippingMethod: (record.shippingMethod || '') as SellDraft['shippingMethod'],
     shippingPayer: (record.shippingPayer || '') as SellDraft['shippingPayer'],
   };
@@ -99,7 +127,9 @@ export function hasDraftContent(record: PersistedSellDraft | null): record is Pe
       record.size ||
       record.description.trim() ||
       record.tags.length ||
-      record.price.trim(),
+      record.price.trim() ||
+      (record.originalPrice ?? '').trim() ||
+      (record.sustainabilityTags?.length ?? 0),
   );
 }
 
@@ -132,19 +162,102 @@ export function clearSellDraft() {
   }
 }
 
+/**
+ * Resume-time photo check — blob: URLs only live as long as the document
+ * that created them. Same-session resumes keep their previews; after a
+ * reload the dead refs are filtered out and counted so the caller can
+ * surface an honest notice instead of silently dropping photos.
+ */
+export async function livePhotosOnly(
+  urls: string[],
+): Promise<{ kept: string[]; dropped: number }> {
+  const alive = await Promise.all(
+    urls.map(async (url) => {
+      if (!url.startsWith('blob:')) return true;
+      try {
+        const res = await fetch(url);
+        return res.ok;
+      } catch {
+        return false;
+      }
+    }),
+  );
+  const kept = urls.filter((_, i) => alive[i]);
+  return { kept, dropped: urls.length - kept.length };
+}
+
+/**
+ * Project a persisted draft onto a seller-hub draft Listing — the shelf
+ * record the management table renders. Condition needs a contract value;
+ * publish still requires the explicit pick, this is only the private
+ * shelf copy.
+ */
+export function draftRecordToListing(record: PersistedSellDraft, seller: User): Listing {
+  const originalPrice = parsePriceInput(record.originalPrice ?? '');
+  return {
+    id: record.draftId ?? `sd-${Date.now().toString(36)}`,
+    title: record.title.trim() || 'Untitled draft',
+    brand: record.brand.trim() || null,
+    size: record.size || null,
+    condition: (record.condition || 'Good') as ListingCondition,
+    price: parsePriceInput(record.price) ?? 0,
+    // Contract field — carried through so a resumed draft keeps its RRP.
+    originalPrice: originalPrice ?? undefined,
+    images: [...record.photos],
+    likes: 0,
+    views: 0,
+    sellerId: seller.id,
+    seller: {
+      id: seller.id,
+      username: seller.username,
+      avatar: seller.avatar,
+      rating: seller.rating,
+      reviewCount: seller.reviewCount,
+      verified: seller.isVerified,
+    },
+    category: record.category || 'uncategorised',
+    subcategory: record.subcategory || null,
+    description: record.description.trim(),
+    createdAt: record.savedAt,
+    status: 'draft',
+    shippingMethod: record.shippingMethod || null,
+    shippingPayer: record.shippingPayer || null,
+    // Seller-asserted claims ride outside the shared contract — the same
+    // extension-field pattern `tags` uses elsewhere in the sell flow.
+    ...({
+      sustainabilityTags: [...(record.sustainabilityTags ?? [])],
+    } as { sustainabilityTags?: string[] }),
+  };
+}
+
 interface UseSellDraftPersistenceOptions {
   draft: SellDraft;
   /** Listing id when authoring through ?edit=<id>, else null. */
   editId: string | null;
+  /** Seller-draft id when composing a shelf/import draft (?draft=<id>). */
+  draftId?: string | null;
   /**
    * True once the user has touched the form this mount. While a saved draft
    * is awaiting the resume/discard decision, auto-save stays quiet so the
    * pristine initial state never overwrites it.
    */
   dirty: boolean;
+  /**
+   * Reconciliation hook — invoked after every persisted write with the
+   * record, and with `null` whenever the stored draft is cleared (emptied,
+   * discarded or published). Lets the owner keep the seller-hub shelf and
+   * the import store in sync with the localStorage snapshot.
+   */
+  onWriteRecord?: (record: PersistedSellDraft | null, draftId: string | null) => void;
 }
 
-export function useSellDraftPersistence({ draft, editId, dirty }: UseSellDraftPersistenceOptions) {
+export function useSellDraftPersistence({
+  draft,
+  editId,
+  draftId,
+  dirty,
+  onWriteRecord,
+}: UseSellDraftPersistenceOptions) {
   const [pendingDraft, setPendingDraft] = useState<PersistedSellDraft | null>(null);
   const [draftSavedVisible, setDraftSavedVisible] = useState(false);
 
@@ -153,14 +266,21 @@ export function useSellDraftPersistence({ draft, editId, dirty }: UseSellDraftPe
   // Set by clearPersistedDraft (publish/abandon) so the unmount flush never
   // resurrects a draft whose job is done. Cleared when the user edits again.
   const clearedRef = useRef(false);
+  // Composer drafts get a shelf id on first save so subsequent autosaves
+  // update the same hub row instead of forking it.
+  const generatedDraftIdRef = useRef<string | null>(null);
   const draftRef = useRef(draft);
   const editIdRef = useRef(editId);
+  const draftIdRef = useRef(draftId);
   const dirtyRef = useRef(dirty);
   const pendingRef = useRef(pendingDraft);
+  const onWriteRef = useRef(onWriteRecord);
   draftRef.current = draft;
   editIdRef.current = editId;
+  draftIdRef.current = draftId;
   dirtyRef.current = dirty;
   pendingRef.current = pendingDraft;
+  onWriteRef.current = onWriteRecord;
 
   /* -- surface a saved draft once on mount -- */
   useEffect(() => {
@@ -168,11 +288,28 @@ export function useSellDraftPersistence({ draft, editId, dirty }: UseSellDraftPe
     if (hasDraftContent(record)) setPendingDraft(record);
   }, []);
 
-  const writeNow = useCallback(() => {
-    const record = toPersistedDraft(draftRef.current, editIdRef.current);
-    if (hasDraftContent(record)) writeSellDraft(record);
-    else clearSellDraft();
+  const currentDraftId = useCallback((): string | null => {
+    if (editIdRef.current) return null;
+    if (draftIdRef.current) return draftIdRef.current;
+    if (!generatedDraftIdRef.current) {
+      generatedDraftIdRef.current = `sd-${Date.now().toString(36)}-${Math.floor(
+        Math.random() * 1_000_000,
+      ).toString(36)}`;
+    }
+    return generatedDraftIdRef.current;
   }, []);
+
+  const writeNow = useCallback(() => {
+    const record = toPersistedDraft(draftRef.current, editIdRef.current, currentDraftId());
+    const recordDraftId = record.draftId ?? null;
+    if (hasDraftContent(record)) {
+      writeSellDraft(record);
+      onWriteRef.current?.(record, recordDraftId);
+    } else {
+      clearSellDraft();
+      onWriteRef.current?.(null, recordDraftId);
+    }
+  }, [currentDraftId]);
 
   /* -- debounced auto-save on draft change -- */
   useEffect(() => {
@@ -217,8 +354,12 @@ export function useSellDraftPersistence({ draft, editId, dirty }: UseSellDraftPe
   }, []);
 
   const discardDraft = useCallback(() => {
+    // The offered record's shelf id wins — discarding deletes that draft.
+    const id =
+      pendingRef.current?.draftId ?? draftIdRef.current ?? generatedDraftIdRef.current;
     setPendingDraft(null);
     clearSellDraft();
+    onWriteRef.current?.(null, id ?? null);
   }, []);
 
   /** "Save draft & exit" — bypass the debounce and persist immediately. */
@@ -230,8 +371,10 @@ export function useSellDraftPersistence({ draft, editId, dirty }: UseSellDraftPe
   /** Publish / abandon — the draft's job is done. */
   const clearPersistedDraft = useCallback(() => {
     clearedRef.current = true;
+    const id = draftIdRef.current ?? generatedDraftIdRef.current;
     setPendingDraft(null);
     clearSellDraft();
+    onWriteRef.current?.(null, id ?? null);
   }, []);
 
   return {

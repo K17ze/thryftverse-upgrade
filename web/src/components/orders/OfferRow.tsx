@@ -23,18 +23,58 @@ import { Badge } from '@/components/ui/Badge';
 import { Button } from '@/components/ui/Button';
 import { Icon } from '@/components/ui/Icon';
 import { listingById, userById } from '@/lib/data/fixtures';
+import { offerOrderId } from '@/lib/commerce/offerAcceptance';
+import { OFFER_STATUS_LABEL } from '@/lib/commerce/offerLabels';
 import { formatPrice, timeAgo } from '@/lib/utils/format';
 import { getCategoryFocalPoint, getListingCoverUri } from '@/lib/utils/media';
 
-export type OfferRowAction = 'accept' | 'decline' | 'counter' | 'withdraw';
+export type OfferRowAction = 'accept' | 'counter' | 'decline' | 'cancel';
 
-const STATUS: Record<OfferStatus, { label: string; variant: 'neutral' | 'success' | 'warning' | 'danger' | 'trust' | 'brand' }> = {
-  pending: { label: 'Pending', variant: 'warning' },
-  accepted: { label: 'Accepted', variant: 'success' },
-  declined: { label: 'Declined', variant: 'danger' },
-  countered: { label: 'Countered', variant: 'brand' },
-  expired: { label: 'Expired', variant: 'neutral' },
-  cancelled: { label: 'Withdrawn', variant: 'neutral' },
+/**
+ * Actions derived from the server's actual authorization rules — the
+ * mobile role/state matrix (components/offers/OfferRow.resolveOfferActions):
+ *   - the participant who did NOT author the standing offer may respond —
+ *     a seller accepts/counters/declines a buyer's offer; a buyer
+ *     accepts/counters/cancels against a seller's standing counter
+ *     (`offeredByUserId !== viewer` is the server's own check);
+ *   - only the seller can decline; only the buyer can cancel — cancel is
+ *     the buyer's exit whether or not the standing offer is theirs;
+ *   - a seller declining their OWN standing counter retracts it — rendered
+ *     as "Withdraw", never as a rejection.
+ *
+ * Web fixture note: the fixture model keeps the standing counter on the
+ * same row as status 'countered' (the backend supersedes via a new
+ * pending row), so the live/actionable set is pending OR countered.
+ */
+export function resolveOfferActions(
+  offer: CommerceOffer,
+  viewerId: string,
+  nowMs: number,
+): OfferRowAction[] {
+  const effective = effectiveOfferStatus(offer, nowMs);
+  if (effective !== 'pending' && effective !== 'countered') return [];
+  const isSeller = offer.sellerId === viewerId;
+  const isBuyer = offer.buyerId === viewerId;
+  const ownMove = offer.offeredByUserId === viewerId;
+  if (isSeller && !ownMove) return ['accept', 'counter', 'decline'];
+  if (isBuyer && !ownMove) return ['accept', 'counter', 'cancel'];
+  if (isBuyer && ownMove) return ['cancel'];
+  if (isSeller && ownMove) return ['decline'];
+  return [];
+}
+
+/** Badge tone per status — labels come from the canonical OFFER_STATUS_LABEL
+ *  map so every surface says the same word for the same state. */
+const STATUS_VARIANT: Record<
+  OfferStatus,
+  'neutral' | 'success' | 'warning' | 'danger' | 'trust' | 'brand'
+> = {
+  pending: 'warning',
+  accepted: 'success',
+  declined: 'danger',
+  countered: 'brand',
+  expired: 'neutral',
+  cancelled: 'neutral',
 };
 
 /**
@@ -128,7 +168,8 @@ export function OfferRow({ offer, direction, viewerId, nowMs, onAction }: OfferR
 
   const effective = effectiveOfferStatus(offer, nowMs);
   const live = effective === 'pending' || effective === 'countered';
-  const status = STATUS[effective];
+  const status = { label: OFFER_STATUS_LABEL[effective], variant: STATUS_VARIANT[effective] };
+  const actions = resolveOfferActions(offer, viewerId, nowMs);
   // Whose move is it? The standing offer's author is waiting; the other
   // side owes a response.
   const ownMove = offer.offeredByUserId === viewerId;
@@ -183,6 +224,18 @@ export function OfferRow({ offer, direction, viewerId, nowMs, onAction }: OfferR
           ) : waitingOnThem ? (
             <p className="mt-1 text-caption text-text-muted">Waiting on @{counterpartyName}</p>
           ) : null}
+          {/* Conversation threading — when the offer is bound to a DM
+              (listing_offers.conversation_id), the row deep-links into that
+              thread instead of leaving the negotiation stranded. */}
+          {offer.conversationId ? (
+            <Link
+              href={`/inbox/${offer.conversationId}`}
+              className="pressable mt-1.5 inline-flex items-center gap-1 text-caption text-text-secondary hover:text-text-primary"
+            >
+              <Icon name="chat" size={13} />
+              View conversation
+            </Link>
+          ) : null}
         </div>
 
         <div className="shrink-0 text-right">
@@ -204,31 +257,47 @@ export function OfferRow({ offer, direction, viewerId, nowMs, onAction }: OfferR
         </span>
       </div>
 
-      {/* Actions — only for rows where something is genuinely actionable:
-          the other side's live offer gets the full response set; your own
-          standing offer can only be withdrawn. */}
-      {awaitingMe ? (
+      {/* Actions — the resolved role/state set, nothing more: the other
+          side's standing offer gets the full response grammar (seller
+          declines, buyer cancels); your own standing move gets only its
+          legal exit — Withdraw for a seller, Cancel for a buyer. */}
+      {actions.length > 0 ? (
         <div className="mt-3 flex gap-2 pl-[68px]">
-          <Button variant="primary" size="sm" onClick={() => onAction(offer, 'accept')}>
-            Accept {formatPrice(offer.amount)}
-          </Button>
-          <Button variant="secondary" size="sm" onClick={() => onAction(offer, 'counter')}>
-            Counter
-          </Button>
-          <Button variant="quiet" size="sm" onClick={() => onAction(offer, 'decline')}>
-            Decline
-          </Button>
-        </div>
-      ) : waitingOnThem ? (
-        <div className="mt-3 flex items-center gap-3 pl-[68px]">
-          <Button variant="quiet" size="sm" onClick={() => onAction(offer, 'withdraw')}>
-            Withdraw
-          </Button>
+          {actions.includes('accept') ? (
+            <Button variant="primary" size="sm" onClick={() => onAction(offer, 'accept')}>
+              Accept <span className="tnum">{formatPrice(offer.amount)}</span>
+            </Button>
+          ) : null}
+          {actions.includes('counter') ? (
+            <Button variant="secondary" size="sm" onClick={() => onAction(offer, 'counter')}>
+              Counter
+            </Button>
+          ) : null}
+          {actions.includes('decline') ? (
+            <Button variant="quiet" size="sm" onClick={() => onAction(offer, 'decline')}>
+              {ownMove ? 'Withdraw' : 'Decline'}
+            </Button>
+          ) : null}
+          {actions.includes('cancel') ? (
+            <Button variant="quiet" size="sm" onClick={() => onAction(offer, 'cancel')}>
+              Cancel
+            </Button>
+          ) : null}
         </div>
       ) : offer.status === 'accepted' ? (
         <p className="mt-2.5 flex items-center gap-1.5 pl-[68px] text-caption text-success-text">
           <Icon name="check" size={13} filled />
-          Deal made — see your orders for dispatch updates.
+          Deal made —{' '}
+          {offerOrderId(offer) ? (
+            <Link
+              href={`/orders/${offerOrderId(offer)}`}
+              className="pressable font-semibold underline underline-offset-2"
+            >
+              view the order
+            </Link>
+          ) : (
+            'see your orders for dispatch updates.'
+          )}
         </p>
       ) : null}
     </li>

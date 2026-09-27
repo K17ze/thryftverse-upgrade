@@ -23,11 +23,18 @@ export function Sparkline({
   width = 80,
   height = 24,
   className = '',
+  label,
 }: {
   candles: CandlePoint[];
   width?: number;
   height?: number;
   className?: string;
+  /**
+   * When set, the sparkline is announced as an image with this label —
+   * pass a trend summary when the line carries meaning on its own.
+   * Without a label it stays decorative (aria-hidden).
+   */
+  label?: string;
 }) {
   const pts = closes(candles);
   if (pts.length < 2) {
@@ -52,7 +59,9 @@ export function Sparkline({
       height={height}
       viewBox={`0 0 ${width} ${height}`}
       className={className}
-      aria-hidden="true"
+      role={label ? 'img' : undefined}
+      aria-label={label}
+      aria-hidden={label ? undefined : true}
       focusable="false"
     >
       <polyline

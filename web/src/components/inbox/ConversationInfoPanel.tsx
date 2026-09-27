@@ -17,11 +17,14 @@
 
 import { useEffect, useRef, useState } from 'react';
 import { useRouter } from 'next/navigation';
+import { useQueryClient } from '@tanstack/react-query';
 import type { User } from '@/lib/contracts/domain';
 import { useConversation, useCreateConversation } from '@/lib/hooks/queries';
+import { DATA_MODE } from '@/lib/api/client';
+import { deleteChatMessage } from '@/lib/api/services/chat';
 import { useSession } from '@/lib/session/SessionProvider';
 import { useHydrated } from '@/lib/store/useStore';
-import { useInboxPrefs } from '@/lib/store/inboxPrefs';
+import { useConversationPrefs } from './useConversationPrefs';
 import { formatDate, formatPrice } from '@/lib/utils/format';
 import { Avatar } from '@/components/ui/Avatar';
 import { EmptyState } from '@/components/ui/EmptyState';
@@ -40,9 +43,15 @@ import { MemberDirectory } from './MemberDirectory';
 import { PermissionsSection } from './PermissionsSection';
 import { QuickActions, type QuickAction } from './QuickActions';
 import { ReportGroupSheet } from './ReportGroupSheet';
-import { SharedMediaGrid, useSharedMedia } from './SharedMediaGrid';
+import {
+  SharedMediaGrid,
+  useSharedMedia,
+  type SharedMediaItem,
+} from './SharedMediaGrid';
+import { ConversationAgentsSection } from './ConversationAgentsSection';
 import {
   conversationCreatedAt,
+  fixtureConversation,
   memberRolesFor,
   useGroupAdminStore,
   viewerRole,
@@ -57,21 +66,21 @@ const LINK_RE = /https?:\/\//i;
 
 export function ConversationInfoPanel({ conversationId }: { conversationId: string }) {
   const router = useRouter();
+  const qc = useQueryClient();
   const toast = useToast();
   const { user, isGuest } = useSession();
   const hydrated = useHydrated();
-  const viewerId = user?.id ?? 'me';
+  const viewerId = user?.id ?? '';
 
-  const { data: conversation, isLoading } = useConversation(conversationId);
+  const { data: conversation, isLoading, isError, refetch } =
+    useConversation(conversationId);
   const isGroup = conversation ? isGroupConversation(conversation) : false;
 
-  // Persisted local prefs — gate reads behind hydration (SSR-safe rule).
-  const mutedIds = useInboxPrefs((s) => s.mutedIds);
-  const archivedIds = useInboxPrefs((s) => s.archivedIds);
-  const toggleMute = useInboxPrefs((s) => s.toggleMute);
-  const toggleArchive = useInboxPrefs((s) => s.toggleArchive);
-  const muted = hydrated && mutedIds.includes(conversationId);
-  const archived = hydrated && archivedIds.includes(conversationId);
+  // Conversation prefs — hydrated override → live isMuted/isArchived —
+  // and writes post the server edge in live mode (revert on failure).
+  const { isMuted, isArchived, setMuted, setArchived } = useConversationPrefs();
+  const muted = conversation ? isMuted(conversation) : false;
+  const archived = conversation ? isArchived(conversation) : false;
 
   const blockedUserIds = useInboxSafety((s) => s.blockedUserIds);
   const toggleBlocked = useInboxSafety((s) => s.toggleBlocked);
@@ -126,6 +135,28 @@ export function ConversationInfoPanel({ conversationId }: { conversationId: stri
 
   if (isGuest) return null;
   if (isLoading) return <InfoSkeleton conversationId={conversationId} />;
+  if (isError) {
+    return (
+      <div className="flex h-full flex-col bg-background">
+        <header className="flex shrink-0 items-center gap-1 border-b border-border-subtle px-1 py-1">
+          <IconButton
+            name="back"
+            aria-label="Back to conversation"
+            onClick={() => router.push(`/inbox/${conversationId}`)}
+          />
+        </header>
+        <div className="flex flex-1 items-center justify-center">
+          <EmptyState
+            icon="alert"
+            title="Couldn't load chat details"
+            subtitle="Check your connection and try again."
+            actionLabel="Try again"
+            onAction={() => void refetch()}
+          />
+        </div>
+      </div>
+    );
+  }
   if (!conversation) {
     return (
       <div className="flex h-full flex-col bg-background">
@@ -155,12 +186,12 @@ export function ConversationInfoPanel({ conversationId }: { conversationId: stri
   // ── Shared actions ────────────────────────────────────────────────────
 
   const handleToggleMute = () => {
-    toggleMute(conversation.id);
+    setMuted(conversation, !muted);
     toast.show(muted ? 'Conversation unmuted' : 'Conversation muted', 'info');
   };
 
   const handleToggleArchive = () => {
-    toggleArchive(conversation.id);
+    setArchived(conversation, !archived);
     toast.show(archived ? 'Conversation unarchived' : 'Conversation archived', 'info');
   };
 
@@ -181,8 +212,8 @@ export function ConversationInfoPanel({ conversationId }: { conversationId: stri
 
   const handleLeave = () => {
     if (role === 'owner') {
-      // No transfer-ownership surface on web yet — the honest guard is to
-      // point at the directory, matching the mobile copy.
+      // The owner can't abandon the role — point at the directory, where
+      // the member sheet's Transfer ownership action lives (mobile copy).
       toast.show('Transfer ownership before leaving this group.', 'info');
       scrollTo(membersAnchor);
       return;
@@ -274,6 +305,34 @@ export function ConversationInfoPanel({ conversationId }: { conversationId: stri
     });
   };
 
+  /**
+   * Ownership handoff — mirrors mobile handleTransferOwnership: a danger
+   * confirm, then the server write that promotes the member to owner and
+   * demotes the viewer to admin (fixture mode applies the same fields to
+   * the module dataset). Failure reports honestly — nothing optimistically
+   * flips roles before the write lands.
+   */
+  const confirmTransferOwnership = (m: MemberActionsTarget) => {
+    const name = m.displayName ?? m.username;
+    setMemberTarget(null);
+    setConfirm({
+      open: true,
+      title: 'Transfer ownership?',
+      message: `You'll no longer be the owner — ${name} becomes the group owner with full control.`,
+      confirmLabel: 'Transfer',
+      variant: 'danger',
+      onConfirm: async () => {
+        const ok = await admin.transferOwnership(m.id);
+        toast.show(
+          ok
+            ? `Ownership transferred to ${name}.`
+            : "Couldn't transfer ownership — try again.",
+          ok ? 'success' : 'error',
+        );
+      },
+    });
+  };
+
   const handlePermissionChange = async (
     key: EditablePermission,
     scope: GroupPermissionScope,
@@ -283,6 +342,46 @@ export function ConversationInfoPanel({ conversationId }: { conversationId: stri
     const ok = await setPermission(key, scope);
     setPendingPermission(null);
     if (!ok) toast.show("Couldn't update permissions — try again.", 'error');
+  };
+
+  /**
+   * Shared-media manage delete — mirrors mobile
+   * SharedConversationMediaScreen: the selected messages are removed for
+   * the viewer (delete-for-me in live mode — a real edge per message,
+   * settled in parallel; fixture mode drops them from the module dataset
+   * like mobile's replaceConversationMessages). One toast reports the
+   * batch honestly, including partial failures.
+   */
+  const removeMediaItems = async (items: SharedMediaItem[]) => {
+    if (items.length === 0) return;
+    const ids = new Set(items.map((it) => it.id));
+    if (DATA_MODE === 'live') {
+      const results = await Promise.allSettled(
+        items.map((it) => deleteChatMessage(conversation.id, it.id, 'me')),
+      );
+      const failed = results.filter((r) => r.status === 'rejected').length;
+      void qc.invalidateQueries({ queryKey: ['conversation', conversation.id] });
+      void qc.invalidateQueries({ queryKey: ['conversations'] });
+      toast.show(
+        failed
+          ? `${failed} of ${items.length} couldn't be removed`
+          : `${items.length} ${items.length === 1 ? 'item' : 'items'} removed`,
+        failed ? 'error' : 'info',
+      );
+      return;
+    }
+    const convo = fixtureConversation(conversation.id);
+    if (!convo) {
+      toast.show("Couldn't remove — conversation not found", 'error');
+      return;
+    }
+    convo.messages = convo.messages.filter((m) => !ids.has(m.id));
+    void qc.invalidateQueries({ queryKey: ['conversation', conversation.id] });
+    void qc.invalidateQueries({ queryKey: ['conversations'] });
+    toast.show(
+      `${items.length} ${items.length === 1 ? 'item' : 'items'} removed`,
+      'info',
+    );
   };
 
   // ── DM actions ────────────────────────────────────────────────────────
@@ -383,6 +482,7 @@ export function ConversationInfoPanel({ conversationId }: { conversationId: stri
           <>
             <GroupInfoHero
               conversation={conversation}
+              viewerId={viewerId}
               canEdit={capabilities?.canEditGroupInfo ?? false}
               onEditCover={() => setEditOpen(true)}
               onEditAvatar={() => setEditOpen(true)}
@@ -418,7 +518,10 @@ export function ConversationInfoPanel({ conversationId }: { conversationId: stri
               {sharedSection}
               {mediaCount > 0 ? (
                 <div className="pt-3">
-                  <SharedMediaGrid items={mediaItems} />
+                  <SharedMediaGrid
+                    items={mediaItems}
+                    onDeleteItems={removeMediaItems}
+                  />
                 </div>
               ) : null}
             </div>
@@ -442,6 +545,13 @@ export function ConversationInfoPanel({ conversationId }: { conversationId: stri
                 pendingKey={pendingPermission}
                 onChange={handlePermissionChange}
               />
+            ) : null}
+
+            {/* Chat agents — the mobile GroupBotManagement surface,
+                manager-gated like mobile's admin controls. Connect applies
+                directly; remove confirms inside the section. */}
+            {capabilities?.canManage ? (
+              <ConversationAgentsSection conversation={conversation} />
             ) : null}
 
             <InfoSection title="Conversation">
@@ -539,7 +649,10 @@ export function ConversationInfoPanel({ conversationId }: { conversationId: stri
               {sharedSection}
               {mediaCount > 0 ? (
                 <div className="pt-3">
-                  <SharedMediaGrid items={mediaItems} />
+                  <SharedMediaGrid
+                    items={mediaItems}
+                    onDeleteItems={removeMediaItems}
+                  />
                 </div>
               ) : null}
             </div>
@@ -609,6 +722,7 @@ export function ConversationInfoPanel({ conversationId }: { conversationId: stri
         open={editOpen}
         onClose={() => setEditOpen(false)}
         conversation={conversation}
+        viewerId={viewerId}
         onSave={saveGroup}
         onDiscardDirty={() =>
           setConfirm({
@@ -632,6 +746,7 @@ export function ConversationInfoPanel({ conversationId }: { conversationId: stri
         onDismiss={() => setMemberTarget(null)}
         canManageMembers={capabilities?.canManage ?? false}
         isSelf={memberTarget?.id === viewerId}
+        canTransferOwnership={role === 'owner'}
         onViewProfile={(m) => {
           setMemberTarget(null);
           router.push(`/u/${m.username}`);
@@ -639,6 +754,7 @@ export function ConversationInfoPanel({ conversationId }: { conversationId: stri
         onMessage={handleMessageMember}
         onToggleAdmin={handleToggleAdmin}
         onRemove={confirmRemoveMember}
+        onTransferOwnership={confirmTransferOwnership}
       />
       <ConfirmSheet state={confirm} onClose={() => setConfirm(CLOSED_CONFIRM)} />
       <ReportSheet

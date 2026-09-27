@@ -20,9 +20,12 @@ import { CreateCollectionSheet } from '@/components/collections/CreateCollection
 import { CollectionsPageSkeleton } from '@/components/collections/CollectionsSkeleton';
 import { useUserCollections } from '@/lib/hooks/collections-queries';
 import { useMyListings } from '@/lib/hooks/queries';
+import { useSignupWall } from '@/components/auth/SignupWall';
 import { useSession } from '@/lib/session/SessionProvider';
 import { useHydrated } from '@/lib/store/useStore';
 import { useCollectionEdits } from '@/lib/store/collectionEdits';
+import { BoardSortControl } from '@/components/profile/BoardSortControl';
+import { sortBoards, useBoardPrefs } from '@/components/profile/boardPrefs';
 import { listingCoverThumbs } from '@/components/profile/boardMedia';
 import { getListingCoverUri } from '@/lib/utils/media';
 import type { UserCollection } from '@/lib/data/fixtures-collections';
@@ -30,8 +33,14 @@ import type { UserCollection } from '@/lib/data/fixtures-collections';
 export default function CollectionsPage() {
   const router = useRouter();
   const { show } = useToast();
-  const { user } = useSession();
+  const { user, isGuest } = useSession();
+  const { requireAuth, wall } = useSignupWall();
   const [createOpen, setCreateOpen] = useState(false);
+
+  /** Creation is account-bound — guests get the soft wall, not the sheet. */
+  const requestCreate = () => {
+    if (requireAuth('save_item')) setCreateOpen(true);
+  };
 
   const {
     data: collections,
@@ -42,6 +51,8 @@ export default function CollectionsPage() {
   const { data: myListings } = useMyListings();
   const hydrated = useHydrated();
   const overlays = useCollectionEdits((s) => s.boards);
+  const boardPrefs = useBoardPrefs((s) => s.boards);
+  const boardSort = useBoardPrefs((s) => s.sort);
 
   const closetThumbs = useMemo(
     () =>
@@ -52,15 +63,28 @@ export default function CollectionsPage() {
     [myListings],
   );
 
-  // Owner edits made on /collection/[id] persist in the overlay store —
-  // apply them post-hydration so the hub's counts and collages agree.
+  // Owner edits made on /collection/[id] persist in the overlay stores —
+  // apply them post-hydration so the hub's counts, privacy and collages
+  // agree. Archived boards leave the grid; the detail route still resolves.
   const boards = useMemo(
     () =>
-      (collections ?? []).map((c) => {
-        const override = hydrated ? overlays[c.id]?.itemIds : undefined;
-        return override ? { ...c, itemIds: override } : c;
-      }),
-    [collections, hydrated, overlays],
+      sortBoards(
+        (collections ?? [])
+          .map((c) => {
+            const pref = hydrated ? boardPrefs[c.id] : undefined;
+            const override = hydrated ? overlays[c.id]?.itemIds : undefined;
+            return {
+              ...c,
+              itemIds: override ?? c.itemIds,
+              isPrivate: pref?.isPrivate ?? c.isPrivate,
+              coverItemId: pref?.coverItemId ?? null,
+              archived: pref?.archived === true,
+            };
+          })
+          .filter((c) => !c.archived),
+        boardSort,
+      ),
+    [collections, hydrated, overlays, boardPrefs, boardSort],
   );
 
   const handleCreated = (collection: UserCollection) => {
@@ -90,6 +114,22 @@ export default function CollectionsPage() {
     );
   }
 
+  // This hub is the member's own boards — guests get the sign-in ask, not
+  // the fixture demo account's collections.
+  if (isGuest || !user) {
+    return (
+      <div className="mx-auto max-w-[1200px]">
+        <EmptyState
+          icon="folder"
+          title="Your collections live here"
+          subtitle="Sign in to see your boards and closet."
+          actionLabel="Sign in"
+          onAction={() => router.push('/auth')}
+        />
+      </div>
+    );
+  }
+
   const closetCount = myListings?.length ?? 0;
   const nothingToShow = boards.length === 0 && closetCount === 0;
 
@@ -109,7 +149,7 @@ export default function CollectionsPage() {
             variant="outline"
             size="sm"
             icon="plus"
-            onClick={() => setCreateOpen(true)}
+            onClick={requestCreate}
           >
             New collection
           </Button>
@@ -117,12 +157,15 @@ export default function CollectionsPage() {
       </div>
 
       <section aria-label="Your collections" className="mt-6">
-        <div className="flex items-baseline justify-between border-b border-border-subtle px-4 pb-3 sm:px-6">
+        <div className="flex items-center justify-between border-b border-border-subtle px-4 pb-3 sm:px-6">
           <h2 className="text-section-title font-semibold text-text-primary">
             Your collections
           </h2>
-          <span className="tnum text-meta text-text-muted">
-            {boards.length + 1} {boards.length + 1 === 1 ? 'board' : 'boards'}
+          <span className="flex items-center gap-3">
+            <span className="tnum text-meta text-text-muted">
+              {boards.length + 1} {boards.length + 1 === 1 ? 'board' : 'boards'}
+            </span>
+            <BoardSortControl />
           </span>
         </div>
 
@@ -132,14 +175,14 @@ export default function CollectionsPage() {
             title="No collections yet"
             subtitle="Group saved items by style, season, or vibe."
             actionLabel="Create collection"
-            onAction={() => setCreateOpen(true)}
+            onAction={requestCreate}
             compact
           />
         ) : (
           <div className="mt-5 grid grid-cols-2 gap-3 px-4 sm:grid-cols-3 sm:px-6 lg:grid-cols-4">
             {/* Your closet — the shopfront board, always first (closet-<id>). */}
             <UserCollectionCard
-              href={`/collection/closet-${user?.id ?? 'me'}`}
+              href={`/collection/closet-${user.id}`}
               name="Your closet"
               thumbs={closetThumbs}
               count={closetCount}
@@ -149,7 +192,7 @@ export default function CollectionsPage() {
                 key={c.id}
                 href={`/collection/${c.id}`}
                 name={c.name}
-                thumbs={listingCoverThumbs(c.itemIds, 4)}
+                thumbs={listingCoverThumbs(c.itemIds, 4, undefined, c.coverItemId)}
                 count={c.itemIds.length}
                 isPrivate={c.isPrivate}
                 updatedAt={c.updatedAt}
@@ -166,6 +209,7 @@ export default function CollectionsPage() {
         onClose={() => setCreateOpen(false)}
         onCreated={handleCreated}
       />
+      {wall}
     </div>
   );
 }

@@ -10,6 +10,7 @@
  */
 
 import type { PayoutAccount, PayoutRequest, PayoutRequestStatus } from '@/lib/data/fixtures';
+import type { PayoutAccountPayload, PayoutRequestPayload } from '@/lib/api/services/payouts';
 import { round2 } from '../convertViewModel';
 
 // ── Flow ──────────────────────────────────────────────────────────────
@@ -130,6 +131,121 @@ export function quickAmount(available: number, pct: number): number {
   return round2((available * pct) / 100);
 }
 
+// ── Payout destination — the unified rail view model ──────────────────
+// Fixture mode stores masked bank details (bankName/sortCode/last4); live
+// mode reads payout_accounts rows, which only carry a provider reference
+// (e.g. a Stripe Connect `acct_…`). Both flatten into one render shape so
+// the surfaces never branch on wire types.
+
+export type DestinationStatus = 'active' | 'pending' | 'disabled';
+
+export interface PayoutDestination {
+  /** UI key — fixture ids are `pa-*`, live ids carry the numeric row id. */
+  id: string;
+  /** Live payout_accounts.id — required by POST payout-requests. Null in
+   *  fixture mode (local demo rows are submitted to nothing). */
+  accountId: number | null;
+  /** 'Barclays •••• 4521' (fixture) or 'Stripe •••• 9f3c' (live). */
+  title: string;
+  /** 'Alex Morgan · Sort code 20-41-50' or 'GBP · Stripe Connect'. */
+  subtitle: string;
+  currency: string;
+  status: DestinationStatus;
+  isDefault: boolean;
+  createdAt: string;
+}
+
+/** A payout can only target an active account — the server 409s on
+ *  pending/disabled rows, so the radio list never offers them. */
+export function isSelectableDestination(d: PayoutDestination): boolean {
+  return d.status === 'active';
+}
+
+/** Human label for a payout gateway id — extend as rails are added. */
+export function gatewayLabel(gatewayId: string): string {
+  if (gatewayId === 'stripe_americas') return 'Stripe';
+  // `stripe_americas` → 'Stripe Americas', `manual_uk` → 'Manual Uk'.
+  return gatewayId
+    .split('_')
+    .filter(Boolean)
+    .map((w) => w.charAt(0).toUpperCase() + w.slice(1))
+    .join(' ');
+}
+
+export function fixtureDestination(account: PayoutAccount): PayoutDestination {
+  return {
+    id: account.id,
+    accountId: null,
+    title: `${account.bankName} •••• ${account.last4}`,
+    subtitle: `${account.holderName} · Sort code ${account.sortCode}`,
+    currency: account.currency,
+    status: 'active',
+    isDefault: account.isDefault,
+    createdAt: account.createdAt,
+  };
+}
+
+export function liveDestination(
+  account: PayoutAccountPayload,
+  isDefault: boolean,
+): PayoutDestination {
+  const refTail = account.providerAccountRef.slice(-4);
+  const holderName =
+    typeof account.metadata?.accountHolderName === 'string'
+      ? account.metadata.accountHolderName
+      : typeof account.metadata?.account_holder_name === 'string'
+        ? account.metadata.account_holder_name
+        : null;
+  return {
+    id: `payout-account-${account.id}`,
+    accountId: account.id,
+    title: `${gatewayLabel(account.gatewayId)} •••• ${refTail}`,
+    subtitle: `${account.currency} · ${gatewayLabel(account.gatewayId)} Connect${holderName ? ` · ${holderName}` : ''}`,
+    currency: account.currency,
+    status: account.status,
+    isDefault,
+    createdAt: account.createdAt,
+  };
+}
+
+/** Display label for a destination on receipts/history rows. */
+export function destinationLabel(d: Pick<PayoutDestination, 'title'>): string {
+  return d.title;
+}
+
+export const DESTINATION_STATUS_CONFIG: Record<
+  DestinationStatus,
+  { label: string; badge: 'neutral' | 'warning' | 'success' | 'danger' }
+> = {
+  active: { label: 'Active', badge: 'success' },
+  pending: { label: 'Pending verification', badge: 'warning' },
+  disabled: { label: 'Disabled', badge: 'neutral' },
+};
+
+/** Live payout request → the shared history-row view model. The reference
+ *  is the provider payout ref when the rail has issued one, else the
+ *  server id — never a fabricated `PO-…` string. */
+export function requestFromApi(
+  request: PayoutRequestPayload,
+  account?: PayoutAccountPayload,
+): PayoutRequest {
+  return {
+    id: request.id,
+    reference: request.providerPayoutRef ?? request.id,
+    accountId: String(request.payoutAccountId),
+    destinationLabel: account
+      ? `${gatewayLabel(account.gatewayId)} •••• ${account.providerAccountRef.slice(-4)}`
+      : `Payout account #${request.payoutAccountId}`,
+    // amountGbp is the server's canonical GBP valuation of the request —
+    // pair it with 'GBP' so the row never labels a GBP figure with the
+    // requested foreign currency.
+    amountGbp: request.amountGbp,
+    currency: 'GBP',
+    status: request.status,
+    createdAt: request.createdAt,
+  };
+}
+
 // ── UK bank account validation ────────────────────────────────────────
 // Mirrors the AddBankAccountScreen fields: 6-digit sort code displayed
 // `XX-XX-XX`, 8-digit account number. Only the last four digits are kept.
@@ -155,10 +271,6 @@ export function accountNumberDigits(raw: string): string {
 
 export function isValidAccountNumber(raw: string): boolean {
   return /^\d{8}$/.test(accountNumberDigits(raw));
-}
-
-export function maskedAccountLabel(account: Pick<PayoutAccount, 'bankName' | 'last4'>): string {
-  return `${account.bankName} •••• ${account.last4}`;
 }
 
 /** True when an account with this sort code + last4 is already saved. */

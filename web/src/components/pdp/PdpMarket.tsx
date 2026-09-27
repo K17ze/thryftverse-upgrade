@@ -5,14 +5,20 @@
  * Port of the mobile ItemDetailPriceMarket: one honest ledger (price drop,
  * previous price, similar-sold range, time on market) plus the "Similar
  * sold items" strip — the eBay sold-comps signal that anchors pricing
- * trust. Every row derives from the fixture record or the sold-comps
- * dataset; nothing is invented. Self-omits when no row and no comp can
- * render.
+ * trust. Every row comes from a real source: live mode reads
+ * /listings/:id/price-history and /listings/:id/sold-comparables (real
+ * recorded price events and aggregated completed orders); fixture mode
+ * derives the same rows from the bundled dataset. The per-item sold strip
+ * is fixture-only — the live endpoint publishes aggregate stats, no card
+ * data — so in live mode the range row stands alone. Nothing is invented:
+ * a failed or empty live read simply omits its row, and the section
+ * self-omits when no row and no comp can render.
  */
 
 import type { Listing } from '@/lib/contracts/domain';
-import { priceHistoryFor, soldComparablesFor } from '@/lib/data/fixtures';
+import { usePdpMarketEvidence } from '@/lib/hooks/pdp-market-queries';
 import { AppImage } from '@/components/ui/AppImage';
+import { Skeleton } from '@/components/ui/Skeleton';
 import { formatPrice } from '@/lib/utils/format';
 
 interface PdpMarketProps {
@@ -38,8 +44,7 @@ interface InsightRow {
 }
 
 export function PdpMarket({ listing }: PdpMarketProps) {
-  const priceEvents = priceHistoryFor(listing);
-  const comps = soldComparablesFor(listing);
+  const { priceEvents, soldComps, isLoading } = usePdpMarketEvidence(listing);
 
   // ── Insight rows — mirror mobile buildItemDetailDerived: only truthful
   //    facts, muted for the secondary evidence. ──
@@ -51,23 +56,60 @@ export function PdpMarket({ listing }: PdpMarketProps) {
         ),
       )
     : null;
-  const showComps = comps.length >= 2;
+  const compsRange =
+    soldComps != null &&
+    soldComps.count >= 2 &&
+    soldComps.minPrice != null &&
+    soldComps.maxPrice != null
+      ? { count: soldComps.count, min: soldComps.minPrice, max: soldComps.maxPrice }
+      : null;
+  // Per-item comp cards — fixture dataset only; the live comparables
+  // endpoint publishes aggregates, so the strip can't exist in live mode.
+  const compItems = soldComps?.items ?? [];
   const showDays = daysListed != null && daysListed >= 3;
 
+  if (isLoading) {
+    return (
+      <section
+        className="border-t border-border-subtle py-6"
+        aria-busy
+        aria-label="Price history and market"
+      >
+        <Skeleton className="mb-3 h-5 w-44" />
+        <Skeleton className="h-4 w-full" />
+        <Skeleton className="mt-2.5 h-4 w-3/4" />
+      </section>
+    );
+  }
+
   const rows: InsightRow[] = [];
-  const latestEvent = priceEvents[0];
-  if (latestEvent) {
-    const dropPercent = Math.round(
-      ((latestEvent.previousPrice - latestEvent.newPrice) / latestEvent.previousPrice) * 100,
-    );
-    rows.push(
-      { label: 'Listed at', value: formatPrice(latestEvent.previousPrice), muted: true },
-      {
+  // Events arrive newest-first (the live endpoint orders changed_at DESC;
+  // the fixture emits its single derived event). The oldest event's
+  // previousPrice is the true list price — the latest event's isn't, once
+  // more than one change has been recorded.
+  const earliestEvent = priceEvents[priceEvents.length - 1];
+  if (earliestEvent) {
+    // The server records every price change, rises included — only real
+    // reductions earn the success row; a rise gets no editorialising.
+    const drops = priceEvents.filter((e) => e.newPrice < e.previousPrice);
+    rows.push({
+      label: 'Listed at',
+      value: formatPrice(earliestEvent.previousPrice),
+      muted: true,
+    });
+    if (drops.length) {
+      const dropPercent = Math.max(
+        0,
+        Math.round(
+          ((earliestEvent.previousPrice - listing.price) / earliestEvent.previousPrice) * 100,
+        ),
+      );
+      rows.push({
         label: 'Reduced',
-        value: `once · −${dropPercent}%`,
+        value: `${drops.length === 1 ? 'once' : `${drops.length} times`} · −${dropPercent}%`,
         success: true,
-      },
-    );
+      });
+    }
   } else {
     rows.push({
       label: 'Price history',
@@ -75,11 +117,10 @@ export function PdpMarket({ listing }: PdpMarketProps) {
       muted: true,
     });
   }
-  if (showComps) {
-    const prices = comps.map((c) => c.soldPrice);
+  if (compsRange) {
     rows.push({
-      label: `${comps.length} similar sold`,
-      value: `${formatPrice(Math.min(...prices))}–${formatPrice(Math.max(...prices))}`,
+      label: `${compsRange.count} similar sold`,
+      value: `${formatPrice(compsRange.min)}–${formatPrice(compsRange.max)}`,
       muted: true,
     });
   }
@@ -93,7 +134,7 @@ export function PdpMarket({ listing }: PdpMarketProps) {
 
   // No evidence at all → the section self-omits rather than publishing a
   // lone "nothing happened" row (mobile hides the whole block likewise).
-  if (!latestEvent && !showComps && !showDays) return null;
+  if (!earliestEvent && !compsRange && !showDays) return null;
 
   return (
     <section className="border-t border-border-subtle py-6" aria-labelledby="pdp-market">
@@ -123,7 +164,7 @@ export function PdpMarket({ listing }: PdpMarketProps) {
         ))}
       </dl>
 
-      {showComps ? (
+      {compItems.length >= 2 ? (
         <div className="mt-5">
           <h3 className="mb-3 text-label font-semibold uppercase tracking-wide text-text-secondary">
             Similar sold items
@@ -132,7 +173,7 @@ export function PdpMarket({ listing }: PdpMarketProps) {
             className="no-scrollbar -mx-4 flex gap-3 overflow-x-auto px-4 sm:-mx-6 sm:px-6 lg:mx-0 lg:px-0"
             role="list"
           >
-            {comps.map((comp) => {
+            {compItems.map((comp) => {
               const date = soldDate(comp.soldAt);
               return (
                 <div key={comp.id} role="listitem" className="w-[130px] shrink-0 sm:w-[150px]">

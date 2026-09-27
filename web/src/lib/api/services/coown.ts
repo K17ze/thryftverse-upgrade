@@ -150,12 +150,76 @@ export async function fetchCoOwnCorporateActions(
   assetId?: string,
   signal?: AbortSignal,
 ): Promise<CorporateAction[]> {
-  const payload = await fetchJson<{ ok?: boolean; items?: CoOwnCorporateActionApi[] }>(
-    `/co-own/corporate-actions${toQuery({ assetId })}`,
+  // The wire carries votingDeadline; the shared mapper's closesAt chain
+  // (payableDate → recordDate → exDate → createdAt) predates it. For a
+  // governance action the vote deadline IS the close that gates voting —
+  // prefer it so an open action never reads as closed early.
+  const payload = await fetchJson<{
+    ok?: boolean;
+    items?: Array<CoOwnCorporateActionApi & { votingDeadline?: string | null }>;
+  }>(`/co-own/corporate-actions${toQuery({ assetId })}`, undefined, { signal });
+  return (payload.items ?? []).map((item) => {
+    const mapped = mapCoOwnCorporateAction(item);
+    return item.votingDeadline ? { ...mapped, closesAt: item.votingDeadline } : mapped;
+  });
+}
+
+// ── Governance votes ─────────────────────────────────────────────────
+// Mirrors frontend/src/services/marketApi.ts — the votes endpoint is the
+// authoritative tally + the viewer's vote + server-computed eligibility.
+
+export interface GovernanceVoteSummary {
+  vote: 'for' | 'against' | 'abstain';
+  votingPowerUnits: number;
+  voteCount: number;
+}
+
+export interface GovernanceVoteEligibility {
+  eligible: boolean;
+  /** Human-readable reason for ineligibility (empty when eligible). */
+  reason: string;
+  votingPowerUnits: number;
+  recordDate: string | null;
+  status: string;
+}
+
+export interface GovernanceVoteResult {
+  summary: GovernanceVoteSummary[];
+  totalVotingPower: number;
+  myVote: 'for' | 'against' | 'abstain' | null;
+  eligibility?: GovernanceVoteEligibility;
+}
+
+export async function fetchGovernanceVotes(
+  actionId: string,
+  signal?: AbortSignal,
+): Promise<GovernanceVoteResult> {
+  const payload = await fetchJson<{ ok?: boolean } & Partial<GovernanceVoteResult>>(
+    `/co-own/corporate-actions/${encodeURIComponent(actionId)}/votes`,
     undefined,
     { signal },
   );
-  return (payload.items ?? []).map(mapCoOwnCorporateAction);
+  return {
+    summary: payload.summary ?? [],
+    totalVotingPower: payload.totalVotingPower ?? 0,
+    myVote: payload.myVote ?? null,
+    eligibility: payload.eligibility,
+  };
+}
+
+export async function castGovernanceVote(
+  actionId: string,
+  input: { assetId: string; vote: 'for' | 'against' | 'abstain'; rationale?: string },
+): Promise<{ actionId: string; vote: string; votingPowerUnits: number; createdAt: string }> {
+  const payload = await fetchJson<{
+    ok: true;
+    vote: { actionId: string; vote: string; votingPowerUnits: number; createdAt: string };
+  }>(`/co-own/corporate-actions/${encodeURIComponent(actionId)}/vote`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(input),
+  });
+  return payload.vote;
 }
 
 export interface PriceCandleApi {
@@ -184,13 +248,23 @@ export async function fetchCoOwnPriceHistory(
   return { interval: payload.interval, candles: payload.candles ?? [] };
 }
 
+/** The wire carries `timeInForce` ('GFD' | 'GTC90'); the web contract
+ *  stores it as `OrderDuration`. Mapped here so mappers stay untouched. */
+function withDuration(
+  order: CoOwnOrder,
+  wire: { timeInForce?: 'GFD' | 'GTC90' | null },
+): CoOwnOrder {
+  const duration =
+    wire.timeInForce === 'GFD' ? 'day' : wire.timeInForce === 'GTC90' ? 'gtc' : undefined;
+  return duration ? { ...order, duration } : order;
+}
+
 export async function fetchCoOwnOrders(signal?: AbortSignal): Promise<CoOwnOrder[]> {
-  const payload = await fetchJson<{ ok?: boolean; items?: MarketCoOwnOrderApi[] }>(
-    '/co-own/orders',
-    undefined,
-    { signal },
-  );
-  return (payload.items ?? []).map(mapCoOwnOrder);
+  const payload = await fetchJson<{
+    ok?: boolean;
+    items?: Array<MarketCoOwnOrderApi & { timeInForce?: 'GFD' | 'GTC90' | null }>;
+  }>('/co-own/orders', undefined, { signal });
+  return (payload.items ?? []).map((o) => withDuration(mapCoOwnOrder(o), o));
 }
 
 export async function fetchCoOwnBuyoutOffers(
@@ -213,8 +287,19 @@ export async function placeCoOwnOrder(input: {
   units: number;
   limitPriceGbp?: number;
   protectionPriceGbp?: number;
+  /** Resting-order duration — GFD (day) or GTC90. */
+  timeInForce?: 'GFD' | 'GTC90';
+  /** Stable per order attempt — the server dedupes on
+   *  (asset_id, actor_id, idempotency_key), so a retry after an
+   *  ambiguous failure replays instead of double-placing (the backend
+   *  also exposes GET .../orders/lookup-by-key/:key for reconciliation). */
+  idempotencyKey: string;
 }): Promise<CoOwnOrder> {
-  const payload = await fetchJson<{ ok: true; status: string; order: MarketCoOwnOrderApi }>(
+  const payload = await fetchJson<{
+    ok: true;
+    status: string;
+    order: MarketCoOwnOrderApi & { timeInForce?: 'GFD' | 'GTC90' | null };
+  }>(
     `/co-own/assets/${encodeURIComponent(input.assetId)}/orders`,
     {
       method: 'POST',
@@ -225,10 +310,12 @@ export async function placeCoOwnOrder(input: {
         units: input.units,
         limitPriceGbp: input.limitPriceGbp,
         protectionPriceGbp: input.protectionPriceGbp,
+        timeInForce: input.timeInForce,
+        idempotencyKey: input.idempotencyKey,
       }),
     },
   );
-  return mapCoOwnOrder(payload.order);
+  return withDuration(mapCoOwnOrder(payload.order), payload.order);
 }
 
 export async function cancelCoOwnOrder(orderId: string): Promise<void> {

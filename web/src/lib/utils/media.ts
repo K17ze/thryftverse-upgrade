@@ -15,6 +15,13 @@ export function isUsableUri(uri: unknown): uri is string {
   return typeof uri === 'string' && uri.trim().length > 0;
 }
 
+/** blob:/data: URIs come from local file picks — next/image can't optimize
+ * them (the optimizer only fetches http(s) sources), so they must render
+ * through a plain <img>. */
+export function isLocalMediaUri(uri: string): boolean {
+  return uri.startsWith('blob:') || uri.startsWith('data:');
+}
+
 export function getListingCoverUri(images: string[] | undefined): string {
   return (images ?? []).filter(isUsableUri)[0] ?? '';
 }

@@ -156,28 +156,42 @@ export async function getPushPermissionStatus(): Promise<Notifications.Notificat
 }
 
 /**
- * Requests push notification permission at a contextual moment.
- * Returns true if granted, false if denied.
+ * Outcome of a contextual push-permission request. `canAskAgain` is false
+ * when the OS has permanently denied re-prompting (iOS after the one-shot
+ * dialog is denied, Android after "don't ask again") — the only recovery
+ * left is the system Settings screen, so callers can swap "try again" for
+ * "open settings" instead of looping on a dead prompt.
+ */
+export interface PushPermissionRequestResult {
+  granted: boolean;
+  canAskAgain: boolean;
+}
+
+/**
+ * Requests push notification permission at a contextual moment and reports
+ * whether the OS can still be asked again.
  *
  * Per App Store / Google Play 2026 guidelines, this should NOT be called on
  * app launch — only after a meaningful user action (e.g. after a purchase,
  * after favoriting an item, after sending a first message, or via a dedicated
  * "Enable notifications" prompt in Settings).
  */
-export async function requestPushPermissionWithContext(
+export async function requestPushPermissionWithContextDetailed(
   context: PushPermissionContext,
-): Promise<boolean> {
+): Promise<PushPermissionRequestResult> {
   try {
-    const { status: existingStatus } = await Notifications.getPermissionsAsync();
-    let finalStatus = existingStatus;
+    const existing = await Notifications.getPermissionsAsync();
+    let finalStatus = existing.status;
+    let canAskAgain = existing.canAskAgain;
 
-    if (existingStatus !== 'granted') {
-      const { status } = await Notifications.requestPermissionsAsync();
-      finalStatus = status;
+    if (existing.status !== 'granted') {
+      const request = await Notifications.requestPermissionsAsync();
+      finalStatus = request.status;
+      canAskAgain = request.canAskAgain;
     }
 
     if (finalStatus !== 'granted') {
-      return false;
+      return { granted: false, canAskAgain };
     }
 
     // Configure the per-category Android notification channels only after
@@ -195,10 +209,21 @@ export async function requestPushPermissionWithContext(
     // the OS grant, which is what this function returns.
     void registerCurrentPushDevice().catch(() => {});
 
-    return true;
+    return { granted: true, canAskAgain: true };
   } catch {
-    return false;
+    return { granted: false, canAskAgain: true };
   }
+}
+
+/**
+ * Requests push notification permission at a contextual moment.
+ * Returns true if granted, false if denied.
+ */
+export async function requestPushPermissionWithContext(
+  context: PushPermissionContext,
+): Promise<boolean> {
+  const result = await requestPushPermissionWithContextDetailed(context);
+  return result.granted;
 }
 
 /**

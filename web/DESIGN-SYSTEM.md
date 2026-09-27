@@ -151,3 +151,77 @@ Utilities: `pressable` (press feedback), `tnum`, `skeleton`, `clamp-1`,
 - 44px minimum hit targets; `aria-label` on icon-only controls; semantic
   HTML (`article`, `nav`, `main`, `h1-h3`, `button`, `form`).
 - Run `cd web && npx tsc --noEmit` — must pass clean.
+
+## Platform systems — how screens adopt them
+
+Wave-13 infrastructure lives in `components/flagship/` + `lib/{state-copy,
+density,offline,i18n,accent,motion}`. Screens consume it; they don't
+re-implement it.
+
+### StateGate (`@/components/flagship/StateGate`)
+
+The canonical loading → error → empty → content wiring. One gate per
+query-owned list zone:
+
+```tsx
+<StateGate
+  domain="orders"                 // registry copy domain
+  isLoading={query.isLoading}
+  isError={query.isError}
+  stale={refreshFailed}           // populated-but-maybe-old → quiet pill
+  skeleton={<OrdersSkeleton />}   // layout-matched, never a spinner
+  onRetry={() => void refetch()}
+>
+  {content}
+</StateGate>
+```
+
+- Copy resolves from `lib/state-copy/registry.ts` → `stateCopy.<domain>.*`
+  i18n keys. Pass `skeleton` whenever the layout is predictable; the
+  default skeleton is a fallback, not the target.
+- `isError` while offline resolves to the domain's `offline` copy
+  ("You're offline…"), not a generic failure — pass the raw query flags,
+  the gate handles the grammar.
+- `filtered` selects `emptyFiltered` copy; `emptyAction` adds the CTA
+  (label defaults to `stateCopy.actions.browseListings`).
+- `compact` tightens the centered states for sub-screen panes (inbox
+  column, drawers).
+- Keep bespoke states where they carry context the registry can't:
+  per-tab empties, sign-in gates, crafted recovery surfaces. Adopt for
+  the generic fetch states; don't downgrade a designed empty for
+  consistency.
+- New domains: add the key to `StateCopyDomain` + `DOMAIN_ICONS`, and
+  author en copy in `STATE_COPY_WEB_EN` inside `scripts/sync-locales.mjs`
+  (en only, mirroring mobile's coverage — non-en falls back). Never
+  hand-edit `lib/i18n/locales/*.ts`.
+
+### Density (`var(--density-*)`)
+
+`useDensity()` persists the preference; `PlatformRuntime` mirrors it to
+`<html data-density>`; `globals.css` holds the vars
+(`--density-row-height`, `--density-row-py`, `--density-row-gap`,
+`--density-gutter`, `--density-section-gap`, `--density-card-radius`).
+
+- Prefer CSS var consumption (`py-[var(--density-row-py)]`) over the JS
+  hook — geometry survives SSR/hydration.
+- List rows consume `--density-row-py`/`--density-row-height`; grid gaps
+  consume `--density-row-gap` with a floor (`max(4px, …)`) so compact
+  never welds media; band/section rhythm consumes
+  `--density-section-gap`.
+- Density adjusts geometry only — never shadows, cards, or chrome.
+
+### i18n chrome (`useLocale().t`)
+
+`const { t, locale, setLocale, dir, locales } = useLocale()`. Chrome
+strings (nav, tab bar, header utilities, footer, account menu, search
+suggestions) resolve from `chrome.*` keys; shared actions from
+`common.*`; state copy from `stateCopy.*`; sync/offline from `sync.*` /
+`offline.*`.
+
+- Data tables carry `labelKey` fields (`chrome.nav.*`, `chrome.links.*`,
+  `chrome.groups.*`); components resolve `t(...)` at render.
+- Missing chrome strings go in the `CHROME`/`CHROME_EXTRA` tables of
+  `scripts/sync-locales.mjs` (authored translations, all 13 locales),
+  then regenerate — the locale modules are generated files.
+- Screen-level copy outside those namespaces is en-only until a surface
+  adopts `t()` for it (see `lib/i18n/README.md`).

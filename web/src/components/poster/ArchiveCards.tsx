@@ -101,8 +101,7 @@ export function ArchiveStoryCard({
             alt={story.frames[0]?.caption ?? 'Poster story'}
             fill
             sizes="(max-width: 640px) 50vw, (max-width: 1024px) 33vw, 25vw"
-            className="h-full w-full"
-            imgClassName="transition-transform duration-300 group-hover:scale-105"
+            className="h-full w-full media-zoom"
             fallbackIcon="image"
           />
           <div className="absolute inset-x-0 top-0 flex items-start justify-between p-2">
@@ -121,14 +120,23 @@ export function ArchiveStoryCard({
         <span className="text-meta text-text-muted">
           {relativeDate(story.createdAt)}
         </span>
-        <button
-          type="button"
-          onClick={() => onDelete(story)}
-          aria-label={`Delete story from ${relativeDate(story.createdAt)}`}
-          className="pressable -mr-2 -mt-1 flex h-11 w-11 items-center justify-center text-text-muted transition-colors hover:text-danger-text"
-        >
-          <Icon name="trash" size={17} />
-        </button>
+        <span className="-mr-2 -mt-1 flex items-center">
+          <Link
+            href={`/poster/${story.id}/activity`}
+            aria-label={`Story activity — ${formatCount(story.viewCount)} views`}
+            className="pressable flex h-11 w-11 items-center justify-center text-text-muted transition-colors hover:text-text-primary"
+          >
+            <Icon name="analytics" size={17} />
+          </Link>
+          <button
+            type="button"
+            onClick={() => onDelete(story)}
+            aria-label={`Delete story from ${relativeDate(story.createdAt)}`}
+            className="pressable flex h-11 w-11 items-center justify-center text-text-muted transition-colors hover:text-danger-text"
+          >
+            <Icon name="trash" size={17} />
+          </button>
+        </span>
       </div>
     </div>
   );
@@ -153,8 +161,7 @@ export function ArchiveHighlightCard({
           alt={highlight.title}
           fill
           sizes="(max-width: 640px) 50vw, (max-width: 1024px) 33vw, 25vw"
-          className="h-full w-full"
-          imgClassName="transition-transform duration-300 group-hover:scale-105"
+          className="h-full w-full media-zoom"
           fallbackIcon="bookmark"
         />
         <div className="absolute inset-x-0 top-0 flex items-start justify-between p-2">

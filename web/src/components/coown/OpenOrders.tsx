@@ -103,7 +103,8 @@ export function OpenOrders({
                             {SIDE_LABEL[order.side]}
                           </span>
                           {' · '}
-                          {TYPE_LABEL[order.orderType]} · {order.units} units @ {gbp(order.unitPriceGbp)}
+                          {TYPE_LABEL[order.orderType]}
+                          {order.duration ? ` · ${order.duration === 'day' ? 'Day' : 'GTC'}` : ''} · {order.units} units @ {gbp(order.unitPriceGbp)}
                         </p>
                       </div>
                       <Badge variant="neutral">{statusLabel(order)}</Badge>
@@ -158,7 +159,14 @@ export function OpenOrders({
                       <p className={`text-body font-semibold tnum ${SIDE_TONE[order.side]}`}>
                         {SIDE_LABEL[order.side]}
                       </p>
-                      <p className="text-body text-text-secondary">{TYPE_LABEL[order.orderType]}</p>
+                      <p className="text-body text-text-secondary">
+                        {TYPE_LABEL[order.orderType]}
+                        {order.duration ? (
+                          <span className="block text-meta text-text-muted">
+                            {order.duration === 'day' ? 'Day' : 'GTC · 90d'}
+                          </span>
+                        ) : null}
+                      </p>
                       <p className="text-right text-body text-text-primary tnum">{gbp(order.unitPriceGbp)}</p>
                       <p className="text-right text-body text-text-secondary tnum">
                         {order.units}
@@ -181,6 +189,69 @@ export function OpenOrders({
           </ul>
         </>
       )}
+    </section>
+  );
+}
+
+const TERMINAL_LABEL: Record<string, string> = {
+  filled: 'Filled',
+  cancelled: 'Cancelled',
+};
+
+/**
+ * Terminal order history — filled and cancelled orders, newest first.
+ * Read-only by design: a cancelled order must not vanish silently, and a
+ * filled order's record is the receipt. Fixture seeds are all open, so
+ * this surface appears once the session records a terminal state.
+ */
+export function OrderHistory({
+  orders,
+  assetTitle,
+}: {
+  orders: CoOwnOrder[];
+  assetTitle: (assetId: string) => string;
+}) {
+  const terminal = [...orders].sort((a, b) => b.placedAt.localeCompare(a.placedAt));
+  if (terminal.length === 0) return null;
+
+  return (
+    <section aria-labelledby="order-history-heading">
+      <div className="flex items-baseline justify-between">
+        <h2 id="order-history-heading" className="text-section-title font-semibold text-text-primary">
+          Order history
+        </h2>
+        <p className="text-meta text-text-muted tnum">{terminal.length} settled</p>
+      </div>
+      <ul className="mt-3 divide-y divide-border-subtle border-y border-border-subtle">
+        {terminal.map((order) => (
+          <li
+            key={order.id}
+            className="flex flex-wrap items-center justify-between gap-x-4 gap-y-1.5 px-1 py-3"
+          >
+            <div className="min-w-0">
+              <p className="clamp-1 text-body font-semibold text-text-primary">
+                {assetTitle(order.assetId)}
+              </p>
+              <p className="mt-0.5 text-meta text-text-secondary tnum">
+                <span className={`font-semibold ${SIDE_TONE[order.side]}`}>
+                  {SIDE_LABEL[order.side]}
+                </span>
+                {' · '}
+                {TYPE_LABEL[order.orderType]} · {order.units} {order.units === 1 ? 'unit' : 'units'} @ {gbp(order.unitPriceGbp)}
+                {order.status === 'filled' && order.filledUnits !== order.units
+                  ? ` — ${order.filledUnits} filled`
+                  : ''}
+              </p>
+            </div>
+            <div className="flex shrink-0 items-center gap-3">
+              <Badge variant={order.status === 'filled' ? 'success' : 'neutral'}>
+                {TERMINAL_LABEL[order.status] ?? order.status}
+              </Badge>
+              <span className="text-meta text-text-muted tnum">{timeAgo(order.placedAt)}</span>
+            </div>
+          </li>
+        ))}
+      </ul>
     </section>
   );
 }

@@ -19,7 +19,7 @@ import { usePostagePrefs } from './usePostagePrefs';
 import { Skeleton } from '@/components/ui/Skeleton';
 import { Icon } from '@/components/ui/Icon';
 import { useToast } from '@/components/ui/Toast';
-import { useSavedAddresses } from '@/lib/store/userPaymentData';
+import { useManagedAddresses } from '@/lib/hooks/instrument-queries';
 import { useHydrated } from '@/lib/store/useStore';
 import { formatPrice } from '@/lib/utils/format';
 
@@ -114,10 +114,12 @@ function ToggleRow({
 export function PostageView() {
   const hydrated = useHydrated();
   const { prefs, loaded, update } = usePostagePrefs();
-  const { addresses } = useSavedAddresses();
+  // The "Saved addresses" row shows the real count — live resolves the
+  // server rail (useManagedAddresses), fixture the local overlay.
+  const { addresses, isLoading: addressesLoading } = useManagedAddresses();
   const { show } = useToast();
 
-  if (!hydrated || !loaded) {
+  if (!hydrated || !loaded || addressesLoading) {
     return (
       <div aria-busy aria-label="Loading postage preferences" className="mt-2 space-y-px">
         {[0, 1, 2, 3].map((i) => (

@@ -27,11 +27,21 @@ export function SellerSectionNav({
       count: toPost + posted,
     },
     { href: '/seller-hub/earnings', label: 'Earnings' },
+    { href: '/seller-hub/promotions', label: 'Promoted' },
+    { href: '/seller-hub/analytics', label: 'Analytics' },
+    { href: '/seller-hub/settings', label: 'Settings' },
   ];
   return (
-    <nav aria-label="Seller hub sections" className="mt-5 flex gap-6 border-b border-border-subtle">
+    <nav
+      aria-label="Seller hub sections"
+      className="mt-5 flex gap-6 overflow-x-auto border-b border-border-subtle"
+    >
       {sections.map((s) => {
-        const active = pathname === s.href;
+        // Prefix-match only the section that owns child routes — the
+        // per-listing manage surface keeps Listings lit.
+        const active =
+          pathname === s.href ||
+          (s.href === '/seller-hub/listings' && pathname.startsWith('/seller-hub/listings/'));
         return (
           <Link
             key={s.href}

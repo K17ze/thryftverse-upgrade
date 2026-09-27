@@ -13,7 +13,9 @@
 
 import { useMemo, useState } from 'react';
 import { useRouter } from 'next/navigation';
+import { StateGate } from '@/components/flagship/StateGate';
 import { EmptyState } from '@/components/ui/EmptyState';
+import { Icon } from '@/components/ui/Icon';
 import { IconButton } from '@/components/ui/IconButton';
 import { OrderRow } from '@/components/orders/OrderRow';
 import { RowSkeleton } from '@/components/orders/RowSkeleton';
@@ -32,9 +34,42 @@ import {
   type OrderRole,
 } from '@/components/orders/orderCapabilities';
 import { orderEnrichmentFor } from '@/lib/data/fixtures-commerce';
+import { listingById, userById } from '@/lib/data/fixtures';
 import { useCommerceOrders } from '@/lib/hooks/queries';
 import { useSession } from '@/lib/session/SessionProvider';
 import type { CommerceOrder } from '@/lib/contracts/domain';
+
+interface DateGroup {
+  key: string;
+  label: string;
+  data: CommerceOrder[];
+}
+
+/** Month-group labels — port of the mobile MyOrdersScreen grammar:
+ *  "This month" / "September 2026" / bare year for older orders. */
+function monthGroupLabel(date: Date): string {
+  const now = new Date();
+  const sameYear = date.getFullYear() === now.getFullYear();
+  const sameMonth = sameYear && date.getMonth() === now.getMonth();
+  if (sameMonth) return 'This month';
+  if (sameYear) {
+    return date.toLocaleDateString('en-GB', { month: 'long', year: 'numeric' });
+  }
+  return String(date.getFullYear());
+}
+
+function groupOrdersByMonth(orders: CommerceOrder[]): DateGroup[] {
+  const groups = new Map<string, DateGroup>();
+  for (const order of orders) {
+    const date = new Date(order.createdAt);
+    if (!Number.isFinite(date.getTime())) continue;
+    const key = `${date.getFullYear()}-${date.getMonth()}`;
+    const group = groups.get(key);
+    if (group) group.data.push(order);
+    else groups.set(key, { key, label: monthGroupLabel(date), data: [order] });
+  }
+  return [...groups.values()];
+}
 
 const EMPTY_COPY: Record<OrdersTab, { title: string; subtitle: string }> = {
   all: {
@@ -61,7 +96,7 @@ const EMPTY_COPY: Record<OrdersTab, { title: string; subtitle: string }> = {
 
 export default function OrdersPage() {
   const router = useRouter();
-  const { user } = useSession();
+  const { user, sessionLoading } = useSession();
   const {
     data: orders,
     isLoading,
@@ -71,8 +106,14 @@ export default function OrdersPage() {
   const [tab, setTab] = useState<OrdersTab>('all');
   const [filter, setFilter] = useState<OrdersFilterState>(EMPTY_ORDERS_FILTER);
   const [filterOpen, setFilterOpen] = useState(false);
+  const [query, setQuery] = useState('');
+  const [refreshing, setRefreshing] = useState(false);
+  const [refreshFailed, setRefreshFailed] = useState(false);
 
-  const viewerId = user?.id ?? 'me';
+  // Orders are account-bound — a guest has no buyer/seller identity, so
+  // the render gate below replaces the list with a sign-in state rather
+  // than attributing orders to a fixture 'me'.
+  const viewerId = user?.id ?? '';
 
   const roleOf = (buyerId: string): OrderRole =>
     buyerId === viewerId ? 'buyer' : 'seller';
@@ -103,36 +144,71 @@ export default function OrdersPage() {
     });
   };
 
-  /** Facets applied before tab classification. */
+  /** Facets applied before tab classification — role/status/year, then
+   *  the search query (eBay purchase-history grammar: title, order id,
+   *  counterparty). */
   const faceted = useMemo(() => {
+    const q = query.trim().toLowerCase();
     return (orders ?? []).filter((o) => {
       if (filter.role === 'buying' && o.buyerId !== viewerId) return false;
       if (filter.role === 'selling' && o.sellerId !== viewerId) return false;
       if (filter.statuses.length > 0 && !filter.statuses.includes(normaliseOrderStatus(o.status)))
         return false;
       if (filter.year != null && new Date(o.createdAt).getFullYear() !== filter.year) return false;
+      if (q) {
+        const listing = listingById(o.listingId);
+        const counterparty =
+          o.buyerId === viewerId
+            ? (listing?.seller?.username ?? userById(o.sellerId)?.username ?? '')
+            : (userById(o.buyerId)?.username ?? '');
+        const haystack = [o.id, listing?.title ?? '', listing?.brand ?? '', counterparty]
+          .join(' ')
+          .toLowerCase();
+        if (!haystack.includes(q)) return false;
+      }
       return true;
     });
-  }, [orders, filter, viewerId]);
+  }, [orders, filter, viewerId, query]);
+
+  /**
+   * The ONE needs-attention classifier — resolved once per order and
+   * shared by the tab counts, the lane and the Needs action tab so no
+   * surface can disagree about whose move it is.
+   */
+  const attentionMap = useMemo(() => {
+    const map = new Map<string, OrderAttention>();
+    for (const o of faceted) {
+      const attention = attentionOf(o);
+      if (attention) map.set(o.id, attention);
+    }
+    return map;
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [faceted, viewerId]);
 
   const counts = useMemo(() => {
-    const out: Partial<Record<OrdersTab, number>> = { all: faceted.length };
+    const out: Partial<Record<OrdersTab, number>> = {
+      all: faceted.length,
+      needs_action: attentionMap.size,
+    };
     for (const o of faceted) {
       const cls = classifyOrderForRole(o.status, roleOf(o.buyerId));
-      if (cls !== 'unknown') out[cls] = (out[cls] ?? 0) + 1;
+      if (cls !== 'unknown' && cls !== 'needs_action') {
+        out[cls] = (out[cls] ?? 0) + 1;
+      }
     }
     return out;
-  }, [faceted, viewerId]); // eslint-disable-line react-hooks/exhaustive-deps
+  }, [faceted, viewerId, attentionMap]); // eslint-disable-line react-hooks/exhaustive-deps
 
   /**
    * Needs-attention lane membership — every faceted order whose ball is in
    * the viewer's court, urgency-ranked (money first, deadlines before
-   * reviews). Renders only on the All tab; collapses when empty.
+   * reviews). Renders only on the All tab; collapses when empty. The
+   * Needs action tab reads the same membership — one classifier.
    */
   const attentionItems = useMemo(() => {
     const items: { order: CommerceOrder; attention: OrderAttention }[] = [];
     for (const o of faceted) {
-      const attention = attentionOf(o);
+      const attention = attentionMap.get(o.id);
       if (attention) items.push({ order: o, attention });
     }
     items.sort((a, b) => {
@@ -146,8 +222,7 @@ export default function OrdersPage() {
       return Date.parse(b.order.createdAt) - Date.parse(a.order.createdAt);
     });
     return items;
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [faceted, viewerId]);
+  }, [faceted, attentionMap]);
 
   const attentionIds = useMemo(
     () => new Set(attentionItems.map((i) => i.order.id)),
@@ -158,9 +233,23 @@ export default function OrdersPage() {
     const mine = tab === 'all'
       // Lane members lead above; the rest stays strictly chronological.
       ? faceted.filter((o) => !attentionIds.has(o.id))
-      : faceted.filter((o) => classifyOrderForRole(o.status, roleOf(o.buyerId)) === tab);
+      : tab === 'needs_action'
+        // Same classifier as the lane — Needs action IS the attention set.
+        ? faceted.filter((o) => attentionMap.has(o.id))
+        : faceted.filter((o) => classifyOrderForRole(o.status, roleOf(o.buyerId)) === tab);
     return [...mine].sort((a, b) => Date.parse(b.createdAt) - Date.parse(a.createdAt));
-  }, [faceted, tab, viewerId, attentionIds]); // eslint-disable-line react-hooks/exhaustive-deps
+  }, [faceted, tab, viewerId, attentionIds, attentionMap]); // eslint-disable-line react-hooks/exhaustive-deps
+
+  const groups = useMemo(() => groupOrdersByMonth(visible), [visible]);
+
+  const handleRefresh = () => {
+    setRefreshing(true);
+    setRefreshFailed(false);
+    void refetch()
+      .then((res) => setRefreshFailed(res.isError === true))
+      .catch(() => setRefreshFailed(true))
+      .finally(() => setRefreshing(false));
+  };
 
   const statusOptions = useMemo(() => {
     const seen = new Map<string, string>();
@@ -187,51 +276,102 @@ export default function OrdersPage() {
     <div className="mx-auto max-w-[820px] px-4 py-8 sm:px-6">
       <div className="flex items-center justify-between gap-3">
         <h1 className="text-screen-title font-bold text-text-primary">Orders</h1>
-        <IconButton
-          name="filter"
-          aria-label="Filter orders"
-          onClick={() => setFilterOpen(true)}
-          contained={filterActive}
+        <div className="flex items-center gap-1">
+          <IconButton
+            name="refresh"
+            aria-label="Refresh orders"
+            onClick={handleRefresh}
+            disabled={refreshing || isLoading}
+            className={refreshing ? 'animate-spin' : undefined}
+          />
+          <IconButton
+            name="filter"
+            aria-label="Filter orders"
+            onClick={() => setFilterOpen(true)}
+            contained={filterActive}
+          />
+        </div>
+      </div>
+
+      {/* Search — eBay purchase-history grammar: title, order id,
+          counterparty. Client-side over the loaded page, honest scope. */}
+      <div className="mt-4 flex h-11 items-center rounded-lg border border-border bg-input px-3.5 focus-within:border-text-muted">
+        <Icon name="search" size={16} className="shrink-0 text-text-muted" />
+        <input
+          type="search"
+          value={query}
+          onChange={(e) => setQuery(e.target.value)}
+          placeholder="Search orders — item, order number, seller"
+          aria-label="Search orders"
+          className="ml-2 w-full bg-transparent text-body text-input-text placeholder:text-text-muted focus:outline-none [&::-webkit-search-cancel-button]:hidden"
         />
+        {query ? (
+          <button
+            type="button"
+            onClick={() => setQuery('')}
+            aria-label="Clear search"
+            className="pressable -mr-2 flex h-11 w-11 shrink-0 items-center justify-center text-text-muted hover:text-text-primary"
+          >
+            <Icon name="close" size={16} />
+          </button>
+        ) : null}
       </div>
 
       <div className="mt-4">
         <OrdersTabRail activeTab={tab} onChange={setTab} counts={counts} />
       </div>
 
-      <div className="mt-5">
-        {isLoading ? (
-          <RowSkeleton />
-        ) : isError ? (
+      {/* States — registry copy via StateGate: the skeleton mirrors the
+          list, a fetch error resolves to the orders error/offline copy
+          (offline reads "You're offline", not "Couldn't load"), and a
+          failed manual refresh keeps the cached list under the stale
+          pill. The sign-in gate and per-tab empties stay bespoke — they
+          carry context the registry doesn't have. */}
+      <StateGate
+        domain="orders"
+        className="mt-5"
+        isLoading={sessionLoading || isLoading}
+        isError={!!user && isError}
+        stale={refreshFailed}
+        skeleton={<RowSkeleton />}
+        onRetry={handleRefresh}
+      >
+        {!user ? (
           <EmptyState
-            icon="alert"
-            title="Couldn't load orders"
-            subtitle="Check your connection and try again — your orders are safe."
-            actionLabel="Try again"
-            onAction={() => void refetch()}
+            icon="profile"
+            title="Sign in to view your orders"
+            subtitle="Purchases and sales are tied to your account."
+            actionLabel="Sign in"
+            onAction={() => router.push('/auth')}
           />
         ) : visible.length === 0 && (tab !== 'all' || attentionItems.length === 0) ? (
           <EmptyState
-            icon="bag"
-            title={EMPTY_COPY[tab].title}
+            icon={query ? 'search' : 'bag'}
+            title={query ? 'No orders match your search' : EMPTY_COPY[tab].title}
             subtitle={
-              filterActive
-                ? 'No orders match these filters.'
-                : EMPTY_COPY[tab].subtitle
+              query
+                ? 'Try a different item name, order number or seller.'
+                : filterActive
+                  ? 'No orders match these filters.'
+                  : EMPTY_COPY[tab].subtitle
             }
             actionLabel={
-              tab === 'all' && !filterActive
-                ? 'Start shopping'
-                : filterActive
-                  ? 'Clear filters'
+              query || filterActive
+                ? query
+                  ? 'Clear search'
+                  : 'Clear filters'
+                : tab === 'all'
+                  ? 'Start shopping'
                   : undefined
             }
             onAction={
-              tab === 'all' && !filterActive
-                ? () => router.push('/explore')
+              query
+                ? () => setQuery('')
                 : filterActive
                   ? () => setFilter(EMPTY_ORDERS_FILTER)
-                  : undefined
+                  : tab === 'all'
+                    ? () => router.push('/explore')
+                    : undefined
             }
           />
         ) : (
@@ -256,24 +396,32 @@ export default function OrdersPage() {
                 </ul>
               </section>
             ) : null}
-            {visible.length > 0 ? (
-              <ul
-                className={`divide-y divide-border-subtle border-border-subtle ${
-                  tab === 'all' && attentionItems.length > 0 ? 'mt-5 border-y' : 'border-y'
-                }`}
+            {/* Chronological list grouped by month — the eBay purchase
+                history grammar the mobile MyOrdersScreen uses ("This
+                month" / "September 2026" / year for older orders). On the
+                Needs action tab each row carries its attention caption —
+                the same classifier as the lane. */}
+            {groups.map((group, gi) => (
+              <section
+                key={group.key}
+                className={gi > 0 || (tab === 'all' && attentionItems.length > 0) ? 'mt-5' : undefined}
               >
-                {visible.map((order) => (
-                  <OrderRow
-                    key={order.id}
-                    order={order}
-                    isBuyer={order.buyerId === viewerId}
-                  />
-                ))}
-              </ul>
-            ) : null}
+                <h2 className="text-caption font-semibold text-text-secondary">{group.label}</h2>
+                <ul className="mt-1 divide-y divide-border-subtle border-y border-border-subtle">
+                  {group.data.map((order) => (
+                    <OrderRow
+                      key={order.id}
+                      order={order}
+                      isBuyer={order.buyerId === viewerId}
+                      attention={tab === 'needs_action' ? attentionMap.get(order.id) : undefined}
+                    />
+                  ))}
+                </ul>
+              </section>
+            ))}
           </>
         )}
-      </div>
+      </StateGate>
 
       <OrdersFilterSheet
         open={filterOpen}

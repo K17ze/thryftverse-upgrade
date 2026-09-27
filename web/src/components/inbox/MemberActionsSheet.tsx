@@ -49,28 +49,42 @@ export function MemberActionsSheet({
   onDismiss,
   canManageMembers,
   isSelf,
+  canTransferOwnership,
   onViewProfile,
   onMessage,
   onToggleAdmin,
   onRemove,
+  onTransferOwnership,
 }: {
   member: MemberActionsTarget | null;
   onDismiss: () => void;
   canManageMembers: boolean;
   isSelf: boolean;
+  /** Viewer is the owner — only they can hand the role to another member. */
+  canTransferOwnership?: boolean;
   onViewProfile: (member: MemberActionsTarget) => void;
   onMessage: (member: MemberActionsTarget) => void;
   onToggleAdmin: (member: MemberActionsTarget) => void;
   onRemove: (member: MemberActionsTarget) => void;
+  onTransferOwnership?: (member: MemberActionsTarget) => void;
 }) {
   const name = member?.displayName ?? member?.username ?? 'Member';
   const adminLabel = member?.role === 'admin' ? 'Dismiss as admin' : 'Make group admin';
   /** Owner rows never carry admin/remove actions — the role is terminal
    *  without an ownership transfer the API performs, not the sheet. */
   const canModerate = canManageMembers && !isSelf && member?.role !== 'owner';
+  /** Mirrors mobile deriveMemberActionDescriptors: transfer renders for
+   *  the owner on any non-owner member row, after the remove action. */
+  const canTransfer =
+    canTransferOwnership === true && !isSelf && member?.role !== 'owner';
 
   return (
-    <Sheet open={member !== null} onClose={onDismiss} maxWidth={400}>
+    <Sheet
+      open={member !== null}
+      onClose={onDismiss}
+      maxWidth={400}
+      ariaLabel={member ? `Actions for ${member.displayName ?? member.username}` : 'Member actions'}
+    >
       {member ? (
         <div className="px-5 pb-6">
           <div className="flex items-center gap-3 py-3">
@@ -108,6 +122,14 @@ export function MemberActionsSheet({
                   onPress={() => onRemove(member)}
                 />
               </>
+            ) : null}
+            {canTransfer && onTransferOwnership ? (
+              <SheetAction
+                icon="key"
+                label="Transfer ownership"
+                danger
+                onPress={() => onTransferOwnership(member)}
+              />
             ) : null}
           </div>
         </div>

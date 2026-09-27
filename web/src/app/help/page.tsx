@@ -9,6 +9,8 @@ import { useMemo, useState } from 'react';
 import Link from 'next/link';
 import { Icon } from '@/components/ui/Icon';
 import { EmptyState } from '@/components/ui/EmptyState';
+import { DsaReportSheet } from '@/components/report';
+import { DISPATCH_SLA_DAYS } from '@/lib/commerce/dispatch';
 
 interface Faq {
   q: string;
@@ -38,7 +40,7 @@ const FAQS: Faq[] = [
   },
   {
     q: 'How is shipping handled?',
-    a: 'The buyer pays shipping at checkout. When you sell, we email a prepaid tracked label — print it, drop the parcel within 5 working days, and tracking updates the order automatically for both sides.',
+    a: `The buyer pays shipping at checkout. When you sell, we email a prepaid tracked label — print it, drop the parcel within ${DISPATCH_SLA_DAYS} working days, and tracking updates the order automatically for both sides.`,
   },
   {
     q: 'What does the sustainability grade mean?',
@@ -76,6 +78,7 @@ function FaqRow({ faq, open, onToggle }: { faq: Faq; open: boolean; onToggle: ()
 export default function HelpPage() {
   const [query, setQuery] = useState('');
   const [openIndex, setOpenIndex] = useState<number | null>(0);
+  const [dsaOpen, setDsaOpen] = useState(false);
 
   const faqs = useMemo(() => {
     const q = query.trim().toLowerCase();
@@ -130,6 +133,30 @@ export default function HelpPage() {
         )}
       </div>
 
+      {/* Trust & Safety — the DSA notice entry point, same as mobile's
+          "Report illegal content" row in Help & Support. */}
+      <section aria-label="Trust and safety" className="mt-10">
+        <h2 className="text-label text-text-muted">Trust &amp; Safety</h2>
+        <div className="mt-1 border-y border-border-subtle">
+          <button
+            type="button"
+            onClick={() => setDsaOpen(true)}
+            className="pressable flex min-h-[56px] w-full items-center gap-3.5 py-3 text-left"
+          >
+            <Icon name="flag" size={20} className="shrink-0 text-text-secondary" />
+            <span className="min-w-0 flex-1">
+              <span className="block text-body-emphasis font-medium text-text-primary">
+                Report illegal content
+              </span>
+              <span className="block text-caption text-text-muted">
+                DSA notice — tell us about content you believe is illegal
+              </span>
+            </span>
+            <Icon name="forward" size={16} className="shrink-0 text-text-muted" />
+          </button>
+        </div>
+      </section>
+
       {/* Contact */}
       <div className="mt-10 flex items-center justify-between gap-4 border-t border-border-subtle pt-6">
         <div>
@@ -146,6 +173,8 @@ export default function HelpPage() {
           Contact support
         </Link>
       </div>
+
+      <DsaReportSheet open={dsaOpen} onClose={() => setDsaOpen(false)} />
     </div>
   );
 }

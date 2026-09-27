@@ -28,9 +28,9 @@ export function memberCount(c: Conversation): number {
 }
 
 /** Mosaic members — everyone except the viewer (mobile selects others). */
-export function mosaicMembers(c: Conversation): MosaicMember[] {
+export function mosaicMembers(c: Conversation, viewerId = 'me'): MosaicMember[] {
   const profiles = c.participantProfiles ?? [];
-  const others = profiles.filter((p) => p.id !== 'me');
+  const others = profiles.filter((p) => p.id !== viewerId);
   if (others.length > 0) {
     return others.map((p) => ({
       id: p.id,
@@ -83,10 +83,13 @@ function isOffer(m: Message): boolean {
  * Per-kind preview for the last message — derived from the stored message
  * so the row never claims a state it can't prove and never leaks a raw
  * type name:
+ *  - deleted       → tombstone label, never the original payload
  *  - system        → its title/body verbatim
  *  - offer         → "You sent an offer · £32" / "{name} sent an offer · £32" / "Offer · £32"
- *  - image         → "📷 Photo" (sender-prefixed in groups)
- *  - video         → "🎥 Video" (sender-prefixed in groups)
+ *  - image         → "Photo" (sender-prefixed in groups)
+ *  - video         → "Video" (sender-prefixed in groups)
+ *  - voice         → "Voice message" (sender-prefixed in groups)
+ *  - document      → "Document" / "{name}" (sender-prefixed in groups)
  *  - offer_declined→ "Offer declined · £32" (its text wins when present)
  *  - listing_share → "Shared a listing · {title}"
  *  - purchase_status / commerce_state → text, else systemTitle/authored preview
@@ -98,11 +101,17 @@ export function lastMessagePreview(c: Conversation): string {
   const m = c.messages.length ? c.messages[c.messages.length - 1] : undefined;
   if (!m) return c.lastMessage ?? '';
 
-  if (isSystem(m)) return m.systemTitle ?? m.text ?? c.lastMessage;
-
   const group = isGroupConversation(c);
   const mine = isMine(m);
   const who = mine ? 'You' : group ? senderHandleFor(c, m.senderId) : null;
+
+  // A deleted-for-everyone message previews as the tombstone label — the
+  // row must never leak the original body, offer or media caption.
+  if (m.isDeleted) {
+    return mine ? 'You deleted a message' : group ? `${who}: deleted a message` : 'This message was deleted';
+  }
+
+  if (isSystem(m)) return m.systemTitle ?? m.text ?? c.lastMessage;
 
   // A live offer card previews as an offer; a decline record is commerce
   // prose, so it falls through to its text / the declined label below.
@@ -112,8 +121,15 @@ export function lastMessagePreview(c: Conversation): string {
     return who ? `${who} sent ${label}` : amount ? `Offer · ${amount}` : 'Offer';
   }
   if (m.mediaUri || m.mediaType) {
-    const noun = m.mediaType === 'video' ? '🎥 Video' : '📷 Photo';
+    const noun = m.mediaType === 'video' ? 'Video' : 'Photo';
     return who && group ? `${who}: ${noun}` : noun;
+  }
+  if (m.type === 'voice' || m.voiceUri) {
+    return who && group ? `${who}: Voice message` : 'Voice message';
+  }
+  if (m.type === 'document' || m.documentUri) {
+    const label = m.documentName ?? 'Document';
+    return who && group ? `${who}: ${label}` : label;
   }
   if (m.text) return who && group ? `${who}: ${m.text}` : m.text;
 

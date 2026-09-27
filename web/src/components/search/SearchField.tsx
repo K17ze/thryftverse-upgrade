@@ -15,6 +15,16 @@ interface SearchFieldProps {
   placeholder?: string;
   autoFocus?: boolean;
   className?: string;
+  /** Forwarded to the input — suggestion-list keyboard navigation. */
+  onKeyDown?: (e: React.KeyboardEvent<HTMLInputElement>) => void;
+  /** Forwarded to the input — reopens the suggestion list on re-focus. */
+  onFocus?: () => void;
+  /** Combobox semantics for an attached suggestion list. */
+  listbox?: {
+    id: string;
+    expanded: boolean;
+    activeOptionId?: string;
+  };
 }
 
 export function SearchField({
@@ -24,6 +34,9 @@ export function SearchField({
   placeholder = 'Search items, brands, members',
   autoFocus,
   className = '',
+  onKeyDown,
+  onFocus,
+  listbox,
 }: SearchFieldProps) {
   return (
     <form
@@ -42,6 +55,13 @@ export function SearchField({
           type="search"
           value={value}
           onChange={(e) => onChange(e.target.value)}
+          onKeyDown={onKeyDown}
+          onFocus={onFocus}
+          role={listbox ? 'combobox' : undefined}
+          aria-autocomplete={listbox ? 'list' : undefined}
+          aria-expanded={listbox ? listbox.expanded : undefined}
+          aria-controls={listbox ? listbox.id : undefined}
+          aria-activedescendant={listbox?.activeOptionId}
           placeholder={placeholder}
           aria-label={placeholder}
           autoFocus={autoFocus}

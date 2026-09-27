@@ -31,6 +31,17 @@ export interface ImportRow {
   priceText: string;
   description: string;
   excluded: boolean;
+  /** The raw cells exactly as the file carried them — the immutable half
+   *  of the per-item diff surface; edits change the live fields, never
+   *  this snapshot. */
+  detected: {
+    title: string;
+    brand: string;
+    size: string;
+    conditionText: string;
+    priceText: string;
+    description: string;
+  };
 }
 
 export interface RowErrors {
@@ -171,7 +182,8 @@ export function parseCatalogCsv(text: string): ParsedImport {
   const body = records.slice(offset);
   const truncated = Math.max(0, body.length - MAX_IMPORT_ROWS);
   const rows = body.slice(0, MAX_IMPORT_ROWS).map((cells, i) => {
-    const condition = normaliseCondition(cells[3] ?? '');
+    const rawCondition = (cells[3] ?? '').trim();
+    const condition = normaliseCondition(rawCondition);
     return {
       id: `row-${i}`,
       line: offset + i + 1,
@@ -183,6 +195,14 @@ export function parseCatalogCsv(text: string): ParsedImport {
       priceText: (cells[4] ?? '').trim(),
       description: (cells[5] ?? '').trim(),
       excluded: false,
+      detected: {
+        title: (cells[0] ?? '').trim(),
+        brand: (cells[1] ?? '').trim(),
+        size: (cells[2] ?? '').trim(),
+        conditionText: rawCondition,
+        priceText: (cells[4] ?? '').trim(),
+        description: (cells[5] ?? '').trim(),
+      },
     } satisfies ImportRow;
   });
   return { rows, truncated };
@@ -214,6 +234,50 @@ export function hasErrors(row: ImportRow): boolean {
 
 export function rowLabel(row: ImportRow): string {
   return row.title.trim() || `Row ${row.line}`;
+}
+
+// ============================================================================
+// EXTRACTION PROVENANCE — what the parser inferred from each raw cell
+// ============================================================================
+
+export interface ExtractionCandidate {
+  field: 'condition' | 'price';
+  label: string;
+  /** The raw cell text from the file. */
+  detected: string;
+  /** What it resolved to (the condition name, or the parsed price). */
+  resolved: string;
+  /** 'low' when the parser had to guess — the seller should check these. */
+  confidence: 'high' | 'low';
+}
+
+/**
+ * The parser's own candidates — the honest CSV analogue of mobile's
+ * photo-extraction candidates. A guessed condition or an unparsable price
+ * is flagged low-confidence; clean mappings report high.
+ */
+export function extractionCandidates(row: ImportRow): ExtractionCandidate[] {
+  const out: ExtractionCandidate[] = [];
+  if (row.detected.conditionText) {
+    out.push({
+      field: 'condition',
+      label: 'Condition',
+      detected: row.detected.conditionText,
+      resolved: row.conditionGuessed ? `${row.condition} (defaulted)` : row.condition,
+      confidence: row.conditionGuessed ? 'low' : 'high',
+    });
+  }
+  if (row.detected.priceText) {
+    const parsed = parseImportPrice(row.detected.priceText);
+    out.push({
+      field: 'price',
+      label: 'Price',
+      detected: row.detected.priceText,
+      resolved: parsed != null ? `£${parsed.toFixed(2)}` : 'Could not parse',
+      confidence: parsed != null ? 'high' : 'low',
+    });
+  }
+  return out;
 }
 
 /** Why a row didn't become a draft — the error when there is one. */

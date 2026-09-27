@@ -16,7 +16,7 @@ export function RowSkeleton({ count = 5 }: { count?: number }) {
       aria-label="Loading"
     >
       {Array.from({ length: count }).map((_, i) => (
-        <li key={i} className="flex items-center gap-3 py-4 sm:gap-4">
+        <li key={i} className="flex items-center gap-3 py-[calc(var(--density-row-py)+4px)] sm:gap-4">
           <Skeleton className="h-[70px] w-14 shrink-0 rounded-md" />
           <div className="min-w-0 flex-1">
             <Skeleton className="h-4 w-2/3" />

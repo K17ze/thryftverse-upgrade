@@ -60,7 +60,7 @@ export function ToastProvider({ children }: { children: React.ReactNode }) {
         {toasts.map((t) => (
           <div
             key={t.id}
-            role="status"
+            role={t.kind === 'error' ? 'alert' : 'status'}
             className={`${t.exiting ? 'toast-exit' : 'toast-enter'} flex items-center gap-2 rounded-full bg-surface-elevated px-4 py-2.5 text-body font-medium text-text-primary shadow-modal border border-border`}
           >
             {t.kind === 'success' ? (

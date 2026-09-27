@@ -15,6 +15,7 @@ import {
   POSTER_HIGHLIGHTS,
   type PosterHighlight,
 } from '@/lib/data/fixtures-posters';
+import { PROFILE_HIGHLIGHTS } from '@/components/profile/fixtures';
 import { usePosterArchive } from '@/lib/store/posterArchive';
 import { useHydrated } from '@/lib/store/useStore';
 import { AppImage } from '@/components/ui/AppImage';
@@ -37,14 +38,22 @@ export default function PosterHighlightPage({
   const hydrated = useHydrated();
   const createdHighlights = usePosterArchive((s) => s.highlights);
 
-  const { data: highlight, isLoading } = useQuery<PosterHighlight | null>({
+  const { data: highlight, isLoading, isError, refetch } = useQuery<PosterHighlight | null>({
     queryKey: ['poster-highlight', id, hydrated],
     queryFn: async () => {
       await tick();
-      const all = hydrated
-        ? [...createdHighlights, ...POSTER_HIGHLIGHTS]
-        : POSTER_HIGHLIGHTS;
-      return all.find((h) => h.id === id) ?? null;
+      // Sources: the member's session-created highlights, the archive seed
+      // (POSTER_HIGHLIGHTS, also surfaced as PROFILE_HIGHLIGHTS.me), and the
+      // per-member profile-rail sets — every rail tile must open here.
+      const byId = new Map<string, PosterHighlight>();
+      for (const h of POSTER_HIGHLIGHTS) byId.set(h.id, h);
+      for (const set of Object.values(PROFILE_HIGHLIGHTS)) {
+        for (const h of set) byId.set(h.id, h);
+      }
+      if (hydrated) {
+        for (const h of createdHighlights) byId.set(h.id, h);
+      }
+      return byId.get(id) ?? null;
     },
   });
 
@@ -139,6 +148,19 @@ export default function PosterHighlightPage({
     );
   }
 
+  // Error is not absence — a failed fetch gets a retry, not a gravestone.
+  if (isError) {
+    return (
+      <EmptyState
+        icon="warning"
+        title="Couldn't load this highlight"
+        subtitle="Check your connection and try again."
+        actionLabel="Try again"
+        onAction={() => void refetch()}
+      />
+    );
+  }
+
   if (!highlight || frames.length === 0) {
     return (
       <EmptyState
@@ -202,7 +224,7 @@ export default function PosterHighlightPage({
         ) : null}
 
         {/* Top chrome — title row, then segments */}
-        <div className="pointer-events-none absolute inset-x-0 top-0 bg-gradient-to-b from-black/60 via-black/25 to-transparent px-3 pb-10 pt-3">
+        <div className="pointer-events-none absolute inset-x-0 top-0 bg-gradient-to-b from-media-overlay-scrim to-transparent px-3 pb-10 pt-3">
           <div className="pointer-events-auto flex items-center">
             <IconButton
               name="close"
@@ -249,7 +271,7 @@ export default function PosterHighlightPage({
         </div>
 
         {/* Caption + frame counter — bottom scrim */}
-        <div className="pointer-events-none absolute inset-x-0 bottom-0 bg-gradient-to-t from-black/70 to-transparent px-4 pb-5 pt-14">
+        <div className="pointer-events-none absolute inset-x-0 bottom-0 bg-gradient-to-t from-media-overlay-scrim to-transparent px-4 pb-5 pt-14">
           {active.caption ? (
             <p className="clamp-2 text-body-large font-medium text-scrim-text-primary">
               {active.caption}

@@ -11,17 +11,17 @@
 import Link from 'next/link';
 import { Icon } from '@/components/ui/Icon';
 import { formatPrice } from '@/lib/utils/format';
-import { PAYOUT_ACCOUNTS } from '@/lib/data/fixtures';
 import { usePayoutAccounts } from './withdraw/usePayoutAccounts';
-import { useHydrated } from '@/lib/store/useStore';
 
 interface WalletBalanceHeroProps {
   available: number;
   pending: number;
   currency: string;
   onWithdraw: () => void;
-  onTopUp: () => void;
-  onConvert: () => void;
+  /** Fixture-mode demo only — omitted in live mode (no top-up endpoint). */
+  onTopUp?: () => void;
+  /** Omitted in live mode — no convert endpoint is wired in this build. */
+  onConvert?: () => void;
 }
 
 export function WalletBalanceHero({
@@ -32,11 +32,10 @@ export function WalletBalanceHero({
   onTopUp,
   onConvert,
 }: WalletBalanceHeroProps) {
-  const hydrated = useHydrated();
-  const { defaultAccount } = usePayoutAccounts();
-  // SSR renders the fixture default; the persisted truth takes over on mount.
-  const seedDefault = PAYOUT_ACCOUNTS.find((a) => a.isDefault) ?? PAYOUT_ACCOUNTS[0] ?? null;
-  const account = hydrated ? defaultAccount : seedDefault;
+  // Live mode reads the real payout_accounts rail; fixture resolves the
+  // demo overlay (seed default before hydration, persisted picks after).
+  const { defaultDestination, isLoading: payoutsLoading, isError: payoutsError } =
+    usePayoutAccounts();
 
   return (
     <section aria-label="Balance" className="px-4 pt-8 sm:px-6 md:pt-12">
@@ -46,18 +45,24 @@ export function WalletBalanceHero({
       <p className="tnum mt-2 text-display-large font-bold tracking-tight text-text-primary">
         {formatPrice(available, currency)}
       </p>
-      <p className="mt-2 flex items-center gap-1.5 text-caption text-text-muted">
-        <Icon name="card" size={14} className="shrink-0" />
-        {account ? (
-          <span>
-            {account.bankName} •••• {account.last4}
-            <span aria-hidden="true" className="mx-1.5">·</span>
-            {currency} account
-          </span>
-        ) : (
-          <span>No payout account yet</span>
-        )}
-      </p>
+      {/* The caption claims nothing while the rail is loading or failed —
+          a guessed "no account" line would flash under a connected user. */}
+      {!payoutsLoading && !payoutsError ? (
+        <p className="mt-2 flex items-center gap-1.5 text-caption text-text-muted">
+          <Icon name="card" size={14} className="shrink-0" />
+          {defaultDestination ? (
+            <span>
+              {defaultDestination.title}
+              <span aria-hidden="true" className="mx-1.5">·</span>
+              {defaultDestination.status === 'active'
+                ? `${defaultDestination.currency} account`
+                : 'verification pending'}
+            </span>
+          ) : (
+            <span>No payout method yet</span>
+          )}
+        </p>
+      ) : null}
 
       {pending > 0 ? (
         <p className="mt-3 flex items-center gap-1.5 text-body text-text-secondary">
@@ -72,15 +77,27 @@ export function WalletBalanceHero({
       {/* Quick actions — mirrors mobile WalletActionRow: Add money leads,
        * Withdraw / Convert ride the outline grammar. Meta-size labels keep
        * three equal targets honest at 375px. */}
-      <div className="mt-6 grid grid-cols-3 gap-2" role="group" aria-label="Quick actions">
-        <button
-          type="button"
-          onClick={onTopUp}
-          className="pressable flex h-11 items-center justify-center gap-1.5 rounded-md bg-brand font-semibold text-text-inverse"
-        >
-          <Icon name="plus" size={20} />
-          <span className="text-meta">Add money</span>
-        </button>
+      <div
+        className={`mt-6 grid gap-2 ${
+          onTopUp && onConvert
+            ? 'grid-cols-3'
+            : onTopUp || onConvert
+              ? 'grid-cols-2'
+              : 'grid-cols-1'
+        }`}
+        role="group"
+        aria-label="Quick actions"
+      >
+        {onTopUp ? (
+          <button
+            type="button"
+            onClick={onTopUp}
+            className="pressable flex h-11 items-center justify-center gap-1.5 rounded-md bg-brand font-semibold text-text-inverse"
+          >
+            <Icon name="plus" size={20} />
+            <span className="text-meta">Add money</span>
+          </button>
+        ) : null}
         <button
           type="button"
           onClick={onWithdraw}
@@ -89,14 +106,16 @@ export function WalletBalanceHero({
           <Icon name="payout" size={20} />
           <span className="text-meta">Withdraw</span>
         </button>
-        <button
-          type="button"
-          onClick={onConvert}
-          className="pressable flex h-11 items-center justify-center gap-1.5 rounded-md border border-border font-semibold text-text-primary"
-        >
-          <Icon name="sort" size={20} />
-          <span className="text-meta">Convert</span>
-        </button>
+        {onConvert ? (
+          <button
+            type="button"
+            onClick={onConvert}
+            className="pressable flex h-11 items-center justify-center gap-1.5 rounded-md border border-border font-semibold text-text-primary"
+          >
+            <Icon name="sort" size={20} />
+            <span className="text-meta">Convert</span>
+          </button>
+        ) : null}
       </div>
 
       <nav aria-label="Wallet tools" className="mt-6 border-t border-border-subtle">

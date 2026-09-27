@@ -12,7 +12,8 @@
  * data doesn't carry are omitted, never zeroed.
  */
 
-import { PriceChart } from '@/components/charts';
+import { useState } from 'react';
+import { CandleChart, PriceChart } from '@/components/charts';
 import { SegmentedControl } from '@/components/feed/SegmentedControl';
 import { Skeleton } from '@/components/ui/Skeleton';
 import type {
@@ -75,6 +76,9 @@ export function PricePanel({
   window: PriceWindow;
   onWindowChange: (w: PriceWindow) => void;
 }) {
+  const [asTable, setAsTable] = useState(false);
+  // Line is the default read; candles carry the OHLC shape when asked for.
+  const [chartMode, setChartMode] = useState<'line' | 'candles'>('line');
   // Top-of-book: the live snapshot first, then the asset's snapshot
   // fields — both are real contract data.
   const bestBid = book?.bids[0]?.unitPriceGbp ?? asset.bestBidGbp;
@@ -149,22 +153,108 @@ export function PricePanel({
         Issuer-run fractional market · not a public exchange
       </p>
 
-      <div className="mt-5">
-        <SegmentedControl options={WINDOWS} value={activeWindow} onChange={onWindowChange} />
+      <div className="mt-5 flex flex-wrap items-center justify-between gap-3">
+        <div className="flex flex-wrap items-center gap-3">
+          <SegmentedControl options={WINDOWS} value={activeWindow} onChange={onWindowChange} />
+          <SegmentedControl
+            options={[
+              { value: 'line' as const, label: 'Line' },
+              { value: 'candles' as const, label: 'Candles' },
+            ]}
+            value={chartMode}
+            onChange={setChartMode}
+          />
+        </div>
+        <button
+          type="button"
+          aria-pressed={asTable}
+          onClick={() => setAsTable((v) => !v)}
+          className="pressable text-meta font-medium text-text-secondary underline-offset-4 hover:text-text-primary hover:underline"
+        >
+          {asTable ? 'View as chart' : 'View as table'}
+        </button>
       </div>
 
       <div className="mt-4">
         {history ? (
-          <PriceChart
-            data={history}
-            ariaLabel={`${asset.title} unit price, ${activeWindow} window`}
-            windowLabel={activeWindow}
-            currentPrice={asset.unitPriceGbp}
-          />
+          asTable ? (
+            <PriceTable candles={history} window={activeWindow} title={asset.title} />
+          ) : (
+            <>
+              {chartMode === 'candles' ? (
+                <CandleChart
+                  data={history}
+                  ariaLabel={`${asset.title} OHLC candles, ${activeWindow} window`}
+                />
+              ) : (
+                <PriceChart
+                  data={history}
+                  ariaLabel={`${asset.title} unit price, ${activeWindow} window`}
+                  windowLabel={activeWindow}
+                  currentPrice={asset.unitPriceGbp}
+                />
+              )}
+              {history.length >= 2 ? (
+                <p className="mt-1.5 text-meta text-text-muted tnum">
+                  {gbp(history[0]!.c)} → {gbp(history[history.length - 1]!.c)} over the window ·
+                  range {gbp(Math.min(...history.map((c) => c.l)))}–
+                  {gbp(Math.max(...history.map((c) => c.h)))}
+                </p>
+              ) : null}
+            </>
+          )
         ) : (
           <Skeleton className="h-[260px] w-full rounded-lg" />
         )}
       </div>
     </section>
+  );
+}
+
+/** The chart's accessible twin — every candle as a plain data table. */
+function PriceTable({
+  candles,
+  window: w,
+  title,
+}: {
+  candles: CandlePoint[];
+  window: PriceWindow;
+  title: string;
+}) {
+  return (
+    <div className="max-h-[260px] overflow-y-auto rounded-lg border border-border-subtle">
+      <table className="w-full text-meta">
+        <caption className="sr-only">
+          {title} unit price history — {w} window
+        </caption>
+        <thead>
+          <tr className="sticky top-0 border-b border-border-subtle bg-surface text-left text-micro font-semibold uppercase tracking-[0.08em] text-text-muted">
+            <th scope="col" className="px-3 py-2 font-semibold">Time</th>
+            <th scope="col" className="py-2 text-right font-semibold">Open</th>
+            <th scope="col" className="py-2 text-right font-semibold">High</th>
+            <th scope="col" className="py-2 text-right font-semibold">Low</th>
+            <th scope="col" className="px-3 py-2 text-right font-semibold">Close</th>
+          </tr>
+        </thead>
+        <tbody className="divide-y divide-border-subtle">
+          {candles.map((c) => (
+            <tr key={c.t}>
+              <th scope="row" className="px-3 py-2 font-normal text-text-secondary">
+                {new Date(c.t).toLocaleString('en-GB', {
+                  day: 'numeric',
+                  month: 'short',
+                  hour: '2-digit',
+                  minute: '2-digit',
+                })}
+              </th>
+              <td className="py-2 text-right text-text-secondary tnum">{gbp(c.o)}</td>
+              <td className="py-2 text-right text-text-secondary tnum">{gbp(c.h)}</td>
+              <td className="py-2 text-right text-text-secondary tnum">{gbp(c.l)}</td>
+              <td className="px-3 py-2 text-right font-medium text-text-primary tnum">{gbp(c.c)}</td>
+            </tr>
+          ))}
+        </tbody>
+      </table>
+    </div>
   );
 }

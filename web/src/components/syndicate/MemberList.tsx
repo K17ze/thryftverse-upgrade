@@ -4,11 +4,13 @@ import { Avatar } from '@/components/ui/Avatar';
 import { gbp } from '@/components/coown/format';
 import type { CoOwnAsset } from '@/lib/contracts/coown';
 import type { Syndicate } from '@/lib/contracts/syndicate';
-import { sharePctOfPool } from '@/lib/contracts/syndicate';
+import { sharePctOfPool, unitsForContribution } from '@/lib/contracts/syndicate';
 import { formatDate } from '@/lib/utils/format';
 
 /** Pool members — avatar, name, commitment and share of the pooled buy.
- * Organizer first, then by contribution size. */
+ * Organizer first, then by contribution size. Once the pool settles the
+ * share line earns its pro-rata units — the same arithmetic the settle
+ * action writes into positions. */
 export function MemberList({
   syndicate,
   asset,
@@ -18,6 +20,7 @@ export function MemberList({
   asset: CoOwnAsset;
   viewerId: string | null;
 }) {
+  const executed = syndicate.status === 'executed';
   const sorted = [...syndicate.members].sort(
     (a, b) =>
       (a.role === 'organizer' ? 0 : 1) - (b.role === 'organizer' ? 0 : 1) ||
@@ -54,6 +57,9 @@ export function MemberList({
               <p className="text-body font-semibold text-text-primary tnum">{gbp(m.contributionGbp)}</p>
               <p className="mt-0.5 text-meta text-text-muted tnum">
                 {sharePctOfPool(m.contributionGbp, syndicate, asset).toFixed(1)}% of pool
+                {executed
+                  ? ` · ${(Math.round(unitsForContribution(m.contributionGbp, asset) * 100) / 100)} units`
+                  : ''}
               </p>
             </div>
           </li>

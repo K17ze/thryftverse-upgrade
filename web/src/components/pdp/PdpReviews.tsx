@@ -67,7 +67,7 @@ function ReviewRow({ review }: { review: Review }) {
 }
 
 export function PdpReviews({ listing }: PdpReviewsProps) {
-  const { data: reviews, isLoading } = useReviews(listing.sellerId);
+  const { data: reviews, isLoading, isError, refetch } = useReviews(listing.sellerId);
   const [ratingFilter, setRatingFilter] = useState<number | null>(null);
 
   const seller = listing.seller;
@@ -116,6 +116,31 @@ export function PdpReviews({ listing }: PdpReviewsProps) {
         <Skeleton className="h-5 w-36" />
         <Skeleton className="mt-4 h-4 w-44" />
         <Skeleton className="mt-4 h-16 w-full" />
+      </section>
+    );
+  }
+
+  // A failed fetch is not "no reviews" — say so and offer retry instead
+  // of vanishing the section.
+  if (isError) {
+    return (
+      <section className="border-t border-border-subtle py-6" aria-labelledby="pdp-reviews">
+        <h2 id="pdp-reviews" className="text-section-title font-semibold text-text-primary">
+          Seller reviews
+        </h2>
+        <div className="mt-3 flex items-center gap-2" role="alert">
+          <Icon name="alert" size={14} className="shrink-0 text-warning-text" />
+          <span className="min-w-0 flex-1 text-body text-text-secondary">
+            Couldn&apos;t load reviews.
+          </span>
+          <button
+            type="button"
+            onClick={() => void refetch()}
+            className="pressable shrink-0 text-caption font-semibold text-text-primary underline-offset-4 hover:underline"
+          >
+            Try again
+          </button>
+        </div>
       </section>
     );
   }

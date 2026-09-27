@@ -2,7 +2,10 @@
 
 /**
  * PriceChart — area/line price history with pointer crosshair.
- * Deterministic SVG from the data; interaction is pointer-only overlay.
+ * Deterministic SVG from the data. The chart is focusable and the same
+ * crosshair is keyboard-driven (arrows step through candles, Home/End
+ * jump, Escape clears); the inspected point is announced through a live
+ * region so pointer and keyboard readers get identical information.
  * A dashed marker at the current unit price anchors the line's end
  * (Polymarket grammar: one clean line, one honest "now" point).
  */
@@ -59,9 +62,40 @@ export function PriceChart({
     setHoverIdx(Math.max(0, Math.min(data.length - 1, idx)));
   };
 
+  // Keyboard crosshair — arrows step one candle, Home/End jump to the
+  // window's edges, Escape clears. Same inspected point the pointer sets.
+  const onKeyDown = (e: React.KeyboardEvent) => {
+    if (e.key === 'ArrowLeft' || e.key === 'ArrowRight') {
+      e.preventDefault();
+      const delta = e.key === 'ArrowRight' ? 1 : -1;
+      setHoverIdx((i) => {
+        const from = i ?? (delta > 0 ? -1 : data.length);
+        return Math.max(0, Math.min(data.length - 1, from + delta));
+      });
+    } else if (e.key === 'Home') {
+      e.preventDefault();
+      setHoverIdx(0);
+    } else if (e.key === 'End') {
+      e.preventDefault();
+      setHoverIdx(data.length - 1);
+    } else if (e.key === 'Escape') {
+      setHoverIdx(null);
+    }
+  };
+
   return (
-    <div ref={ref} className="relative touch-none" onPointerMove={onMove} onPointerLeave={() => setHoverIdx(null)}>
-      <svg viewBox={`0 0 ${W} ${H}`} className="w-full" style={{ height: H }} role="img" aria-label={ariaLabel}>
+    <div
+      ref={ref}
+      className="relative touch-none rounded-sm focus:outline-none focus-visible:ring-2 focus-visible:ring-text-primary focus-visible:ring-offset-2 focus-visible:ring-offset-background"
+      role="img"
+      aria-label={`${ariaLabel}. Use left and right arrow keys to inspect each price point.`}
+      aria-keyshortcuts="ArrowLeft ArrowRight Home End Escape"
+      tabIndex={0}
+      onPointerMove={onMove}
+      onPointerLeave={() => setHoverIdx(null)}
+      onKeyDown={onKeyDown}
+    >
+      <svg viewBox={`0 0 ${W} ${H}`} className="w-full" style={{ height: H }} aria-hidden="true" focusable="false">
         {[0, 1, 2, 3, 4].map((i) => {
           const v = min + ((max - min) / 4) * i;
           return (
@@ -128,6 +162,18 @@ export function PriceChart({
         </div>
       ) : null}
       {windowLabel ? <span className="absolute right-14 top-1 text-micro text-text-muted">{windowLabel}</span> : null}
+      {/* Screen-reader twin of the floating tooltip — announces the same
+          point a sighted pointer user would see. */}
+      <span role="status" aria-live="polite" className="sr-only">
+        {active
+          ? `£${active.c.toFixed(2)} on ${new Date(active.t).toLocaleString('en-GB', {
+              day: 'numeric',
+              month: 'short',
+              hour: '2-digit',
+              minute: '2-digit',
+            })}`
+          : ''}
+      </span>
     </div>
   );
 }

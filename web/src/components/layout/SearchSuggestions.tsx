@@ -17,6 +17,7 @@ import type { Listing, User } from '@/lib/contracts/domain';
 import { LISTINGS, USERS } from '@/lib/data/fixtures';
 import { formatCount, formatPrice } from '@/lib/utils/format';
 import { TRENDING_SEARCHES } from '@/components/search/taxonomy';
+import { useLocale } from '@/lib/i18n';
 
 const MAX_LISTING_RESULTS = 5;
 const MAX_MEMBER_RESULTS = 3;
@@ -142,6 +143,7 @@ export function SearchSuggestions({
   onSelect,
   onRemoveRecent,
 }: SearchSuggestionsProps) {
+  const { t } = useLocale();
   const indexed = options.map((option, index) => ({ option, index }));
   const byKind = (kind: SuggestionKind) =>
     indexed.filter(({ option }) => option.kind === kind);
@@ -188,12 +190,15 @@ export function SearchSuggestions({
   );
 
   return (
-    <div
-      id={listboxId}
-      role="listbox"
-      aria-label="Search suggestions"
-      className="absolute left-0 right-0 top-full z-dropdown mt-2 max-h-[420px] overflow-y-auto rounded-lg border border-border bg-surface-elevated py-1.5 shadow-subtle"
-    >
+    <div className="absolute left-0 right-0 top-full z-dropdown mt-2 overflow-hidden rounded-lg border border-border bg-surface-elevated shadow-subtle">
+      {/* ARIA APG: a listbox's children must be options or groups of
+          options — the pinned navigation link lives outside it. */}
+      <div
+        id={listboxId}
+        role="listbox"
+        aria-label={t('chrome.search.suggestions')}
+        className="max-h-[420px] overflow-y-auto py-1.5"
+      >
       {searchRows.map(({ option, index }) =>
         textRow(
           option,
@@ -207,8 +212,8 @@ export function SearchSuggestions({
       )}
 
       {listingRows.length > 0 ? (
-        <div role="group" aria-label="Matching items">
-          <SectionLabel>Items</SectionLabel>
+        <div role="group" aria-label={t('chrome.search.matchingItems')}>
+          <SectionLabel>{t('common.misc.items')}</SectionLabel>
           {listingRows.map(({ option, index }) => (
             <div
               key={option.id}
@@ -238,8 +243,8 @@ export function SearchSuggestions({
       ) : null}
 
       {memberRows.length > 0 ? (
-        <div role="group" aria-label="Members">
-          <SectionLabel>Members</SectionLabel>
+        <div role="group" aria-label={t('chrome.search.members')}>
+          <SectionLabel>{t('chrome.search.members')}</SectionLabel>
           {memberRows.map(({ option, index }) => (
             <div
               key={option.id}
@@ -274,8 +279,8 @@ export function SearchSuggestions({
       ) : null}
 
       {recentRows.length > 0 ? (
-        <div role="group" aria-label="Recent searches">
-          <SectionLabel>Recent</SectionLabel>
+        <div role="group" aria-label={t('chrome.search.recent')}>
+          <SectionLabel>{t('chrome.search.recent')}</SectionLabel>
           {recentRows.map(({ option, index }) =>
             textRow(
               option,
@@ -284,7 +289,7 @@ export function SearchSuggestions({
               option.term,
               <button
                 type="button"
-                aria-label={`Remove “${option.term}” from recent searches`}
+                aria-label={t('chrome.search.removeRecent', { term: option.term })}
                 onMouseDown={(e) => {
                   e.preventDefault();
                   e.stopPropagation();
@@ -300,8 +305,8 @@ export function SearchSuggestions({
       ) : null}
 
       {trendingRows.length > 0 ? (
-        <div role="group" aria-label="Trending searches">
-          <SectionLabel>Trending</SectionLabel>
+        <div role="group" aria-label={t('chrome.search.trending')}>
+          <SectionLabel>{t('chrome.search.trending')}</SectionLabel>
           {trendingRows.map(({ option, index }) =>
             textRow(option, index, 'trending', option.term),
           )}
@@ -309,8 +314,8 @@ export function SearchSuggestions({
       ) : null}
 
       {brandRows.length > 0 ? (
-        <div role="group" aria-label="Popular brands">
-          <SectionLabel>Popular brands</SectionLabel>
+        <div role="group" aria-label={t('chrome.search.popularBrands')}>
+          <SectionLabel>{t('chrome.search.popularBrands')}</SectionLabel>
           <div className="flex flex-wrap gap-1.5 px-4 pb-1 pt-1">
             {brandRows.map(({ option, index }) => (
               <Chip
@@ -328,10 +333,11 @@ export function SearchSuggestions({
           </div>
         </div>
       ) : null}
+      </div>
 
       {/* Photo-driven discovery — pinned affordance, outside the combobox
           option list since it navigates rather than submits a term. */}
-      <div className="mt-1 border-t border-border-subtle pt-1">
+      <div className="border-t border-border-subtle">
         <Link
           href="/search/visual"
           onMouseDown={(e) => e.preventDefault()}
@@ -339,7 +345,7 @@ export function SearchSuggestions({
         >
           <Icon name="camera" size={18} className="shrink-0 text-text-muted" />
           <span className="clamp-1 min-w-0 flex-1 text-body text-text-primary">
-            Search by photo
+            {t('chrome.links.searchByPhoto')}
           </span>
           <Icon name="forward" size={14} className="shrink-0 text-text-muted" />
         </Link>

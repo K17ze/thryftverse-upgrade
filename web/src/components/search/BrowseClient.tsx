@@ -2,13 +2,15 @@
 
 /**
  * BrowseClient — /browse body: category rail + full-catalogue
- * RefinedResults (refinement rail on desktop, sheet on mobile). Sort
- * persists in the URL; the category chips stay a local scope.
+ * RefinedResults (refinement rail on desktop, sheet on mobile). Sort and
+ * facets persist in the URL (?sort= + facet params), so a refined browse
+ * is shareable; the category chips stay a local scope.
  */
 
-import { useState } from 'react';
+import { useMemo, useState } from 'react';
 import { Chip } from '@/components/ui/Chip';
 import { RefinedResults } from './RefinedResults';
+import { useFacetParams } from './useFacetParams';
 import { useSortParam } from './useSortParam';
 import { CATEGORIES } from '@/lib/data/fixtures';
 import { useListings } from '@/lib/hooks/queries';
@@ -16,10 +18,22 @@ import { useListings } from '@/lib/hooks/queries';
 export function BrowseClient() {
   const [category, setCategory] = useState<string | null>(null);
   const [sort, setSort] = useSortParam();
-  const { data, isLoading } = useListings(category ?? undefined);
+  const [filters, setFilters] = useFacetParams();
+  const { data, isLoading, isError, refetch } = useListings(category ?? undefined);
+
+  // When the chip rail scopes the set, a category facet stacked on top
+  // would only ever produce empty intersections — strip it (the group is
+  // hidden anyway, so no URL param can set it here deliberately).
+  const effectiveFilters = useMemo(
+    () =>
+      category !== null && filters.categories.length > 0
+        ? { ...filters, categories: [] }
+        : filters,
+    [category, filters],
+  );
 
   return (
-    <div className="mx-auto max-w-[1600px]">
+    <div className="mx-auto max-w-[1440px]">
       <div className="px-4 pt-6 sm:px-6">
         <h1 className="text-screen-title font-bold text-text-primary">
           Browse
@@ -49,10 +63,19 @@ export function BrowseClient() {
         key={category ?? 'all'}
         listings={data ?? []}
         isLoading={isLoading}
+        isError={isError}
+        onRetry={() => void refetch()}
+        filters={effectiveFilters}
+        onFiltersChange={setFilters}
         sort={sort}
         onSortChange={setSort}
+        // The chip rail already scopes the set — a category facet derived
+        // from it would offer one meaningless option.
+        hideCategoryFilter={category !== null}
         heading={(n) =>
-          n === null ? null : (
+          n === null ? (
+            <span className="skeleton block h-6 w-32 rounded-md" />
+          ) : (
             <p className="text-item-title font-semibold text-text-primary">
               <span className="tnum">{n.toLocaleString('en-GB')}</span>{' '}
               item{n === 1 ? '' : 's'}

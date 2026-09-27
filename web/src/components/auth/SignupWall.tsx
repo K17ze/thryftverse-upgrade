@@ -11,8 +11,8 @@
  * the write action (`true` lets the caller proceed, `false` means the
  * guest was walled) and `wall` is the sheet element to render once in
  * the component tree. Like mobile, the wall shows at most once per
- * action per session — dismissed once, the action stays quietly
- * blocked rather than nagging again.
+ * action per session — dismissed once, repeat taps answer with a quiet
+ * "Sign up" toast (rate-limited) rather than nagging the wall again.
  */
 
 import { useRouter } from 'next/navigation';
@@ -21,6 +21,7 @@ import { Sheet } from '@/components/ui/Sheet';
 import { Button } from '@/components/ui/Button';
 import { Icon, type AppIconName } from '@/components/ui/Icon';
 import { useSession } from '@/lib/session/SessionProvider';
+import { useToast } from '@/components/ui/Toast';
 
 /** Account-bound actions that raise the wall — mirrors the mobile set. */
 export type SignupAction =
@@ -70,6 +71,25 @@ const ACTION_COPY: Record<SignupAction, { title: string; body: string; icon: App
  * means once per SPA session across every callsite, matching mobile.
  */
 const shownActions = new Set<SignupAction>();
+
+/** Short per-action lines for the quiet re-entry toast — the wall's full
+ *  value sentence would shout; these just answer the tap. */
+const NUDGE_COPY: Record<SignupAction, string> = {
+  save_item: 'Sign up to save items',
+  follow_seller: 'Sign up to follow sellers',
+  message_seller: 'Sign up to message sellers',
+  place_bid: 'Sign up to place bids',
+  purchase: 'Sign up to buy securely',
+  create_listing: 'Sign up to sell',
+};
+
+/**
+ * Per-action nudge cooldown — a repeat tap must always get an answer (a
+ * dead control is a dead end), but rapid re-taps shouldn't stack toasts.
+ * Longer than the toast's ~3s lifetime so pills never queue.
+ */
+const nudgedAt = new Map<SignupAction, number>();
+const NUDGE_COOLDOWN_MS = 6000;
 
 interface SignupWallProps {
   action: SignupAction | null;
@@ -132,19 +152,32 @@ export function SignupWall({ action, onClose }: SignupWallProps) {
  */
 export function useSignupWall() {
   const { isGuest } = useSession();
+  const { show } = useToast();
+  const router = useRouter();
   const [action, setAction] = useState<SignupAction | null>(null);
 
   const requireAuth = useCallback(
     (requested: SignupAction): boolean => {
       if (!isGuest) return true;
-      // Already dismissed this action once this session — stay blocked
-      // quietly rather than re-opening the same prompt.
-      if (shownActions.has(requested)) return false;
+      if (shownActions.has(requested)) {
+        // The wall covered this action once and stayed quiet — but a
+        // repeat tap is an intent signal, so answer it with a restrained
+        // re-entry affordance rather than leaving the control dead.
+        const last = nudgedAt.get(requested) ?? 0;
+        if (Date.now() - last >= NUDGE_COOLDOWN_MS) {
+          nudgedAt.set(requested, Date.now());
+          show(NUDGE_COPY[requested], 'info', {
+            label: 'Sign up',
+            onPress: () => router.push('/auth/signup'),
+          });
+        }
+        return false;
+      }
       shownActions.add(requested);
       setAction(requested);
       return false;
     },
-    [isGuest],
+    [isGuest, show, router],
   );
 
   const close = useCallback(() => setAction(null), []);

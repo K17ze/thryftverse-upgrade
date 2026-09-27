@@ -2,11 +2,13 @@
 
 /**
  * ConnectionsView — followers / following lists (the mobile
- * ConnectionListScreen's web counterpart). Row grammar: avatar, name +
- * verified marker, one bio line, follow state. Lists over 20 entries get
- * a client-side search. Fixture pools are deterministic per profile; the
- * session's own following list reads the persisted follow store once
- * hydrated, so toggles here agree with the hero button.
+ * ConnectionListScreen's web counterpart): back affordance, @username
+ * context header, Followers|Following route tabs with counts, an always-on
+ * search field (with a clear affordance), then rows in mobile grammar —
+ * avatar, name + verified marker, one bio line, follow state. Fixture
+ * pools are deterministic per profile; the session's own following list
+ * reads the persisted follow store once hydrated, so toggles here agree
+ * with the hero button.
  */
 
 import { useMemo, useState } from 'react';
@@ -15,6 +17,7 @@ import { Avatar } from '@/components/ui/Avatar';
 import { EmptyState } from '@/components/ui/EmptyState';
 import { Icon } from '@/components/ui/Icon';
 import { Skeleton } from '@/components/ui/Skeleton';
+import { BackBar } from '@/components/profile/BackBar';
 import { FollowButton } from '@/components/profile/FollowButton';
 import { ProfileTabs } from '@/components/profile/ProfileTabs';
 import { useFollows } from '@/lib/store/follows';
@@ -37,6 +40,29 @@ function pool(user: User, kind: ConnectionKind, followingIds: string[]): User[] 
   const rotated = candidates.map((u, i) => candidates[(i + seed) % candidates.length]);
   const target = kind === 'following' ? user.following : user.followers;
   return rotated.slice(0, Math.min(candidates.length, Math.max(1, Math.min(target, candidates.length))));
+}
+
+/** Route-level loading state — title line + list rows (not the hero
+ *  skeleton, which belongs to profile surfaces). */
+export function ConnectionsSkeleton({ count = 7 }: { count?: number }) {
+  return (
+    <div className="mx-auto w-full max-w-xl px-4 pt-5 sm:px-0" aria-busy aria-label="Loading connections">
+      <Skeleton className="h-6 w-40" />
+      <Skeleton className="mt-5 h-10 w-full rounded-none" />
+      <div className="mt-2">
+        {Array.from({ length: count }).map((_, i) => (
+          <div key={i} className="flex items-center gap-3 py-3">
+            <Skeleton className="size-11 shrink-0 rounded-full" />
+            <div className="flex-1 space-y-1.5">
+              <Skeleton className="h-4 w-32" />
+              <Skeleton className="h-3 w-48" />
+            </div>
+            <Skeleton className="h-8 w-24 rounded-md" />
+          </div>
+        ))}
+      </div>
+    </div>
+  );
 }
 
 function RowSkeleton({ count = 6 }: { count?: number }) {
@@ -68,7 +94,6 @@ export function ConnectionsView({ user, kind }: { user: User; kind: ConnectionKi
   );
   const pending = kind === 'following' && user.id === CURRENT_USER.id && !hydrated;
 
-  const searchable = rows.length > 20;
   const q = query.trim().toLowerCase();
   const visible = q
     ? rows.filter(
@@ -80,38 +105,61 @@ export function ConnectionsView({ user, kind }: { user: User; kind: ConnectionKi
 
   return (
     <div className="mx-auto w-full max-w-xl">
-      <div className="px-4 pt-5 sm:px-0">
-        <h1 className="text-screen-title font-bold text-text-primary">
-          {kind === 'followers' ? 'Followers' : 'Following'}
-        </h1>
-        <p className="mt-0.5 text-body text-text-muted">@{user.username}</p>
+      <BackBar />
+      {/* Context header — the tabs carry the mode, so the title is the
+          member, not a repeat of the active tab label. */}
+      <div className="px-4 pt-1 sm:px-0">
+        <h1 className="text-item-title font-bold text-text-primary">@{user.username}</h1>
       </div>
 
-      <div className="mt-4">
+      <div className="mt-2">
         <ProfileTabs
+          ariaLabel="Connections"
           tabs={[
-            { key: 'followers', label: 'Followers', href: `/u/${user.username}/followers` },
-            { key: 'following', label: 'Following', href: `/u/${user.username}/following` },
+            {
+              key: 'followers',
+              label: 'Followers',
+              count: user.followers,
+              href: `/u/${user.username}/followers`,
+            },
+            {
+              key: 'following',
+              label: 'Following',
+              count: user.following,
+              href: `/u/${user.username}/following`,
+            },
           ]}
           active={kind}
         />
       </div>
 
-      {searchable ? (
-        <div className="relative px-4 pb-1 pt-4 sm:px-0">
-          <Icon
-            name="search"
-            size={16}
-            className="pointer-events-none absolute left-7 top-1/2 -translate-y-1/2 text-text-muted"
-          />
-          <input
-            value={query}
-            onChange={(e) => setQuery(e.target.value)}
-            placeholder={`Search ${kind}`}
-            aria-label={`Search ${kind}`}
-            autoComplete="off"
-            className="h-9 w-full rounded-md bg-surface-alt pl-9 pr-3 text-body text-input-text placeholder:text-text-muted"
-          />
+      {rows.length > 0 ? (
+        <div className="px-4 pb-1 pt-4 sm:px-0">
+          <div className="relative">
+            <Icon
+              name="search"
+              size={16}
+              className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-text-muted"
+            />
+            <input
+              value={query}
+              onChange={(e) => setQuery(e.target.value)}
+              placeholder={`Search ${kind}`}
+              aria-label={`Search ${kind}`}
+              autoComplete="off"
+              className="h-9 w-full rounded-md bg-surface-alt pl-9 pr-9 text-body text-input-text placeholder:text-text-muted"
+            />
+            {query ? (
+              <button
+                type="button"
+                onClick={() => setQuery('')}
+                aria-label="Clear search"
+                className="pressable absolute right-0 top-1/2 flex h-9 w-9 -translate-y-1/2 items-center justify-center text-text-muted hover:text-text-primary"
+              >
+                <Icon name="close" size={15} />
+              </button>
+            ) : null}
+          </div>
         </div>
       ) : null}
 
@@ -140,7 +188,11 @@ export function ConnectionsView({ user, kind }: { user: User; kind: ConnectionKi
         <ul className="divide-y divide-border-subtle pt-2">
           {visible.map((u) => (
             <li key={u.id} className="flex items-center gap-3 px-4 py-3 sm:px-0">
-              <Link href={`/u/${u.username}`} className="flex min-w-0 flex-1 items-center gap-3">
+              <Link
+                href={`/u/${u.username}`}
+                className="pressable flex min-w-0 flex-1 items-center gap-3 rounded-md"
+                aria-label={`Open @${u.username}'s profile`}
+              >
                 <Avatar src={u.avatar} name={u.username} size={44} />
                 <span className="min-w-0">
                   <span className="flex items-center gap-1">

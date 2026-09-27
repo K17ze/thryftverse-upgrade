@@ -13,24 +13,27 @@ import { useEffect, useRef, useState } from 'react';
 import { Avatar } from '@/components/ui/Avatar';
 import { Icon, type AppIconName } from '@/components/ui/Icon';
 import { useSession } from '@/lib/session/SessionProvider';
+import { useLocale } from '@/lib/i18n';
 
-const DESTINATIONS: { href: string; label: string; icon: AppIconName }[] = [
-  { href: '/profile', label: 'Profile', icon: 'profile' },
-  { href: '/orders', label: 'Orders', icon: 'receipt' },
-  { href: '/saved', label: 'Saved', icon: 'heart' },
-  { href: '/outfits', label: 'Outfits', icon: 'layers' },
-  { href: '/offers', label: 'Offers', icon: 'tag' },
-  { href: '/wallet', label: 'Wallet', icon: 'wallet' },
-  { href: '/seller-hub', label: 'Seller hub', icon: 'store' },
-  { href: '/agents', label: 'AI agents', icon: 'chip' },
-  { href: '/invite', label: 'Invite & earn', icon: 'people' },
-  { href: '/support', label: 'Support', icon: 'help' },
-  { href: '/settings', label: 'Settings', icon: 'settings' },
+/** labelKey resolves under chrome.* via useLocale().t at render. */
+const DESTINATIONS: { href: string; labelKey: string; icon: AppIconName }[] = [
+  { href: '/profile', labelKey: 'tabs.profile', icon: 'profile' },
+  { href: '/orders', labelKey: 'links.orders', icon: 'receipt' },
+  { href: '/saved', labelKey: 'account.saved', icon: 'heart' },
+  { href: '/outfits', labelKey: 'links.outfits', icon: 'layers' },
+  { href: '/offers', labelKey: 'account.offers', icon: 'tag' },
+  { href: '/wallet', labelKey: 'links.wallet', icon: 'wallet' },
+  { href: '/seller-hub', labelKey: 'links.sellerHub', icon: 'store' },
+  { href: '/agents', labelKey: 'account.aiAgents', icon: 'chip' },
+  { href: '/invite', labelKey: 'links.inviteEarn', icon: 'people' },
+  { href: '/support', labelKey: 'links.support', icon: 'help' },
+  { href: '/settings', labelKey: 'links.settings', icon: 'settings' },
 ];
 
 export function AccountMenu() {
   const router = useRouter();
   const pathname = usePathname();
+  const { t } = useLocale();
   const { user, signOut } = useSession();
   const [open, setOpen] = useState(false);
   const rootRef = useRef<HTMLDivElement>(null);
@@ -57,6 +60,12 @@ export function AccountMenu() {
       e.preventDefault();
       close();
       rootRef.current?.querySelector<HTMLButtonElement>('button')?.focus();
+    } else if (e.key === 'Tab') {
+      // Menu grammar (the FeedItemMenu fix): close, return focus to the
+      // trigger, then let the browser's default tab step continue from
+      // it — an open menu left past its Tab position strands the order.
+      close();
+      rootRef.current?.querySelector<HTMLButtonElement>('button')?.focus();
     } else if (e.key === 'ArrowDown' || e.key === 'ArrowUp') {
       e.preventDefault();
       const items = [...(menuRef.current?.querySelectorAll<HTMLElement>('[role="menuitem"]') ?? [])];
@@ -71,7 +80,7 @@ export function AccountMenu() {
     <div ref={rootRef} className="relative ml-1" onKeyDown={onKeyDown}>
       <button
         type="button"
-        aria-label="Your account"
+        aria-label={t('chrome.account.yourAccount')}
         aria-haspopup="menu"
         aria-expanded={open}
         onClick={() => setOpen((v) => !v)}
@@ -84,7 +93,7 @@ export function AccountMenu() {
         <div
           ref={menuRef}
           role="menu"
-          aria-label="Account"
+          aria-label={t('chrome.account.menu')}
           className="absolute right-0 top-full z-elevated mt-2 w-64 overflow-hidden rounded-lg border border-border bg-surface-elevated py-1.5 shadow-floating"
         >
           <Link
@@ -97,7 +106,9 @@ export function AccountMenu() {
               <span className="clamp-1 block text-body-emphasis font-semibold text-text-primary">
                 {user?.username}
               </span>
-              <span className="block text-meta text-text-secondary">View profile</span>
+              <span className="block text-meta text-text-secondary">
+                {t('chrome.account.viewProfile')}
+              </span>
             </span>
           </Link>
 
@@ -111,7 +122,7 @@ export function AccountMenu() {
               className="flex items-center gap-3 px-4 py-2.5 text-body text-text-primary hover:bg-row focus:bg-row focus:outline-none"
             >
               <Icon name={d.icon} size={19} className="text-text-secondary" />
-              {d.label}
+              {t(`chrome.${d.labelKey}`)}
             </Link>
           ))}
 
@@ -128,7 +139,7 @@ export function AccountMenu() {
             className="flex w-full items-center gap-3 px-4 py-2.5 text-left text-body text-text-primary hover:bg-row focus:bg-row focus:outline-none"
           >
             <Icon name="exit" size={19} className="text-text-secondary" />
-            Sign out
+            {t('chrome.account.signOut')}
           </button>
         </div>
       ) : null}

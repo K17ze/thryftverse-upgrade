@@ -20,7 +20,7 @@ import type { User } from '@/lib/contracts/domain';
 import { CURRENT_USER } from '@/lib/data/fixtures';
 import { useHydrated } from '@/lib/store/useStore';
 import { hydrateSavedLists } from '@/lib/store/useStore';
-import { useFollows } from '@/lib/store/follows';
+import { hydrateFollows, useFollows } from '@/lib/store/follows';
 import { useProfileEdit } from '@/lib/store/profileEdit';
 import { useVerificationStore } from '@/components/verification/useVerificationStore';
 import type {
@@ -30,12 +30,17 @@ import type {
 import { DATA_MODE } from '@/lib/api/client';
 import { SESSION_EXPIRED_EVENT } from '@/lib/api/http';
 import * as authService from '@/lib/api/services/auth';
+import type { AccountIdentity } from '@/lib/api/services/auth';
 
 interface SessionValue {
   user: User | null;
   isGuest: boolean;
   /** True while live mode is resolving the stored session. */
   sessionLoading: boolean;
+  /** Contact fields from /users/me (email, verification, phone) — the
+      "Personal info" settings surface reads them. Live mode only; null
+      while unresolved. */
+  accountIdentity: AccountIdentity | null;
   /** Effective KYC status — the local submission wins, else the account's. */
   verificationStatus: VerificationStatus;
   /** Highest verification tier on the effective user. */
@@ -46,6 +51,8 @@ interface SessionValue {
   login: (email: string, password: string) => Promise<void>;
   signup: (email: string, password: string, username: string) => Promise<void>;
   logout: () => Promise<void>;
+  /** Re-pull /users/me after an account mutation (e.g. phone update). */
+  refreshSession: () => Promise<void>;
 }
 
 const SessionContext = createContext<SessionValue | null>(null);
@@ -58,6 +65,7 @@ export function SessionProvider({ children }: { children: React.ReactNode }) {
   // starts neutral — guest until /users/me proves otherwise.
   const [isGuest, setIsGuest] = useState(isLive);
   const [liveUser, setLiveUser] = useState<User | null>(null);
+  const [accountIdentity, setAccountIdentity] = useState<AccountIdentity | null>(null);
   const [sessionLoading, setSessionLoading] = useState(isLive);
 
   // Persisted KYC outcome — hydration-gated so SSR and the first client
@@ -70,13 +78,22 @@ export function SessionProvider({ children }: { children: React.ReactNode }) {
   const hydrateLiveSession = useCallback(async () => {
     try {
       const me = await authService.fetchMe();
-      setLiveUser(me);
-      setIsGuest(!me);
-      if (me) void hydrateSavedLists();
+      setLiveUser(me.user);
+      setAccountIdentity(me.account);
+      setIsGuest(!me.user);
+      if (me.user) {
+        void hydrateSavedLists();
+        void hydrateFollows(me.user.id);
+      } else {
+        // Resolved guest — a persisted set (e.g. fixture-mode seeds) would
+        // mark strangers followed on a signed-out session. Clear it.
+        useFollows.setState({ followingIds: [] });
+      }
     } catch {
       // Network/server failure — keep whatever session state we have rather
       // than bouncing to guest on a transient outage.
       setLiveUser(null);
+      setAccountIdentity(null);
     } finally {
       setSessionLoading(false);
     }
@@ -87,7 +104,11 @@ export function SessionProvider({ children }: { children: React.ReactNode }) {
     void hydrateLiveSession();
     const onExpired = () => {
       setLiveUser(null);
+      setAccountIdentity(null);
       setIsGuest(true);
+      // Expired session = guest — drop the persisted follows so a stale
+      // set never renders as the next visitor's truth.
+      useFollows.setState({ followingIds: [] });
     };
     window.addEventListener(SESSION_EXPIRED_EVENT, onExpired);
     return () => window.removeEventListener(SESSION_EXPIRED_EVENT, onExpired);
@@ -101,14 +122,20 @@ export function SessionProvider({ children }: { children: React.ReactNode }) {
 
   const user = useMemo<User | null>(() => {
     if (!baseUser) return null;
-    let merged: User = { ...baseUser, ...edits, following: followingCount };
+    // Same hydration gate as KYC — the persisted follows count lands only
+    // after localStorage truth is known; SSR renders the account value.
+    let merged: User = {
+      ...baseUser,
+      ...edits,
+      following: hydrated ? followingCount : baseUser.following,
+    };
     // An approved verification grants the identity tier — upgrades only,
     // never a downgrade of what the account already holds.
     if (localApproved && !merged.identityVerified) {
       merged = { ...merged, isVerified: true, identityVerified: true, trustLevel: 'identity' };
     }
     return merged;
-  }, [baseUser, edits, localApproved, followingCount]);
+  }, [baseUser, edits, localApproved, hydrated, followingCount]);
 
   const verificationStatus = useMemo<VerificationStatus>(() => {
     if (hydrated && kycStatus !== 'not_started') return kycStatus;
@@ -128,6 +155,7 @@ export function SessionProvider({ children }: { children: React.ReactNode }) {
       user,
       isGuest,
       sessionLoading,
+      accountIdentity,
       verificationStatus,
       verificationTier,
       signIn: () => {
@@ -141,6 +169,7 @@ export function SessionProvider({ children }: { children: React.ReactNode }) {
         if (isLive) {
           void authService.logout().then(() => {
             setLiveUser(null);
+            setAccountIdentity(null);
             setIsGuest(true);
           });
           return;
@@ -167,11 +196,15 @@ export function SessionProvider({ children }: { children: React.ReactNode }) {
         if (isLive) {
           await authService.logout();
           setLiveUser(null);
+          setAccountIdentity(null);
         }
         setIsGuest(true);
       },
+      refreshSession: async () => {
+        if (isLive) await hydrateLiveSession();
+      },
     }),
-    [user, isGuest, sessionLoading, verificationStatus, verificationTier, isLive, hydrateLiveSession],
+    [user, isGuest, sessionLoading, accountIdentity, verificationStatus, verificationTier, isLive, hydrateLiveSession],
   );
 
   return <SessionContext.Provider value={value}>{children}</SessionContext.Provider>;

@@ -3,7 +3,10 @@
 /**
  * ReturnRequestSheet — structured return-request form. Reason categories
  * mirror the mobile refund-request surface; amount validates against the
- * paid total (server enforces the same bound). Submit creates a ReturnCase.
+ * paid total through the shared refundAmount helpers (the server enforces
+ * the same bound). Reason-specific evidence guidance + photo attach match
+ * the mobile OrderSupportScreen evidence model. Submit creates a
+ * ReturnCase with the attached evidence URLs.
  */
 
 import { useMemo, useState } from 'react';
@@ -12,6 +15,28 @@ import { Icon } from '@/components/ui/Icon';
 import { Button } from '@/components/ui/Button';
 import { RETURN_REASONS } from '@/lib/data/fixtures-commerce';
 import { formatPrice } from '@/lib/utils/format';
+import {
+  EvidencePhotoField,
+  type EvidencePhoto,
+} from './EvidencePhotoField';
+import {
+  refundAmountErrorMessage,
+  validateRequestedRefundAmount,
+} from './refundAmount';
+
+/**
+ * Reason → evidence guidance. Photos matter for every fault-based return;
+ * 'Other reason' keeps the field optional rather than demanding evidence
+ * for a change-of-mind-adjacent request.
+ */
+const RETURN_EVIDENCE: Record<string, { needsPhotos: boolean; hint: string }> = {
+  not_as_described: { needsPhotos: true, hint: 'Attach photos showing how the item differs from the listing.' },
+  damaged: { needsPhotos: true, hint: 'Attach photos of the damage and the original packaging.' },
+  wrong_item: { needsPhotos: true, hint: 'Attach a photo of the item you received.' },
+  authenticity: { needsPhotos: true, hint: 'Attach photos of labels, stitching or serial marks.' },
+  missing_contents: { needsPhotos: true, hint: 'Attach photos of the parcel and what arrived.' },
+  changed_mind: { needsPhotos: false, hint: 'Photos are optional for this reason.' },
+};
 
 interface Props {
   open: boolean;
@@ -22,16 +47,9 @@ interface Props {
     reasonLabel: string;
     note: string;
     amountGbp: number | null;
+    evidenceMediaUrls: string[];
   }) => void;
   onClose: () => void;
-}
-
-function parseAmount(raw: string): number | null {
-  const normalised = raw.trim().replace(/[£$\s,]/g, '');
-  if (!normalised) return null;
-  const value = Number(normalised);
-  if (!Number.isFinite(value)) return null;
-  return Math.round(value * 100) / 100;
 }
 
 export function ReturnRequestSheet({ open, orderTotalGbp, itemTitle, onSubmit, onClose }: Props) {
@@ -39,24 +57,39 @@ export function ReturnRequestSheet({ open, orderTotalGbp, itemTitle, onSubmit, o
   const [note, setNote] = useState('');
   const [amountText, setAmountText] = useState('');
   const [partial, setPartial] = useState(false);
+  const [evidence, setEvidence] = useState<EvidencePhoto[]>([]);
+  const [touched, setTouched] = useState(false);
 
-  const parsed = useMemo(() => parseAmount(amountText), [amountText]);
+  const amountResult = useMemo(
+    () => validateRequestedRefundAmount(amountText, orderTotalGbp),
+    [amountText, orderTotalGbp],
+  );
   const amountError =
-    partial && amountText.trim()
-      ? parsed == null || parsed <= 0
-        ? 'Enter a valid amount'
-        : parsed > orderTotalGbp
-          ? `Can't exceed the order total (${formatPrice(orderTotalGbp)})`
+    partial && (touched || amountText.trim())
+      ? amountResult.error
+          ? refundAmountErrorMessage(amountResult.error, orderTotalGbp, formatPrice)
           : null
       : null;
 
-  const canSubmit = reasonId != null && (!partial || (parsed != null && !amountError));
+  const uploading = evidence.some((e) => e.state === 'uploading');
+  const canSubmit =
+    reasonId != null &&
+    !uploading &&
+    (!partial || amountResult.error == null);
+
+  const evidenceConfig = reasonId ? RETURN_EVIDENCE[reasonId] : null;
+  const showEvidence = !!reasonId;
 
   const reset = () => {
+    for (const item of evidence) {
+      if (item.uri.startsWith('blob:')) URL.revokeObjectURL(item.uri);
+    }
     setReasonId(null);
     setNote('');
     setAmountText('');
     setPartial(false);
+    setEvidence([]);
+    setTouched(false);
   };
 
   const handleClose = () => {
@@ -65,13 +98,16 @@ export function ReturnRequestSheet({ open, orderTotalGbp, itemTitle, onSubmit, o
   };
 
   const handleSubmit = () => {
-    if (reasonId == null) return;
+    if (reasonId == null || !canSubmit) return;
     const reason = RETURN_REASONS.find((r) => r.id === reasonId);
     onSubmit({
       reasonId,
       reasonLabel: reason?.label ?? 'Return requested',
       note: note.trim(),
-      amountGbp: partial ? parsed : null,
+      amountGbp: partial ? amountResult.amountGbp : null,
+      evidenceMediaUrls: evidence
+        .filter((e) => e.state === 'attached')
+        .map((e) => e.uri),
     });
     reset();
   };
@@ -115,7 +151,9 @@ export function ReturnRequestSheet({ open, orderTotalGbp, itemTitle, onSubmit, o
           })}
         </ul>
 
-        {/* Refund scope — full by default, partial with a validated amount */}
+        {/* Refund scope — full by default, partial with a validated amount.
+            Switching to partial prefills the paid total once (the mobile
+            return topic does the same) without clobbering typed edits. */}
         <div className="mt-4 flex gap-2">
           {[
             { key: 'full', label: 'Full refund' },
@@ -127,7 +165,13 @@ export function ReturnRequestSheet({ open, orderTotalGbp, itemTitle, onSubmit, o
                 key={opt.key}
                 type="button"
                 aria-pressed={selected}
-                onClick={() => setPartial(opt.key === 'partial')}
+                onClick={() => {
+                  const next = opt.key === 'partial';
+                  setPartial(next);
+                  if (next && !amountText.trim()) {
+                    setAmountText(orderTotalGbp.toFixed(2));
+                  }
+                }}
                 className={`pressable rounded-full border px-3.5 py-1.5 text-caption font-medium ${
                   selected
                     ? 'border-brand bg-brand text-text-inverse'
@@ -145,14 +189,28 @@ export function ReturnRequestSheet({ open, orderTotalGbp, itemTitle, onSubmit, o
             <input
               value={amountText}
               onChange={(e) => setAmountText(e.target.value)}
+              onBlur={() => setTouched(true)}
               inputMode="decimal"
+              aria-label={`Refund amount in pounds, maximum ${formatPrice(orderTotalGbp)}`}
+              aria-invalid={amountError != null}
               placeholder={`Refund amount (max ${formatPrice(orderTotalGbp)})`}
               className="tnum mt-3 w-full rounded-md border border-border bg-input px-3 py-2 text-body text-input-text placeholder:text-text-muted focus:border-text-muted"
             />
             {amountError ? (
-              <p className="mt-1 text-caption text-danger-text">{amountError}</p>
+              <p role="alert" className="tnum mt-1 text-caption text-danger-text">{amountError}</p>
             ) : null}
           </>
+        ) : null}
+
+        {/* Reason-specific evidence — only rendered once a reason is
+            picked, per the report's no-photo-theatre rule. */}
+        {showEvidence && evidenceConfig ? (
+          <EvidencePhotoField
+            label={evidenceConfig.needsPhotos ? 'Evidence' : 'Evidence (optional)'}
+            hint={evidenceConfig.hint}
+            items={evidence}
+            onChange={setEvidence}
+          />
         ) : null}
 
         <textarea
@@ -160,6 +218,7 @@ export function ReturnRequestSheet({ open, orderTotalGbp, itemTitle, onSubmit, o
           onChange={(e) => setNote(e.target.value)}
           rows={3}
           maxLength={1000}
+          aria-label="Return details for the seller"
           placeholder="Tell the seller what happened (optional)"
           className="mt-3 w-full rounded-md border border-border bg-input px-3 py-2 text-body text-input-text placeholder:text-text-muted focus:border-text-muted"
         />
@@ -172,7 +231,7 @@ export function ReturnRequestSheet({ open, orderTotalGbp, itemTitle, onSubmit, o
           disabled={!canSubmit}
           onClick={handleSubmit}
         >
-          Submit return request
+          {uploading ? 'Uploading…' : 'Submit return request'}
         </Button>
         <p className="mt-3 text-caption text-text-muted">
           The seller responds first. If they don&apos;t, you can ask Thryft to step in.

@@ -92,12 +92,6 @@ function ReviewRow({ review }: { review: Review }) {
         </div>
         <div className="mt-1 flex items-center gap-2">
           <RatingStars rating={review.rating} size={13} />
-          {!review.isAutomatic ? (
-            <span className="flex items-center gap-1 text-meta text-success-text">
-              <Icon name="shieldCheck" size={12} aria-hidden />
-              Verified buyer
-            </span>
-          ) : null}
         </div>
         <p
           className={`mt-1.5 text-body ${

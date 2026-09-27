@@ -5,9 +5,15 @@
  * SavedAddressesScreen: one flat list (name, street, city + postcode),
  * edit/remove per row, default carried by the edit sheet's toggle.
  *
- * Truth lives in useSavedAddresses (fixture seeds + session overlays).
- * Removing the default promotes the oldest remaining address — the store
- * resolves it, the toast says so.
+ * Fixture truth is the local overlay (useSavedAddresses via
+ * useManagedAddresses); removing the default promotes the oldest remaining
+ * address — the store resolves it, the toast says so.
+ *
+ * Live truth is the server rail (GET/POST/DELETE /users/:id/addresses via
+ * useManagedAddresses). There is no address PATCH or set-default route, so
+ * live rows omit Edit — the only live writes are create (whose isDefault
+ * flag the server honours, auto-defaulting the first) and delete (the
+ * server re-promotes a default itself). Loading and error states are real.
  */
 
 import { useState } from 'react';
@@ -18,7 +24,8 @@ import { Button } from '@/components/ui/Button';
 import { IconButton } from '@/components/ui/IconButton';
 import { useToast } from '@/components/ui/Toast';
 import { useHydrated } from '@/lib/store/useStore';
-import { useSavedAddresses } from '@/lib/store/userPaymentData';
+import { useManagedAddresses } from '@/lib/hooks/instrument-queries';
+import { parseApiError } from '@/lib/api/http';
 import { AddAddressSheet } from '@/components/checkout/AddPaymentSheets';
 import { ConfirmSheet, type ConfirmSheetState } from '@/components/orders/ConfirmSheet';
 import type { Address } from '@/lib/contracts/domain';
@@ -29,7 +36,8 @@ function AddressRow({
   onRemove,
 }: {
   address: Address;
-  onEdit: () => void;
+  /** null omits the control — live mode has no address-update route. */
+  onEdit: (() => void) | null;
   onRemove: () => void;
 }) {
   return (
@@ -47,9 +55,11 @@ function AddressRow({
         </p>
       </div>
       <div className="flex shrink-0 items-center -my-1.5 -mr-2">
-        <Button variant="quiet" size="sm" onClick={onEdit}>
-          Edit
-        </Button>
+        {onEdit ? (
+          <Button variant="quiet" size="sm" onClick={onEdit}>
+            Edit
+          </Button>
+        ) : null}
         <IconButton
           name="trash"
           size={18}
@@ -64,20 +74,44 @@ function AddressRow({
 
 export function AddressesView() {
   const hydrated = useHydrated();
-  const { addresses, defaultAddress, addAddress, updateAddress, removeAddress, setDefaultAddress } =
-    useSavedAddresses();
+  const {
+    mode,
+    addresses,
+    defaultAddress,
+    isLoading,
+    isError,
+    refetch,
+    addAddress,
+    updateAddress,
+    removeAddress,
+    setDefaultAddress,
+  } = useManagedAddresses();
   const { show } = useToast();
   const [sheet, setSheet] = useState<'closed' | 'add' | 'edit'>('closed');
   const [editing, setEditing] = useState<Address | null>(null);
   const [confirm, setConfirm] = useState<ConfirmSheetState | null>(null);
+  const [confirmBusy, setConfirmBusy] = useState(false);
 
-  if (!hydrated) {
+  if (!hydrated || isLoading) {
     return (
       <div aria-busy aria-label="Loading addresses" className="mt-2 space-y-px">
         {[0, 1].map((i) => (
           <Skeleton key={i} className="h-[88px] w-full rounded-none" />
         ))}
       </div>
+    );
+  }
+
+  if (isError) {
+    return (
+      <EmptyState
+        icon="alert"
+        title="Couldn't load addresses"
+        subtitle="Check your connection and try again."
+        actionLabel="Try again"
+        onAction={refetch}
+        compact
+      />
     );
   }
 
@@ -88,16 +122,28 @@ export function AddressesView() {
       confirmLabel: 'Remove',
       variant: 'destructive',
       onConfirm: () => {
-        const result = removeAddress(address.id);
-        setConfirm(null);
-        if (result.ok) {
-          show(
-            result.promotedToDefault ? 'Address removed — next address is now default' : 'Address removed',
-            'success',
-          );
-        } else {
-          show('Could not remove this address', 'error');
-        }
+        // Both modes resolve through the same async result; fixture
+        // resolves on a microtask, live after the DELETE + re-read.
+        setConfirmBusy(true);
+        void removeAddress(address.id)
+          .then((result) => {
+            setConfirm(null);
+            if (result.ok) {
+              show(
+                result.promotedToDefault
+                  ? 'Address removed — next address is now default'
+                  : 'Address removed',
+                'success',
+              );
+            } else {
+              show('Could not remove this address', 'error');
+            }
+          })
+          .catch(() => {
+            setConfirm(null);
+            show('Could not remove this address', 'error');
+          })
+          .finally(() => setConfirmBusy(false));
       },
     });
 
@@ -123,10 +169,14 @@ export function AddressesView() {
               <AddressRow
                 key={a.id}
                 address={a}
-                onEdit={() => {
-                  setEditing(a);
-                  setSheet('edit');
-                }}
+                onEdit={
+                  updateAddress
+                    ? () => {
+                        setEditing(a);
+                        setSheet('edit');
+                      }
+                    : null
+                }
                 onRemove={() => requestRemove(a)}
               />
             ))}
@@ -152,6 +202,10 @@ export function AddressesView() {
         }}
         onSave={(fields, makeDefault) => {
           if (sheet === 'edit' && editing) {
+            // Fixture-only path — live never opens the edit sheet (there is
+            // no address-update route to write through); if it ever did,
+            // bail rather than POST a duplicate.
+            if (!updateAddress || !setDefaultAddress) return;
             updateAddress(editing.id, fields);
             if (makeDefault && !editing.isDefault) {
               setDefaultAddress(editing.id);
@@ -162,15 +216,34 @@ export function AddressesView() {
               if (next) setDefaultAddress(next.id);
             }
             show('Address updated', 'success');
-          } else {
-            const created = addAddress(fields);
-            if (makeDefault || addresses.length === 0) setDefaultAddress(created.id);
-            show('Address saved', 'success');
+            return;
           }
+          if (mode === 'live') {
+            // Returning the promise keeps the sheet open (busy) until the
+            // server row lands; a rejected save stays open with the error
+            // toasted — nothing is written locally in live.
+            return addAddress(fields, makeDefault)
+              .then(() => {
+                show('Address saved', 'success');
+              })
+              .catch((error) => {
+                show(
+                  parseApiError(
+                    error,
+                    'Address couldn’t be saved — check your connection and try again.',
+                  ).message,
+                  'error',
+                );
+                throw error;
+              });
+          }
+          void addAddress(fields, makeDefault).then(() =>
+            show('Address saved', 'success'),
+          );
         }}
       />
 
-      <ConfirmSheet sheet={confirm} onDismiss={() => setConfirm(null)} />
+      <ConfirmSheet sheet={confirm} busy={confirmBusy} onDismiss={() => setConfirm(null)} />
     </>
   );
 }

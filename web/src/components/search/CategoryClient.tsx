@@ -12,6 +12,7 @@ import { useRouter, useSearchParams } from 'next/navigation';
 import { Chip } from '@/components/ui/Chip';
 import { EmptyState } from '@/components/ui/EmptyState';
 import { RefinedResults } from './RefinedResults';
+import { useFacetParams } from './useFacetParams';
 import { useSortParam } from './useSortParam';
 import { CATEGORIES } from '@/lib/data/fixtures';
 import { useListings } from '@/lib/hooks/queries';
@@ -21,6 +22,7 @@ export function CategoryClient({ slug }: { slug: string }) {
   const router = useRouter();
   const params = useSearchParams();
   const [sort, setSort] = useSortParam();
+  const [filters, setFilters] = useFacetParams();
   const category = CATEGORIES.find((c) => c.slug === slug);
   const subs = subcategoriesFor(slug);
 
@@ -28,7 +30,9 @@ export function CategoryClient({ slug }: { slug: string }) {
   const activeSub =
     subs.find((s) => s.toLowerCase() === subParam?.toLowerCase()) ?? null;
 
-  const { data, isLoading } = useListings(category ? slug : undefined);
+  const { data, isLoading, isError, refetch } = useListings(
+    category ? slug : undefined,
+  );
 
   const listings = useMemo(() => {
     const all = data ?? [];
@@ -49,7 +53,7 @@ export function CategoryClient({ slug }: { slug: string }) {
 
   if (!category) {
     return (
-      <div className="mx-auto max-w-[1600px]">
+      <div className="mx-auto max-w-[1440px]">
         <EmptyState
           icon="folder"
           title="Category not found"
@@ -62,7 +66,7 @@ export function CategoryClient({ slug }: { slug: string }) {
   }
 
   return (
-    <div className="mx-auto max-w-[1600px]">
+    <div className="mx-auto max-w-[1440px]">
       <header className="px-4 pb-1 pt-6 sm:px-6">
         <h1 className="text-screen-title font-bold text-text-primary">
           {category.name}
@@ -95,11 +99,24 @@ export function CategoryClient({ slug }: { slug: string }) {
         key={`${slug}:${activeSub ?? 'all'}`}
         listings={listings}
         isLoading={isLoading}
+        isError={isError}
+        onRetry={() => void refetch()}
+        // The page IS the category scope — a stray ?category= facet param
+        // would only intersect to empty, so the facet is stripped here
+        // (its group is hidden from the rail/sheet regardless).
+        filters={
+          filters.categories.length > 0
+            ? { ...filters, categories: [] }
+            : filters
+        }
+        onFiltersChange={setFilters}
         hideCategoryFilter
         sort={sort}
         onSortChange={setSort}
         heading={(n) =>
-          n === null ? null : (
+          n === null ? (
+            <span className="skeleton block h-6 w-32 rounded-md" />
+          ) : (
             <p className="text-item-title font-semibold text-text-primary">
               <span className="tnum">{n.toLocaleString('en-GB')}</span>{' '}
               item{n === 1 ? '' : 's'}

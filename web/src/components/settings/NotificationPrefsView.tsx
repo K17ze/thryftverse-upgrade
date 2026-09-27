@@ -289,7 +289,7 @@ export function NotificationPrefsView() {
   const emailOn = channelAnyEnabled(email, CHANNEL_KEYS.email);
 
   const selectClass =
-    'h-9 rounded-md border border-border bg-input px-2 text-body text-input-text focus:border-text-muted focus:outline-none';
+    'h-11 rounded-md border border-border bg-input px-2 text-body text-input-text focus:border-text-muted focus:outline-none';
 
   return (
     <>

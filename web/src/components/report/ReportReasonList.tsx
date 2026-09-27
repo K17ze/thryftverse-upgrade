@@ -7,21 +7,31 @@
  */
 
 import { Icon } from '@/components/ui/Icon';
-import { REPORT_REASONS, type ReportReason } from './reportModel';
+import { REPORT_REASONS, type ReportReason, type ReportReasonOption } from './reportModel';
 
-interface ReportReasonListProps {
-  selected: ReportReason | null;
-  onSelect: (reason: ReportReason) => void;
+interface ReportReasonListProps<K extends string = ReportReason> {
+  selected: K | null;
+  onSelect: (reason: K) => void;
+  /** Override the catalogue — the DSA notice uses its own reason set. */
+  reasons?: ReportReasonOption<K>[];
+  /** radiogroup label — callers pass a flow-specific name. */
+  ariaLabel?: string;
 }
 
-export function ReportReasonList({ selected, onSelect }: ReportReasonListProps) {
+export function ReportReasonList<K extends string = ReportReason>({
+  selected,
+  onSelect,
+  reasons,
+  ariaLabel = 'Report reason',
+}: ReportReasonListProps<K>) {
+  const options = (reasons ?? REPORT_REASONS) as ReportReasonOption<K>[];
   return (
     <div
       role="radiogroup"
-      aria-label="Report reason"
+      aria-label={ariaLabel}
       className="border-y border-border-subtle"
     >
-      {REPORT_REASONS.map((reason, index) => {
+      {options.map((reason, index) => {
         const isSelected = selected === reason.key;
         return (
           <button
@@ -31,7 +41,7 @@ export function ReportReasonList({ selected, onSelect }: ReportReasonListProps) 
             aria-checked={isSelected}
             onClick={() => onSelect(reason.key)}
             className={`pressable flex min-h-[64px] w-full items-center gap-3 py-3 text-left ${
-              index < REPORT_REASONS.length - 1 ? 'border-b border-border-subtle' : ''
+              index < options.length - 1 ? 'border-b border-border-subtle' : ''
             }`}
           >
             <span

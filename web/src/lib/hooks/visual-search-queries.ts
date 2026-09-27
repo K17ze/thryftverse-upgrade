@@ -31,9 +31,12 @@ import {
   type VisualSearchErrorKind,
   type VisualSearchRegion,
   type VisualSearchStatus,
+  COLOR_VOCAB,
 } from '@/components/visualsearch/visualSearchTypes';
 import { DATA_MODE } from '@/lib/api/client';
 import * as visualSearchService from '@/lib/api/services/visualSearch';
+import { EMPTY_FILTERS } from '@/components/filters/filterTypes';
+import { useSavedSearches, type SavedSearch } from '@/lib/store/savedSearches';
 
 /** Per-phase dwell — the work is real but sub-frame; a short floor keeps
  *  each stage perceivable without theatre. */
@@ -76,10 +79,17 @@ function facetsFromAttributes(
   return { color, style };
 }
 
+let querySeq = 0;
+const nextQueryId = () =>
+  `vq-${Date.now().toString(36)}-${(querySeq++).toString(36)}`;
+
 export interface VisualSearchState {
   status: VisualSearchStatus;
   phase: AnalysisPhase;
   error: VisualSearchErrorKind | null;
+  /** Correlates this analysis run — stamped onto a saved search so a
+   *  "visual save" traces back to the query that produced it. */
+  queryId: string | null;
   previewUrl: string | null;
   fileName: string;
   fileSize: number;
@@ -90,6 +100,11 @@ export interface VisualSearchState {
   region: VisualSearchRegion | null;
   results: Listing[];
   pickFile: (file: File) => void;
+  /** Fetch a remote image and run the same pipeline as a picked file —
+   *  powers the dropzone's pasted-URL input and ?image= deep links. */
+  pickImageUrl: (url: string) => void;
+  /** True while a remote image is being fetched for pickImageUrl. */
+  urlLoading: boolean;
   removePhoto: () => void;
   applyRegion: (region: VisualSearchRegion | null) => void;
   toggleAttribute: (kind: DetectedAttribute['kind']) => void;
@@ -101,6 +116,7 @@ export function useVisualSearch(): VisualSearchState {
   const [status, setStatus] = useState<VisualSearchStatus>('idle');
   const [phase, setPhase] = useState<AnalysisPhase>('reading');
   const [error, setError] = useState<VisualSearchErrorKind | null>(null);
+  const [queryId, setQueryId] = useState<string | null>(null);
   const [previewUrl, setPreviewUrl] = useState<string | null>(null);
   const [fileName, setFileName] = useState('');
   const [fileSize, setFileSize] = useState(0);
@@ -111,6 +127,7 @@ export function useVisualSearch(): VisualSearchState {
   );
   const [region, setRegion] = useState<VisualSearchRegion | null>(null);
   const [results, setResults] = useState<Listing[]>([]);
+  const [urlLoading, setUrlLoading] = useState(false);
 
   // ── Owned resources + sequencing ──────────────────────────────────────
   // previewRef/decodedRef hold the live blob URL and decoded image so a
@@ -208,18 +225,19 @@ export function useVisualSearch(): VisualSearchState {
       setStatus(matched.length > 0 ? 'populated' : 'empty');
     } catch {
       if (!live()) return;
-      setStatus('idle');
+      // Land on the explicit error state — keep the picked file + preview
+      // so the query panel still shows the photo and `retry` can re-run
+      // the full pipeline. The decoded bitmap is dropped; retry re-reads
+      // the file rather than trusting a half-failed decode.
+      setStatus('error');
       setError('decode');
-      disposeImage();
-      setPreviewUrl(null);
-      setFileName('');
-      setFileSize(0);
+      decodedRef.current?.dispose();
+      decodedRef.current = null;
       setFeatures(null);
       setAttributes([]);
-      setRegion(null);
       setResults([]);
     }
-  }, [disposeImage]);
+  }, []);
 
   // Re-running the match over committed state — fixture mode scores the
   // cached features synchronously; live mode re-queries the backend with the
@@ -281,9 +299,56 @@ export function useVisualSearch(): VisualSearchState {
       setInactiveKinds(new Set());
       setRegion(null);
       setResults([]);
+      setQueryId(nextQueryId());
       void analyze('full');
     },
     [analyze, disposeImage],
+  );
+
+  /**
+   * Remote-image entry — fetches the URL and runs the identical pipeline
+   * as a file pick (same validation, same decode, same blob lifecycle).
+   * A blocked/private link lands on the honest 'unreachable' error, never
+   * on a fabricated result.
+   */
+  const pickImageUrl = useCallback(
+    (url: string) => {
+      const trimmed = url.trim();
+      let parsed: URL;
+      try {
+        parsed = new URL(trimmed);
+      } catch {
+        setError('unreachable');
+        return;
+      }
+      if (parsed.protocol !== 'http:' && parsed.protocol !== 'https:') {
+        setError('unreachable');
+        return;
+      }
+      const my = ++runRef.current;
+      setError(null);
+      setUrlLoading(true);
+      fetch(parsed.toString())
+        .then((res) => {
+          if (!res.ok) throw new Error(`HTTP ${res.status}`);
+          return res.blob();
+        })
+        .then((blob) => {
+          if (my !== runRef.current || !mountedRef.current) return;
+          const name =
+            decodeURIComponent(parsed.pathname.split('/').pop() ?? '') ||
+            'image';
+          pickFile(new File([blob], name, { type: blob.type }));
+        })
+        .catch(() => {
+          if (my !== runRef.current || !mountedRef.current) return;
+          setError('unreachable');
+        })
+        .finally(() => {
+          if (mountedRef.current) setUrlLoading(false);
+        });
+    },
+    [pickFile],
   );
 
   const removePhoto = useCallback(() => {
@@ -298,6 +363,7 @@ export function useVisualSearch(): VisualSearchState {
     setInactiveKinds(new Set());
     setRegion(null);
     setResults([]);
+    setQueryId(null);
   }, [disposeImage]);
 
   // Region confirm/clear — re-extracts features on the crop and re-ranks.
@@ -340,6 +406,7 @@ export function useVisualSearch(): VisualSearchState {
     status,
     phase,
     error,
+    queryId,
     previewUrl,
     fileName,
     fileSize,
@@ -349,10 +416,64 @@ export function useVisualSearch(): VisualSearchState {
     region,
     results,
     pickFile,
+    pickImageUrl,
+    urlLoading,
     removePhoto,
     applyRegion,
     toggleAttribute,
     resetAttributes,
     retry,
   };
+}
+
+/**
+ * useSaveVisualSearch — web port of mobile useVisualSearchSaveSearch.
+ * Persists the *derived* facet query into the shared saved-searches
+ * store. The image itself is never persisted — only the attribute
+ * text/facets it produced, which is exactly what replay and alerts can
+ * honestly match on. Alerts therefore start off: a saved facet query can
+ * watch for new matching listings, but the photo is not a durable matcher.
+ */
+export function useSaveVisualSearch() {
+  const saveSearch = useSavedSearches((s) => s.saveSearch);
+  return useCallback(
+    (args: {
+      queryId: string | null;
+      attributes: DetectedAttribute[];
+      inactiveKinds: ReadonlySet<DetectedAttribute['kind']>;
+      results: Listing[];
+    }): SavedSearch => {
+      const active = args.attributes.filter(
+        (a) => !args.inactiveKinds.has(a.kind),
+      );
+      const colourFor = (a: DetectedAttribute): string => {
+        const hit = COLOR_VOCAB.find(
+          (v) =>
+            v.name.toLowerCase() === a.value ||
+            v.name.toLowerCase() === a.label.toLowerCase() ||
+            v.aliases.includes(a.value),
+        );
+        return hit?.name ?? a.label;
+      };
+      const filters = {
+        ...EMPTY_FILTERS,
+        colours: active.filter((a) => a.kind === 'color').map(colourFor),
+        categories: active
+          .filter((a) => a.kind === 'category')
+          .map((a) => a.value),
+        brands: active.filter((a) => a.kind === 'brand').map((a) => a.label),
+      };
+      const label =
+        active.length > 0
+          ? `Photo search — ${active.map((a) => a.label).join(' · ')}`
+          : 'Photo search';
+      return saveSearch(label, filters, {
+        kind: 'visual',
+        queryId: args.queryId ?? undefined,
+        resultCount: args.results.length,
+        alertsOn: false,
+      });
+    },
+    [saveSearch],
+  );
 }

@@ -10,6 +10,7 @@
  */
 
 import { useMemo, useState } from 'react';
+import { SettingsRow } from './SettingsRow';
 import { SettingsSection } from './SettingsSection';
 import { Switch } from './Switch';
 import { Avatar } from '@/components/ui/Avatar';
@@ -17,6 +18,7 @@ import { Icon } from '@/components/ui/Icon';
 import { Skeleton } from '@/components/ui/Skeleton';
 import { useToast } from '@/components/ui/Toast';
 import { USERS } from '@/lib/data/fixtures';
+import { useShopAway } from '@/lib/hooks/seller-queries';
 import { useHydrated } from '@/lib/store/useStore';
 import { useSettingsPrefs, type PrivacyFlag } from '@/lib/store/settingsPrefs';
 
@@ -163,6 +165,10 @@ export function PrivacyView() {
   const unblockUser = useSettingsPrefs((s) => s.unblockUser);
   const restrictUser = useSettingsPrefs((s) => s.restrictUser);
   const unrestrictUser = useSettingsPrefs((s) => s.unrestrictUser);
+  // The real away state — the row's value reads the same /users/me/
+  // preferences (fixture store in demo) truth the seller-hub control
+  // writes; the toggle itself lives there.
+  const away = useShopAway();
 
   const flagValues: Record<PrivacyFlag, boolean> = {
     showCloset,
@@ -195,6 +201,20 @@ export function PrivacyView() {
             ))}
           </div>
         )}
+      </SettingsSection>
+
+      {/* Shop activity — mobile puts Holiday mode inside privacy-style
+          settings (Settings → Shop activity); web keeps the one control
+          at /seller-hub/settings, so the row deep-links rather than
+          duplicating the mutation. */}
+      <SettingsSection title="Shop activity">
+        <SettingsRow
+          icon="bag"
+          label="Holiday mode"
+          subtitle="Pause your listings and hide your shop while you're away"
+          value={away.data?.holidayMode === true ? 'On' : undefined}
+          href="/seller-hub/settings"
+        />
       </SettingsSection>
 
       <SettingsSection title={`Blocked users${hydrated && blockedIds.length > 0 ? ` · ${blockedIds.length}` : ''}`}>

@@ -11,6 +11,7 @@ import { Button } from '@/components/ui/Button';
 import { Icon } from '@/components/ui/Icon';
 import { Skeleton } from '@/components/ui/Skeleton';
 import { useToast } from '@/components/ui/Toast';
+import { DISPATCH_SLA_DAYS } from '@/lib/commerce/dispatch';
 
 export function CheckoutSkeleton() {
   return (
@@ -93,7 +94,8 @@ export function CheckoutSuccess({ orderId }: { orderId: string }) {
       </span>
       <h1 className="mt-5 text-screen-title font-bold text-text-primary">Order placed</h1>
       <p className="mt-2 text-body text-text-secondary">
-        Your payment was successful. The seller has been asked to ship within 3 working days.
+        Your payment was successful. The seller has been asked to dispatch within{' '}
+        {DISPATCH_SLA_DAYS} working days.
       </p>
       <button
         type="button"
@@ -104,6 +106,29 @@ export function CheckoutSuccess({ orderId }: { orderId: string }) {
         Order <span className="tnum font-semibold text-text-secondary">{orderId}</span>
         <Icon name="document" size={13} />
       </button>
+
+      {/* What happens next — the mobile receipt's three-step promise:
+          the live step leads, pending steps stay muted. */}
+      <ol className="mt-8 flex w-full flex-col gap-3 border-t border-border-subtle pt-6 text-left">
+        {[
+          'The seller prepares and dispatches your item',
+          'The carrier delivers to your address',
+          'You confirm receipt and can leave a review',
+        ].map((step, i) => (
+          <li key={step} className="flex items-center gap-3">
+            <span
+              aria-hidden
+              className={`h-2 w-2 shrink-0 rounded-full ${i === 0 ? 'bg-brand' : 'bg-border'}`}
+            />
+            <span
+              className={`text-body ${i === 0 ? 'text-text-primary' : 'text-text-muted'}`}
+            >
+              {step}
+            </span>
+          </li>
+        ))}
+      </ol>
+
       <div className="mt-7 flex w-full flex-col gap-2">
         <Button variant="primary" size="lg" fullWidth onClick={() => router.push(`/orders/${orderId}`)}>
           View order

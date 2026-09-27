@@ -5,8 +5,11 @@
  * OrdersTabRail semantics with the classification vocabulary the task
  * specifies (All / Needs action / Active / Completed / Cancelled). A single
  * sliding underline; counts are real because the list is fully loaded
- * client-side.
+ * client-side. Keyboard follows the tab pattern: roving tabindex, arrows
+ * move selection, Home/End jump to the edges (same grammar ProfileTabs).
  */
+
+import { useRef } from 'react';
 
 export type OrdersTab = 'all' | 'needs_action' | 'active' | 'completed' | 'cancelled';
 
@@ -26,16 +29,44 @@ interface Props {
 }
 
 export function OrdersTabRail({ activeTab, onChange, counts }: Props) {
+  const railRef = useRef<HTMLDivElement | null>(null);
+
+  const onKeyDown = (event: React.KeyboardEvent<HTMLDivElement>) => {
+    const current = ORDERS_TABS.findIndex((t) => t.key === activeTab);
+    let next = -1;
+    if (event.key === 'ArrowRight' || event.key === 'ArrowDown') {
+      next = (current + 1) % ORDERS_TABS.length;
+    } else if (event.key === 'ArrowLeft' || event.key === 'ArrowUp') {
+      next = (current - 1 + ORDERS_TABS.length) % ORDERS_TABS.length;
+    } else if (event.key === 'Home') {
+      next = 0;
+    } else if (event.key === 'End') {
+      next = ORDERS_TABS.length - 1;
+    }
+    if (next < 0 || next === current) return;
+    event.preventDefault();
+    onChange(ORDERS_TABS[next]!.key);
+    railRef.current?.querySelectorAll<HTMLElement>('[role="tab"]')[next]?.focus();
+  };
+
   return (
-    <div role="tablist" className="flex gap-6 border-b border-border-subtle">
+    <div
+      role="tablist"
+      aria-label="Order categories"
+      className="flex gap-6 border-b border-border-subtle"
+      onKeyDown={onKeyDown}
+      ref={railRef}
+    >
       {ORDERS_TABS.map((tab) => {
         const active = activeTab === tab.key;
         const count = counts?.[tab.key];
         return (
           <button
             key={tab.key}
+            type="button"
             role="tab"
             aria-selected={active}
+            tabIndex={active ? 0 : -1}
             onClick={() => onChange(tab.key)}
             className={`pressable relative pb-2.5 pt-1 text-body-emphasis font-medium ${
               active ? 'text-text-primary' : 'text-text-muted hover:text-text-secondary'

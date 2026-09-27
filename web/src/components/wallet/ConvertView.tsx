@@ -2,10 +2,11 @@
 
 /**
  * Convert surface — 1ZE ↔ GBP over the fixture wallet. Mirrors the mobile
- * ConvertAmountStep → review → executing → receipt state machine, collapsed
- * to amount → executing → receipt (no biometric gate in fixture mode).
+ * WalletExchange flow: amount → review sheet → executing → receipt (no
+ * biometric gate in fixture mode). Direction is a swap control between the
+ * from and receive fields; the sheet carries the full quote disclosure.
  * The pocket breakdown mirrors WalletSubBalanceSection: flat hairline rows,
- * withdrawable emphasised. Session state lives in the ['wallet'] query
+ * withdrawable emphasised. Session state lives in the walletKeys.all(userId)
  * cache, so /wallet reflects a conversion immediately.
  */
 
@@ -13,15 +14,18 @@ import { useMemo, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { useQueryClient } from '@tanstack/react-query';
 import { Button } from '@/components/ui/Button';
-import { Chip } from '@/components/ui/Chip';
 import { EmptyState } from '@/components/ui/EmptyState';
 import { Icon } from '@/components/ui/Icon';
 import { IconButton } from '@/components/ui/IconButton';
+import { Sheet } from '@/components/ui/Sheet';
 import { Skeleton } from '@/components/ui/Skeleton';
 import { useToast } from '@/components/ui/Toast';
+import { DATA_MODE } from '@/lib/api/client';
+import { useSession } from '@/lib/session/SessionProvider';
 import { formatPrice } from '@/lib/utils/format';
 import type { WalletLedgerEntry } from './ledgerViewModel';
 import { useWalletData, type WalletData } from './useWalletData';
+import { walletKeys } from './walletKeys';
 import { ConvertSummaryRow } from './ConvertSummaryRow';
 import {
   buildQuote,
@@ -32,7 +36,6 @@ import {
   round2,
   sanitizeAmount,
   withdrawableOf,
-  GBP_RESERVED,
   RATE_AS_OF,
   type ConversionResult,
 } from './convertViewModel';
@@ -95,17 +98,23 @@ export function ConvertView() {
   const queryClient = useQueryClient();
   const { show } = useToast();
   const { data, isLoading, isError, refetch } = useWalletData();
+  const { user, isGuest, sessionLoading } = useSession();
 
   const [direction, setDirection] = useState<'ize_to_gbp' | 'gbp_to_ize'>('ize_to_gbp');
   const [amount, setAmount] = useState('');
+  const [reviewing, setReviewing] = useState(false);
   const [step, setStep] = useState<'amount' | 'executing' | 'receipt'>('amount');
   const [result, setResult] = useState<ConversionResult | null>(null);
 
   const numericAmount = Number(amount) || 0;
+  // GBP has no hold mechanism — open orders reserve 1ZE, never fiat —
+  // so the fiat withdrawable is the settled balance itself.
   const maxAmount = data
     ? direction === 'ize_to_gbp'
-      ? withdrawableOf(data.ize.settled, data.ize.reserved)
-      : withdrawableOf(data.available, GBP_RESERVED)
+      ? data.ize
+        ? withdrawableOf(data.ize.settled, data.ize.reserved)
+        : 0
+      : round2(data.available)
     : 0;
   const exceeds = numericAmount > maxAmount;
 
@@ -115,8 +124,8 @@ export function ConvertView() {
   );
 
   const applyConversion = (r: ConversionResult) => {
-    queryClient.setQueryData<WalletData>(['wallet'], (old) => {
-      if (!old) return old;
+    queryClient.setQueryData<WalletData>(walletKeys.all(user?.id), (old) => {
+      if (!old?.ize) return old;
       const entry: WalletLedgerEntry = {
         id: r.id,
         kind: 'conversion',
@@ -140,6 +149,7 @@ export function ConvertView() {
 
   const execute = () => {
     if (!quote) return;
+    setReviewing(false);
     setStep('executing');
     window.setTimeout(() => {
       const executed = executeQuote(quote);
@@ -155,7 +165,35 @@ export function ConvertView() {
     }, 900);
   };
 
-  if (isLoading) return <ConvertSkeleton />;
+  if (sessionLoading || isLoading) return <ConvertSkeleton />;
+
+  // Conversions are account-bound — guests sign in rather than play with
+  // the demo identity's balances.
+  if (isGuest) {
+    return (
+      <EmptyState
+        icon="wallet"
+        title="Sign in to convert"
+        subtitle="Conversions move between your own GBP and 1ZE balances."
+        actionLabel="Sign in"
+        onAction={() => router.push('/auth')}
+      />
+    );
+  }
+
+  // No quote/convert endpoint exists in this build — the fixture math
+  // would fabricate a real conversion, so live mode hides the capability.
+  if (DATA_MODE === 'live') {
+    return (
+      <EmptyState
+        icon="wallet"
+        title="Conversion isn't available in this build"
+        subtitle="1ZE ⇄ GBP conversion ships with the wallet backend connection."
+        actionLabel="Back to wallet"
+        onAction={() => router.push('/wallet')}
+      />
+    );
+  }
 
   if (isError || !data) {
     return (
@@ -168,6 +206,11 @@ export function ConvertView() {
       />
     );
   }
+
+  // Everything below is fixture-only — live mode returned above. The
+  // pocket is always seeded there; the fallback just satisfies strict
+  // nullability without ever rendering in live.
+  const ize = data.ize ?? { settled: 0, pending: 0, reserved: 0 };
 
   // ── Receipt ───────────────────────────────────────────────────────────
   if (step === 'receipt' && result) {
@@ -208,7 +251,7 @@ export function ConvertView() {
             label="New GBP balance"
             value={formatPrice(round2(data.available), 'GBP')}
           />
-          <ConvertSummaryRow label="New 1ZE balance" value={formatIze(data.ize.settled)} />
+          <ConvertSummaryRow label="New 1ZE balance" value={formatIze(ize.settled)} />
           <ConvertSummaryRow label="Reference" value={result.id.toUpperCase()} />
           <ConvertSummaryRow label="Timestamp" value={rateTimestampLabel(result.timestamp)} />
         </div>
@@ -237,7 +280,7 @@ export function ConvertView() {
   // ── Amount step ───────────────────────────────────────────────────────
   const settledLabel =
     direction === 'ize_to_gbp'
-      ? `${formatIze(data.ize.settled)} 1ZE`
+      ? `${formatIze(ize.settled)} 1ZE`
       : formatPrice(data.available, data.currency);
 
   return (
@@ -259,18 +302,18 @@ export function ConvertView() {
         <div className="mt-5 border-t border-border-subtle">
           {direction === 'ize_to_gbp' ? (
             <>
-              {data.ize.pending > 0 ? (
+              {ize.pending > 0 ? (
                 <PocketRow
                   label="Pending — unsettled Co-Own proceeds"
-                  value={`${formatIze(data.ize.pending)} 1ZE`}
+                  value={`${formatIze(ize.pending)} 1ZE`}
                 />
               ) : null}
-              {data.ize.reserved > 0 ? (
-                <PocketRow label="Reserved for open orders" value={`${formatIze(data.ize.reserved)} 1ZE`} />
+              {ize.reserved > 0 ? (
+                <PocketRow label="Reserved for open orders" value={`${formatIze(ize.reserved)} 1ZE`} />
               ) : null}
               <PocketRow
                 label="Withdrawable"
-                value={`${formatIze(withdrawableOf(data.ize.settled, data.ize.reserved))} 1ZE`}
+                value={`${formatIze(withdrawableOf(ize.settled, ize.reserved))} 1ZE`}
                 emphasize
               />
             </>
@@ -282,10 +325,9 @@ export function ConvertView() {
                   value={formatPrice(data.pending, data.currency)}
                 />
               ) : null}
-              <PocketRow label="Reserved for open orders" value={formatPrice(GBP_RESERVED, 'GBP')} />
               <PocketRow
                 label="Withdrawable"
-                value={formatPrice(withdrawableOf(data.available, GBP_RESERVED), data.currency)}
+                value={formatPrice(round2(data.available), data.currency)}
                 emphasize
               />
             </>
@@ -293,49 +335,74 @@ export function ConvertView() {
         </div>
       </section>
 
-      {/* Form */}
+      {/* Form — from field, swap control, receive estimate. The swap
+          button is the direction toggle (mobile WalletExchangeScreen
+          grammar), not a chip pair. */}
       <section aria-label="Convert form" className="mt-8 px-4 sm:px-6">
-        <div className="flex gap-2" role="radiogroup" aria-label="Conversion direction">
-          <Chip
-            selected={direction === 'ize_to_gbp'}
-            onClick={() => setDirection('ize_to_gbp')}
-            aria-label="Convert 1ZE to GBP"
+        <div className="rounded-lg border border-border bg-input px-4">
+          <label
+            htmlFor="convert-amount"
+            className="block pt-3 text-meta text-text-muted"
           >
-            1ZE → GBP
-          </Chip>
-          <Chip
-            selected={direction === 'gbp_to_ize'}
-            onClick={() => setDirection('gbp_to_ize')}
-            aria-label="Convert GBP to 1ZE"
-          >
-            GBP → 1ZE
-          </Chip>
-        </div>
-
-        <div className="mt-4 flex items-center gap-3 rounded-lg border border-border bg-input px-4">
-          <input
-            value={amount}
-            onChange={(e) => setAmount(sanitizeAmount(e.target.value))}
-            inputMode="decimal"
-            placeholder="0.00"
-            aria-label={direction === 'ize_to_gbp' ? 'Amount in 1ZE' : 'Amount in GBP'}
-            className="tnum h-16 min-w-0 flex-1 bg-transparent text-price-hero font-bold text-input-text placeholder:text-text-muted focus:outline-none"
-          />
-          <span className="shrink-0 text-body-emphasis font-semibold text-text-muted">
-            {direction === 'ize_to_gbp' ? '1ZE' : data.currency}
-          </span>
-          <Button
-            variant="quiet"
-            size="sm"
-            onClick={() => setAmount(maxAmount.toFixed(2))}
-            disabled={maxAmount <= 0}
-          >
-            Max
-          </Button>
+            You convert
+          </label>
+          <div className="flex items-center gap-3">
+            <input
+              id="convert-amount"
+              value={amount}
+              onChange={(e) => setAmount(sanitizeAmount(e.target.value))}
+              inputMode="decimal"
+              placeholder="0.00"
+              aria-label={direction === 'ize_to_gbp' ? 'Amount in 1ZE' : 'Amount in GBP'}
+              className="tnum h-14 min-w-0 flex-1 bg-transparent text-price-hero font-bold text-input-text placeholder:text-text-muted focus:outline-none"
+            />
+            <span className="shrink-0 text-body-emphasis font-semibold text-text-muted">
+              {direction === 'ize_to_gbp' ? '1ZE' : data.currency}
+            </span>
+            <Button
+              variant="quiet"
+              size="sm"
+              onClick={() => setAmount(maxAmount.toFixed(2))}
+              disabled={maxAmount <= 0}
+            >
+              Max
+            </Button>
+          </div>
         </div>
         {exceeds ? (
           <p className="mt-2 text-caption text-danger-text">Amount exceeds your withdrawable balance.</p>
         ) : null}
+
+        {/* Swap — flips the conversion direction; the visible button is
+            compact, the hit target stays 44px. */}
+        <div className="my-1 flex items-center justify-center">
+          <span className="h-px flex-1 bg-border-subtle" aria-hidden="true" />
+          <button
+            type="button"
+            onClick={() => setDirection((d) => (d === 'ize_to_gbp' ? 'gbp_to_ize' : 'ize_to_gbp'))}
+            aria-label="Swap conversion direction"
+            className="pressable -my-1 flex h-11 w-11 items-center justify-center rounded-full text-text-secondary hover:text-text-primary"
+          >
+            <Icon name="sort" size={20} />
+          </button>
+          <span className="h-px flex-1 bg-border-subtle" aria-hidden="true" />
+        </div>
+
+        <div className="rounded-lg border border-border-subtle bg-surface-alt px-4">
+          <p className="pt-3 text-meta text-text-muted">You receive</p>
+          <p
+            className={`tnum flex h-14 items-center text-price-hero font-bold ${
+              quote ? 'text-text-primary' : 'text-text-muted'
+            }`}
+            aria-live="polite"
+          >
+            {quote
+              ? direction === 'ize_to_gbp'
+                ? formatPrice(quote.net, data.currency)
+                : `${formatIze(quote.net)} 1ZE`
+              : '—'}
+          </p>
+        </div>
 
         <p className="mt-3 flex items-center gap-1.5 text-caption text-text-muted">
           <Icon name="info" size={14} className="shrink-0" />
@@ -346,51 +413,82 @@ export function ConvertView() {
           <span>rate as of {rateTimestampLabel(RATE_AS_OF)}</span>
         </p>
 
-        {quote ? (
-          <div className="mt-5 border-t border-border-subtle pt-3">
-            <ConvertSummaryRow
-              label="You convert"
-              value={
-                direction === 'ize_to_gbp'
-                  ? `${formatIze(numericAmount)} 1ZE`
-                  : formatPrice(numericAmount, data.currency)
-              }
-            />
-            <ConvertSummaryRow
-              label={`Platform fee (${quote.feeBps} bps)`}
-              value={`−${formatPrice(quote.fee, data.currency)}`}
-              negative
-            />
-            <ConvertSummaryRow
-              label="You receive"
-              value={
-                direction === 'ize_to_gbp'
-                  ? formatPrice(quote.net, data.currency)
-                  : `${formatIze(quote.net)} 1ZE`
-              }
-              total
-            />
-          </div>
-        ) : null}
-
         <Button
           variant="primary"
           size="lg"
           fullWidth
           className="mt-6"
-          onClick={execute}
+          onClick={() => setReviewing(true)}
           disabled={!quote || step === 'executing'}
         >
           {step === 'executing'
             ? 'Converting…'
             : quote
-              ? direction === 'ize_to_gbp'
-                ? `Convert ${formatIze(numericAmount)} 1ZE`
-                : `Convert ${formatPrice(numericAmount, data.currency)}`
+              ? 'Review conversion'
               : 'Enter an amount'}
         </Button>
       </section>
 
+      {/* Confirm sheet — the full quote disclosure before anything moves,
+          matching the mobile review step: source, rate, fee, receive, and
+          the pocket balances after conversion. */}
+      <Sheet
+        open={reviewing && quote != null}
+        onClose={() => setReviewing(false)}
+        title="Review conversion"
+      >
+        {quote ? (
+          <div className="px-5 pb-6">
+            <div className="mt-2">
+              <ConvertSummaryRow
+                label="You convert"
+                value={
+                  direction === 'ize_to_gbp'
+                    ? `${formatIze(numericAmount)} 1ZE`
+                    : formatPrice(numericAmount, data.currency)
+                }
+              />
+              <ConvertSummaryRow label="Rate" value={rateLabel(direction)} />
+              <ConvertSummaryRow
+                label={`Platform fee (${quote.feeBps} bps)`}
+                value={`−${formatPrice(quote.fee, data.currency)}`}
+                negative
+              />
+              <ConvertSummaryRow
+                label="You receive"
+                value={
+                  direction === 'ize_to_gbp'
+                    ? formatPrice(quote.net, data.currency)
+                    : `${formatIze(quote.net)} 1ZE`
+                }
+                total
+              />
+              <ConvertSummaryRow
+                label="Rate as of"
+                value={rateTimestampLabel(RATE_AS_OF)}
+              />
+            </div>
+            <p className="mt-4 flex items-start gap-1.5 text-caption text-text-muted">
+              <Icon name="info" size={13} className="mt-px shrink-0" />
+              Fixture mode — this conversion is simulated for design review.
+              No money moves.
+            </p>
+            <Button
+              variant="primary"
+              size="lg"
+              fullWidth
+              className="mt-5"
+              onClick={execute}
+              disabled={step === 'executing'}
+            >
+              {step === 'executing' ? 'Converting…' : 'Confirm conversion'}
+            </Button>
+          </div>
+        ) : null}
+      </Sheet>
+
+      {/* Live mode never reaches this surface — the capability is hidden
+          above, so the fixture disclosure stays unconditional here. */}
       <p className="mt-10 flex items-center gap-1.5 px-4 text-caption text-text-muted sm:px-6">
         <Icon name="info" size={14} className="shrink-0" />
         Fixture mode — conversions are simulated for design review. No money moves.

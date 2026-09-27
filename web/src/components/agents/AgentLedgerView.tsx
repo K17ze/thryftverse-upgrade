@@ -68,7 +68,7 @@ export function AgentLedgerView() {
   return (
     <div className="pb-16">
       <div className="flex items-center gap-1 px-2 pt-1 sm:px-4">
-        <IconButton name="back" aria-label="Back" onClick={() => router.back()} />
+        <IconButton name="back" aria-label="Back to agents" onClick={() => router.push('/agents')} />
         <h1 className="flex-1 text-screen-title font-semibold text-text-primary">
           Agent ledger
         </h1>

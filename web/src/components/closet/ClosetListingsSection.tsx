@@ -16,6 +16,7 @@
 import { useMemo, useState } from 'react';
 import type { Listing } from '@/lib/contracts/domain';
 import { Button } from '@/components/ui/Button';
+import { Chip } from '@/components/ui/Chip';
 import { EmptyState } from '@/components/ui/EmptyState';
 import { Icon, type AppIconName } from '@/components/ui/Icon';
 import { ClosetGrid, ClosetGridSkeleton } from '@/components/profile/ClosetGrid';
@@ -31,6 +32,7 @@ import {
   EMPTY_CLOSET_FILTERS,
   extractClosetFacets,
   facetHasChoice,
+  priceDropCount,
   sortClosetListings,
   type ClosetFilters,
   type ClosetSortKey,
@@ -91,6 +93,7 @@ export function ClosetListingsSection({
   const [sheetOpen, setSheetOpen] = useState(false);
 
   const facets = useMemo(() => extractClosetFacets(items), [items]);
+  const priceDrops = useMemo(() => priceDropCount(items), [items]);
   const filtered = useMemo(
     () => sortClosetListings(applyClosetFilters(items, filters), sort),
     [items, filters, sort],
@@ -161,7 +164,7 @@ export function ClosetListingsSection({
               type="button"
               onClick={() => set({ query: '' })}
               aria-label="Clear search"
-              className="pressable absolute right-1.5 top-1/2 flex h-6 w-6 -translate-y-1/2 items-center justify-center rounded-full text-text-muted hover:text-text-primary"
+              className="pressable absolute right-1 top-1/2 flex h-11 w-9 -translate-y-1/2 items-center justify-center rounded-full text-text-muted hover:text-text-primary"
             >
               <Icon name="close" size={14} />
             </button>
@@ -179,6 +182,23 @@ export function ClosetListingsSection({
           </Button>
         ) : null}
       </div>
+
+      {/* Price-drop quick filter — mobile's ClosetPriceDropChip parity:
+          a single compact chip under the toolbar, only when the closet
+          actually carries discounted items. */}
+      {priceDrops > 0 ? (
+        <div className="px-4 pb-3 sm:px-6">
+          <Chip
+            selected={filters.priceDropsOnly}
+            icon="pricetag"
+            aria-label={`Show price drops only — ${priceDrops} item${priceDrops === 1 ? '' : 's'} discounted`}
+            onClick={() => set({ priceDropsOnly: !filters.priceDropsOnly })}
+          >
+            Price drops
+            <span className="tnum text-meta opacity-60">{priceDrops}</span>
+          </Chip>
+        </div>
+      ) : null}
 
       {facets.brands.length > 1 ? (
         <ClosetBrandRail
@@ -220,6 +240,13 @@ export function ClosetListingsSection({
               onRemove={() => removeCondition(c)}
             />
           ))}
+          {filters.priceDropsOnly ? (
+            <RemovableChip
+              label="Price drops"
+              removeLabel="Remove price-drops filter"
+              onRemove={() => set({ priceDropsOnly: false })}
+            />
+          ) : null}
           {filters.category ? (
             <RemovableChip
               label={categoryLabel(filters.category)}

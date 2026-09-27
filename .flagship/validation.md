@@ -226,3 +226,26 @@ Reviewer lacked file access — all findings arrived as VERIFY items; each verif
 - **R78**: `scripts/mutation-idempotency-catalog.mjs` + `npm run audit:idempotency` — scans 471 mutation routes, classifies each handler's idempotency mechanism (bounded at next route declaration), emits `docs/MUTATION_IDEMPOTENCY.md` with the 24 money-path routes flagged for review.
 - Verified covered, no work needed: R50 (protected_market maxPriceGbp enforcement), R53 (per-recipient `units_at_record`/`record_date` entitlement rows), R54 (durable `coown_drip_receipt` events, tx-atomic, dedupe-keyed), R68 (seller net-proceeds preview matches checkout fee math), R36 (checkout `unknown_outcome` stage + payment-status recovery), R34/R47/R49 (existing test/matrix coverage), R79 (CI migration apply + rerun + prefix check), R77 (realtime seq/replay/resnapshot).
 - Environment limitation unchanged: Redis/Postgres-dependent suites can't execute locally.
+
+## Web campaign — implementation wave 1 verification (2026-09-26)
+
+Gates:
+- `npx tsc --noEmit`: PASS (0 errors)
+- `npm run lint`: PASS (0 errors, 0 warnings)
+- `npm run build`: PASS (104 routes, new /seller-hub/fulfilment/label)
+- Route smoke (prod server :3000): 34 critical routes → all 200
+- Rendered spot-checks (Playwright, seeded session):
+  - / home: real following count + posterStories rail + feed units OK
+  - /item/l1 desktop: auth-included threshold line, per-seller postage, urgency scrim OK
+  - /item/l1 mobile (390px): sticky PdpBuyDock above tab bar OK
+  - /orders: search + refresh + needs-attention lane + tabs OK
+  - /inbox: unread row badges; header badge live OK
+  - /sell: composer renders, guest wall on publish path OK
+- Fresh-context adversarial review wave 1 dispatched (3 reviewers: data-truth, a11y/hydration, journeys)
+
+Orchestrator cross-cutting fixes applied post-wave:
+- Report flows (ReportSheet, ReportGroupSheet, SettingsSheets ReportSheet) → real useSupportActions.createTicket + real ref + "View your case" deep link; newReportReference deleted
+- ChatPanel 'Calling is coming soon' phone control removed
+- Sheet ariaLabel prop + MemberActionsSheet named dialog
+- role="switch" custom impls (PriceAlertsView, OfferToLikersSheet) → shared Switch
+- 1600px shells unified to 1440px (categories, search, browse, visual search)

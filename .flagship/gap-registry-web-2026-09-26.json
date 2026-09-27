@@ -1,0 +1,590 @@
+{
+  "campaign": "web-flagship-audit-2026-09-26",
+  "generated": "2026-09-26",
+  "baseline": {
+    "tsc": "clean",
+    "eslint": "clean",
+    "build": "clean",
+    "routes": 100
+  },
+  "totals": {
+    "P0": 10,
+    "P1": 74,
+    "P2": 68,
+    "P3": 22
+  },
+  "findings": [
+    {
+      "id": "HOME-P0-01",
+      "sev": "P0",
+      "dept": "home",
+      "title": "Following tab uses hardcoded FOLLOWED_SELLERS set instead of useFollows store",
+      "files": [
+        "src/app/page.tsx"
+      ],
+      "fix": "filter feed by useFollows() state; empty following → empty state with explore CTA"
+    },
+    {
+      "id": "SELL-P0-01",
+      "sev": "P0",
+      "dept": "sell",
+      "title": "blob:/data: listing photos routed through next/image optimizer which cannot fetch them — local sell photos render fallback icons",
+      "files": [
+        "src/components/ui/AppImage.tsx"
+      ],
+      "fix": "DONE (orchestrator): isLocalMediaUri branch renders plain <img>"
+    },
+    {
+      "id": "CM-P0-01",
+      "sev": "P0",
+      "dept": "commerce",
+      "title": "Accepting an offer patches local status and toasts success but creates no order or checkout path",
+      "files": [
+        "src/app/offers/page.tsx",
+        "src/lib/api/services/*"
+      ],
+      "fix": "call order-creating accept mutation; navigate to created order/checkout"
+    },
+    {
+      "id": "ORD-P0-01",
+      "sev": "P0",
+      "dept": "orders",
+      "title": "Report submission fabricates a case reference via setTimeout",
+      "files": [
+        "src/app/orders/**",
+        "src/components/**"
+      ],
+      "fix": "wire real report mutation or disclose limitation; never fabricate refs"
+    },
+    {
+      "id": "AUC-P0-01",
+      "sev": "P0",
+      "dept": "auctions",
+      "title": "Guests are assigned viewer identity 'me', so fixture bids render as 'You' and outbid state is false",
+      "files": [
+        "src/app/auctions/**",
+        "src/components/auction/**"
+      ],
+      "fix": "null/guest identity when unauthenticated; gate bid CTA"
+    },
+    {
+      "id": "LIVE-P0-01",
+      "sev": "P0",
+      "dept": "live",
+      "title": "Host-pinned products never reach live viewers — pin state stored host-side only",
+      "files": [
+        "src/app/live/**",
+        "src/components/host/**",
+        "src/components/live/**"
+      ],
+      "fix": "shared pinned-product store/service consumed by viewer rail"
+    },
+    {
+      "id": "MSG-P0-01",
+      "sev": "P0",
+      "dept": "messaging",
+      "title": "Opening a conversation never marks it read — unread rows/badges persist forever",
+      "files": [
+        "src/app/inbox/**",
+        "src/components/inbox/**",
+        "src/lib/stores/**"
+      ],
+      "fix": "markRead mutation on conversation open, synced to store + badges"
+    },
+    {
+      "id": "CO-P0-01",
+      "sev": "P0",
+      "dept": "co-own",
+      "title": "Market/protected-market trades show 'Order placed' receipt but record no order, position, or ledger entry",
+      "files": [
+        "src/app/co-own/**",
+        "src/components/trading/**"
+      ],
+      "fix": "shared order/position/ledger mutation behind the confirm flow"
+    },
+    {
+      "id": "WAL-P0-01",
+      "sev": "P0",
+      "dept": "wallet",
+      "title": "Wallet mutations write ['wallet'] while readers use ['wallet', userId] — balance/ledger stay stale",
+      "files": [
+        "src/components/wallet/ConvertView.tsx",
+        "src/components/wallet/useWalletData.ts"
+      ],
+      "fix": "walletKeys factory shared by writers+readers; invalidate/set same key"
+    },
+    {
+      "id": "SET-P0-01",
+      "sev": "P0",
+      "dept": "settings",
+      "title": "Accessibility settings (text size, contrast, motion) apply only while settings view is mounted despite app-wide claim",
+      "files": [
+        "src/app/settings/**",
+        "src/app/layout.tsx",
+        "src/components/**"
+      ],
+      "fix": "persisted prefs applied by a root provider effect"
+    },
+    {
+      "id": "HOME-P1",
+      "sev": "P1",
+      "dept": "home",
+      "title": "Pulse follow resets (component-local); pulse like writes to likedLooks; home/explore/pulse collapse fetch errors into empty states; MasonryGrid post-mount resize; feed contract units unproduced (DONE: editorial+rec-break+span); first-viewport priority images; shell max-width mismatch 1600 vs 1440; segmented tab semantics incomplete",
+      "files": [
+        "src/app/page.tsx",
+        "src/app/pulse/**",
+        "src/app/explore/**",
+        "src/components/feed/**",
+        "src/components/home/**",
+        "src/components/pulse/**"
+      ]
+    },
+    {
+      "id": "SEARCH-P1",
+      "sev": "P1",
+      "dept": "search",
+      "title": "Visual search decode failure → idle not error/retry; privacy copy claims no upload in live mode; desktop renders rail + sheet duplicate; mobile filters hide facet counts; term removal hover-only; search matcher lacks synonym vocab; divergent masonry hooks; landing lacks autocomplete; dead components/filters duplicates",
+      "files": [
+        "src/app/search/**",
+        "src/app/browse/**",
+        "src/app/categories/**",
+        "src/components/search/**",
+        "src/components/filters/**"
+      ]
+    },
+    {
+      "id": "CM-P1",
+      "sev": "P1",
+      "dept": "commerce",
+      "title": "Live offer send uses fixture mutation; multi-item checkout drops unpaid items from bag; live payment failures swallowed; offer fee math uses ask not offer; flat postage vs per-seller parcel + seller-paid copy; expensive-item authentication flow absent; PDP lacks mobile sticky purchase dock; offer actions/status matrix diverges from mobile",
+      "files": [
+        "src/app/item/**",
+        "src/app/bag/**",
+        "src/app/checkout/**",
+        "src/app/offers/**",
+        "src/components/pdp/**",
+        "src/components/commerce/**"
+      ]
+    },
+    {
+      "id": "ORD-P1",
+      "sev": "P1",
+      "dept": "orders",
+      "title": "Order timelines reuse createdAt for shipped/delivered; needs-attention classification divergent; order list lacks search/month-group/refresh parity (eBay grammar)",
+      "files": [
+        "src/app/orders/**",
+        "src/components/orders/**"
+      ]
+    },
+    {
+      "id": "SELL-P1",
+      "sev": "P1",
+      "dept": "sell",
+      "title": "Imported drafts and seller drafts are separate stores w/o hydration into /sell; fulfillment rows reference wrong fixture collection (broken thumbs, £0 payouts); 'Print label' toast-only; metrics/CSV truth issues; publish silently defaults missing condition to Good; resumed drafts lose blob photos; guest sell flow lacks auth wall",
+      "files": [
+        "src/app/sell/**",
+        "src/app/seller-hub/**",
+        "src/components/sell/**",
+        "src/components/seller/**"
+      ]
+    },
+    {
+      "id": "ID-P1",
+      "sev": "P1",
+      "dept": "identity",
+      "title": "Profile Message routes to /inbox not a created/opened conversation; moodboard 'More options' coming-soon toast; private collections render to unauthorized viewers; profile tabs href='#'; /profile/edit navigates during render; 'Verified buyer' badge has no contract field; cover media dead (DONE: seeds); creation not guest-gated; /saved vs boards divergent sources; outfit delete <44px",
+      "files": [
+        "src/app/profile/**",
+        "src/app/u/**",
+        "src/app/saved/**",
+        "src/app/collections/**",
+        "src/app/outfits/**",
+        "src/components/profile/**"
+      ]
+    },
+    {
+      "id": "MSG-P1",
+      "sev": "P1",
+      "dept": "messaging",
+      "title": "Muted convos excluded from row badges but counted in header/tab badges; live message send drops image/media fields; deleted/edited/reaction/reply/listing-share/voice/doc mapped but not rendered; live notifications use legacy rows (DONE: notificationEntries seam); inbox persisted reads ungated; row actions local-only; group messaging weaker than DM",
+      "files": [
+        "src/app/inbox/**",
+        "src/app/notifications/**",
+        "src/components/inbox/**",
+        "src/components/notifications/**"
+      ]
+    },
+    {
+      "id": "AUC-P1",
+      "sev": "P1",
+      "dept": "auctions",
+      "title": "Sellers can bid own auctions; leading-bidder state unrepresented; auction watch service not wired to UI; won auctions lack payment path; live overlay dialog lacks focus trap; reminder copy implies push in fixture mode; live chat/product/host state partially disconnected",
+      "files": [
+        "src/app/auctions/**",
+        "src/app/live/**",
+        "src/components/auction/**",
+        "src/components/live/**",
+        "src/components/host/**"
+      ]
+    },
+    {
+      "id": "CO-P1",
+      "sev": "P1",
+      "dept": "co-own",
+      "title": "Crossing limit orders stay open; sell-side holdings checks + guest gates missing; asset detail keeps private order list vs shared query; syndicate queries fixture-only w/o lifecycle/withdrawal; price alerts claim unevaluated triggers; chart lacks keyboard/text alternatives; wallet/trading contract gaps vs native",
+      "files": [
+        "src/app/co-own/**",
+        "src/app/wallet/**",
+        "src/components/co-own/**",
+        "src/components/trading/**",
+        "src/components/wallet/**"
+      ]
+    },
+    {
+      "id": "SET-P1",
+      "sev": "P1",
+      "dept": "settings",
+      "title": "Onboarding flag written not read; notification denied loops on 'Try again' vs browser-settings guidance; /invite uses dead text-title token; social sign-in simulates success in fixture + dead-ends live; auth/settings metadata + parity gaps; support sections missing mobile padding",
+      "files": [
+        "src/app/settings/**",
+        "src/app/support/**",
+        "src/app/auth/**",
+        "src/app/onboarding/**",
+        "src/app/invite/**"
+      ]
+    },
+    {
+      "id": "GLO-P1",
+      "sev": "P1",
+      "dept": "global",
+      "title": "Algorithm prefs claim feed effect but unconsumed; persisted Zustand reads ungated for hydration; guests reach Sell/Inbox via chrome w/o walls; no skip link; Sheet max-width left-anchors mobile; three toggle grammars; bottom sheet no drag handle; AppImage failed-state reset (DONE); flyout/combobox kbd gaps; IconButton svg labels; EmptyState oversized icon circle; toast errors role=status not alert",
+      "files": [
+        "src/components/chrome/**",
+        "src/components/ui/**",
+        "src/components/layout/**",
+        "src/app/layout.tsx",
+        "src/lib/stores/**"
+      ]
+    },
+    {
+      "id": "P2-P3",
+      "sev": "P2-P3",
+      "dept": "all",
+      "title": "~90 lower-severity items documented in dept reports: polish, rhythm, microcopy, secondary a11y, minor parity deltas",
+      "files": [
+        ".flagship/audit-web-2026-09-26/*.md"
+      ]
+    }
+  ],
+  "workstreams": [
+    {
+      "id": "WS-1",
+      "name": "home-feed-pulse",
+      "files": [
+        "src/app/page.tsx",
+        "src/app/explore/**",
+        "src/app/pulse/**",
+        "src/components/home/**",
+        "src/components/feed/**",
+        "src/components/pulse/**"
+      ],
+      "addresses": [
+        "HOME-P0-01",
+        "HOME-P1"
+      ]
+    },
+    {
+      "id": "WS-2",
+      "name": "search-browse",
+      "files": [
+        "src/app/search/**",
+        "src/app/browse/**",
+        "src/app/categories/**",
+        "src/components/search/**",
+        "src/components/filters/**"
+      ],
+      "addresses": [
+        "SEARCH-P1"
+      ]
+    },
+    {
+      "id": "WS-3",
+      "name": "commerce-orders",
+      "files": [
+        "src/app/item/**",
+        "src/app/bag/**",
+        "src/app/checkout/**",
+        "src/app/orders/**",
+        "src/app/offers/**",
+        "src/components/pdp/**",
+        "src/components/commerce/**",
+        "src/components/checkout/**",
+        "src/components/offers/**",
+        "src/components/orders/**",
+        "src/lib/commerce/**"
+      ],
+      "addresses": [
+        "CM-P0-01",
+        "ORD-P0-01",
+        "CM-P1",
+        "ORD-P1"
+      ]
+    },
+    {
+      "id": "WS-4",
+      "name": "sell-sellerhub",
+      "files": [
+        "src/app/sell/**",
+        "src/app/seller-hub/**",
+        "src/components/sell/**",
+        "src/components/seller/**"
+      ],
+      "addresses": [
+        "SELL-P1"
+      ]
+    },
+    {
+      "id": "WS-5",
+      "name": "identity-social",
+      "files": [
+        "src/app/profile/**",
+        "src/app/u/**",
+        "src/app/saved/**",
+        "src/app/collections/**",
+        "src/app/moodboards/**",
+        "src/app/outfits/**",
+        "src/components/profile/**",
+        "src/components/identity/**",
+        "src/lib/stores/follows*"
+      ],
+      "addresses": [
+        "ID-P1"
+      ]
+    },
+    {
+      "id": "WS-6",
+      "name": "messaging-notifications",
+      "files": [
+        "src/app/inbox/**",
+        "src/app/notifications/**",
+        "src/components/inbox/**",
+        "src/components/notifications/**",
+        "src/lib/stores/messages*"
+      ],
+      "addresses": [
+        "MSG-P0-01",
+        "MSG-P1"
+      ]
+    },
+    {
+      "id": "WS-7",
+      "name": "auctions-live",
+      "files": [
+        "src/app/auctions/**",
+        "src/app/live/**",
+        "src/components/auction/**",
+        "src/components/live/**",
+        "src/components/host/**"
+      ],
+      "addresses": [
+        "AUC-P0-01",
+        "LIVE-P0-01",
+        "AUC-P1"
+      ]
+    },
+    {
+      "id": "WS-8",
+      "name": "coown-wallet",
+      "files": [
+        "src/app/co-own/**",
+        "src/app/syndicate/**",
+        "src/app/wallet/**",
+        "src/components/co-own/**",
+        "src/components/trading/**",
+        "src/components/wallet/**"
+      ],
+      "addresses": [
+        "CO-P0-01",
+        "WAL-P0-01",
+        "CO-P1"
+      ]
+    },
+    {
+      "id": "WS-9",
+      "name": "settings-chrome-primitives",
+      "files": [
+        "src/app/settings/**",
+        "src/app/support/**",
+        "src/app/auth/**",
+        "src/app/onboarding/**",
+        "src/app/invite/**",
+        "src/app/layout.tsx",
+        "src/components/settings/**",
+        "src/components/support/**",
+        "src/components/auth/**",
+        "src/components/chrome/**",
+        "src/components/ui/**",
+        "src/components/layout/**",
+        "src/lib/stores/preferences*",
+        "src/lib/stores/settings*"
+      ],
+      "addresses": [
+        "SET-P0-01",
+        "SET-P1",
+        "GLO-P1"
+      ],
+      "note": "may read AppImage.tsx but NOT edit it (orchestrator-owned)"
+    }
+  ],
+  "orchestrator_completed": [
+    "AppImage local-URI branch + src-reset (SELL-P0-01, GLO-P1 partial)",
+    "isLocalMediaUri exported from lib/utils/media.ts",
+    "coverPhoto seeds on u1/u3/u5/u6/me (ID-P1 partial)",
+    "client.ts: notificationEntries() + posterStories() seams",
+    "client.ts: editorial + recommendation_break + featured span feed units (HOME-P1 partial)"
+  ],
+  "r2_adversarial_review": {
+    "reviewers": [
+      "honesty",
+      "a11y-state",
+      "consistency-parity"
+    ],
+    "totals": {
+      "P0": 10,
+      "P1": 12,
+      "P2": 9,
+      "parity_high": 4,
+      "parity_medium": 8,
+      "parity_low": 6
+    },
+    "highlights": [
+      "live payment success fabricated (order created, payment never confirmed) — fixed: payment intent + settlement poll + honest pending state",
+      "wallet top-up fake card charge — fixture-gated with demo disclosure, hidden live",
+      "in-chat offers cosmetic — offerId added to contract, real accept/decline/counter wired",
+      "systemic ?? me guest leaks — gated across orders/offers/saved/collections/inbox/wallet/coown/support",
+      "SessionProvider useFollows hydration gap — gated",
+      "auction hooks dropped isError — exposed; retry states added on all auction surfaces",
+      "fixture purchases now mark listing sold; ?item= path filters unavailable",
+      "fulfilment dispatch writes through to orders + invalidates both modes",
+      "RM-format fake tracking numbers removed",
+      "seller earnings honest nulls in live mode; no fixture ledger presented as real",
+      "live viewer count verbatim in live mode; scripted chat labelled simulated",
+      "profile About tab ported; labels unified to mobile grammar",
+      "payment intent flow mirrors native useCheckoutPaymentFlow"
+    ],
+    "blocked_or_deferred": [
+      "live web card checkout cannot settle — no Stripe.js on web; orders+intents created truthfully, card intents report pending and land on order detail (native parity). Follow-up: Stripe Payment Element if live card checkout is wanted.",
+      "live support accept/escalate/CSAT endpoints absent — actions hidden in live mode, honest in fixture",
+      "load-older pagination / typing indicators — no contract, not fabricated"
+    ]
+  },
+  "resolution": {
+    "status": "r2-fixes-integrated",
+    "verification": {
+      "tsc": "clean",
+      "eslint": "clean",
+      "build": "clean",
+      "smoke": "50/50 200",
+      "journey": "6/6 PASS"
+    },
+    "updated": "2026-09-26"
+  },
+  "r4_parity_repair": {
+    "date": "2026-09-27",
+    "source": "wave-4 fresh-context parity review (21 findings, 4 HIGH) + truth review carryover",
+    "repairs": {
+      "auction-idempotency": "placeAuctionBid/buyAuctionNow send idempotencyKey; reconcileBidOutcome + outcomeUnknown UX; maxBidGbp verified rejected by live schema -> proxy gated live",
+      "seller-away-live": "GET /sellers/:id trust summary wired into capabilities at BuyPanel/PdpBuyDock/checkout; normalizeSeller maps holidayMode/reachState",
+      "composer-safety": "own-draft scam scan + role-aware banner + quick-reply rescan",
+      "reserve-live": "create form + bid reserve gated honestly in live (backend drops field)",
+      "menu-a11y": "Tab-orphaning fixed across inbox portal menus; all overlays on refcounted scrollLock",
+      "feed-topics": "See-more/Remove-topic via POST /recommendations/intent/:userId/mutate (live-gated)",
+      "tile-states": "Paused chip + sold quick-action suppression on ProductTile",
+      "sort-honesty": "Most liked when no query; Best match only with scored query"
+    },
+    "verified": {
+      "tsc": "clean",
+      "eslint": "clean (max-warnings 0)",
+      "build": "clean ~120 routes",
+      "smoke": "38/38 200",
+      "journey": "6/6 PASS"
+    },
+    "backend_bug_filed": "auction_bids.idempotency_key stored scoped (bid:/buy_now:) but lookup compares raw key — reconciliation degrades to safe_to_retry; backend fix needed",
+    "status": "closed pending R5 final audit"
+  },
+  "r5_final_audit_repair": {
+    "date": "2026-09-27",
+    "source": "r5-final-audit.md — fresh-context post-R4 audit",
+    "found": {
+      "P0": [
+        "auction winner pay called POST /orders on paused listing (guaranteed 409) — canonical POST /auctions/:id/payment unwired",
+        "withdraw fabricated payout state in live mode (fake PAYOUT refs, fixture bank accounts merged into live)"
+      ],
+      "P1": [
+        "placeCoOwnOrder missing idempotencyKey",
+        "seller-away CTA leak during trust-fetch pending window"
+      ]
+    },
+    "repairs": {
+      "winner-pay": "payAuction + fetchAuctionPaymentStatus + waitForAuctionPayment wired; per-attempt keys; paidOut state; paymentOpen lifecycle gate; SCA nextActionUrl handoff",
+      "buy-now": "buyAuctionNow returns isBuyNow/orderId; live CTA wired in BidPanel with per-attempt key; navigates to bound order",
+      "withdraw": "payouts.ts service (accounts, requests, Stripe Connect onboarding, idempotent submitPayoutRequest+lookup-by-key); live reads real endpoints; fixture disclosed; PayoutSetupSheet",
+      "coown-order-key": "idempotencyKey required at service boundary; minted per confirm in TradePanel",
+      "away-pending": "sellerTrustPending pending surfaces at BuyPanel/PdpBuyDock/checkout"
+    },
+    "verified": {
+      "tsc": "clean",
+      "eslint": "clean",
+      "build": "clean",
+      "smoke": "33/33 200",
+      "journey": "6/6 PASS"
+    },
+    "status": "closed — awaiting R6 convergence pass"
+  },
+  "r6_convergence_repair": {
+    "date": "2026-09-27",
+    "source": "R6 fresh-context convergence audit + 4 repair workstreams",
+    "found": {
+      "P1": [
+        "live wallet ledger rendered fixture transactions; real /users/:id/transactions dropped",
+        "live checkout offered fixture addresses/cards; NaN-stripped instrument ids shipped orders without displayed instruments; AddCardSheet persisted raw local cards as chargeable",
+        "bag dead in live mode (fixture-only listingById resolution)",
+        "live PDP published fixture sold-comps + fixture similar-listing deep-links to 404s"
+      ]
+    },
+    "repairs": {
+      "wallet-ledger": "buildLedger consumes real ledger wire shape in live (direction-signed, posted->completed, no fabricated running balance); fixture path unchanged; CSV exports real rows only",
+      "checkout-instruments": "new services/checkout.ts (live addresses CRUD, /v2/payments/methods rail, shipping/quote with preferredCarrierId, createOrder with shippingCarrierId); useCheckoutInstruments unifies rails; NaN-stripping removed; AddCardSheet self-gates to tokenisation notice",
+      "bag-live": "useBagListings resolves live ids via GET /listings/:id (allSettled, position-preserving); sold/unresolved rows reported honestly; checkout bag branch shares resolver",
+      "pdp-evidence": "pdp-market-queries.ts wires real /listings/:id/price-history, /sold-comparables (aggregate), /related; PdpMarket live-gated; BuyPanel signalLine drops fixture comp count; similar rail real in live",
+      "instrument-consumers": "instrument-queries.ts (useManagedAddresses live list/add/delete, useManagedPaymentMethods live rail with remove/default, useOrderInstrumentFacts resolves order-stamped refs); settings + order detail + receipt wired",
+      "orchestrator": "auction PDP similar rail -> usePdpSimilarListings; useSellerListings enabled-gate"
+    },
+    "verified": {
+      "tsc": "clean",
+      "eslint": "clean",
+      "build": "clean ~135 routes",
+      "smoke": "37/37 200",
+      "journey": "6/6 PASS"
+    },
+    "status": "closed"
+  },
+  "accepted_residuals_2026_09_27": [
+    "auctionWatchlist/liveReminders optimistic writes lack rollback (P2)",
+    "LiveReactions ambient hearts on real sessions (P3, decorative, no writes)",
+    "SearchSuggestions offers fixture items as live suggestions (P2)",
+    "LiveProductRail pinned products fixture-resolve only (P2)",
+    "OrderRow generic labels on live orders (P3, honest but lossy)",
+    "bundleDiscountFor client-computed discount display vs charge (P2, server semantics unverified)"
+  ],
+  "backend_followups_2026_09_27": [
+    "auction idempotency lookup compares raw key vs scoped bid:/buy_now: keys (pre-existing)",
+    "GET /listings/:id/related ignores limit; brand NULL -> loose matches",
+    "GET /users/:id/transactions mixes currencies; IZE rows carry amount_gbp NULL",
+    "wallet transaction history capped at 50; no server pagination",
+    "no address PATCH/set-default route (live edit impossible by design)",
+    "fulfilmentSnapshot.destinationSummary always null server-side",
+    "no web card-add rail — needs Stripe SetupIntent surface (product decision)",
+    "usersService.fetchUserTransactions mapper lossy (drops direction/lineType/currency)"
+  ]
+}

@@ -10,7 +10,8 @@
 
 import { useMemo } from 'react';
 import Link from 'next/link';
-import { MasonryGrid, useMasonryColumns } from '@/components/feed/MasonryGrid';
+import { MasonryGrid } from '@/components/feed/MasonryGrid';
+import { useResultColumns } from '@/components/filters/useResultColumns';
 import { EmptyState } from '@/components/ui/EmptyState';
 import { Icon } from '@/components/ui/Icon';
 import { MasonrySkeleton } from '@/components/ui/Skeleton';
@@ -50,7 +51,7 @@ export function VisualSearchResults({
   onChooseAnother,
   onRetry,
 }: VisualSearchResultsProps) {
-  const columns = useMasonryColumns();
+  const columns = useResultColumns();
 
   const units = useMemo<DiscoveryFeedUnit[]>(
     () =>

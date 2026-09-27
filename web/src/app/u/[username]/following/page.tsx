@@ -1,8 +1,7 @@
 'use client';
 
 import { useParams } from 'next/navigation';
-import { ConnectionsView } from '@/components/profile/ConnectionsView';
-import { ProfileHeroSkeleton } from '@/components/profile/ProfileSkeleton';
+import { ConnectionsSkeleton, ConnectionsView } from '@/components/profile/ConnectionsView';
 import { EmptyState } from '@/components/ui/EmptyState';
 import { useUserByUsername } from '@/lib/hooks/queries';
 import { useSession } from '@/lib/session/SessionProvider';
@@ -16,7 +15,7 @@ export default function FollowingPage() {
   // merged user is the truth there.
   const user = data ?? (me?.username === username ? me : undefined);
 
-  if (isLoading) return <ProfileHeroSkeleton />;
+  if (isLoading) return <ConnectionsSkeleton />;
   if (isFetched && !user) {
     return (
       <div className="pt-16">
@@ -24,6 +23,6 @@ export default function FollowingPage() {
       </div>
     );
   }
-  if (!user) return <ProfileHeroSkeleton />;
+  if (!user) return <ConnectionsSkeleton />;
   return <ConnectionsView user={user} kind="following" />;
 }

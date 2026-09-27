@@ -12,7 +12,12 @@ import { AppImage } from '@/components/ui/AppImage';
 import { Avatar } from '@/components/ui/Avatar';
 import { Icon } from '@/components/ui/Icon';
 import { AuctionCountdownChip } from '@/components/auctions/AuctionCountdown';
-import { countdownUrgency, formatDuration } from '@/lib/data/fixtures-auctions';
+import {
+  auctionOutcome,
+  countdownUrgency,
+  formatClock,
+  formatDuration,
+} from '@/lib/data/fixtures-auctions';
 import { listingById, userById } from '@/lib/data/fixtures';
 import { formatPrice } from '@/lib/utils/format';
 
@@ -28,19 +33,27 @@ function startTime(iso: string): string {
 
 /**
  * Card chip grammar — honest urgency only. Live ticks down from the real
- * endsAt ("Ends in 34m" / "Ends in 2h 14m"), collapsing to "Ending soon"
- * inside the last ten minutes. Scheduled auctions announce a wall-clock
- * start; ended auctions just say so.
+ * endsAt ("Ends in 34m" / "Ends in 2h 14m"); inside the last ten minutes
+ * the chip switches to ticking m:ss ("Ends in 8:42") — eBay urgency
+ * grammar, not a flattened "Ending soon". The board's shared now-clock
+ * re-renders every second, so the digits are real. Scheduled auctions
+ * announce a wall-clock start; ended auctions just say so.
  */
-function chipLabel(auction: AuctionViewModel): string {
-  if (auction.lifecycle === 'ended') return 'Ended';
+export function auctionChipLabel(auction: AuctionViewModel): string {
+  if (auction.lifecycle === 'ended') {
+    // Honest ended label — a cancelled or reserve-not-met run isn't "ended".
+    const outcome = auctionOutcome(auction);
+    if (outcome === 'cancelled') return 'Cancelled';
+    if (outcome === 'reserve_not_met') return 'Reserve not met';
+    return 'Ended';
+  }
   if (auction.lifecycle === 'upcoming') return `Starts ${startTime(auction.startsAt)}`;
   return auction.msToEnd < 10 * MIN_MS
-    ? 'Ending soon'
+    ? `Ends in ${formatClock(auction.msToEnd)}`
     : `Ends in ${formatDuration(auction.msToEnd)}`;
 }
 
-function chipUrgency(auction: AuctionViewModel): CountdownUrgency {
+export function auctionChipUrgency(auction: AuctionViewModel): CountdownUrgency {
   if (auction.lifecycle === 'live' && auction.msToEnd < 10 * MIN_MS) {
     return auction.msToEnd < 5 * MIN_MS ? 'final' : 'soon';
   }
@@ -56,8 +69,8 @@ export function AuctionCard({ auction, priority }: AuctionCardProps) {
   const seller = userById(auction.sellerId);
   const listing = listingById(auction.listingId);
   const ratio = listing?.mediaAspectRatio ?? 0.8;
-  const label = chipLabel(auction);
-  const urgency = chipUrgency(auction);
+  const label = auctionChipLabel(auction);
+  const urgency = auctionChipUrgency(auction);
 
   return (
     <article className="group relative">

@@ -18,12 +18,15 @@ import type {
 import {
   ANTI_SNIPING_EXTENSION_MS,
   ANTI_SNIPING_WINDOW_MS,
+  BID_INCREMENT_RATE,
 } from '@/lib/contracts/auction';
+import { formatPrice } from '@/lib/utils/format';
 import type { MyBidRow } from '@/lib/data/fixtures-auctions';
 import {
   AUCTION_BIDS,
   AUCTIONS,
   buildAuction,
+  minNextBid,
   myBidRows,
   sortAuctions,
   toViewModel,
@@ -43,6 +46,22 @@ const runtimeAuctions: AuctionMarketItem[] = [];
 const runtimeBids: AuctionBid[] = [];
 const runtimeBidState = new Map<string, { currentBid: number; bidCount: number }>();
 const runtimeEnds = new Map<string, number>();
+/**
+ * The viewer's proxy ceiling per auction — the "Set maximum bid" value
+ * this session submitted. Session-scoped like the rest of the runtime;
+ * in live mode it records what we POSTed (the API doesn't echo it back),
+ * in fixture mode it powers the honest "Automatic bidding" state. The
+ * fixture runtime has no rival bidders, so the ceiling never auto-fires —
+ * it is a user-declared preference, not a simulated outcome.
+ */
+const runtimeProxyMax = new Map<string, { bidderId: string; maxBid: number }>();
+
+/** The viewer's declared proxy ceiling this session, if any. */
+export function viewerProxyMax(auctionId: string, bidderId: string | undefined): number | null {
+  if (!bidderId) return null;
+  const entry = runtimeProxyMax.get(auctionId);
+  return entry && entry.bidderId === bidderId ? entry.maxBid : null;
+}
 
 /** Every auction: session-created first, then the seeded board, overlaid. */
 function allAuctions(): AuctionMarketItem[] {
@@ -87,7 +106,7 @@ export function useNowTick(intervalMs = 1000): number {
 /** Hub board — sorted live → upcoming → ended, recomputed on every tick. */
 export function useAuctionBoard() {
   const now = useNowTick(1000);
-  const { data, isLoading } = useQuery({
+  const { data, isLoading, isError, refetch } = useQuery({
     queryKey: ['auctions'],
     queryFn: async () => {
       if (DATA_MODE === 'live') {
@@ -102,12 +121,12 @@ export function useAuctionBoard() {
     () => sortAuctions((data ?? []).map((item) => toViewModel(item, now))),
     [data, now],
   );
-  return { auctions, isLoading };
+  return { auctions, isLoading, isError, refetch };
 }
 
 export function useAuction(id: string) {
   const now = useNowTick(1000);
-  const { data, isLoading } = useQuery({
+  const { data, isLoading, isError, refetch } = useQuery({
     queryKey: ['auction', id],
     queryFn: async () => {
       if (DATA_MODE === 'live') {
@@ -121,7 +140,7 @@ export function useAuction(id: string) {
     () => (data ? toViewModel(data, now) : null),
     [data, now],
   );
-  return { auction, isLoading };
+  return { auction, isLoading, isError, refetch };
 }
 
 export function useAuctionBids(auctionId: string) {
@@ -140,13 +159,22 @@ export function useAuctionBids(auctionId: string) {
 export interface MyBidsBoard {
   outbid: MyBidRow[];
   winning: MyBidRow[];
+  /** Wire 'active' — a live bid whose lead the serve couldn't resolve.
+   *  Kept distinct from 'winning' so the row never claims a lead it
+   *  can't prove. */
+  active: MyBidRow[];
   won: MyBidRow[];
   lost: MyBidRow[];
 }
 
 export function useMyBids(viewerId: string) {
   const now = useNowTick(30_000);
-  const { data: auctions, isLoading } = useQuery({
+  const {
+    data: auctions,
+    isLoading,
+    isError: auctionsError,
+    refetch: refetchAuctions,
+  } = useQuery({
     queryKey: ['auctions'],
     queryFn: async () => {
       if (DATA_MODE === 'live') {
@@ -157,8 +185,10 @@ export function useMyBids(viewerId: string) {
       return allAuctions();
     },
   });
-  const { data: bids } = useQuery({
+  const { data: bids, isError: bidsError, refetch: refetchBids } = useQuery({
     queryKey: ['auction-bids-all', viewerId],
+    // Guests have no ledger — never hit the authed endpoint for them.
+    enabled: viewerId !== '' || DATA_MODE !== 'live',
     queryFn: async () => {
       if (DATA_MODE === 'live') {
         return auctionsService.fetchMyAuctionBids('all');
@@ -172,6 +202,10 @@ export function useMyBids(viewerId: string) {
     const rows: MyBidRow[] =
       DATA_MODE === 'live'
         ? ((bids ?? []) as auctionsService.MyAuctionBidApi[]).map((b) => {
+            // The wire distinguishes 'leading' from 'active' (bid placed,
+            // lead unresolved). Mapping 'active' into the winning bucket
+            // would claim a lead the serve never reported — keep it
+            // honest.
             const status: MyBidRow['status'] =
               b.bidState === 'won'
                 ? 'won'
@@ -179,7 +213,9 @@ export function useMyBids(viewerId: string) {
                   ? 'lost'
                   : b.bidState === 'outbid'
                     ? 'outbid'
-                    : 'winning';
+                    : b.bidState === 'leading'
+                      ? 'winning'
+                      : 'active';
             const item: AuctionMarketItem = {
               id: b.auction.id,
               listingId: b.auction.id,
@@ -206,23 +242,36 @@ export function useMyBids(viewerId: string) {
     return {
       outbid: pick('outbid'),
       winning: pick('winning'),
+      active: pick('active'),
       won: pick('won'),
       lost: pick('lost'),
     };
   }, [auctions, bids, now, viewerId]);
 
-  return { board, isLoading };
+  return {
+    board,
+    isLoading,
+    // The board reads both queries — either leg failing means the ledger
+    // is incomplete, so surface it as one retryable error, never as empty.
+    isError: auctionsError || bidsError,
+    refetch: () => {
+      void refetchAuctions();
+      void refetchBids();
+    },
+  };
 }
 
 /**
  * Seller's own board — the same 'auctions' cache as the hub, narrowed to
  * auctions the viewer is selling. Session-created auctions land here too:
- * buildAuction() stamps sellerId 'me'.
+ * creation stamps the session identity as seller-of-record.
  */
-export function useSellerAuctionBoard(sellerId: string = CURRENT_USER.id) {
+export function useSellerAuctionBoard(_sellerId: string = CURRENT_USER.id) {
   const now = useNowTick(1000);
   const { user } = useSession();
-  const effectiveSellerId = DATA_MODE === 'live' ? (user?.id ?? sellerId) : sellerId;
+  // The board is the caller's own — the session identity decides. Guests
+  // resolve to '' so they never borrow the fixture 'me' board.
+  const effectiveSellerId = user?.id ?? '';
   const { data, isLoading, isError, refetch } = useQuery({
     queryKey: ['auctions'],
     queryFn: async () => {
@@ -254,6 +303,19 @@ interface BidSnapshot {
   extendedEnd?: number;
 }
 
+/** What a bid placement carries: the visible bid, the idempotency key for
+ *  this user-initiated attempt (one key per confirm — retries of the same
+ *  attempt reuse it so the backend dedupe replays rather than
+ *  double-commits), and the optional proxy ceiling. `maxBid` is a
+ *  fixture-runtime preference only — the live bids schema
+ *  (backend index.ts:37587, `additionalProperties: false`) has no proxy
+ *  field, so it is never sent over the wire. */
+export interface PlaceBidInput {
+  amount: number;
+  maxBid?: number;
+  idempotencyKey?: string;
+}
+
 export function usePlaceBid(auctionId: string) {
   const qc = useQueryClient();
   const { user } = useSession();
@@ -277,21 +339,56 @@ export function usePlaceBid(auctionId: string) {
   };
 
   return useMutation({
-    mutationFn: async (amount: number) => {
+    mutationFn: async (input: PlaceBidInput) => {
       if (DATA_MODE === 'live') {
-        await auctionsService.placeAuctionBid(auctionId, amount);
-        return amount;
+        await auctionsService.placeAuctionBid(auctionId, {
+          amountGbp: input.amount,
+          // The caller supplies one key per attempt; fall back to a fresh
+          // one so a bare call can never go out unsigned.
+          idempotencyKey: input.idempotencyKey ?? auctionsService.newBidAttemptKey(),
+        });
+        return input;
       }
       await tick(350);
-      return amount;
+      return input;
     },
-    onMutate: (amount: number): BidSnapshot => {
+    onMutate: (input: PlaceBidInput): BidSnapshot => {
+      const { amount, maxBid } = input;
       if (DATA_MODE === 'live') {
         // Live mode re-reads on settle — no client-side bid store to mirror.
         return {};
       }
       const auction = allAuctions().find((item) => item.id === auctionId);
       if (!auction) throw new Error('This auction is no longer available');
+      // Real identity only — a guest must never land a bid under the
+      // fixture 'me' identity, and the seller can't bid on their own lot.
+      if (user == null) throw new Error('Sign in to place a bid');
+      if (auction.sellerId === user.id) {
+        throw new Error("You can't bid on your own auction");
+      }
+      // The same rejections a server would return — the fixture runtime
+      // exercises the real failure path rather than only the happy one.
+      const effectiveEndMs = runtimeEnds.get(auctionId) ?? Date.parse(auction.endsAt);
+      if (Date.parse(auction.startsAt) > Date.now()) {
+        throw new Error('Bidding opens when the auction goes live');
+      }
+      if (effectiveEndMs <= Date.now()) {
+        throw new Error('This auction has ended');
+      }
+      const floor = minNextBid({ ...auction, currentBid: auction.currentBid });
+      if (amount < floor) {
+        // The +5% rationale only applies to the locally-derived floor —
+        // a server-declared minimumNextBid is quoted without a guessed rule.
+        throw new Error(
+          auction.minimumNextBid != null
+            ? `Bid must be at least ${formatPrice(floor)}`
+            : `Bid must be at least ${formatPrice(floor)} — the current bid plus ${Math.round(BID_INCREMENT_RATE * 100)}%`,
+        );
+      }
+      if (maxBid != null && maxBid < amount) {
+        throw new Error("Your maximum bid can't sit below the bid you're placing");
+      }
+      const bidder = user;
       const snapshot: BidSnapshot = {
         bidState: runtimeBidState.get(auctionId),
         bidsLength: runtimeBids.length,
@@ -305,21 +402,20 @@ export function usePlaceBid(auctionId: string) {
       runtimeBids.push({
         id: `rb-${Date.now().toString(36)}`,
         auctionId,
-        bidderId: user?.id ?? CURRENT_USER.id,
-        bidderName: user?.username ?? CURRENT_USER.username,
-        bidderAvatar: user?.avatar ?? CURRENT_USER.avatar,
+        bidderId: bidder.id,
+        bidderName: bidder.username,
+        bidderAvatar: bidder.avatar,
         amount,
         createdAt: new Date().toISOString(),
       });
       // Anti-sniping — a bid inside the final two minutes pushes the end out.
-      const effectiveEndMs = runtimeEnds.get(auctionId) ?? Date.parse(auction.endsAt);
       if (effectiveEndMs - Date.now() < ANTI_SNIPING_WINDOW_MS) {
         runtimeEnds.set(auctionId, effectiveEndMs + ANTI_SNIPING_EXTENSION_MS);
       }
       refresh();
       return snapshot;
     },
-    onError: (_error, _amount, snapshot) => {
+    onError: (_error, _input, snapshot) => {
       if (snapshot?.bidState) runtimeBidState.set(auctionId, snapshot.bidState);
       else runtimeBidState.delete(auctionId);
       if (snapshot?.bidsLength != null && snapshot.bidsLength !== runtimeBids.length) {
@@ -331,7 +427,16 @@ export function usePlaceBid(auctionId: string) {
       }
       refresh();
     },
-    onSuccess: () => refresh(),
+    onSuccess: (input) => {
+      // Record the viewer's proxy ceiling only once the placement
+      // succeeded — a rejected bid leaves no "automatic bidding" state.
+      // Fixture-runtime only: the live bids schema carries no proxy
+      // field, so input.maxBid is never set in live mode.
+      if (input.maxBid != null && user) {
+        runtimeProxyMax.set(auctionId, { bidderId: user.id, maxBid: input.maxBid });
+      }
+      refresh();
+    },
   });
 }
 
@@ -339,26 +444,49 @@ export function usePlaceBid(auctionId: string) {
 // Create auction — simulated, session-scoped (fixture mode)
 // ============================================================================
 
+/** Session-scoped create input — `startsAt` widens the fixture contract
+ *  so the create flow can schedule an auction ahead of the hammer (the
+ *  service already accepts it; the shared contract type does not). */
+export interface CreateAuctionSessionInput extends CreateAuctionInput {
+  /** ISO — present when the auction is scheduled for later. */
+  startsAt?: string;
+}
+
 export function useCreateAuction() {
   const qc = useQueryClient();
+  const { user } = useSession();
   return useMutation({
-    mutationFn: async (input: CreateAuctionInput) => {
+    mutationFn: async (input: CreateAuctionSessionInput) => {
+      const startsAtMs = input.startsAt ? Date.parse(input.startsAt) : Date.now();
       if (DATA_MODE === 'live') {
-        const now = Date.now();
+        // No reservePriceGbp — the live create schema drops it (backend
+        // index.ts:37308). The create page gates the field in live mode
+        // so this is also unreachable, but the contract stays honest at
+        // the source.
         const auction = await auctionsService.createAuction({
           listingId: input.listingId,
-          startsAt: new Date(now).toISOString(),
-          endsAt: new Date(now + input.durationHours * 3_600_000).toISOString(),
+          startsAt: new Date(startsAtMs).toISOString(),
+          endsAt: new Date(startsAtMs + input.durationHours * 3_600_000).toISOString(),
           startingBidGbp: input.startingBid,
           buyNowPriceGbp: input.buyNowPrice,
         });
         return auction;
       }
+      if (user == null) throw new Error('Sign in to create an auction');
       const created = buildAuction(input);
       if (!created) throw new Error('Pick one of your listings first');
+      // Seller-of-record is the session identity — never a borrowed 'me'.
+      // Scheduled auctions stamp their real window; buildAuction always
+      // opens now, so a delayed start overrides both ends of the window.
+      const stamped: AuctionMarketItem = {
+        ...created,
+        sellerId: user.id,
+        startsAt: new Date(startsAtMs).toISOString(),
+        endsAt: new Date(startsAtMs + input.durationHours * 3_600_000).toISOString(),
+      };
       await tick(400);
-      runtimeAuctions.unshift(created);
-      return created;
+      runtimeAuctions.unshift(stamped);
+      return stamped;
     },
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ['auctions'] });

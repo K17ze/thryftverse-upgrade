@@ -4,8 +4,9 @@
  * PulseFeed — vertical short-form snap surface.
  * Mobile: full-bleed edge-to-edge cards. Desktop: a centred 430px column
  * with rounded cards, side prev/next affordances and arrow-key stepping.
- * Follow state is lifted here so a creator followed on one card stays
- * followed on every card they appear in. The SignupWall mounts once for
+ * Follow state is the persisted follows store — a creator followed here
+ * stays followed across cards, surfaces and reloads (hydration-gated so
+ * SSR and first client render agree). The SignupWall mounts once for
  * the whole feed.
  */
 
@@ -17,12 +18,16 @@ import { Icon } from '@/components/ui/Icon';
 import { IconButton } from '@/components/ui/IconButton';
 import { Button } from '@/components/ui/Button';
 import { useSignupWall } from '@/components/auth/SignupWall';
+import { useHydrated } from '@/lib/store/useStore';
+import { useFollows } from '@/lib/store/follows';
 
 export function PulseFeed({ cards }: { cards: PulseCardModel[] }) {
   const router = useRouter();
   const { requireAuth, wall } = useSignupWall();
   const scrollRef = useRef<HTMLDivElement>(null);
-  const [followedIds, setFollowedIds] = useState<Record<string, true>>({});
+  const hydrated = useHydrated();
+  const followingIds = useFollows((s) => s.followingIds);
+  const toggleFollowStore = useFollows((s) => s.toggleFollow);
   const [edge, setEdge] = useState({ prev: false, next: true });
   const [active, setActive] = useState(0);
 
@@ -69,14 +74,9 @@ export function PulseFeed({ cards }: { cards: PulseCardModel[] }) {
   const toggleFollow = useCallback(
     (creatorId: string) => {
       if (!requireAuth('follow_seller')) return;
-      setFollowedIds((f) => {
-        const next = { ...f };
-        if (next[creatorId]) delete next[creatorId];
-        else next[creatorId] = true;
-        return next;
-      });
+      toggleFollowStore(creatorId);
     },
-    [requireAuth],
+    [requireAuth, toggleFollowStore],
   );
 
   return (
@@ -104,7 +104,7 @@ export function PulseFeed({ cards }: { cards: PulseCardModel[] }) {
               <PulseCard
                 card={card}
                 priority={i === 0}
-                followed={followedIds[card.creatorId] === true}
+                followed={hydrated && followingIds.includes(card.creatorId)}
                 onToggleFollow={toggleFollow}
                 requireAuth={requireAuth}
               />
@@ -114,7 +114,7 @@ export function PulseFeed({ cards }: { cards: PulseCardModel[] }) {
 
         {/* End of feed — honest marker, no synthetic repeat cycles. */}
         <div className="flex h-full snap-start items-center justify-center px-6">
-          <div className="flex w-full max-w-[340px] flex-col items-center rounded-2xl bg-surface px-8 py-10 text-center">
+          <div className="flex w-full max-w-[340px] flex-col items-center rounded-xl bg-surface px-8 py-10 text-center">
             <span className="flex h-14 w-14 items-center justify-center rounded-full bg-surface-alt text-text-muted">
               <Icon name="check" size={24} filled />
             </span>

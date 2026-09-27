@@ -8,6 +8,22 @@ export type AuctionLifecycle = 'upcoming' | 'live' | 'ended';
 /** Countdown heat — normal → soon (under an hour) → final (under 5m). */
 export type CountdownUrgency = 'normal' | 'soon' | 'final' | 'ended';
 
+/**
+ * Server-declared terminal reason — mirrors marketApi.ts
+ * AuctionTerminalReason. Absent on fixture rows; when present it is
+ * authoritative over timestamp-derived outcomes.
+ */
+export type AuctionTerminalReason =
+  | 'cancelled'
+  | 'seller_cancelled'
+  | 'settled'
+  | 'buy_now'
+  | 'scheduled_end'
+  | 'reserve_not_met'
+  | 'payment_expired'
+  | 'second_chance'
+  | 'seller_accepted_below_reserve';
+
 export interface AuctionMarketItem {
   id: string;
   /** The listing under the hammer — links the auction to the catalogue. */
@@ -21,6 +37,23 @@ export interface AuctionMarketItem {
   currentBid: number;
   bidCount: number;
   buyNowPrice?: number;
+  /** Reserve floor — the hammer must reach it or nothing sells. Never
+   *  surfaced as a number; only the met/not-met state is public. */
+  reservePrice?: number;
+  /** Server-computed minimum next bid — wins over the local +5% rule. */
+  minimumNextBid?: number;
+  /** Server lifecycle verbatim ('live', 'ended', 'reserve_not_met',
+   *  'awaiting_payment', 'payment_expired', 'second_chance_offered',
+   *  'settled', 'cancelled'). Needed because the post-end states are not
+   *  expressible from timestamps alone. */
+  serverLifecycle?: string;
+  terminalReason?: AuctionTerminalReason | null;
+  /** Winner's payment deadline (ISO) while a win awaits payment. */
+  paymentDeadlineAt?: string | null;
+  /** Viewer id the second-chance offer is addressed to. */
+  secondChanceOfferedTo?: string | null;
+  /** Winning bidder id when the server reports it. */
+  winnerBidderId?: string | null;
 }
 
 export interface AuctionViewModel extends AuctionMarketItem {
@@ -41,8 +74,10 @@ export interface AuctionBid {
   createdAt: string;
 }
 
-/** Viewer's relationship to an auction — derived, never stored. */
-export type MyBidStatus = 'outbid' | 'winning' | 'won' | 'lost';
+/** Viewer's relationship to an auction — derived, never stored. 'active'
+ *  is the wire's "bid placed, still running, lead unresolved" state — it
+ *  must never collapse into 'winning'. */
+export type MyBidStatus = 'outbid' | 'winning' | 'won' | 'lost' | 'active';
 
 export interface MyAuctionBid {
   auction: AuctionViewModel;
@@ -57,6 +92,8 @@ export interface CreateAuctionInput {
   startingBid: number;
   durationHours: number;
   buyNowPrice?: number;
+  /** Optional reserve — the lowest hammer the seller will accept. */
+  reservePrice?: number;
 }
 
 /** 5% minimum increment, rounded up to the pound — mirrors the mobile ladder. */

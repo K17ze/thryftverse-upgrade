@@ -6,7 +6,7 @@
  * Delete uses the same confirm-sheet grammar as the /outfits grid.
  */
 
-import { useMemo, useState } from 'react';
+import { useMemo, useRef, useState } from 'react';
 import { useParams, useRouter } from 'next/navigation';
 import { Button } from '@/components/ui/Button';
 import { EmptyState } from '@/components/ui/EmptyState';
@@ -14,7 +14,9 @@ import { IconButton } from '@/components/ui/IconButton';
 import { Sheet } from '@/components/ui/Sheet';
 import { Skeleton } from '@/components/ui/Skeleton';
 import { useToast } from '@/components/ui/Toast';
+import { INPUT_CLASS } from '@/components/sell/SellField';
 import { BackBar } from '@/components/profile/BackBar';
+import { useShare } from '@/components/profile/useShare';
 import { ProductTile } from '@/components/cards/ProductTile';
 import { OutfitCanvas } from '@/components/outfits/OutfitCanvas';
 import { outfitItemsList, outfitListings } from '@/components/outfits/outfitItems';
@@ -27,11 +29,16 @@ export default function OutfitDetailPage() {
   const params = useParams();
   const router = useRouter();
   const { show } = useToast();
+  const share = useShare();
   const hydrated = useHydrated();
   const id = String(params.id ?? '');
   const outfit = useOutfits((s) => s.outfits.find((o) => o.id === id));
   const removeOutfit = useOutfits((s) => s.removeOutfit);
+  const renameOutfit = useOutfits((s) => s.renameOutfit);
   const [confirming, setConfirming] = useState(false);
+  const [renaming, setRenaming] = useState(false);
+  const [nameDraft, setNameDraft] = useState('');
+  const nameInputRef = useRef<HTMLInputElement>(null);
 
   const items = useMemo(
     () => (outfit ? outfitListings(outfit) : {}),
@@ -67,19 +74,22 @@ export default function OutfitDetailPage() {
     );
   }
 
-  const shareOutfit = async () => {
-    try {
-      await navigator.clipboard.writeText(window.location.href);
-      show('Outfit link copied', 'success');
-    } catch {
-      show('Could not copy link', 'error');
-    }
-  };
+  const shareOutfit = () =>
+    share({ title: outfit.name, copiedLabel: 'Outfit link copied' });
 
   const deleteOutfit = () => {
     removeOutfit(outfit.id);
     show(`Deleted “${outfit.name}”`, 'info');
     router.push('/outfits');
+  };
+
+  const commitRename = () => {
+    const next = nameDraft.trim();
+    if (next && next !== outfit.name) {
+      renameOutfit(outfit.id, next);
+      show('Outfit renamed', 'success');
+    }
+    setRenaming(false);
   };
 
   return (
@@ -88,6 +98,15 @@ export default function OutfitDetailPage() {
         actions={
           <>
             <IconButton name="share" aria-label="Share outfit" onClick={shareOutfit} />
+            <IconButton
+              name="edit"
+              aria-label="Rename outfit"
+              onClick={() => {
+                setNameDraft(outfit.name);
+                setRenaming(true);
+                requestAnimationFrame(() => nameInputRef.current?.select());
+              }}
+            />
             <IconButton
               name="trash"
               aria-label="Delete outfit"
@@ -135,6 +154,48 @@ export default function OutfitDetailPage() {
           </div>
         </section>
       ) : null}
+
+      {/* Rename — the persisted overlay writes through renameOutfit. */}
+      <Sheet
+        open={renaming}
+        onClose={() => setRenaming(false)}
+        title="Rename outfit"
+        maxWidth={420}
+      >
+        <div className="px-5 py-5">
+          <label
+            htmlFor="outfit-rename"
+            className="text-caption font-medium text-text-secondary"
+          >
+            Outfit name
+          </label>
+          <input
+            id="outfit-rename"
+            ref={nameInputRef}
+            value={nameDraft}
+            onChange={(e) => setNameDraft(e.target.value)}
+            onKeyDown={(e) => {
+              if (e.key === 'Enter') commitRename();
+            }}
+            maxLength={60}
+            autoComplete="off"
+            className={`${INPUT_CLASS} mt-1.5`}
+          />
+          <div className="mt-5 flex gap-3">
+            <Button variant="secondary" fullWidth onClick={() => setRenaming(false)}>
+              Cancel
+            </Button>
+            <Button
+              variant="primary"
+              fullWidth
+              disabled={!nameDraft.trim()}
+              onClick={commitRename}
+            >
+              Save
+            </Button>
+          </div>
+        </div>
+      </Sheet>
 
       <Sheet
         open={confirming}

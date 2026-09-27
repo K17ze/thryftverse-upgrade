@@ -31,6 +31,10 @@ import { useSettingsPrefs, type DataFlag } from '@/lib/store/settingsPrefs';
 
 // ── Consent toggles ─────────────────────────────────────────────────────────
 
+// 'recommendations' is intentionally not surfaced: its copy claimed a
+// present-tense effect on feed ranking that no web surface consumes.
+// The store flag stays for the feed workstream to wire honestly.
+
 const DATA_SWITCHES: { key: DataFlag; label: string; sub: string }[] = [
   {
     key: 'personalisedAds',
@@ -41,11 +45,6 @@ const DATA_SWITCHES: { key: DataFlag; label: string; sub: string }[] = [
     key: 'analytics',
     label: 'Analytics',
     sub: 'Anonymous usage data that helps improve ThryftVerse',
-  },
-  {
-    key: 'recommendations',
-    label: 'Recommendation personalisation',
-    sub: 'Use your activity to shape your feed and suggestions',
   },
   {
     key: 'thirdPartySharing',
@@ -109,7 +108,7 @@ function clearPersistedStores() {
   for (const key of keys) window.localStorage.removeItem(key);
 }
 
-function DeleteAccountRow() {
+export function DeleteAccountRow() {
   const router = useRouter();
   const { signOut } = useSession();
   const { show } = useToast();

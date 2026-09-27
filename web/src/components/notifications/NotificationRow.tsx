@@ -5,7 +5,11 @@
  * thumb) carries the unread dot top-right and a per-kind accent badge
  * bottom-right; the body is one sentence with the time right-aligned.
  * Unread is signalled by dot + title weight only — never a row tint.
- * Rows with a deep link render as links; the press also marks read.
+ * Rows with a deep link render as links; the press also marks read. A
+ * check button is the web analogue of the mobile swipe-to-read — marks
+ * the row without navigating. Hover-capable viewports reveal it on
+ * row hover/focus; touch viewports (hover:none) keep it always visible
+ * since there is no hover to discover it by.
  */
 
 import Link from 'next/link';
@@ -59,13 +63,31 @@ export function NotificationRow({ notification: n, onOpen }: NotificationRowProp
       <span className="flex shrink-0 flex-col items-end gap-1.5">
         <span className="pt-0.5 text-meta text-text-muted">{n.time}</span>
         {/* Instagram grammar — follow rows carry the in-row action. The
-            button sits above the row's stretched link on z; its own tap
-            doesn't navigate. */}
-        {n.kind === 'follow' && n.actorId ? (
-          <span className="relative z-[2]">
-            <FollowButton userId={n.actorId} />
-          </span>
-        ) : null}
+            buttons sit above the row's stretched link on z; their taps
+            don't navigate. */}
+        <span className="flex items-center gap-1">
+          {n.unread && n.href ? (
+            <span className="relative z-[2]">
+              <button
+                type="button"
+                aria-label="Mark as read"
+                title="Mark as read"
+                onClick={(e) => {
+                  e.stopPropagation();
+                  onOpen(n.id);
+                }}
+                className="pressable flex h-8 w-8 items-center justify-center rounded-full text-text-muted transition-opacity hover:text-text-primary focus-visible:opacity-100 [@media(hover:hover)]:opacity-0 [@media(hover:hover)]:group-hover/nrow:opacity-100 [@media(hover:hover)]:group-focus-within/nrow:opacity-100"
+              >
+                <Icon name="check" size={16} />
+              </button>
+            </span>
+          ) : null}
+          {n.kind === 'follow' && n.actorId ? (
+            <span className="relative z-[2]">
+              <FollowButton userId={n.actorId} />
+            </span>
+          ) : null}
+        </span>
       </span>
     </>
   );
@@ -73,9 +95,13 @@ export function NotificationRow({ notification: n, onOpen }: NotificationRowProp
   // No `pressable` on the row: the :active scale transform creates a
   // mid-press stacking context that lets the stretched link steal the
   // hit-test from the in-row FollowButton between pointerdown/up.
-  const className = 'flex w-full items-start gap-3 px-2 py-3 text-left hover:bg-row-pressed';
+  const className =
+    'group/nrow flex w-full items-start gap-3 px-2 py-3 text-left hover:bg-row-pressed';
   const label = `${n.text}${n.unread ? ' — unread' : ''}`;
-  const hasAction = n.kind === 'follow' && n.actorId != null;
+  // In-row actions need the stretched-link pattern — real buttons can't
+  // nest inside the anchor.
+  const hasAction =
+    (n.kind === 'follow' && n.actorId != null) || (n.unread && n.href != null);
 
   // Rows with an in-row action use the stretched-link pattern — the
   // FollowButton is a real button, so it can't nest inside the anchor.

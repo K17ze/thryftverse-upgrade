@@ -9,8 +9,9 @@ import { useRouter } from 'next/navigation';
 import { AppImage } from '@/components/ui/AppImage';
 import { Button } from '@/components/ui/Button';
 import { Icon } from '@/components/ui/Icon';
-import { priceWindow } from '@/lib/data/fixtures-coown';
+import { usePriceHistory } from '@/lib/hooks/coown-queries';
 import type { CoOwnAsset } from '@/lib/contracts/coown';
+import { deriveLifecycleState } from '@/lib/contracts/coown';
 import { formatCount } from '@/lib/utils/format';
 import { gbp, gbpCompact } from './format';
 import { LifecycleTag } from './LifecycleTag';
@@ -19,14 +20,21 @@ import { Sparkline } from './Sparkline';
 
 export function FeaturedHero({ asset }: { asset: CoOwnAsset }) {
   const router = useRouter();
-  const week = priceWindow(asset.id, '1W');
+  // Query layer, not the fixture directly — live mode reads the real
+  // price-history endpoint; while it loads the slot stays empty.
+  const weekQ = usePriceHistory(asset.id, '1W');
   const tier = asset.issuer.verificationTier;
   const href = `/co-own/${asset.id}`;
+
+  // A halted or exiting market's hero CTA navigates, it doesn't promise
+  // a trade — label follows the lifecycle.
+  const state = deriveLifecycleState(asset);
+  const tradable = state === 'secondaryTrading' || state === 'initialOffering';
 
   const stats = [
     { label: 'Holders', value: formatCount(asset.holders) },
     { label: '24h volume', value: gbpCompact(asset.volume24hGbp) },
-    { label: 'Available', value: `${asset.availableUnits}` },
+    { label: 'Available', value: formatCount(asset.availableUnits) },
     { label: 'Units', value: formatCount(asset.totalUnits) },
   ];
 
@@ -65,8 +73,17 @@ export function FeaturedHero({ asset }: { asset: CoOwnAsset }) {
         </div>
 
         <div className="mt-3 flex items-center gap-2.5">
-          <Sparkline candles={week} width={180} height={44} />
-          <span className="text-micro text-text-muted">1W</span>
+          {weekQ.data && weekQ.data.length >= 2 ? (
+            <>
+              <Sparkline
+                candles={weekQ.data}
+                width={180}
+                height={44}
+                label={`${asset.title} 1-week trend`}
+              />
+              <span className="text-micro text-text-muted">1W</span>
+            </>
+          ) : null}
         </div>
 
         <dl className="mt-5 grid grid-cols-2 gap-x-6 gap-y-4 border-t border-border-subtle pt-4 sm:grid-cols-4">
@@ -80,7 +97,7 @@ export function FeaturedHero({ asset }: { asset: CoOwnAsset }) {
 
         <div className="mt-6 flex flex-wrap gap-3">
           <Button icon="trending" className="min-w-36 flex-1 sm:flex-none" onClick={() => router.push(href)}>
-            Trade
+            {tradable ? 'Trade' : 'View market'}
           </Button>
           <Button variant="secondary" icon="document" className="min-w-36 flex-1 sm:flex-none" onClick={() => router.push(href)}>
             View dossier

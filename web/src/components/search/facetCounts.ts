@@ -4,18 +4,36 @@
  * group the base set is "listings passing every other active filter", so
  * each option's count is what the grid would actually show after clicking
  * it (eBay refinement-rail behaviour — no fabricated tallies).
+ *
+ * Facets are multi-select (union within a dimension): a selected option's
+ * count is what that option contributes on top of the relaxed base — the
+ * same per-option tally eBay and Vinted show against their checkboxes.
  */
 
 import type { Listing } from '@/lib/contracts/domain';
-import { CONDITION_OPTIONS, type ListingFilters } from '@/components/filters/filterTypes';
+import {
+  applyListingFilters,
+  CONDITION_OPTIONS,
+  listingColourNames,
+  type ListingFilters,
+} from '@/components/filters/filterTypes';
+import { COLOR_VOCAB } from '@/components/visualsearch/visualSearchTypes';
 
-export type FacetGroupKey = 'category' | 'brand' | 'size' | 'condition';
+export type FacetGroupKey =
+  | 'category'
+  | 'brand'
+  | 'size'
+  | 'condition'
+  | 'colour'
+  | 'sold';
 
 export interface FacetOption {
   /** Value written into ListingFilters when selected. */
   value: string;
   label: string;
   count: number;
+  /** Colour facets carry the vocabulary swatch for a swatch-dot row. */
+  swatch?: string;
 }
 
 /** Listings passing every filter except the named group's dimension. */
@@ -24,9 +42,13 @@ function baseExcept(
   filters: ListingFilters,
   group: FacetGroupKey,
 ): Listing[] {
-  const size = filters.size.trim().toLowerCase();
-  const brand = filters.brand.trim().toLowerCase();
+  const brands = filters.brands.map((b) => b.trim().toLowerCase()).filter(Boolean);
+  const sizes = filters.sizes.map((s) => s.trim().toLowerCase()).filter(Boolean);
+  const categories = filters.categories.map((c) => c.toLowerCase());
   return listings.filter((l) => {
+    if (group !== 'sold' && !filters.includeSold && (l.isSold || l.status === 'sold')) {
+      return false;
+    }
     if (
       group !== 'condition' &&
       filters.conditions.length > 0 &&
@@ -38,16 +60,28 @@ function baseExcept(
     if (filters.priceMax != null && l.price > filters.priceMax) return false;
     if (
       group !== 'category' &&
-      filters.category &&
-      l.category.toLowerCase() !== filters.category.toLowerCase()
+      categories.length > 0 &&
+      !categories.includes(l.category.toLowerCase())
     ) {
       return false;
     }
-    if (group !== 'size' && size && !(l.size ?? '').toLowerCase().includes(size)) {
+    if (
+      group !== 'size' &&
+      sizes.length > 0 &&
+      !sizes.some((s) => (l.size ?? '').toLowerCase().includes(s))
+    ) {
       return false;
     }
-    if (group !== 'brand' && brand && !(l.brand ?? '').toLowerCase().includes(brand)) {
+    if (
+      group !== 'brand' &&
+      brands.length > 0 &&
+      !brands.some((b) => (l.brand ?? '').toLowerCase().includes(b))
+    ) {
       return false;
+    }
+    if (group !== 'colour' && filters.colours.length > 0) {
+      const named = listingColourNames(l);
+      if (!filters.colours.some((c) => named.includes(c))) return false;
     }
     return true;
   });
@@ -144,4 +178,82 @@ export function conditionFacets(
     label: c,
     count: counts.get(c) ?? 0,
   }));
+}
+
+/**
+ * Colour options — the shared COLOR_VOCAB names actually present in the
+ * relaxed result set (a listing qualifies only if its own text names the
+ * colour — the strict facet rule applyListingFilters applies), with the
+ * vocabulary swatch so the option renders as a swatch-dot row.
+ */
+export function colourFacets(
+  listings: Listing[],
+  filters: ListingFilters,
+): FacetOption[] {
+  const base = baseExcept(listings, filters, 'colour');
+  const counts = new Map<string, number>();
+  for (const l of base) {
+    for (const name of listingColourNames(l)) {
+      counts.set(name, (counts.get(name) ?? 0) + 1);
+    }
+  }
+  return COLOR_VOCAB.filter((c) => (counts.get(c.name) ?? 0) > 0).map((c) => ({
+    value: c.name,
+    label: c.name,
+    count: counts.get(c.name) ?? 0,
+    swatch: `rgb(${c.rgb[0]}, ${c.rgb[1]}, ${c.rgb[2]})`,
+  }));
+}
+
+/**
+ * Sold-count for the availability toggle — the number of sold listings the
+ * relaxed set would add (what "Sold items" contributes on this result set).
+ */
+export function soldFacetCount(
+  listings: Listing[],
+  filters: ListingFilters,
+): number {
+  const base = baseExcept(listings, filters, 'sold');
+  return base.filter((l) => l.isSold === true || l.status === 'sold').length;
+}
+
+/**
+ * Options for a multi-select facet — the relaxed-base tally plus, when a
+ * URL-seeded value isn't among them, appended selected options carrying
+ * their real substring counts (same matching rule as the filter itself)
+ * so they stay visible and removable.
+ */
+export function optionsWithSelected(
+  listings: Listing[],
+  filters: ListingFilters,
+  dim: 'brand' | 'size',
+): FacetOption[] {
+  const base =
+    dim === 'brand'
+      ? brandFacets(listings, filters)
+      : sizeFacets(listings, filters);
+  const selected = dim === 'brand' ? filters.brands : filters.sizes;
+  const missing = selected.filter(
+    (v) => v.trim() && !base.some((o) => o.value === v.trim().toLowerCase()),
+  );
+  if (missing.length === 0) return base;
+  const relaxed = applyListingFilters(
+    listings,
+    dim === 'brand'
+      ? { ...filters, brands: [] }
+      : { ...filters, sizes: [] },
+  );
+  const extra = missing.map((raw) => {
+    const sel = raw.trim().toLowerCase();
+    return {
+      value: sel,
+      label: raw.trim(),
+      count: relaxed.filter((l) =>
+        (dim === 'brand' ? (l.brand ?? '') : (l.size ?? ''))
+          .toLowerCase()
+          .includes(sel),
+      ).length,
+    };
+  });
+  return [...base, ...extra];
 }

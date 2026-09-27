@@ -1,6 +1,7 @@
 import type { Metadata } from 'next';
 import Link from 'next/link';
 import { Icon, type AppIconName } from '@/components/ui/Icon';
+import { DISPATCH_SLA_DAYS } from '@/lib/commerce/dispatch';
 
 export const metadata: Metadata = {
   title: 'Buyer Protection',
@@ -16,7 +17,7 @@ const STEPS: { icon: AppIconName; title: string; body: string }[] = [
   {
     icon: 'box',
     title: 'The seller ships',
-    body: 'They get a prepaid tracked label and 5 working days to dispatch. You watch it move.',
+    body: `They get a prepaid tracked label and ${DISPATCH_SLA_DAYS} working days to dispatch. You watch it move.`,
   },
   {
     icon: 'shieldCheck',

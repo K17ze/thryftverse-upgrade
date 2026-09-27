@@ -16,33 +16,109 @@
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import { useState } from 'react';
+import { useQueryClient } from '@tanstack/react-query';
 import type { Listing } from '@/lib/contracts/domain';
 import { Avatar } from '@/components/ui/Avatar';
 import { Button } from '@/components/ui/Button';
 import { Icon } from '@/components/ui/Icon';
 import { IconButton } from '@/components/ui/IconButton';
 import { Badge } from '@/components/ui/Badge';
+import { Skeleton } from '@/components/ui/Skeleton';
 import { useToast } from '@/components/ui/Toast';
 import { useStore, useHydrated } from '@/lib/store/useStore';
 import { useSession } from '@/lib/session/SessionProvider';
 import { useSignupWall } from '@/components/auth/SignupWall';
-import { soldComparablesFor } from '@/lib/data/fixtures';
-import { recordSentOffer } from '@/lib/data/fixtures-commerce';
+import { useCreateConversation } from '@/lib/hooks/queries';
+import { FollowButton } from '@/components/profile/FollowButton';
+import {
+  AUTHENTICATION_THRESHOLD_GBP,
+  recordSentOffer,
+} from '@/lib/data/fixtures-commerce';
+import { DATA_MODE } from '@/lib/api/client';
+import * as commerceService from '@/lib/api/services/commerce';
+import { listingCapabilities, listingStateCopy } from '@/lib/commerce/capabilities';
+import { DISPATCH_SLA_DAYS } from '@/lib/commerce/dispatch';
+import {
+  useMyListingOffer,
+  useSellerTrustSummary,
+  useWithdrawListingOffer,
+} from '@/lib/hooks/pdp-queries';
+import { usePdpMarketEvidence } from '@/lib/hooks/pdp-market-queries';
 import { formatCount, formatPrice, timeAgo } from '@/lib/utils/format';
 import { OfferSheet } from './OfferSheet';
 import { OfferToLikers } from './OfferToLikers';
 import { SizeGuideSheet, resolveSizeGuide } from './SizeGuideSheet';
 import { BundleUpsellRow } from '@/components/bundle/BundleUpsellRow';
-import { ReportLauncher } from '@/components/report';
+import { ListingReportMenu } from './ListingReportMenu';
+import { SaveToBoardSheet } from '@/components/saved/SaveToBoardSheet';
+import { useIsBlockedUser } from '@/components/inbox/inboxSafety';
 
 interface BuyPanelProps {
   listing: Listing;
+}
+
+/** "5 Oct" — compact en-GB day/month for the ETA window. */
+function formatEtaDay(iso: string): string | null {
+  const ms = Date.parse(iso);
+  if (!Number.isFinite(ms)) return null;
+  return new Date(ms).toLocaleDateString('en-GB', { day: 'numeric', month: 'short' });
+}
+
+/** Delivery cost line — "Free postage" when the seller covers it, the real
+ *  charge when the contract carries one, honest fallback when it doesn't. */
+function deliveryCostLine(listing: Listing): string {
+  if (listing.shippingPayer === 'seller') {
+    return 'Free postage — the seller covers delivery';
+  }
+  if (typeof listing.shippingPrice === 'number') {
+    return listing.shippingPrice > 0
+      ? `${formatPrice(listing.shippingPrice)} postage`
+      : 'Free postage — the seller covers delivery';
+  }
+  return 'Postage calculated at checkout';
+}
+
+/** Estimated arrival — a real window when both bounds exist, the single
+ *  bound when only one does, nothing when the contract is silent or the
+ *  dates are stale/malformed (never a fabricated estimate). */
+function deliveryEtaLine(listing: Listing): string | null {
+  const end = listing.estimatedDeliveryEnd ? formatEtaDay(listing.estimatedDeliveryEnd) : null;
+  const start = listing.estimatedDeliveryStart
+    ? formatEtaDay(listing.estimatedDeliveryStart)
+    : null;
+  if (!start && !end) return null;
+  // A window already in the past is stale data, not an ETA.
+  const today = new Date();
+  today.setHours(0, 0, 0, 0);
+  const endMs = listing.estimatedDeliveryEnd
+    ? Date.parse(listing.estimatedDeliveryEnd)
+    : Date.parse(listing.estimatedDeliveryStart ?? '');
+  if (Number.isFinite(endMs) && endMs < today.getTime()) return null;
+  if (start && end) return start === end ? `Arrives ${start}` : `Arrives ${start} – ${end}`;
+  if (end) return `Arrives by ${end}`;
+  return `Arrives from ${start}`;
+}
+
+/** Returns line — mirrors mobile ShippingReturnsInfo: the server summary
+ *  verbatim, the "{n}-day returns" / "Returns accepted" / "No returns"
+ *  grammar when structured fields carry it, the honest fallback when the
+ *  contract is silent. */
+function returnsLine(listing: Listing): string {
+  const policy = listing.returnPolicy;
+  if (!policy) return 'Return policy confirmed at checkout';
+  if (policy.summary) return policy.summary;
+  if (policy.accepted === true) {
+    return policy.windowDays ? `${policy.windowDays}-day returns` : 'Returns accepted';
+  }
+  if (policy.accepted === false) return 'No returns';
+  return 'Return policy confirmed at checkout';
 }
 
 export function BuyPanel({ listing }: BuyPanelProps) {
   const router = useRouter();
   const { show } = useToast();
   const { user } = useSession();
+  const queryClient = useQueryClient();
   const { requireAuth, wall } = useSignupWall();
 
   const hydrated = useHydrated();
@@ -59,7 +135,9 @@ export function BuyPanel({ listing }: BuyPanelProps) {
   const [offerOpen, setOfferOpen] = useState(false);
   const [sizeGuideOpen, setSizeGuideOpen] = useState(false);
   const [protectionOpen, setProtectionOpen] = useState(false);
+  const [boardOpen, setBoardOpen] = useState(false);
   const sizeGuide = resolveSizeGuide(listing);
+  const createConversation = useCreateConversation();
 
   const isSold = listing.isSold === true || listing.status === 'sold';
   const isOwner = user?.id === listing.sellerId;
@@ -67,14 +145,82 @@ export function BuyPanel({ listing }: BuyPanelProps) {
   const sellerUsername = seller?.username ?? null;
 
   /**
+   * Viewer-relationship truth — a blocked seller surfaces no purchase,
+   * offer, message or follow affordance anywhere on the PDP; every one of
+   * those paths fails server-side anyway, so showing live CTAs is a lie
+   * (mobile CommerceActionDock / SellerInfoCard parity).
+   */
+  // Two ids, one predicate — both hooks stay unconditional.
+  const blockedById = useIsBlockedUser(listing.sellerId);
+  const blockedBySellerObj = useIsBlockedUser(seller?.id ?? null);
+  const sellerBlocked = blockedById || blockedBySellerObj;
+
+  /**
+   * Seller availability — live mode reads the authoritative summary
+   * (GET /sellers/:id): the listing payload's seller block doesn't carry
+   * holidayMode/reachState, so without it an away or suspended seller's
+   * CTAs render live and the backend 409s them. Fixture mode skips the
+   * fetch — the away projection already writes listing.seller.holidayMode.
+   */
+  const sellerTrustQuery = useSellerTrustSummary(listing.sellerId);
+  const sellerTrust = sellerTrustQuery.data;
+  /**
+   * Sold-comps evidence for the signal line — the same query PdpMarket
+   * publishes (shared cache): live mode reads the real aggregated
+   * completed-orders count, fixture mode the bundled sold-comps dataset.
+   * The fixture scorer never reaches a live PDP.
+   */
+  const { soldComps } = usePdpMarketEvidence(listing);
+  // While the live trust read is in flight, away/suspended state is
+  // unresolved — the dock renders a pending surface instead of live CTAs
+  // that would 409 the moment the fetch lands. A failed read stays
+  // fail-open (the backend 409 remains the enforcer — native parity).
+  const sellerTrustPending = DATA_MODE === 'live' && sellerTrustQuery.isLoading;
+  /**
+   * Capability gate — the mobile CommerceActionDock chain: listing status
+   * (sold/reserved/paused/draft/removed/unknown), missing price or seller,
+   * then seller availability (holiday mode, suspended reach). Purchase and
+   * offer affordances never render when the backend would 409 them.
+   */
+  const caps = listingCapabilities(listing, user?.id, sellerTrust);
+  const stateCopy = listingStateCopy(caps, sellerTrust);
+  /**
+   * The CTA state dock follows the mobile precedence chain — listing and
+   * seller state (sold → unavailable → suspended) outrank the viewer's
+   * own block; the block outranks seller-away alone. Either way the panel
+   * states a fact instead of offering affordances that fail server-side.
+   */
+  const blockedStateCopy = {
+    label: 'Blocked',
+    subtitle: 'You blocked this seller — purchases, offers and messages are off.',
+  };
+  const effectiveStateCopy = sellerBlocked
+    ? caps.unavailableReason || caps.sellerSuspended
+      ? stateCopy
+      : blockedStateCopy
+    : stateCopy;
+
+  /** One active offer per listing — the same rule the backend enforces.
+   *  When the viewer already has a pending/countered offer on the table the
+   *  composer stays closed and the standing offer gets a withdraw path
+   *  instead of a dead second-offer write. */
+  const { data: activeOffer } = useMyListingOffer(
+    listing.id,
+    !isOwner && !sellerBlocked && caps.canOffer,
+  );
+  const withdrawOffer = useWithdrawListingOffer(listing.id);
+
+  /**
    * Conversational signal line — the eBay VI beat that sits directly under
    * the buy buttons. Every clause comes from a real field: views/likes are
-   * contract counters, sold comps are the same dataset PdpMarket publishes.
-   * Resale stock is one-of-one, so the scarcity clause is structural truth,
-   * not a fabricated counter. One quiet line; self-omits for sold/owner.
+   * contract counters, the sold-comps count is the same evidence PdpMarket
+   * publishes (live: aggregated real completed orders; fixture: the bundled
+   * comps dataset). Resale stock is one-of-one, so the scarcity clause is
+   * structural truth, not a fabricated counter. One quiet line; self-omits
+   * for sold/owner.
    */
   const signalLine = ((): string | null => {
-    if (isSold || isOwner) return null;
+    if (isSold || isOwner || sellerBlocked || !caps.canBuy) return null;
     const demand: string[] = [];
     if (typeof listing.views === 'number' && listing.views > 0) {
       demand.push(`${formatCount(listing.views)} views`);
@@ -86,8 +232,9 @@ export function BuyPanel({ listing }: BuyPanelProps) {
           : `${formatCount(listing.likes)} people like this`,
       );
     }
-    const comps = soldComparablesFor(listing);
-    if (comps.length >= 2) demand.push(`${comps.length} similar sold`);
+    if (soldComps && soldComps.count >= 2) {
+      demand.push(`${soldComps.count} similar sold`);
+    }
     return demand.length
       ? `One only · ${demand.slice(0, 2).join(' · ')}`
       : 'One only — once it’s gone, it’s gone';
@@ -117,6 +264,18 @@ export function BuyPanel({ listing }: BuyPanelProps) {
     show(isSaved ? 'Removed from saved' : 'Added to saved', 'info');
   };
 
+  /**
+   * File-to-board — the web translation of mobile's long-press on the
+   * save control (SaveToCollectionModal): the caret next to Save opens the
+   * board picker. Filing is a save, so an unsaved item lands in Saved
+   * first — the bookmark state then agrees with the board membership.
+   */
+  const handleSaveToBoard = () => {
+    if (!requireAuth('save_item')) return;
+    if (!savedItem) toggleSaved(listing.id);
+    setBoardOpen(true);
+  };
+
   const handleAddToBag = () => {
     if (!requireAuth('purchase')) return;
     if (inBag) {
@@ -127,9 +286,37 @@ export function BuyPanel({ listing }: BuyPanelProps) {
     show('Added to bag', 'success');
   };
 
+  /**
+   * Message seller — create-or-reuse the DM thread and land inside it,
+   * the same deep-link grammar ProfileHero uses. Never just the inbox
+   * list: the buyer asked to talk to THIS seller.
+   */
   const handleMessage = () => {
     if (!requireAuth('message_seller')) return;
-    router.push('/inbox');
+    void createConversation
+      .mutateAsync({ memberIds: [listing.sellerId] })
+      .then((conversation) => router.push(`/inbox/${conversation.id}`))
+      .catch(() => show('Could not open the conversation', 'error'));
+  };
+
+  /** Share — the native share sheet where the platform offers it,
+   *  a copied link where it doesn't. */
+  const handleShare = async () => {
+    const url = `${window.location.origin}/item/${listing.id}`;
+    if (typeof navigator !== 'undefined' && navigator.share) {
+      try {
+        await navigator.share({ title: listing.title, url });
+        return;
+      } catch {
+        // Dismissed or unsupported — fall through to the clipboard.
+      }
+    }
+    try {
+      await navigator.clipboard.writeText(url);
+      show('Link copied', 'success');
+    } catch {
+      show('Could not copy the link', 'error');
+    }
   };
 
   return (
@@ -231,12 +418,21 @@ export function BuyPanel({ listing }: BuyPanelProps) {
               </p>
             ) : null}
           </div>
-          <Link
-            href={`/u/${sellerUsername}`}
-            className="pressable shrink-0 rounded-md px-2 py-1 text-caption font-semibold text-text-secondary hover:text-text-primary"
-          >
-            Visit shop
-          </Link>
+          {/* Trailing action — Follow for buyers (the persisted toggle
+              every other surface shares), Visit shop for the owner and
+              for a blocked seller, whose follow would fail server-side
+              anyway. The username/avatar already carry the profile link
+              for everyone else. */}
+          {isOwner || !seller?.id || sellerBlocked ? (
+            <Link
+              href={`/u/${sellerUsername}`}
+              className="pressable shrink-0 rounded-md px-2 py-1 text-caption font-semibold text-text-secondary hover:text-text-primary"
+            >
+              Visit shop
+            </Link>
+          ) : (
+            <FollowButton userId={seller.id} size="sm" className="shrink-0" />
+          )}
         </div>
       ) : null}
 
@@ -258,9 +454,50 @@ export function BuyPanel({ listing }: BuyPanelProps) {
           <Badge variant="neutral" className="self-start">
             Sold {timeAgo(listing.createdAt) ? `· listed ${timeAgo(listing.createdAt)}` : ''}
           </Badge>
+          <p className="text-caption text-text-secondary">
+            This item has sold — similar pieces are below.
+          </p>
           <Button variant="secondary" size="lg" fullWidth onClick={() => router.push('/explore')}>
             Browse similar items
           </Button>
+        </div>
+      ) : sellerTrustPending ? (
+        /* Seller availability unresolved — quiet skeleton rather than
+           live CTAs that could 409 the moment the fetch lands. */
+        <div className="mt-5 flex flex-col gap-2" aria-busy aria-label="Checking availability">
+          <Skeleton className="h-12 w-full rounded-md" />
+          <Skeleton className="h-12 w-full rounded-md" />
+        </div>
+      ) : effectiveStateCopy ? (
+        /* Unavailable truth — reserved/paused/draft/removed listings,
+            away or restricted sellers, and viewer-blocked sellers get a
+            factual state and a browse fallback, never a purchase button
+            the backend would reject. Messaging stays unless the viewer
+            blocked the seller: a buyer can still ask about an away
+            seller's item, but nothing reaches a blocked member. */
+        <div className="mt-5 flex flex-col gap-2">
+          <Badge
+            variant="neutral"
+            icon={effectiveStateCopy === blockedStateCopy ? 'ban' : undefined}
+            className="self-start"
+          >
+            {effectiveStateCopy.label}
+          </Badge>
+          <p className="text-caption text-text-secondary">{effectiveStateCopy.subtitle}</p>
+          <Button variant="secondary" size="lg" fullWidth onClick={() => router.push('/explore')}>
+            Browse similar items
+          </Button>
+          {caps.canMessage && !sellerBlocked ? (
+            <Button
+              variant="quiet"
+              size="sm"
+              icon="chat"
+              onClick={handleMessage}
+              className="self-center"
+            >
+              Message seller
+            </Button>
+          ) : null}
         </div>
       ) : (
         <div className="mt-5 flex flex-col gap-2">
@@ -276,18 +513,54 @@ export function BuyPanel({ listing }: BuyPanelProps) {
             Buy now
           </Button>
           <div className="flex gap-2">
-            <Button
-              variant="secondary"
-              size="md"
-              fullWidth
-              icon="offer"
-              onClick={() => {
-                if (!requireAuth('purchase')) return;
-                setOfferOpen(true);
-              }}
-            >
-              Make an offer
-            </Button>
+            {activeOffer ? (
+              /* Standing offer — the composer stays closed; the buyer can
+                 see what's on the table and pull it. */
+              <div className="flex min-w-0 flex-1 items-center gap-2 rounded-md border border-border-subtle px-3 py-2">
+                <div className="min-w-0 flex-1">
+                  <p className="tnum text-body font-semibold text-text-primary">
+                    Your offer · {formatPrice(activeOffer.amount)}
+                  </p>
+                  <p className="clamp-1 text-meta text-text-secondary">
+                    {activeOffer.status === 'countered'
+                      ? 'Countered — reply in Offers'
+                      : 'Waiting for the seller'}
+                  </p>
+                </div>
+                <Link
+                  href="/offers"
+                  className="pressable shrink-0 rounded-md px-2 py-1.5 text-caption font-semibold text-text-secondary hover:text-text-primary"
+                >
+                  Offers
+                </Link>
+                <button
+                  type="button"
+                  disabled={withdrawOffer.isPending}
+                  onClick={() => {
+                    withdrawOffer.mutate(activeOffer.id, {
+                      onSuccess: () => show('Offer withdrawn', 'info'),
+                      onError: () => show('Could not withdraw the offer — try again.', 'error'),
+                    });
+                  }}
+                  className="pressable shrink-0 rounded-md px-2 py-1.5 text-caption font-semibold text-text-secondary hover:text-danger-text disabled:opacity-40"
+                >
+                  {withdrawOffer.isPending ? 'Withdrawing…' : 'Withdraw'}
+                </button>
+              </div>
+            ) : (
+              <Button
+                variant="secondary"
+                size="md"
+                fullWidth
+                icon="offer"
+                onClick={() => {
+                  if (!requireAuth('purchase')) return;
+                  setOfferOpen(true);
+                }}
+              >
+                Make an offer
+              </Button>
+            )}
             <IconButton
               name="bag"
               aria-label={inBag ? 'View bag' : 'Add to bag'}
@@ -306,33 +579,47 @@ export function BuyPanel({ listing }: BuyPanelProps) {
         <p className="tnum mt-2.5 text-caption text-text-secondary">{signalLine}</p>
       ) : null}
 
-      {/* Save / heart — icon-level actions, quiet row */}
+      {/* Save / heart — icon-level actions, quiet row. Save carries a
+          caret for the board picker (mobile's long-press tier): tap saves,
+          the caret files it to a board. */}
       <div className="mt-3 flex items-center gap-1 border-b border-border-subtle pb-4">
-        <button
-          type="button"
-          onClick={handleSave}
-          aria-pressed={isSaved}
-          className="pressable flex h-9 items-center gap-1.5 rounded-md px-2 text-caption font-medium text-text-secondary hover:text-text-primary"
-        >
-          <Icon name="bookmark" filled={isSaved} size={16} className={isSaved ? 'text-brand' : ''} />
-          {isSaved ? 'Saved' : 'Save'}
-        </button>
+        <span className="flex items-center">
+          <button
+            type="button"
+            onClick={handleSave}
+            aria-pressed={isSaved}
+            className="pressable -my-1 flex h-11 items-center gap-1.5 rounded-md px-2 text-caption font-medium text-text-secondary hover:text-text-primary"
+          >
+            <Icon name="bookmark" filled={isSaved} size={16} className={isSaved ? 'text-brand' : ''} />
+            {isSaved ? 'Saved' : 'Save'}
+          </button>
+          <button
+            type="button"
+            onClick={handleSaveToBoard}
+            aria-label="Save to a board"
+            className="pressable -my-1 -ml-0.5 flex h-11 w-8 items-center justify-center rounded-md text-text-secondary hover:text-text-primary"
+          >
+            <Icon name="chevronDown" size={12} />
+          </button>
+        </span>
         <button
           type="button"
           onClick={handleHeart}
           aria-pressed={isFav}
-          className="pressable flex h-9 items-center gap-1.5 rounded-md px-2 text-caption font-medium text-text-secondary hover:text-text-primary"
+          className="pressable -my-1 flex h-11 items-center gap-1.5 rounded-md px-2 text-caption font-medium text-text-secondary hover:text-text-primary"
         >
           <Icon name="heart" filled={isFav} size={16} className={isFav ? 'text-danger-text' : ''} />
           {isFav ? 'Favourited' : 'Favourite'}
         </button>
-        {!isOwner ? (
-          <ReportLauncher
-            target={{ type: 'listing', id: listing.id, label: listing.title }}
-            menuTitle="Listing options"
-            menuLabel="Report this item"
-          />
-        ) : null}
+        <button
+          type="button"
+          onClick={handleShare}
+          className="pressable -my-1 flex h-11 items-center gap-1.5 rounded-md px-2 text-caption font-medium text-text-secondary hover:text-text-primary"
+        >
+          <Icon name="share" size={16} />
+          Share
+        </button>
+        {!isOwner ? <ListingReportMenu listing={listing} /> : null}
         <span className="ml-auto flex items-center gap-3 text-meta text-text-muted">
           {/* When the conversational line already carries views/likes above
               the fold, the icon counters stay out of this row — the numbers
@@ -357,14 +644,14 @@ export function BuyPanel({ listing }: BuyPanelProps) {
         </span>
       </div>
 
-      {/* Shipping + protection — contract-driven lines, honest fallbacks.
-          Trust belongs at the decision point: this block sits in the
-          commerce cluster under the CTAs, not buried past the spec ledger.
-          shippingMethod is the only carrier field on Listing; no price or
-          ETA exists in the contract, so cost stays "calculated at checkout"
-          unless the seller covers it (shippingPayer === 'seller'). No
-          trailing border: the bundle row below opens with its own hairline
-          when it renders, and when it omits the panel simply ends. */}
+      {/* Delivery + returns + protection — the mobile ShippingReturnsInfo
+          block, mirrored at the decision point. Every line is contract-
+          backed: shippingPrice / ETA window from the listing commerce
+          payload, dispatch SLA from the listing or the platform default,
+          the seller's returnPolicy — and each falls back honestly when the
+          contract is silent. No trailing border: the bundle row below opens
+          with its own hairline when it renders, and when it omits the panel
+          simply ends. */}
       <div className="py-4">
         <div className="flex items-start gap-3">
           <Icon name="box" size={20} className="mt-0.5 shrink-0 text-text-secondary" />
@@ -373,13 +660,65 @@ export function BuyPanel({ listing }: BuyPanelProps) {
               {listing.shippingMethod ?? 'Delivery'}
               {seller?.location ? ` · from ${seller.location}` : ''}
             </p>
-            <p className="mt-0.5 text-caption text-text-secondary">
-              {listing.shippingPayer === 'seller'
-                ? 'Free delivery — the seller covers postage'
-                : 'Delivery calculated at checkout'}
+            <p className="tnum mt-0.5 text-caption text-text-secondary">
+              {deliveryCostLine(listing)}
+              {deliveryEtaLine(listing) ? ` · ${deliveryEtaLine(listing)}` : ''}
             </p>
           </div>
         </div>
+
+        {/* Dispatch certainty — the seller's own SLA when the contract
+            carries one reads as a commitment; the platform default only
+            earns the softer "typically" framing. */}
+        <div className="mt-2.5 flex items-start gap-3">
+          <Icon name="clock" size={20} className="mt-0.5 shrink-0 text-text-secondary" />
+          <p className="text-body font-medium text-text-primary">
+            {typeof listing.dispatchSlaDays === 'number' && listing.dispatchSlaDays > 0 ? (
+              <>
+                Dispatches within{' '}
+                <span className="tnum">{Math.round(listing.dispatchSlaDays)}</span>{' '}
+                {Math.round(listing.dispatchSlaDays) === 1 ? 'day' : 'days'}
+              </>
+            ) : (
+              <>
+                Typically dispatches in{' '}
+                <span className="tnum">{DISPATCH_SLA_DAYS}</span> days
+              </>
+            )}
+          </p>
+        </div>
+
+        <div className="mt-2.5 flex items-start gap-3">
+          <Icon name="repeat" size={20} className="mt-0.5 shrink-0 text-text-secondary" />
+          <div className="min-w-0">
+            <p className="text-body font-medium text-text-primary">{returnsLine(listing)}</p>
+            {listing.returnPolicy?.conditions ? (
+              <p className="mt-0.5 text-caption text-text-secondary">
+                {listing.returnPolicy.conditions}
+              </p>
+            ) : null}
+          </div>
+        </div>
+
+        {/* Physical verification — the order contract carries
+            verificationRequested for orders at/above the authentication
+            threshold, so the claim is backed by the record the purchase
+            will produce, not by a badge on the listing. */}
+        {listing.price >= AUTHENTICATION_THRESHOLD_GBP ? (
+          <div className="mt-2.5 flex items-start gap-3">
+            <Icon name="verified" size={20} className="mt-0.5 shrink-0 text-commerce-trust" />
+            <div className="min-w-0">
+              <p className="text-body font-medium text-text-primary">
+                Physical authentication included
+              </p>
+              <p className="mt-0.5 text-caption text-text-secondary">
+                Orders over{' '}
+                <span className="tnum">{formatPrice(AUTHENTICATION_THRESHOLD_GBP)}</span> are
+                checked by our verification team before they reach you.
+              </p>
+            </div>
+          </div>
+        ) : null}
 
         {/* Buyer Protection — expandable "What's covered" disclosure.
             Copy mirrors /buyer-protection — payment escrowed until
@@ -425,8 +764,9 @@ export function BuyPanel({ listing }: BuyPanelProps) {
 
       {/* Bundle upsell — same-seller picks with the BUNDLE_RULE tier.
           Self-omits when no bundle can be formed (sold item, own listing,
-          too little seller stock). */}
-      <BundleUpsellRow listing={listing} />
+          too little seller stock). A blocked seller never surfaces it —
+          buying more from them fails the same server gate. */}
+      {sellerBlocked ? null : <BundleUpsellRow listing={listing} />}
 
       {wall}
 
@@ -434,9 +774,26 @@ export function BuyPanel({ listing }: BuyPanelProps) {
         open={offerOpen}
         onClose={() => setOfferOpen(false)}
         listing={listing}
-        onSend={(amount) => {
-          recordSentOffer(listing, amount);
+        onSend={(amount, expiryHours) => {
+          if (DATA_MODE === 'live') {
+            // Live write — the offer only reads as sent once the backend
+            // has recorded it; failure surfaces an error, no fake success.
+            void commerceService
+              .makeOffer(listing.id, amount, {
+                originalPriceGbp: listing.price,
+                expiryHours,
+              })
+              .then(() => {
+                setOfferOpen(false);
+                void queryClient.invalidateQueries({ queryKey: ['listing-offer', listing.id] });
+                show(`Offer sent — ${formatPrice(amount)}`, 'success');
+              })
+              .catch(() => show('Could not send the offer — try again.', 'error'));
+            return;
+          }
+          recordSentOffer(listing, amount, expiryHours);
           setOfferOpen(false);
+          void queryClient.invalidateQueries({ queryKey: ['listing-offer', listing.id] });
           show(`Offer sent — ${formatPrice(amount)}`, 'success');
         }}
       />
@@ -446,6 +803,16 @@ export function BuyPanel({ listing }: BuyPanelProps) {
         onClose={() => setSizeGuideOpen(false)}
         guide={sizeGuide}
         currentSize={listing.size}
+      />
+
+      {/* Board picker — same sheet the saved/profile surfaces share.
+          Self-gates to members: guests hit the signup wall before this
+          ever opens, and the sheet itself returns null for guests. */}
+      <SaveToBoardSheet
+        open={boardOpen}
+        onClose={() => setBoardOpen(false)}
+        itemId={listing.id}
+        itemLabel={listing.title}
       />
     </div>
   );

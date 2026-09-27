@@ -4,8 +4,9 @@ import Link from 'next/link';
 import { AppImage } from '@/components/ui/AppImage';
 import { Icon } from '@/components/ui/Icon';
 import { IconButton } from '@/components/ui/IconButton';
-import { deriveLifecycleState, type CoOwnAsset } from '@/lib/contracts/coown';
-import { LIFECYCLE_LABEL, verificationLabel } from '../format';
+import type { CoOwnAsset } from '@/lib/contracts/coown';
+import { verificationLabel } from '../format';
+import { LifecycleTag } from '../LifecycleTag';
 import { Avatar } from '@/components/ui/Avatar';
 
 /**
@@ -102,10 +103,8 @@ export function MarketHeader({
         </div>
 
         <div className="flex shrink-0 items-center gap-3 sm:flex-col sm:items-end sm:gap-2">
-          <span className="inline-flex items-center gap-1.5 text-meta text-text-secondary">
-            <span className="h-1.5 w-1.5 rounded-full bg-coown-up" aria-hidden="true" />
-            {LIFECYCLE_LABEL[deriveLifecycleState(asset)]}
-          </span>
+          {/* Shared tag — the dot carries the halted/exiting tone. */}
+          <LifecycleTag asset={asset} />
           <span
             className="rounded border border-border-subtle px-1.5 py-0.5 text-micro font-semibold tracking-[0.08em] text-text-muted tnum"
             title="Single-price settlement"

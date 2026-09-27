@@ -22,22 +22,26 @@ import { IconButton } from '@/components/ui/IconButton';
 import { AccountMenu } from './AccountMenu';
 import { Button } from '@/components/ui/Button';
 import { useSession } from '@/lib/session/SessionProvider';
-import { useConversations } from '@/lib/hooks/queries';
+import { useSignupWall } from '@/components/auth/SignupWall';
+import { useConversations, useNotificationEntries } from '@/lib/hooks/queries';
 import { useStore, useHydrated } from '@/lib/store/useStore';
-import {
-  useNotificationCursor,
-  unreadNotificationCount,
-} from '@/lib/store/notificationCursor';
+import { useInboxPrefs } from '@/lib/store/inboxPrefs';
+import { useNotificationCursor } from '@/lib/store/notificationCursor';
 import { useRecentSearches } from '@/components/search/searchHistory';
+import { useLocale } from '@/lib/i18n';
 
 const SEARCH_LISTBOX_ID = 'header-search-listbox';
 
-/** Numeric utility badge — one pill grammar for alerts/inbox/bag. */
-function CountBadge({ count }: { count: number }) {
+/** Numeric utility badge. `alert` (danger) is reserved for counts that
+ *  need action — unread notifications, new messages. A bag count is
+ *  inventory, not an alarm, so it wears the neutral brand pill. */
+function CountBadge({ count, tone = 'alert' }: { count: number; tone?: 'alert' | 'neutral' }) {
   if (count <= 0) return null;
   return (
     <span
-      className="tnum pointer-events-none absolute right-0.5 top-0.5 flex h-4 min-w-4 items-center justify-center rounded-full bg-danger px-1 text-[10px] font-bold leading-none text-scrim-text-primary"
+      className={`tnum pointer-events-none absolute right-0.5 top-0.5 flex h-4 min-w-4 items-center justify-center rounded-full px-1 text-[10px] font-bold leading-none ${
+        tone === 'alert' ? 'bg-danger text-scrim-text-primary' : 'bg-brand text-text-inverse'
+      }`}
       aria-hidden
     >
       {count > 9 ? '9+' : count}
@@ -48,8 +52,11 @@ function CountBadge({ count }: { count: number }) {
 export function Header() {
   const pathname = usePathname();
   const router = useRouter();
+  const { t } = useLocale();
   const { isGuest } = useSession();
+  const { requireAuth, wall } = useSignupWall();
   const { data: conversations } = useConversations();
+  const { data: notifEntries } = useNotificationEntries();
   const clearedNotifIds = useNotificationCursor((s) => s.clearedIds);
   const hydrated = useHydrated();
   const bagCount = useStore((s) => s.bag.length);
@@ -59,8 +66,21 @@ export function Header() {
   const searchBoxRef = useRef<HTMLDivElement>(null);
   const { recent, add: addRecent, remove: removeRecent } = useRecentSearches();
 
-  const unreadChats = (conversations ?? []).filter((c) => c.unread).length;
-  const unreadNotifs = unreadNotificationCount(clearedNotifIds);
+  const requestResolutions = useInboxPrefs((s) => s.requests);
+  // Muted threads report unread: false through useConversations, and
+  // message requests never inflate the unread count — pending requests
+  // add as their own count, like mobile's TabNavigator badge.
+  const unreadChats =
+    (conversations ?? []).filter((c) => c.unread && !c.isRequest).length +
+    (conversations ?? []).filter(
+      (c) => c.isRequest && !(hydrated && requestResolutions[c.id]),
+    ).length;
+  // Structured feed unreads minus the persisted read overlay — zero until
+  // hydration so SSR and the first client render agree.
+  const unreadNotifs = hydrated
+    ? (notifEntries ?? []).filter((n) => n.unread && !clearedNotifIds.includes(n.id)).length
+    : 0;
+  const bagTotal = hydrated ? bagCount : 0;
 
   const suggestions = buildSuggestionOptions(q, recent);
 
@@ -93,6 +113,13 @@ export function Header() {
     e.preventDefault();
     selectTerm(q);
   };
+
+  // Close on route change — a selection (or the pinned visual-search
+  // link) navigates; the panel must not linger across the transition.
+  useEffect(() => {
+    setSearchOpen(false);
+    setActiveOption(-1);
+  }, [pathname]);
 
   // Close on pointer-down outside the field + panel.
   useEffect(() => {
@@ -132,15 +159,18 @@ export function Header() {
   };
 
   return (
+    <>
     <header className="sticky top-0 z-sticky border-b border-border-subtle bg-header">
-      <div className="mx-auto flex h-16 max-w-[1440px] items-center gap-3 px-4 sm:gap-4 sm:px-6">
+      <div className="mx-auto flex h-14 max-w-[1440px] items-center gap-2 px-4 sm:gap-3 md:h-16 md:gap-4 md:px-6">
         <Logo className="shrink-0" />
 
         {/* Primary nav — desktop only, department flyouts on hover/focus */}
         <DepartmentNav />
 
-        {/* Search — command-center, grows to fill */}
-        <form onSubmit={submit} role="search" className="mx-auto w-full min-w-0 max-w-xl flex-1">
+        {/* Search — command-center, grows to fill. Below md it collapses
+            to an icon that routes to the dedicated /search surface; the
+            mobile tab bar owns primary navigation. */}
+        <form onSubmit={submit} role="search" className="mx-auto hidden w-full min-w-0 max-w-xl flex-1 md:block">
           <div ref={searchBoxRef} className="relative">
             <label className="relative block">
               <span className="pointer-events-none absolute left-3.5 top-1/2 -translate-y-1/2 text-text-muted">
@@ -161,11 +191,12 @@ export function Header() {
                   }
                 }}
                 onKeyDown={onSearchKeyDown}
-                placeholder="Search items, brands, members"
-                aria-label="Search items, brands, members"
+                placeholder={t('chrome.header.searchPlaceholder')}
+                aria-label={t('chrome.header.searchPlaceholder')}
                 role="combobox"
                 aria-expanded={searchOpen}
                 aria-controls={SEARCH_LISTBOX_ID}
+                aria-haspopup="listbox"
                 aria-autocomplete="list"
                 aria-activedescendant={
                   searchOpen && activeOption >= 0
@@ -192,12 +223,20 @@ export function Header() {
           </div>
         </form>
 
-        {/* Utilities — transparent 44px targets, glyph scrim not needed off-media */}
-        <div className="flex shrink-0 items-center gap-0.5">
+        {/* Utilities — transparent 44px targets, glyph scrim not needed
+            off-media. Mobile keeps search, alerts, bag, account — the
+            actions the tab bar doesn't carry. */}
+        <div className="ml-auto flex shrink-0 items-center gap-0.5 md:ml-0">
+          <IconButton
+            name="search"
+            aria-label={t('chrome.header.searchPlaceholder')}
+            onClick={() => router.push('/search')}
+            className="md:hidden"
+          />
           <span className="relative inline-flex">
             <IconButton
               name="notifications"
-              aria-label={`Notifications${unreadNotifs ? `, ${unreadNotifs} new` : ''}`}
+              aria-label={`${t('chrome.header.notifications')}${unreadNotifs ? `, ${unreadNotifs} new` : ''}`}
               onClick={() => router.push('/notifications')}
             />
             {hydrated ? <CountBadge count={unreadNotifs} /> : null}
@@ -205,38 +244,42 @@ export function Header() {
           <span className="relative hidden sm:inline-flex">
             <IconButton
               name="inbox"
-              aria-label={`Inbox${unreadChats ? `, ${unreadChats} unread` : ''}`}
-              onClick={() => router.push('/inbox')}
+              aria-label={`${t('chrome.header.inbox')}${unreadChats ? `, ${unreadChats} unread` : ''}`}
+              onClick={() => {
+                if (requireAuth('message_seller')) router.push('/inbox');
+              }}
             />
             {hydrated ? <CountBadge count={unreadChats} /> : null}
           </span>
-          <span className="relative hidden sm:inline-flex">
+          <span className="relative inline-flex">
             <IconButton
               name="cart"
-              aria-label={`Bag${bagCount ? `, ${bagCount} items` : ''}`}
+              aria-label={`${t('chrome.header.bag')}${bagTotal ? `, ${bagTotal} items` : ''}`}
               onClick={() => router.push('/bag')}
             />
-            {hydrated ? <CountBadge count={bagCount} /> : null}
+            {hydrated ? <CountBadge count={bagTotal} tone="neutral" /> : null}
           </span>
 
           <Button
             variant="primary"
             size="sm"
             icon="plus"
-            className="ml-2 hidden h-10 rounded-full md:inline-flex"
-            onClick={() => router.push('/sell')}
+            className="ml-2 hidden h-11 rounded-full md:inline-flex"
+            onClick={() => {
+              if (requireAuth('create_listing')) router.push('/sell');
+            }}
           >
-            Sell now
+            {t('chrome.header.sellNow')}
           </Button>
 
           {isGuest ? (
             <Button
               variant="secondary"
               size="sm"
-              className="ml-2 h-10 rounded-full"
+              className="ml-2 h-11 rounded-full"
               onClick={() => router.push('/auth')}
             >
-              Sign in
+              {t('chrome.tabs.signIn')}
             </Button>
           ) : (
             <AccountMenu />
@@ -244,11 +287,11 @@ export function Header() {
         </div>
       </div>
 
-      {/* Department rail — below lg the primary nav hides, so departments
-          ride a second scrollable row (mobile-web grammar, Vinted-style). */}
+      {/* Department rail — only in the md–lg gap: below md the tab bar
+          owns navigation, at lg the inline DepartmentNav takes over. */}
       <nav
-        className="no-scrollbar flex items-center gap-1 overflow-x-auto border-t border-border-subtle px-3 lg:hidden"
-        aria-label="Departments"
+        className="no-scrollbar hidden items-center gap-1 overflow-x-auto border-t border-border-subtle px-3 md:flex lg:hidden"
+        aria-label={t('chrome.header.departments')}
       >
         {NAV.map((item) => {
           const active = item.href === '/' ? pathname === '/' : pathname.startsWith(item.href);
@@ -261,7 +304,7 @@ export function Header() {
                 active ? 'text-text-primary' : 'text-text-secondary'
               }`}
             >
-              {item.label}
+              {t(`chrome.nav.${item.labelKey}`)}
               {active ? (
                 <span className="absolute inset-x-3 bottom-0 h-0.5 rounded-full bg-text-primary" aria-hidden />
               ) : null}
@@ -270,5 +313,7 @@ export function Header() {
         })}
       </nav>
     </header>
+    {wall}
+    </>
   );
 }

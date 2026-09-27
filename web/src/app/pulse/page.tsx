@@ -29,9 +29,24 @@ function usePulseFeed() {
 
 export default function PulsePage() {
   const router = useRouter();
-  const { data: cards, isLoading } = usePulseFeed();
+  const { data: cards, isLoading, isError, refetch } = usePulseFeed();
 
   if (isLoading) return <PulseFeedSkeleton />;
+
+  // Last-good wins over the error panel: a failed refetch keeps the
+  // populated feed on screen (FRESH-02) — the error state is only for a
+  // no-content failure.
+  if (isError && (!cards || cards.length === 0)) {
+    return (
+      <EmptyState
+        icon="warning"
+        title="Couldn't load Pulse"
+        subtitle="Check your connection and try again."
+        actionLabel="Try again"
+        onAction={() => void refetch()}
+      />
+    );
+  }
 
   if (!cards || cards.length === 0) {
     return (

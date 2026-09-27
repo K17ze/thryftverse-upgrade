@@ -114,6 +114,7 @@ export function ReviewPromptSheet({
               onChange={(e) => setText(e.target.value)}
               rows={3}
               maxLength={500}
+              aria-label="Review text"
               placeholder="How was the item, the packaging, the dispatch time?"
               className="mt-4 w-full rounded-md border border-border bg-input px-3 py-2 text-body text-input-text placeholder:text-text-muted focus:border-text-muted"
             />

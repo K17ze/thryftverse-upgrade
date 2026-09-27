@@ -133,11 +133,18 @@ export function LiveView() {
 
   const [hero, ...restLive] = live;
 
+  // Keep the watched session pinned to the latest hub data — a host
+  // ending their show flips the cached session to 'ended', and the
+  // overlay should stop claiming it's live.
+  const watchingFresh =
+    (watching && data.find((s) => s.id === watching.id)) ?? watching;
+
   return (
     <>
       <div className="space-y-10 pb-10">
-        {/* Category rails — one filter across every section */}
-        {categories.length > 0 ? (
+        {/* Category rails — one filter across every section; only when
+            the contract actually carries more than one category. */}
+        {categories.length > 1 ? (
           <div className="no-scrollbar -mx-4 overflow-x-auto px-4 sm:-mx-6 sm:px-6">
             <CategoryFilter
               categories={categories}
@@ -200,7 +207,7 @@ export function LiveView() {
         ) : null}
       </div>
 
-      <LiveViewerOverlay session={watching} onClose={() => setWatching(null)} />
+      <LiveViewerOverlay session={watchingFresh} onClose={() => setWatching(null)} />
     </>
   );
 }

@@ -67,7 +67,7 @@ function LinkRow({
   detail,
 }: {
   href: string;
-  icon: 'receipt' | 'trending';
+  icon: 'receipt' | 'trending' | 'bookmark';
   label: string;
   detail: string;
 }) {
@@ -206,6 +206,12 @@ export function AgentsHub() {
             icon="receipt"
             label="Agent ledger"
             detail="Every action your agents have taken"
+          />
+          <LinkRow
+            href="/agents/memory"
+            icon="bookmark"
+            label="Agent memory"
+            detail="See and forget what your agents remember"
           />
           <LinkRow
             href="/agents/algorithm"

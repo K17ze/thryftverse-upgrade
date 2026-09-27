@@ -71,7 +71,7 @@ export function VisualSearchQueryPanel({
           type="button"
           onClick={onToggleFraming}
           aria-pressed={framing}
-          className={`pressable flex items-center gap-1.5 rounded-md px-2.5 py-2 text-caption font-medium ${
+          className={`pressable flex h-10 items-center gap-1.5 rounded-md px-2.5 text-caption font-medium ${
             framing || region ? 'text-text-primary' : 'text-text-secondary hover:text-text-primary'
           } hover:bg-surface-alt`}
         >
@@ -81,7 +81,7 @@ export function VisualSearchQueryPanel({
         <button
           type="button"
           onClick={() => replaceRef.current?.click()}
-          className="pressable flex items-center gap-1.5 rounded-md px-2.5 py-2 text-caption font-medium text-text-secondary hover:bg-surface-alt hover:text-text-primary"
+          className="pressable flex h-10 items-center gap-1.5 rounded-md px-2.5 text-caption font-medium text-text-secondary hover:bg-surface-alt hover:text-text-primary"
         >
           <Icon name="repeat" size={16} />
           Replace
@@ -89,7 +89,7 @@ export function VisualSearchQueryPanel({
         <button
           type="button"
           onClick={onRemove}
-          className="pressable flex items-center gap-1.5 rounded-md px-2.5 py-2 text-caption font-medium text-text-secondary hover:bg-surface-alt hover:text-text-primary"
+          className="pressable flex h-10 items-center gap-1.5 rounded-md px-2.5 text-caption font-medium text-text-secondary hover:bg-surface-alt hover:text-text-primary"
         >
           <Icon name="trash" size={16} />
           Remove

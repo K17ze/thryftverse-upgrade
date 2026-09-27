@@ -28,6 +28,8 @@ export interface ClosetFilters {
   conditions: ListingCondition[];
   /** Category slug — null means any. */
   category: string | null;
+  /** Mobile's wishlist price-drop toggle — shows only discounted items. */
+  priceDropsOnly: boolean;
 }
 
 export const EMPTY_CLOSET_FILTERS: ClosetFilters = {
@@ -36,7 +38,31 @@ export const EMPTY_CLOSET_FILTERS: ClosetFilters = {
   sizes: [],
   conditions: [],
   category: null,
+  priceDropsOnly: false,
 };
+
+// ── Price drops — the contract's originalPrice field is the only honest
+//    signal (mobile ClosetMediaMosaic parity): a real previous price the
+//    listing dropped from. Sold items never carry the signal. ──
+export function listingHasPriceDrop(l: Listing): boolean {
+  return (
+    !l.isSold &&
+    l.status !== 'sold' &&
+    typeof l.originalPrice === 'number' &&
+    l.originalPrice > l.price
+  );
+}
+
+export function priceDropPercent(l: Listing): number {
+  return listingHasPriceDrop(l)
+    ? Math.round(((l.originalPrice! - l.price) / l.originalPrice!) * 100)
+    : 0;
+}
+
+/** Live price drops in a closet set — drives the filter chip's count. */
+export function priceDropCount(items: Listing[]): number {
+  return items.reduce((n, l) => n + (listingHasPriceDrop(l) ? 1 : 0), 0);
+}
 
 export interface ClosetFacet<T = string> {
   value: T;
@@ -115,6 +141,7 @@ export function applyClosetFilters(items: Listing[], f: ClosetFilters): Listing[
     }
     if (f.conditions.length > 0 && !f.conditions.includes(l.condition)) return false;
     if (f.category && l.category !== f.category) return false;
+    if (f.priceDropsOnly && !listingHasPriceDrop(l)) return false;
     return true;
   });
 }
@@ -151,5 +178,7 @@ export function countClosetFacetFilters(f: ClosetFilters): number {
 
 /** Any narrowing at all — drives the active-chips row and scoped empty state. */
 export function countActiveClosetFilters(f: ClosetFilters): number {
-  return countClosetFacetFilters(f) + (f.query.trim() ? 1 : 0);
+  return (
+    countClosetFacetFilters(f) + (f.query.trim() ? 1 : 0) + (f.priceDropsOnly ? 1 : 0)
+  );
 }

@@ -26,17 +26,35 @@ interface PdpRailsProps {
   sellerItems: Listing[];
   similarItems: Listing[];
   isLoading?: boolean;
+  /** Live similar-listings read still in flight — the band renders a
+   *  skeleton rather than popping in unannounced. */
+  similarLoading?: boolean;
+  /** The seller-listings query failed — render the honest inline notice
+   *  (mobile ItemDetailFooterNotices' recs-unavailable grammar) instead
+   *  of silently omitting the closet rail. */
+  hasError?: boolean;
+  onRetry?: () => void;
 }
 
-export function PdpRails({ listing, sellerItems, similarItems, isLoading }: PdpRailsProps) {
+export function PdpRails({
+  listing,
+  sellerItems,
+  similarItems,
+  isLoading,
+  similarLoading,
+  hasError,
+  onRetry,
+}: PdpRailsProps) {
   const seller = listing.seller;
   const sellerUsername = seller?.username ?? null;
 
   /**
-   * Match basis for the similar rail — similarListings scores brand,
-   * subcategory then category overlap. The heading names whichever signal
-   * actually dominates the returned set; when the match is only
-   * category-level it reads "Similar style" — still true, still stated.
+   * Match basis for the similar rail — the source (live: the
+   * /listings/:id/related category+brand match; fixture: the brand,
+   * subcategory then category scorer) decides what the returned set shares.
+   * The heading names whichever signal actually dominates that set; when
+   * the match is only category-level it reads "Similar style" — still
+   * true, still stated.
    */
   const similarTitle = useMemo(() => {
     if (!similarItems.length) return 'Similar items';
@@ -67,6 +85,26 @@ export function PdpRails({ listing, sellerItems, similarItems, isLoading }: PdpR
 
   return (
     <div>
+      {/* Fetch failure — an honest inline notice with retry, not a
+          silently missing rail. */}
+      {hasError && sellerItems.length === 0 ? (
+        <div className="border-t border-border-subtle px-4 py-6 sm:px-6">
+          <p className="flex items-center gap-1.5 text-caption text-text-secondary" role="status">
+            <Icon name="alert" size={14} className="shrink-0 text-warning-text" />
+            The seller&apos;s other items couldn&apos;t be loaded.
+            {onRetry ? (
+              <button
+                type="button"
+                onClick={onRetry}
+                className="pressable ml-1 font-semibold text-text-secondary underline underline-offset-2 hover:text-text-primary"
+              >
+                Try again
+              </button>
+            ) : null}
+          </p>
+        </div>
+      ) : null}
+
       {sellerItems.length > 0 ? (
         <section className="border-t border-border-subtle py-6" aria-labelledby="pdp-seller-rail">
           {sellerUsername ? (
@@ -136,6 +174,22 @@ export function PdpRails({ listing, sellerItems, similarItems, isLoading }: PdpR
               <div key={item.id} role="listitem" className="w-[150px] shrink-0 sm:w-[180px]">
                 <ProductTile item={mapListingToDiscoverySummary(item)} />
               </div>
+            ))}
+          </div>
+        </section>
+      ) : similarLoading ? (
+        /* Related-listings read in flight — a quiet skeleton band, never
+           a fixture rail standing in for live results. */
+        <section className="border-t border-border-subtle py-6" aria-busy aria-hidden>
+          <div className="mb-4 px-4 sm:px-6">
+            <Skeleton className="h-5 w-40" />
+          </div>
+          <div className="flex gap-2 overflow-hidden px-4 sm:px-6">
+            {Array.from({ length: 5 }).map((_, i) => (
+              <Skeleton
+                key={i}
+                className="aspect-[0.8] w-[150px] shrink-0 rounded-lg sm:w-[180px]"
+              />
             ))}
           </div>
         </section>

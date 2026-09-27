@@ -7,11 +7,12 @@
  * localStorage flag keeps it from returning.
  */
 
-import { useEffect, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import { createPortal } from 'react-dom';
 import { Button } from '@/components/ui/Button';
 import { Icon, type AppIconName } from '@/components/ui/Icon';
 import { IconButton } from '@/components/ui/IconButton';
+import { lockBodyScroll } from '@/lib/a11y/scrollLock';
 
 const SEEN_KEY = 'thryftverse:coown-onboarded';
 
@@ -49,6 +50,7 @@ export function CoOwnOnboardingGate() {
   const [mounted, setMounted] = useState(false);
   const [seen, setSeen] = useState(true);
   const [index, setIndex] = useState(0);
+  const dialogRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
     setMounted(true);
@@ -59,22 +61,66 @@ export function CoOwnOnboardingGate() {
     }
   }, []);
 
-  if (!mounted || seen) return null;
-
-  const slide = SLIDES[index]!;
-  const isLast = index === SLIDES.length - 1;
-
-  const dismiss = () => {
+  const dismiss = useCallback(() => {
     try {
       window.localStorage.setItem(SEEN_KEY, '1');
     } catch {
       /* private mode — treat as seen for this mount anyway */
     }
     setSeen(true);
-  };
+  }, []);
+
+  const visible = mounted && !seen;
+
+  // Dialog semantics — Escape dismisses, focus is captured inside while
+  // open (same trap grammar as the Sheet primitive), restored on close.
+  useEffect(() => {
+    if (!visible) return;
+    const prev = document.activeElement as HTMLElement | null;
+    dialogRef.current?.focus();
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') dismiss();
+      if (e.key === 'Tab' && dialogRef.current) {
+        const focusables = dialogRef.current.querySelectorAll<HTMLElement>(
+          'button, [href], input, select, textarea, [tabindex]:not([tabindex="-1"])',
+        );
+        if (focusables.length === 0) return;
+        const first = focusables[0];
+        const last = focusables[focusables.length - 1];
+        if (e.shiftKey && document.activeElement === first) {
+          e.preventDefault();
+          last.focus();
+        } else if (!e.shiftKey && document.activeElement === last) {
+          e.preventDefault();
+          first.focus();
+        }
+      }
+    };
+    document.addEventListener('keydown', onKey);
+    // Refcounted scroll lock — a sibling overlay (sheet, wall) closing
+    // while the gate is open must not unlock the body under it.
+    const unlock = lockBodyScroll();
+    return () => {
+      document.removeEventListener('keydown', onKey);
+      unlock();
+      prev?.focus();
+    };
+  }, [visible, dismiss]);
+
+  if (!visible) return null;
+
+  const slide = SLIDES[index]!;
+  const isLast = index === SLIDES.length - 1;
 
   return createPortal(
-    <div className="fixed inset-0 z-modal flex flex-col bg-background" role="dialog" aria-modal="true" aria-label="Co-Own introduction">
+    <div
+      ref={dialogRef}
+      tabIndex={-1}
+      className="fixed inset-0 z-modal flex flex-col bg-background outline-none"
+      role="dialog"
+      aria-modal="true"
+      aria-label="Co-Own introduction"
+    >
       {/* Header — back/close, progress, skip */}
       <div className="mx-auto flex w-full max-w-xl items-center justify-between px-4 pt-4 sm:px-6">
         {index > 0 ? (

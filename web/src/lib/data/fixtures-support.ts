@@ -6,7 +6,34 @@
  * and are deterministic so SSR and client render identically.
  */
 
-import type { SupportTicket } from '@/lib/contracts/support';
+import type {
+  SupportAuthorRole,
+  SupportTicket,
+  SupportTicketMessage,
+} from '@/lib/contracts/support';
+import { listingById } from '@/lib/data/fixtures';
+
+/**
+ * Long-thread helper — a transcript of (role, body) pairs spaced `gapMin`
+ * apart from `startIso`, so fixture threads stay deterministic while still
+ * exercising thread pagination (> 20 messages).
+ */
+function thread(
+  idPrefix: string,
+  startIso: string,
+  gapMin: number,
+  lines: Array<[SupportAuthorRole, string, string | null]>,
+): SupportTicketMessage[] {
+  const start = new Date(startIso).getTime();
+  return lines.map(([role, body, authorName], i) => ({
+    id: `${idPrefix}-m${i + 1}`,
+    role,
+    authorName,
+    body,
+    createdAt: new Date(start + i * gapMin * 60_000).toISOString(),
+    status: 'sent' as const,
+  }));
+}
 
 export const SUPPORT_TICKETS: SupportTicket[] = [
   {
@@ -15,6 +42,7 @@ export const SUPPORT_TICKETS: SupportTicket[] = [
     topicId: 'order_issue',
     topicLabel: 'Order issue',
     orderRef: 'ord-1042',
+    contextLinks: [{ kind: 'listing', id: 'l6' }],
     status: 'in_review',
     priority: 'high',
     messages: [
@@ -67,6 +95,12 @@ export const SUPPORT_TICKETS: SupportTicket[] = [
     topicId: 'refund',
     topicLabel: 'Refund',
     orderRef: 'ord-1038',
+    contextLinks: [{ kind: 'listing', id: 'l19' }],
+    // Two photos attached with the return request — the customer message
+    // references them ("Photos attached to the return request").
+    evidence: (listingById('l19')?.images ?? [])
+      .slice(0, 2)
+      .map((uri, i) => ({ id: `ev-47911-${i + 1}`, uri })),
     status: 'resolved',
     priority: 'normal',
     messages: [
@@ -89,6 +123,7 @@ export const SUPPORT_TICKETS: SupportTicket[] = [
     ],
     events: [
       { kind: 'opened', label: 'Case opened', at: '2026-09-20T18:40:00Z' },
+      { kind: 'evidence', label: 'Evidence received', detail: '2 photos attached', at: '2026-09-20T18:41:00Z' },
       { kind: 'in_review', label: 'In review', detail: 'Assigned to Resolutions', at: '2026-09-21T09:00:00Z' },
       { kind: 'resolved', label: 'Resolved', detail: 'Refund approved', at: '2026-09-22T10:05:00Z' },
     ],
@@ -99,6 +134,58 @@ export const SUPPORT_TICKETS: SupportTicket[] = [
     csat: null,
     createdAt: '2026-09-20T18:40:00Z',
     updatedAt: '2026-09-22T10:05:00Z',
+  },
+  {
+    // Long AI-handled thread on the delivery-failed order — exercises the
+    // message pagination and the "Talk to a person" handoff (no human has
+    // replied yet, so the assistant still owns the conversation).
+    id: 'tv-47680',
+    ref: 'TV-47680',
+    topicId: 'order_issue',
+    topicLabel: 'Order issue',
+    orderRef: 'ord-1053',
+    contextLinks: [{ kind: 'listing', id: 'l15' }],
+    status: 'open',
+    priority: 'normal',
+    messages: thread('t47680', '2026-09-25T09:02:00Z', 95, [
+      ['customer', 'Order ord-1053 shows "delivery failed" but I was home all day — no card was left either.', null],
+      ['agent_ai', 'Sorry about that. I can see the carrier recorded a failed attempt at 14:30 with "no access to the building" as the reason.', 'ThryftVerse Assistant'],
+      ['customer', 'There\'s a concierge at my building — they always take parcels. Can you check what address the driver went to?', null],
+      ['agent_ai', 'The delivery GPS ping places the driver at the correct postcode. Sometimes the access note is logged by default when a signature can\'t be obtained.', 'ThryftVerse Assistant'],
+      ['customer', 'So what happens now? Do they try again?', null],
+      ['agent_ai', 'The carrier will usually re-attempt on the next working day. I\'ve flagged the parcel for redelivery and added a note that a concierge is available.', 'ThryftVerse Assistant'],
+      ['customer', 'The tracking hasn\'t moved since the failed attempt though.', null],
+      ['agent_ai', 'You\'re right — the last scan is still the failed delivery event. If there\'s no new scan by tomorrow morning I\'ll escalate this to a carrier trace.', 'ThryftVerse Assistant'],
+      ['system', 'Redelivery requested with the carrier.', null],
+      ['customer', 'Morning — still nothing on tracking.', null],
+      ['agent_ai', 'I\'ve opened a trace with the carrier now. They have 48 hours to locate the parcel or confirm it as lost.', 'ThryftVerse Assistant'],
+      ['customer', 'And if it\'s lost?', null],
+      ['agent_ai', 'Then you\'re covered by Buyer Protection — a full refund including postage, no need to chase the carrier yourself.', 'ThryftVerse Assistant'],
+      ['customer', 'Ok. The seller hasn\'t replied to my message about this either.', null],
+      ['agent_ai', 'I can see the message is unread. Sellers aren\'t required to respond during a carrier trace — the resolution comes through the protection claim.', 'ThryftVerse Assistant'],
+      ['customer', 'Understood. How will I know when the trace completes?', null],
+      ['agent_ai', 'I\'ll update this thread the moment the carrier responds. You\'ll also get an email.', 'ThryftVerse Assistant'],
+      ['customer', 'Thanks. One more thing — the parcel was supposed to be a gift for this weekend.', null],
+      ['agent_ai', 'I\'m sorry it won\'t make it in time. If the trace comes back as delivered-to-wrong-address the refund still covers you in full.', 'ThryftVerse Assistant'],
+      ['customer', 'Is there any chance it still arrives today?', null],
+      ['agent_ai', 'Realistically no — the parcel is still at the national hub per the last confirmed scan. I won\'t promise what tracking doesn\'t show.', 'ThryftVerse Assistant'],
+      ['customer', 'Appreciate the honesty. I\'ll wait for the trace.', null],
+      ['agent_ai', 'The trace is logged under reference CRT-55621. Nothing needed from you meanwhile.', 'ThryftVerse Assistant'],
+      ['system', 'Carrier trace CRT-55621 opened.', null],
+      ['customer', 'Hi — checking in, it\'s been a day and a half.', null],
+      ['agent_ai', 'The carrier has about 12 hours left on the trace window. Still no new scans, which is common mid-trace.', 'ThryftVerse Assistant'],
+      ['customer', 'Ok, thanks for the update.', null],
+      ['agent_ai', 'I\'ll post here as soon as the carrier closes the trace — one way or the other you\'ll have an answer by tomorrow.', 'ThryftVerse Assistant'],
+    ]),
+    events: [
+      { kind: 'opened', label: 'Case opened', detail: 'Order issue · ord-1053', at: '2026-09-25T09:02:00Z' },
+      { kind: 'note', label: 'Redelivery requested', at: '2026-09-25T20:30:00Z' },
+      { kind: 'note', label: 'Carrier trace opened', detail: 'Reference CRT-55621', at: '2026-09-26T08:50:00Z' },
+    ],
+    resolution: null,
+    csat: null,
+    createdAt: '2026-09-25T09:02:00Z',
+    updatedAt: '2026-09-27T10:15:00Z',
   },
   {
     id: 'tv-48150',
@@ -138,6 +225,8 @@ export const SUPPORT_TICKETS: SupportTicket[] = [
     topicId: 'payments',
     topicLabel: 'Payments & payouts',
     orderRef: null,
+    // The withdrawal the case is about — payout detail lives in Wallet.
+    contextLinks: [{ kind: 'payout', id: 'TVP-88231' }],
     status: 'closed',
     priority: 'low',
     messages: [

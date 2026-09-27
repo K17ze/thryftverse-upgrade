@@ -10,6 +10,7 @@
 import { useState } from 'react';
 import { Button } from '@/components/ui/Button';
 import { Icon } from '@/components/ui/Icon';
+import { useToast } from '@/components/ui/Toast';
 import {
   SUPPORT_TOPICS,
   topicById,
@@ -23,27 +24,37 @@ const FIELD_CLASS =
 interface NewTicketFormProps {
   onCreated: (ticketId: string) => void;
   onCancel: () => void;
+  /** Preselects the topic — the hub's shortcut row passes one through. */
+  initialTopic?: SupportTopicId;
 }
 
-export function NewTicketForm({ onCreated, onCancel }: NewTicketFormProps) {
+export function NewTicketForm({ onCreated, onCancel, initialTopic }: NewTicketFormProps) {
   const { createTicket } = useSupportActions();
-  const [topicId, setTopicId] = useState<SupportTopicId | ''>('');
+  const { show } = useToast();
+  const [topicId, setTopicId] = useState<SupportTopicId | ''>(initialTopic ?? '');
   const [orderRef, setOrderRef] = useState('');
   const [message, setMessage] = useState('');
   const [touched, setTouched] = useState(false);
+  const [submitting, setSubmitting] = useState(false);
 
   const topic = topicId ? topicById(topicId) : undefined;
-  const canSubmit = topicId !== '' && message.trim().length >= 10;
+  const canSubmit = topicId !== '' && message.trim().length >= 10 && !submitting;
 
   const submit = async () => {
     setTouched(true);
     if (!canSubmit) return;
-    const ticket = await createTicket({
-      topicId,
-      orderRef: orderRef.trim() || null,
-      message: message.trim(),
-    });
-    onCreated(ticket.id);
+    setSubmitting(true);
+    try {
+      const ticket = await createTicket({
+        topicId,
+        orderRef: orderRef.trim() || null,
+        message: message.trim(),
+      });
+      onCreated(ticket.id);
+    } catch {
+      show("Couldn't open the case — check your connection and try again.", 'error');
+      setSubmitting(false);
+    }
   };
 
   return (
@@ -67,7 +78,7 @@ export function NewTicketForm({ onCreated, onCancel }: NewTicketFormProps) {
             id="ticket-topic"
             value={topicId}
             onChange={(e) => setTopicId(e.target.value as SupportTopicId | '')}
-            className={`${FIELD_CLASS} appearance-none pr-9`}
+            className={`${FIELD_CLASS} h-11 appearance-none pr-9`}
           >
             <option value="" disabled>
               Choose a topic
@@ -99,7 +110,7 @@ export function NewTicketForm({ onCreated, onCancel }: NewTicketFormProps) {
           value={orderRef}
           onChange={(e) => setOrderRef(e.target.value)}
           placeholder="e.g. ord-1042"
-          className={`tnum mt-1.5 ${FIELD_CLASS}`}
+          className={`tnum mt-1.5 h-11 ${FIELD_CLASS}`}
         />
       </div>
 
@@ -135,7 +146,7 @@ export function NewTicketForm({ onCreated, onCancel }: NewTicketFormProps) {
 
       <div className="flex flex-col gap-2">
         <Button type="submit" variant="primary" size="lg" fullWidth disabled={!canSubmit}>
-          Open case
+          {submitting ? 'Opening…' : 'Open case'}
         </Button>
         <Button type="button" variant="quiet" size="md" onClick={onCancel}>
           Cancel

@@ -42,7 +42,6 @@
   --coown-down-subtle: rgba(255, 155, 155, 0.16);
   --social: #9A6B7A;
   --discovery: #B85566;
-  --discovery-subtle: rgba(184, 85, 102, 0.12);
   --commerce-trust: #4A7AC4;
   --commerce-trust-subtle: rgba(74, 122, 196, 0.10);
   --commerce-trust-border: rgba(74, 122, 196, 0.20);
@@ -50,8 +49,6 @@
   --scrim-text-primary: #FFFFFF;
   --scrim-text-secondary: rgba(255, 255, 255, 0.88);
   --scrim-text-tertiary: rgba(255, 255, 255, 0.40);
-  --media-overlay-text: #FFFFFF;
-  --media-overlay-text-muted: rgba(255, 255, 255, 0.7);
   --media-overlay-scrim: rgba(0, 0, 0, 0.6);
   --media-outline: rgba(255, 255, 255, 0.08);
   --overlay: rgba(0, 0, 0, 0.66);
@@ -104,7 +101,6 @@
   --coown-down-subtle: rgba(95, 22, 22, 0.10);
   --social: #6B3245;
   --discovery: #7B0E1E;
-  --discovery-subtle: rgba(123, 14, 30, 0.10);
   --commerce-trust: #06489A;
   --commerce-trust-subtle: rgba(6, 72, 154, 0.08);
   --commerce-trust-border: rgba(6, 72, 154, 0.16);
@@ -112,8 +108,6 @@
   --scrim-text-primary: #FFFFFF;
   --scrim-text-secondary: rgba(255, 255, 255, 0.88);
   --scrim-text-tertiary: rgba(255, 255, 255, 0.40);
-  --media-overlay-text: #FFFFFF;
-  --media-overlay-text-muted: rgba(255, 255, 255, 0.7);
   --media-overlay-scrim: rgba(0, 0, 0, 0.6);
   --media-outline: rgba(0, 0, 0, 0.07);
   --overlay: rgba(0, 0, 0, 0.44);
@@ -169,7 +163,6 @@
   --color-coown-down-subtle: var(--coown-down-subtle);
   --color-social: var(--social);
   --color-discovery: var(--discovery);
-  --color-discovery-subtle: var(--discovery-subtle);
   --color-commerce-trust: var(--commerce-trust);
   --color-commerce-trust-subtle: var(--commerce-trust-subtle);
   --color-commerce-trust-border: var(--commerce-trust-border);
@@ -177,8 +170,6 @@
   --color-scrim-text-primary: var(--scrim-text-primary);
   --color-scrim-text-secondary: var(--scrim-text-secondary);
   --color-scrim-text-tertiary: var(--scrim-text-tertiary);
-  --color-media-overlay-text: var(--media-overlay-text);
-  --color-media-overlay-text-muted: var(--media-overlay-text-muted);
   --color-media-overlay-scrim: var(--media-overlay-scrim);
   --color-overlay: var(--overlay);
   --color-input: var(--input);
@@ -199,7 +190,6 @@
   --radius-chat: 20px;
   --radius-xxl: 24px;
   --radius-sheet: 20px;
-  --radius-rail: 18px;
 
   /* Type scale — mirrors mobile TypographyV2: size / line-height / weight /
      letter-spacing are all part of the role. Tracking is the perceptual
@@ -288,7 +278,6 @@
   --shadow-modal: var(--elev-modal);
 
   --ease-standard: cubic-bezier(0.2, 0, 0, 1);
-  --ease-emphasized: cubic-bezier(0.05, 0.7, 0.1, 1);
 }
 
 /* ============================================================================
@@ -642,4 +631,112 @@ h2 {
   .group:hover .media-zoom {
     transform: none;
   }
+}
+
+/* ============================================================================
+   Platform systems — density, accent, offline banner, motion vars
+   (contracts owned by web/src/lib/{density,accent,offline,motion})
+   ============================================================================ */
+
+/* Density — applied via [data-density] on <html> (useDensity +
+   PlatformRuntime; restored pre-paint by the layout inline script).
+   `regular` values are the defaults; geometry only — density never adds
+   chrome (frontend/src/theme/density.ts contract). */
+:root {
+  --density-row-height: 64px;
+  --density-row-py: 12px;
+  --density-row-gap: 8px;
+  --density-gutter: 16px;
+  --density-section-gap: 24px;
+  --density-card-radius: 12px;
+}
+:root[data-density="compact"] {
+  --density-row-height: 56px;
+  --density-row-py: 8px;
+  --density-row-gap: 0px;
+  --density-gutter: 16px;
+  --density-section-gap: 16px;
+  --density-card-radius: 8px;
+}
+:root[data-density="editorial"] {
+  --density-row-height: 80px;
+  --density-row-py: 16px;
+  --density-row-gap: 16px;
+  --density-gutter: 20px;
+  --density-section-gap: 32px;
+  --density-card-radius: 16px;
+}
+
+/* Accent presets — [data-accent] on <html> overrides the brand token quad
+   (useAccent; presets ported 1:1 from frontend/src/theme/accentPreference.ts).
+   Dark values are the base; the light pair is scoped under data-theme. */
+[data-accent="sage"] {
+  --brand: #8b9d83;
+  --brand-pressed: #7a8c72;
+  --brand-subtle: rgba(139, 157, 131, 0.1);
+  --brand-border: rgba(139, 157, 131, 0.22);
+}
+[data-accent="clay"] {
+  --brand: #c4956c;
+  --brand-pressed: #b0855e;
+  --brand-subtle: rgba(196, 149, 108, 0.1);
+  --brand-border: rgba(196, 149, 108, 0.22);
+}
+[data-accent="slate"] {
+  --brand: #8b9dae;
+  --brand-pressed: #7a8c9d;
+  --brand-subtle: rgba(139, 157, 174, 0.1);
+  --brand-border: rgba(139, 157, 174, 0.22);
+}
+[data-accent="plum"] {
+  --brand: #9a7b8e;
+  --brand-pressed: #8a6b7e;
+  --brand-subtle: rgba(154, 123, 142, 0.1);
+  --brand-border: rgba(154, 123, 142, 0.22);
+}
+[data-theme="light"][data-accent="sage"] {
+  --brand: #3d4f37;
+  --brand-pressed: #33422e;
+  --brand-subtle: rgba(61, 79, 55, 0.08);
+  --brand-border: rgba(61, 79, 55, 0.18);
+}
+[data-theme="light"][data-accent="clay"] {
+  --brand: #8b5e3c;
+  --brand-pressed: #7a5234;
+  --brand-subtle: rgba(139, 94, 60, 0.08);
+  --brand-border: rgba(139, 94, 60, 0.18);
+}
+[data-theme="light"][data-accent="slate"] {
+  --brand: #3d5566;
+  --brand-pressed: #334858;
+  --brand-subtle: rgba(61, 85, 102, 0.08);
+  --brand-border: rgba(61, 85, 102, 0.18);
+}
+[data-theme="light"][data-accent="plum"] {
+  --brand: #5c3d4f;
+  --brand-pressed: #4e3343;
+  --brand-subtle: rgba(92, 61, 79, 0.08);
+  --brand-border: rgba(92, 61, 79, 0.18);
+}
+
+/* Offline banner — the strip is fixed at the top (z-toast); the reserved
+   body padding keeps it from covering the sticky header while offline. */
+:root {
+  --offline-strip-h: 34px;
+}
+.offline-strip {
+  height: var(--offline-strip-h);
+}
+html[data-offline] body {
+  padding-top: var(--offline-strip-h);
+}
+
+/* Motion vars — CSS-facing halves of web/src/lib/motion (tiers + easing
+   direction rules). For transitions, not decoration. */
+:root {
+  --dur-micro: 120ms;
+  --dur-deliberate: 280ms;
+  --ease-entrance: cubic-bezier(0.215, 0.61, 0.355, 1);
+  --ease-exit: cubic-bezier(0.55, 0.055, 0.675, 0.19);
+  --ease-crisp: cubic-bezier(0.645, 0.045, 0.355, 1);
 }

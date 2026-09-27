@@ -12,6 +12,7 @@
 import { useCallback, useEffect, useState } from 'react';
 import { useQueryClient } from '@tanstack/react-query';
 import { DATA_MODE } from '@/lib/api/client';
+import { useSession } from '@/lib/session/SessionProvider';
 import type { Conversation, User } from '@/lib/contracts/domain';
 import {
   addFixtureMembers,
@@ -22,6 +23,7 @@ import {
   isGroupManager,
   liveGroupApi,
   removeFixtureMember,
+  transferFixtureOwnership,
   updateFixtureGroup,
   useGroupAdminStore,
   type EditablePermission,
@@ -32,17 +34,25 @@ import {
 } from './groupAdmin';
 
 /** Re-issue fresh references around the mutated fixture objects so every
- *  subscribed surface re-renders on the same write. */
+ *  subscribed surface re-renders on the same write. The readers key with
+ *  the session user (`['conversation', id, userKey]` / `['conversations',
+ *  userKey]`) — writes must land on that shape, while invalidations keep
+ *  prefix scope so every session variant re-reads. */
 function useInvalidateConversation(conversationId: string) {
   const qc = useQueryClient();
+  const { user } = useSession();
+  const userKey = user?.id ?? 'guest';
   return useCallback(() => {
-    qc.setQueryData<Conversation | null>(['conversation', conversationId], (old) =>
-      old ? { ...old, messages: [...old.messages] } : old,
+    qc.setQueryData<Conversation | null>(
+      ['conversation', conversationId, userKey],
+      (old) => (old ? { ...old, messages: [...old.messages] } : old),
     );
-    qc.setQueryData<Conversation[]>(['conversations'], (old) => (old ? [...old] : old));
+    qc.setQueryData<Conversation[]>(['conversations', userKey], (old) =>
+      old ? [...old] : old,
+    );
     void qc.invalidateQueries({ queryKey: ['conversation', conversationId] });
     void qc.invalidateQueries({ queryKey: ['conversations'] });
-  }, [qc, conversationId]);
+  }, [qc, conversationId, userKey]);
 }
 
 /**
@@ -127,6 +137,7 @@ export function useGroupCapabilities(
 
 /** All admin actions for a conversation — group and DM alike. */
 export function useConversationAdmin(conversation: Conversation | null | undefined) {
+  const { user } = useSession();
   const invalidate = useInvalidateConversation(conversation?.id ?? '');
   const setMemberRoleStore = useGroupAdminStore((s) => s.setMemberRole);
   const dropRolesStore = useGroupAdminStore((s) => s.dropRoles);
@@ -219,6 +230,50 @@ export function useConversationAdmin(conversation: Conversation | null | undefin
     [conversation, invalidate, setMemberRoleStore],
   );
 
+  /**
+   * Owner → member ownership transfer — the same write on both modes:
+   * live calls POST /transfer-ownership (server demotes the caller to
+   * admin and returns the full memberRoles map); fixture mode applies the
+   * same ownerId/role write to the module dataset. Session overrides are
+   * aligned with the post-transfer roles so any earlier override can't
+   * resurrect the old owner.
+   */
+  const transferOwnership = useCallback(
+    async (userId: string): Promise<boolean> => {
+      const viewerId = user?.id ?? '';
+      if (
+        !conversation ||
+        conversation.type !== 'group' ||
+        !userId ||
+        userId === viewerId
+      ) {
+        return false;
+      }
+      if (DATA_MODE === 'live') {
+        try {
+          const res = await liveGroupApi.transferOwnership(conversation.id, userId);
+          const roles = res.memberRoles ?? {};
+          for (const [id, role] of Object.entries(roles)) {
+            if (role === 'owner' || role === 'admin' || role === 'member') {
+              setMemberRoleStore(conversation.id, id, role);
+            }
+          }
+        } catch {
+          return false;
+        }
+      } else {
+        if (!transferFixtureOwnership(conversation.id, userId, viewerId)) {
+          return false;
+        }
+        setMemberRoleStore(conversation.id, userId, 'owner');
+        setMemberRoleStore(conversation.id, viewerId, 'admin');
+      }
+      invalidate();
+      return true;
+    },
+    [conversation, user?.id, invalidate, setMemberRoleStore],
+  );
+
   const clearChat = useCallback(async (): Promise<boolean> => {
     if (!conversation) return false;
     if (DATA_MODE === 'live') {
@@ -257,6 +312,7 @@ export function useConversationAdmin(conversation: Conversation | null | undefin
     addMembers,
     removeMember,
     setMemberRole,
+    transferOwnership,
     clearChat,
     removeConversation,
   };

@@ -10,16 +10,14 @@ interface EmptyStateProps {
   compact?: boolean;
 }
 
-/** Empty state — quiet icon ring, one title, optional single action. */
+/** Empty state — restrained flat glyph, one title, optional single action. */
 export function EmptyState({ icon = 'search', title, subtitle, actionLabel, onAction, compact }: EmptyStateProps) {
   return (
     <div
       className={`flex flex-col items-center justify-center text-center ${compact ? 'py-12' : 'py-24'} px-6`}
       role="status"
     >
-      <div className="mb-4 flex h-16 w-16 items-center justify-center rounded-full bg-surface-alt text-text-muted">
-        <Icon name={icon} size={28} />
-      </div>
+      <Icon name={icon} size={28} className="mb-4 text-text-muted" />
       <h2 className="text-section-title font-semibold text-text-primary">{title}</h2>
       {subtitle ? <p className="mt-1.5 max-w-sm text-body text-text-secondary">{subtitle}</p> : null}
       {actionLabel && onAction ? (

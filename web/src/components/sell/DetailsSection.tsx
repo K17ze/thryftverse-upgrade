@@ -11,9 +11,12 @@ import { Icon } from '@/components/ui/Icon';
 import {
   CONDITION_OPTIONS,
   DESCRIPTION_MAX,
+  DESCRIPTION_MIN,
   POPULAR_BRANDS,
   SUBCATEGORIES,
+  SUSTAINABILITY_TAG_OPTIONS,
   isSizelessCategory,
+  isSizeRequiredCategory,
   sizesForCategory,
   type SellDraft,
   type SellErrors,
@@ -45,6 +48,9 @@ export function DetailsSection({ draft, errors, update, clearError }: DetailsSec
   const subcategories = SUBCATEGORIES[draft.category] ?? [];
   const sizes = sizesForCategory(draft.category);
   const sizeless = isSizelessCategory(draft.category);
+  // Category policy parity: size is a hard requirement for sneakers
+  // (mobile's shoes policy); recommended elsewhere, hidden when sizeless.
+  const sizeRequired = isSizeRequiredCategory(draft.category);
 
   return (
     <SellSection id="sell-details" step={2} title="Details" subtitle="The facts buyers filter on.">
@@ -53,6 +59,7 @@ export function DetailsSection({ draft, errors, update, clearError }: DetailsSec
           id="sell-field-title"
           label="Title"
           required
+          done={draft.title.trim().length >= 3}
           error={errors.title}
           hint={!errors.title && draft.title.trim().length > 0 && draft.title.trim().length < 10 ? 'Describe the item — include the style or model name.' : undefined}
         >
@@ -96,7 +103,13 @@ export function DetailsSection({ draft, errors, update, clearError }: DetailsSec
         </SellField>
 
         <div className="grid gap-6 sm:grid-cols-2">
-          <SellField id="sell-field-category" label="Category" required error={errors.category}>
+          <SellField
+            id="sell-field-category"
+            label="Category"
+            required
+            done={!!draft.category}
+            error={errors.category}
+          >
             <div className="relative">
               <select
                 id="sell-field-category"
@@ -149,11 +162,22 @@ export function DetailsSection({ draft, errors, update, clearError }: DetailsSec
           </SellField>
         </div>
 
-        <div>
-          <span className="mb-1.5 block text-caption font-medium text-text-secondary">
-            Condition
-          </span>
-          <div role="radiogroup" aria-label="Condition" className="grid gap-2 sm:grid-cols-2">
+        <div id="sell-field-condition">
+          <div className="mb-1.5 flex items-baseline justify-between">
+            <span className="text-caption font-medium text-text-secondary">Condition</span>
+            {draft.condition ? (
+              <Icon name="check" size={14} className="text-success-text" />
+            ) : (
+              <span className="text-micro text-text-muted">Required</span>
+            )}
+          </div>
+          <div
+            role="radiogroup"
+            aria-label="Condition"
+            aria-invalid={!!errors.condition}
+            aria-describedby={errors.condition ? 'sell-field-condition-error' : undefined}
+            className="grid gap-2 sm:grid-cols-2"
+          >
             {CONDITION_OPTIONS.map((opt) => {
               const selected = draft.condition === opt.value;
               return (
@@ -162,11 +186,16 @@ export function DetailsSection({ draft, errors, update, clearError }: DetailsSec
                   type="button"
                   role="radio"
                   aria-checked={selected}
-                  onClick={() => update({ condition: opt.value })}
+                  onClick={() => {
+                    update({ condition: opt.value });
+                    clearError('condition');
+                  }}
                   className={`pressable flex items-start justify-between gap-3 rounded-lg border px-3.5 py-3 text-left transition-colors ${
                     selected
                       ? 'border-text-primary bg-surface-alt'
-                      : 'border-border hover:border-text-muted'
+                      : errors.condition
+                        ? 'border-danger-border hover:border-text-muted'
+                        : 'border-border hover:border-text-muted'
                   }`}
                 >
                   <span>
@@ -182,40 +211,84 @@ export function DetailsSection({ draft, errors, update, clearError }: DetailsSec
               );
             })}
           </div>
+          {errors.condition ? (
+            <p id="sell-field-condition-error" role="alert" className="mt-1.5 text-caption text-danger-text">
+              {errors.condition}
+            </p>
+          ) : null}
         </div>
 
         {draft.category && !sizeless ? (
-          <div>
-            <span className="mb-1.5 block text-caption font-medium text-text-secondary">Size</span>
-            <div className="flex flex-wrap gap-1.5">
+          <div id="sell-field-size">
+            <div className="mb-1.5 flex items-baseline justify-between">
+              <span className="text-caption font-medium text-text-secondary">Size</span>
+              {sizeRequired ? (
+                draft.size ? (
+                  <Icon name="check" size={14} className="text-success-text" />
+                ) : (
+                  <span className="text-micro text-text-muted">Required</span>
+                )
+              ) : (
+                <span className="text-micro text-text-muted">Recommended</span>
+              )}
+            </div>
+            <div
+              className="flex flex-wrap gap-1.5"
+              aria-invalid={!!errors.size}
+              aria-describedby={errors.size ? 'sell-field-size-error' : undefined}
+            >
               {sizes.map((size) => (
                 <Chip
                   key={size}
                   selected={draft.size === size}
-                  onClick={() => update({ size: draft.size === size ? '' : size })}
+                  onClick={() => {
+                    update({ size: draft.size === size ? '' : size });
+                    clearError('size');
+                  }}
                 >
                   {size}
                 </Chip>
               ))}
             </div>
+            {errors.size ? (
+              <p id="sell-field-size-error" role="alert" className="mt-1.5 text-caption text-danger-text">
+                {errors.size}
+              </p>
+            ) : null}
           </div>
         ) : null}
 
         <SellField
           id="sell-field-description"
           label="Description"
-          optional
-          hint="Material, fit, flaws, why you're selling — honest detail builds trust."
+          required
+          done={draft.description.trim().length >= DESCRIPTION_MIN}
+          error={errors.description}
+          hint={
+            !errors.description
+              ? draft.description.trim().length > 0 &&
+                draft.description.trim().length < DESCRIPTION_MIN
+                ? `At least ${DESCRIPTION_MIN} characters — material, fit, flaws, why you're selling.`
+                : "Material, fit, flaws, why you're selling — honest detail builds trust."
+              : undefined
+          }
         >
           <div className="relative">
             <textarea
               id="sell-field-description"
               value={draft.description}
-              onChange={(e) => update({ description: e.target.value })}
+              onChange={(e) => {
+                update({ description: e.target.value });
+                clearError('description');
+              }}
               rows={4}
               maxLength={DESCRIPTION_MAX}
               placeholder="e.g. 90s 501s, perfect wash and fade. Button fly, no repairs needed."
-              className="w-full resize-y rounded-md border border-border bg-input px-3.5 py-3 text-body text-input-text placeholder:text-text-muted transition-colors focus:border-text-muted focus:outline-none"
+              aria-invalid={!!errors.description}
+              aria-describedby={errors.description ? 'sell-field-description-error' : undefined}
+              className={`w-full resize-y rounded-md border bg-input px-3.5 py-3 text-body text-input-text placeholder:text-text-muted transition-colors focus:border-text-muted focus:outline-none ${
+                errors.description ? 'border-danger-border' : 'border-border'
+              }`}
             />
             <span className="pointer-events-none absolute bottom-2.5 right-3 text-micro text-text-muted">
               {draft.description.length}/{DESCRIPTION_MAX}
@@ -224,6 +297,72 @@ export function DetailsSection({ draft, errors, update, clearError }: DetailsSec
         </SellField>
 
         <TagField tags={draft.tags} onChange={(tags) => update({ tags })} />
+
+        {/* Sustainability — seller-asserted attributes, ported from the
+            mobile SustainabilityTags selector. Each chip is a labelled
+            switch with a 44px hit area; the impact summary below is
+            honest about what a claim means — never a verified grade. */}
+        <fieldset id="sell-field-sustainability">
+          <div className="mb-1.5 flex items-baseline justify-between">
+            <legend className="text-caption font-medium text-text-secondary">
+              Sustainability
+            </legend>
+            <span className="text-micro text-text-muted">Optional</span>
+          </div>
+          <div className="flex flex-wrap gap-1.5" role="group" aria-label="Sustainability attributes">
+            {SUSTAINABILITY_TAG_OPTIONS.map((opt) => {
+              const selected = draft.sustainabilityTags.includes(opt.id);
+              return (
+                <button
+                  key={opt.id}
+                  type="button"
+                  role="switch"
+                  aria-checked={selected}
+                  aria-label={`${opt.label} — mark this listing ${opt.label.toLowerCase()}`}
+                  onClick={() =>
+                    update({
+                      sustainabilityTags: selected
+                        ? draft.sustainabilityTags.filter((t) => t !== opt.id)
+                        : [...draft.sustainabilityTags, opt.id],
+                    })
+                  }
+                  className={`pressable relative inline-flex h-9 shrink-0 items-center gap-1.5 rounded-full px-4 text-body font-medium after:absolute after:-inset-y-1 after:content-[""] ${
+                    selected
+                      ? 'bg-brand text-text-inverse'
+                      : 'bg-surface-alt text-text-primary hover:bg-surface-raised'
+                  }`}
+                >
+                  <Icon name={opt.icon} filled={selected} size={16} />
+                  {opt.label}
+                </button>
+              );
+            })}
+          </div>
+          {/* Truth line — mirrors the mobile disclosure: these are the
+              seller's own assertions, not a platform-verified grade. */}
+          <p className="mt-2 text-meta text-text-muted">
+            Your claims — shown to buyers as seller-provided, not independently verified.
+          </p>
+          {draft.sustainabilityTags.length ? (
+            <ul className="mt-2.5 space-y-1" aria-label="Sustainability impact">
+              {SUSTAINABILITY_TAG_OPTIONS.filter((t) =>
+                draft.sustainabilityTags.includes(t.id),
+              ).map((t) => (
+                <li
+                  key={t.id}
+                  className="flex items-start gap-1.5 text-caption text-text-secondary"
+                >
+                  <Icon name="check" size={14} className="mt-px shrink-0 text-success-text" />
+                  <span>
+                    <span className="font-semibold text-text-primary">{t.label}</span>
+                    {' — '}
+                    {t.impact}
+                  </span>
+                </li>
+              ))}
+            </ul>
+          ) : null}
+        </fieldset>
       </div>
     </SellSection>
   );

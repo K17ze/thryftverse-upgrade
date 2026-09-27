@@ -15,11 +15,19 @@ import { persist, createJSONStorage } from 'zustand/middleware';
 export interface CollectionOverlay {
   /** Effective ordered listing ids once edited; absent = fixture order. */
   itemIds?: string[];
+  /** Renamed collection title — mirrors PATCH /collections/:id {name}. */
+  title?: string;
+  /** Description override — null clears, absent = fixture description. */
+  description?: string | null;
 }
 
 interface CollectionEditsState {
   boards: Record<string, CollectionOverlay>;
   setCollectionItems: (collectionId: string, itemIds: string[]) => void;
+  setCollectionMeta: (
+    collectionId: string,
+    meta: { title?: string; description?: string | null },
+  ) => void;
 }
 
 export const useCollectionEdits = create<CollectionEditsState>()(
@@ -31,6 +39,13 @@ export const useCollectionEdits = create<CollectionEditsState>()(
           boards: {
             ...s.boards,
             [collectionId]: { ...s.boards[collectionId], itemIds },
+          },
+        })),
+      setCollectionMeta: (collectionId, meta) =>
+        set((s) => ({
+          boards: {
+            ...s.boards,
+            [collectionId]: { ...s.boards[collectionId], ...meta },
           },
         })),
     }),

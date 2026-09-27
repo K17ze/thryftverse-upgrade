@@ -13,6 +13,7 @@ import {
   BUNDLE_RULE,
   LISTINGS,
   MY_LISTINGS,
+  MY_LISTING_STATS,
   ORDERS,
   USERS,
   listingById,
@@ -21,6 +22,10 @@ import {
 } from '@/lib/data/fixtures';
 
 const ALL_LISTINGS = [...LISTINGS, ...MY_LISTINGS];
+
+/** Re-export — commerce surfaces (seller-queries) read listing stats from
+ *  this commerce-owned module; the record itself is seeded in fixtures.ts. */
+export { MY_LISTING_STATS };
 
 // ============================================================================
 // OFFERS — mirrors mobile ListingOffer (services/listingOffersApi.ts)
@@ -41,10 +46,17 @@ export interface CommerceOffer {
   /** Who placed the standing offer — counterparty counters flip this. */
   offeredByUserId: string;
   counterRound: number;
+  /** DM thread this negotiation is bound to (listing_offers.conversation_id
+   *  on the wire) — the offer deep-links to that conversation when set. */
+  conversationId?: string | null;
   createdAt: string;
   updatedAt: string;
   expiresAt?: string;
 }
+
+// Offer deadlines are relative so fixtures never lazily-expire into a
+// state the demo journeys can't exercise — hardcoded dates rot overnight.
+const offerExpires = (hours: number) => new Date(Date.now() + hours * 3600_000).toISOString();
 
 export const OFFERS: CommerceOffer[] = [
   {
@@ -60,7 +72,7 @@ export const OFFERS: CommerceOffer[] = [
     counterRound: 0,
     createdAt: '2026-09-25T08:10:00Z',
     updatedAt: '2026-09-25T08:10:00Z',
-    expiresAt: '2026-09-27T08:10:00Z',
+    expiresAt: offerExpires(26),
   },
   {
     // Received — already countered by me, waiting on the buyer
@@ -73,9 +85,10 @@ export const OFFERS: CommerceOffer[] = [
     status: 'countered',
     offeredByUserId: 'me',
     counterRound: 1,
+    conversationId: 'c4', // DM with u2 (scott_art)
     createdAt: '2026-09-23T15:40:00Z',
     updatedAt: '2026-09-24T09:05:00Z',
-    expiresAt: '2026-09-26T09:05:00Z',
+    expiresAt: offerExpires(20),
   },
   {
     // Received — accepted, became a completed sale (ord-1021)
@@ -102,9 +115,10 @@ export const OFFERS: CommerceOffer[] = [
     status: 'countered',
     offeredByUserId: 'u3',
     counterRound: 1,
+    conversationId: 'c1', // DM with u3 (dankdunksuk) — the £130/£135 thread on l4
     createdAt: '2026-09-25T09:20:00Z',
     updatedAt: '2026-09-25T09:22:00Z',
-    expiresAt: '2026-09-27T09:22:00Z',
+    expiresAt: offerExpires(22),
   },
   {
     // Sent — still pending
@@ -117,9 +131,10 @@ export const OFFERS: CommerceOffer[] = [
     status: 'pending',
     offeredByUserId: 'me',
     counterRound: 0,
+    conversationId: 'c3', // DM with u5 (archive.thread)
     createdAt: '2026-09-25T11:45:00Z',
     updatedAt: '2026-09-25T11:45:00Z',
-    expiresAt: '2026-09-27T11:45:00Z',
+    expiresAt: offerExpires(30),
   },
   {
     // Sent — declined
@@ -142,8 +157,16 @@ export function offerDirection(offer: CommerceOffer, viewerId = 'me'): 'received
   return offer.sellerId === viewerId ? 'received' : 'sent';
 }
 
-/** Fixture-mode send — appends a pending sent offer (session-local truth). */
-export function recordSentOffer(listing: Listing, amount: number): CommerceOffer {
+/** Fixture-mode send — appends a pending sent offer (session-local truth).
+ *  expiryHours mirrors the create-offer payload the server uses to compute
+ *  expires_at; conversationId threads the negotiation into a DM when the
+ *  offer was composed inside one (listing_offers.conversation_id). */
+export function recordSentOffer(
+  listing: Listing,
+  amount: number,
+  expiryHours = 48,
+  conversationId?: string | null,
+): CommerceOffer {
   const offer: CommerceOffer = {
     id: `of-local-${Date.now()}`,
     listingId: listing.id,
@@ -154,21 +177,42 @@ export function recordSentOffer(listing: Listing, amount: number): CommerceOffer
     status: 'pending',
     offeredByUserId: 'me',
     counterRound: 0,
+    conversationId: conversationId ?? null,
     createdAt: new Date().toISOString(),
     updatedAt: new Date().toISOString(),
-    expiresAt: new Date(Date.now() + 48 * 3600_000).toISOString(),
+    expiresAt: new Date(Date.now() + expiryHours * 3600_000).toISOString(),
   };
   OFFERS.push(offer);
   return offer;
 }
 
 /** Counter a standing offer — flips the author and bumps the round. */
-export function counterOffer(offer: CommerceOffer, amount: number, byUserId = 'me') {
+/** Fixture-mode decline — the recipient's refusal is final. */
+export function declineOffer(offer: CommerceOffer): void {
+  offer.status = 'declined';
+  offer.updatedAt = new Date().toISOString();
+}
+
+/** Fixture-mode withdraw — the sender pulls their standing offer. */
+export function cancelOffer(offer: CommerceOffer): void {
+  offer.status = 'cancelled';
+  offer.updatedAt = new Date().toISOString();
+}
+
+export function counterOffer(
+  offer: CommerceOffer,
+  amount: number,
+  byUserId = 'me',
+  expiryHours = 48,
+): void {
   offer.amount = amount;
   offer.status = 'countered';
   offer.offeredByUserId = byUserId;
   offer.counterRound += 1;
   offer.updatedAt = new Date().toISOString();
+  // The server supersedes the standing offer with a fresh pending row whose
+  // expiry restarts from the counter — mirror that clock.
+  offer.expiresAt = new Date(Date.now() + expiryHours * 3600_000).toISOString();
 }
 
 // ============================================================================
@@ -287,8 +331,10 @@ export function orderDetailFor(order: Order): OrderDetailInfo {
   const isSale = order.sellerId === 'me';
   return {
     orderId: order.id,
-    carrier: 'Royal Mail',
-    service: 'Tracked 48',
+    // No authored fulfilment for this order — the carrier/service stay
+    // unset rather than printing a courier the seller never chose.
+    carrier: null,
+    service: null,
     itemPrice,
     protectionFee,
     shippingFee,
@@ -308,30 +354,103 @@ export function orderDetailFor(order: Order): OrderDetailInfo {
   };
 }
 
-/** Fixture-mode purchase — appends the order the checkout just "paid". */
-export function recordOrder(listings: Listing[]): Order {
-  const first = listings[0];
-  const totals = orderTotals(listings);
-  const order: Order = {
-    id: `ord-${Date.now()}`,
-    listingId: first?.id ?? '',
-    buyerId: 'me',
-    sellerId: first?.sellerId ?? '',
-    status: 'pending',
-    totalPrice: Math.round(totals.total * 100) / 100,
-    createdAt: new Date().toISOString(),
-  };
-  ORDERS.push(order);
-  ORDER_DETAILS[order.id] = {
-    orderId: order.id,
-    carrier: 'Royal Mail',
-    service: 'Tracked 48',
-    itemPrice: totals.items,
-    protectionFee: totals.protectionFee,
-    shippingFee: totals.shippingFee,
-    timeline: [{ key: 'ordered', label: 'Order placed', at: order.createdAt }],
-  };
-  return order;
+/**
+ * Mark a purchased listing sold wherever it lives — public shelf or the
+ * seller's own list. The caller owns invalidating listing queries so the
+ * PDP and feed stop offering it.
+ */
+export function markListingSold(listing: Listing): void {
+  listing.isSold = true;
+  listing.status = 'sold';
+  listing.priceWithProtection = undefined;
+}
+
+function round2(n: number): number {
+  return Math.round(n * 100) / 100;
+}
+
+/** The delivery service the buyer picked for a parcel at checkout — the
+ *  chosen quote's price becomes that parcel's postage and its carrier/
+ *  service lands on the order detail record (mirrors the bound shipping
+ *  quote the backend persists from shippingQuoteId). */
+export interface RecordOrderDeliveryChoice {
+  carrierId: string;
+  serviceName: string;
+  priceGbp: number;
+}
+
+export interface RecordOrderOptions {
+  /** Per-parcel delivery selection, keyed by sellerId. Seller-covered
+   *  parcels stay free regardless of any entry here. */
+  delivery?: Record<string, RecordOrderDeliveryChoice>;
+  /** Buyer-requested item verification — a request flag on the order,
+   *  no fee (the backend exposes no verification price). Items at/above
+   *  the authentication threshold are flagged regardless. */
+  verificationRequested?: boolean;
+}
+
+/**
+ * Fixture-mode purchase — creates one order per seller group, mirroring the
+ * backend's one-order-per-parcel checkout contract. Each order's total is
+ * ledger-honest for its parcel: discounted item subtotal + per-item
+ * protection + that parcel's postage (the chosen delivery quote's price,
+ * or the flat SHIPPING_FEE when nothing was selected). The purchased
+ * listings are marked sold and detail/enrichment rows are written so every
+ * order surface resolves without child-layer fallbacks.
+ */
+export function recordOrder(
+  listings: Listing[],
+  options?: RecordOrderOptions,
+): CommerceOrder[] {
+  const purchasable = listings.filter((l) => !l.isSold && l.status !== 'sold');
+  const groups = sellerGroups(purchasable);
+  const now = Date.now();
+  return groups.map((group, index) => {
+    const choice = options?.delivery?.[group.sellerId];
+    const itemPrice = round2(group.subtotal - group.discount);
+    const protectionFee = round2(
+      group.items.reduce((sum, l) => sum + protectionFeeFor(l), 0),
+    );
+    const shippingFee = group.items.every((l) => l.shippingPayer === 'seller')
+      ? 0
+      : (choice?.priceGbp ?? SHIPPING_FEE);
+    const order: CommerceOrder = {
+      id: `ord-${now}${index > 0 ? `-${index}` : ''}`,
+      listingId: group.items[0]?.id ?? '',
+      buyerId: 'me',
+      sellerId: group.sellerId,
+      status: 'paid',
+      totalPrice: round2(itemPrice + protectionFee + shippingFee),
+      createdAt: new Date(now).toISOString(),
+    };
+    if (
+      options?.verificationRequested ||
+      group.items.some((l) => l.price >= AUTHENTICATION_THRESHOLD_GBP)
+    ) {
+      order.verificationRequested = true;
+      ORDER_ENRICHMENT[order.id] = { verificationRequested: true };
+    }
+    COMMERCE_ORDER_EXTRAS.push(order);
+    ORDER_DETAILS[order.id] = {
+      orderId: order.id,
+      // Carrier/service are real only when the buyer picked a delivery
+      // quote at checkout — a seller-covered or unchosen parcel has none
+      // yet, so null rather than an invented courier.
+      carrier: choice?.carrierId ?? null,
+      service: choice?.serviceName ?? null,
+      itemPrice,
+      protectionFee,
+      shippingFee,
+      timeline: [
+        { key: 'ordered', label: 'Order placed', at: order.createdAt },
+        { key: 'paid', label: 'Paid', at: order.createdAt },
+        { key: 'shipped', label: 'Shipped by seller', at: null },
+        { key: 'delivered', label: 'Delivered', at: null },
+      ],
+    };
+    group.items.forEach(markListingSold);
+    return order;
+  });
 }
 
 /** Fixture-mode publish — the sell flow's draft becomes a real listing in
@@ -496,6 +615,7 @@ import type {
   ReturnRemedy,
 } from '@/lib/contracts/domain';
 import { REVIEWS } from '@/lib/data/fixtures';
+import { DISPATCH_SLA_DAYS } from '@/lib/commerce/dispatch';
 
 /** Fixture-clock helpers — deadlines are relative to the session so the
  *  dispatch countdown / ETA / step-in windows stay honest on any date. */
@@ -547,7 +667,7 @@ export const COMMERCE_ORDER_EXTRAS: CommerceOrder[] = [
     status: 'paid',
     totalPrice: 151.19,
     createdAt: daysAgo(1),
-    shipByDate: inDays(2),
+    shipByDate: inDays(DISPATCH_SLA_DAYS),
     estimatedReleaseAt: inDays(9),
     fulfilmentSnapshot: {
       quoteId: 'q-1051', quoteHash: 'qh-1051',
@@ -555,7 +675,7 @@ export const COMMERCE_ORDER_EXTRAS: CommerceOrder[] = [
       serviceName: 'Evri Standard',
       deliveryMode: 'integrated',
       etaMinDays: 3, etaMaxDays: 5, trackingIncluded: true,
-      shipByDate: inDays(2),
+      shipByDate: inDays(DISPATCH_SLA_DAYS),
       destinationSummary: 'London, UK',
       parcelProfile: { maxWeightKg: 5, maxLengthCm: 60 },
     },
@@ -846,6 +966,9 @@ export const ORDER_ENRICHMENT: Record<string, OrderEnrichment> = {
       status: 'requested',
       reasonCategory: 'not_as_described',
       reasonLabel: 'Item not as described',
+      // Buyer attached two photos with the request — the listing's own
+      // imagery stands in as the received-condition evidence.
+      evidenceMediaUrls: (listingById('l17')?.images ?? []).slice(0, 2),
       requestedAmountGbp: null,
       stepInEligibleAt: inDays(2),
       createdAt: daysAgo(1),
@@ -931,8 +1054,8 @@ export function commerceOrderDetailFor(order: CommerceOrder): OrderDetailInfo {
   const isSale = order.sellerId === 'me';
   return {
     orderId: order.id,
-    carrier: enr.carrier ?? base?.carrier ?? 'Royal Mail',
-    service: enr.service ?? base?.service ?? 'Tracked 48',
+    carrier: enr.carrier ?? base?.carrier ?? null,
+    service: enr.service ?? base?.service ?? null,
     itemPrice,
     protectionFee,
     shippingFee,
@@ -969,9 +1092,23 @@ function touchTimeline(orderId: string, stepKey: OrderTimelineStep['key'], at: s
   if (steps) {
     const step = steps.find((s) => s.key === stepKey);
     if (step) step.at = at;
+    else steps.push({ key: stepKey, label: TIMELINE_STEP_LABEL[stepKey], at });
     return;
   }
-  enr.timeline = [{ key: stepKey, label: stepKey === 'delivered' ? 'Delivered' : 'Shipped', at }];
+  enr.timeline = [{ key: stepKey, label: TIMELINE_STEP_LABEL[stepKey], at }];
+}
+
+const TIMELINE_STEP_LABEL: Record<OrderTimelineStep['key'], string> = {
+  ordered: 'Order placed',
+  paid: 'Paid',
+  shipped: 'Shipped',
+  delivered: 'Delivered',
+};
+
+/** Buyer completed payment on a 'created' order — the paid milestone lands. */
+export function markOrderPaid(orderId: string): void {
+  ORDER_OVERRIDES[orderId] = { ...ORDER_OVERRIDES[orderId], status: 'paid' };
+  touchTimeline(orderId, 'paid', new Date().toISOString());
 }
 
 /** Buyer confirmed receipt — releases escrow, lands 'completed'. */
@@ -1045,7 +1182,13 @@ export const RETURN_REASONS: { id: string; label: string; description: string }[
 /** Buyer opened a return/refund request on the order. */
 export function requestReturnCase(
   orderId: string,
-  input: { reasonId: string; reasonLabel: string; note: string; amountGbp: number | null },
+  input: {
+    reasonId: string;
+    reasonLabel: string;
+    note: string;
+    amountGbp: number | null;
+    evidenceMediaUrls?: string[];
+  },
 ): ReturnCase {
   const enr = enrichmentEntry(orderId);
   const rc: ReturnCase = {
@@ -1054,6 +1197,9 @@ export function requestReturnCase(
     status: 'requested',
     reasonCategory: input.reasonId,
     reasonLabel: input.reasonLabel,
+    evidenceMediaUrls: input.evidenceMediaUrls?.length
+      ? input.evidenceMediaUrls
+      : undefined,
     requestedAmountGbp: input.amountGbp,
     stepInEligibleAt: inDays(2),
     createdAt: new Date().toISOString(),
@@ -1169,6 +1315,131 @@ export function getReturnCaseStatusLabel(
     return 'Refund approved — processing';
   }
   return RETURN_CASE_STATUS_LABELS[returnCase.status] ?? returnCase.status;
+}
+
+// ============================================================================
+// LISTING DELIVERY + RETURNS — fixture-mode PDP truth
+// ============================================================================
+// The live PDP reads shippingPrice / estimatedDeliveryStart–End /
+// returnPolicy off the /listings/:id commerce block (mobile parity). This
+// overlay gives fixture listings the same facts so the delivery/returns
+// block renders real numbers in design mode. Listings absent from the map
+// exercise the honest "calculated at checkout" fallbacks — that's intended.
+// ETAs anchor to today (dispatch SLA + transit), matching what a live
+// payload would project.
+
+interface ListingDeliveryFacts {
+  shippingMethod?: string | null;
+  shippingPayer?: string | null;
+  shippingPrice?: number | null;
+  estimatedDeliveryStart?: string | null;
+  estimatedDeliveryEnd?: string | null;
+  returnPolicy?: Listing['returnPolicy'];
+  dispatchSlaDays?: number | null;
+}
+
+const STANDARD_POSTAGE = 3.49;
+const HEAVY_POSTAGE = 5.99;
+const EXPRESS_POSTAGE = 12.99;
+
+const LISTING_DELIVERY: Record<string, ListingDeliveryFacts> = {
+  l1: {
+    shippingMethod: 'Royal Mail Tracked 48',
+    shippingPrice: STANDARD_POSTAGE,
+    estimatedDeliveryStart: inDays(DISPATCH_SLA_DAYS + 2),
+    estimatedDeliveryEnd: inDays(DISPATCH_SLA_DAYS + 4),
+    returnPolicy: { accepted: true, windowDays: 14 },
+  },
+  l2: {
+    shippingMethod: 'Royal Mail Tracked 48',
+    shippingPrice: STANDARD_POSTAGE,
+    estimatedDeliveryStart: inDays(DISPATCH_SLA_DAYS + 2),
+    estimatedDeliveryEnd: inDays(DISPATCH_SLA_DAYS + 4),
+    returnPolicy: { accepted: true, windowDays: 14 },
+  },
+  l4: {
+    shippingMethod: 'Royal Mail Tracked 24',
+    shippingPrice: HEAVY_POSTAGE,
+    estimatedDeliveryStart: inDays(DISPATCH_SLA_DAYS + 1),
+    estimatedDeliveryEnd: inDays(DISPATCH_SLA_DAYS + 3),
+    returnPolicy: {
+      accepted: true,
+      windowDays: 14,
+      conditions: 'Returned in the condition sent — authentication tag intact.',
+    },
+  },
+  l5: {
+    shippingMethod: 'Royal Mail Tracked 48',
+    shippingPrice: STANDARD_POSTAGE,
+    estimatedDeliveryStart: inDays(DISPATCH_SLA_DAYS + 2),
+    estimatedDeliveryEnd: inDays(DISPATCH_SLA_DAYS + 5),
+    returnPolicy: { accepted: true, windowDays: 7 },
+  },
+  l6: {
+    shippingMethod: 'Royal Mail Tracked 48',
+    shippingPrice: STANDARD_POSTAGE,
+    estimatedDeliveryStart: inDays(DISPATCH_SLA_DAYS + 2),
+    estimatedDeliveryEnd: inDays(DISPATCH_SLA_DAYS + 4),
+    returnPolicy: { accepted: true, windowDays: 14 },
+  },
+  l8: {
+    shippingMethod: 'DHL Express',
+    shippingPrice: EXPRESS_POSTAGE,
+    dispatchSlaDays: 1,
+    estimatedDeliveryStart: inDays(2),
+    estimatedDeliveryEnd: inDays(3),
+    returnPolicy: {
+      accepted: true,
+      windowDays: 14,
+      conditions: 'Insured return only — authentication tag must stay attached.',
+    },
+  },
+  l9: {
+    shippingMethod: 'Royal Mail Tracked 48',
+    shippingPrice: STANDARD_POSTAGE,
+    estimatedDeliveryStart: inDays(DISPATCH_SLA_DAYS + 2),
+    estimatedDeliveryEnd: inDays(DISPATCH_SLA_DAYS + 4),
+    // No returns on this one — the PDP must say so, not soften it.
+    returnPolicy: { accepted: false },
+  },
+  l12: {
+    shippingMethod: 'Royal Mail Tracked 48',
+    // Seller covers postage — renders the "Free postage" line.
+    shippingPayer: 'seller',
+    shippingPrice: 0,
+    estimatedDeliveryStart: inDays(DISPATCH_SLA_DAYS + 2),
+    estimatedDeliveryEnd: inDays(DISPATCH_SLA_DAYS + 4),
+    returnPolicy: { accepted: true, windowDays: 14 },
+  },
+  l17: {
+    shippingMethod: 'Royal Mail 2nd Class',
+    shippingPrice: 2.99,
+    estimatedDeliveryStart: inDays(DISPATCH_SLA_DAYS + 3),
+    estimatedDeliveryEnd: inDays(DISPATCH_SLA_DAYS + 6),
+    returnPolicy: { accepted: false },
+  },
+  ml1: {
+    shippingMethod: 'Royal Mail Tracked 48',
+    shippingPrice: STANDARD_POSTAGE,
+    estimatedDeliveryStart: inDays(DISPATCH_SLA_DAYS + 2),
+    estimatedDeliveryEnd: inDays(DISPATCH_SLA_DAYS + 4),
+    returnPolicy: { accepted: true, windowDays: 14 },
+  },
+  ml2: {
+    shippingMethod: 'Royal Mail Tracked 48',
+    shippingPayer: 'seller',
+    shippingPrice: 0,
+    estimatedDeliveryStart: inDays(DISPATCH_SLA_DAYS + 2),
+    estimatedDeliveryEnd: inDays(DISPATCH_SLA_DAYS + 4),
+    returnPolicy: { accepted: true, windowDays: 14 },
+  },
+};
+
+// Applied at module init — the overlay lands on the shared fixture objects
+// the PDP resolves via data.listing(), exactly like the live mapper's merge.
+for (const listing of ALL_LISTINGS) {
+  const facts = LISTING_DELIVERY[listing.id];
+  if (facts) Object.assign(listing, facts);
 }
 
 // ============================================================================

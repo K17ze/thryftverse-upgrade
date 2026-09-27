@@ -15,6 +15,9 @@ import { IconButton } from '@/components/ui/IconButton';
 import { Skeleton } from '@/components/ui/Skeleton';
 import { useToast } from '@/components/ui/Toast';
 import { POPULAR_ARTICLES } from '@/lib/data/fixtures-support';
+import { SUPPORT_TOPICS, type SupportTopicId } from '@/lib/contracts/support';
+import { DATA_MODE } from '@/lib/api/client';
+import { useSession } from '@/lib/session/SessionProvider';
 import { ArticleAccordion } from './ArticleAccordion';
 import { NewTicketForm } from './NewTicketForm';
 import { TicketListRow } from './TicketListRow';
@@ -49,15 +52,19 @@ function HubSkeleton() {
 export function SupportHub() {
   const router = useRouter();
   const { show } = useToast();
+  const { isGuest, sessionLoading } = useSession();
   const { data: tickets, isLoading, isError } = useSupportTickets();
   const [contactOpen, setContactOpen] = useState(false);
+  const [contactTopic, setContactTopic] = useState<SupportTopicId | undefined>(undefined);
+  /** Resolution-centre filter — mirrors the mobile Open/All chips. */
+  const [filter, setFilter] = useState<'open' | 'all'>('open');
 
   const handleCreated = (ticketId: string) => {
     show('Case opened — we reply within one working day.', 'success');
     router.push(`/support/${ticketId}`);
   };
 
-  if (isLoading) return <HubSkeleton />;
+  if (sessionLoading || isLoading) return <HubSkeleton />;
 
   if (isError || !tickets) {
     return (
@@ -71,7 +78,10 @@ export function SupportHub() {
     );
   }
 
-  const openCount = tickets.filter((t) => t.status === 'open' || t.status === 'in_review').length;
+  const isOpen = (s: (typeof tickets)[number]['status']) =>
+    s === 'open' || s === 'in_review';
+  const openCount = tickets.filter((t) => isOpen(t.status)).length;
+  const visible = filter === 'open' ? tickets.filter((t) => isOpen(t.status)) : tickets;
 
   return (
     <div className="pb-16">
@@ -95,9 +105,60 @@ export function SupportHub() {
           Order issues, refunds and verification cases.
         </p>
 
+        {/* Open/All filter chips — mirrors the mobile ResolutionCentre
+            scope filter. Counts sit inside the chips so the header stays
+            a single line. */}
+        <div role="tablist" aria-label="Filter cases" className="mt-3 flex gap-2 px-4 sm:px-6">
+          {(
+            [
+              { key: 'open', label: 'Open', count: openCount },
+              { key: 'all', label: 'All', count: tickets.length },
+            ] as const
+          ).map((opt) => {
+            const selected = filter === opt.key;
+            return (
+              <button
+                key={opt.key}
+                type="button"
+                role="tab"
+                aria-selected={selected}
+                onClick={() => setFilter(opt.key)}
+                className={`pressable inline-flex min-h-11 items-center gap-1.5 rounded-full border px-4 text-body font-medium ${
+                  selected
+                    ? 'border-brand bg-brand text-text-inverse'
+                    : 'border-border text-text-secondary hover:border-text-muted'
+                }`}
+              >
+                {opt.label}
+                <span className={`tnum ${selected ? 'text-text-inverse/70' : 'text-text-muted'}`}>
+                  {opt.count}
+                </span>
+              </button>
+            );
+          })}
+        </div>
+
         <div className="mt-3 border-t border-border-subtle">
-          {tickets.length > 0 ? (
-            tickets.map((ticket) => <TicketListRow key={ticket.id} ticket={ticket} />)
+          {isGuest ? (
+            // Fixture seeds belong to the demo identity — guests get a
+            // sign-in prompt, never 'me' data.
+            <EmptyState
+              compact
+              icon="folder"
+              title="Sign in to see your cases"
+              subtitle="Order issues, refunds and verification cases are tied to your account."
+              actionLabel="Sign in"
+              onAction={() => router.push('/auth')}
+            />
+          ) : visible.length > 0 ? (
+            visible.map((ticket) => <TicketListRow key={ticket.id} ticket={ticket} />)
+          ) : tickets.length > 0 ? (
+            <EmptyState
+              compact
+              icon="folder"
+              title="No open cases"
+              subtitle="Everything is resolved — switch to All to see closed cases."
+            />
           ) : (
             <EmptyState
               compact
@@ -117,29 +178,72 @@ export function SupportHub() {
         </div>
       </section>
 
-      {/* Contact — CTA reveals the inline form */}
-      <section aria-label="Contact support" className="mt-10 border-t border-border-subtle pt-6">
+      {/* Contact — CTA reveals the inline form. Cases are account-bound,
+          so guests sign in rather than open a case they can't track. */}
+      {isGuest ? null : (
+      <section
+        aria-label="Contact support"
+        className="mt-10 border-t border-border-subtle px-4 pt-6 sm:px-6"
+      >
         {contactOpen ? (
-          <NewTicketForm onCreated={handleCreated} onCancel={() => setContactOpen(false)} />
+          <NewTicketForm
+            key={contactTopic ?? 'blank'}
+            initialTopic={contactTopic}
+            onCreated={handleCreated}
+            onCancel={() => {
+              setContactOpen(false);
+              setContactTopic(undefined);
+            }}
+          />
         ) : (
-          <div className="flex items-center justify-between gap-4">
-            <div>
-              <p className="text-body-emphasis font-medium text-text-primary">Still need help?</p>
-              <p className="mt-0.5 text-body text-text-secondary">
-                Open a case — we reply within one working day.
-              </p>
+          <div>
+            <div className="flex items-center justify-between gap-4">
+              <div>
+                <p className="text-body-emphasis font-medium text-text-primary">Still need help?</p>
+                <p className="mt-0.5 text-body text-text-secondary">
+                  Open a case — we reply within one working day.
+                </p>
+              </div>
+              <Button
+                variant="secondary"
+                size="md"
+                icon="chat"
+                onClick={() => {
+                  setContactTopic(undefined);
+                  setContactOpen(true);
+                }}
+              >
+                Contact support
+              </Button>
             </div>
-            <Button variant="secondary" size="md" icon="chat" onClick={() => setContactOpen(true)}>
-              Contact support
-            </Button>
+            {/* Topic shortcuts — mirrors the mobile help categories; each
+                opens the form with the topic preselected. */}
+            <div className="mt-3 flex flex-wrap">
+              {SUPPORT_TOPICS.map((t) => (
+                <button
+                  key={t.id}
+                  type="button"
+                  onClick={() => {
+                    setContactTopic(t.id);
+                    setContactOpen(true);
+                  }}
+                  className="pressable inline-flex min-h-11 items-center pr-4 text-body text-text-secondary underline-offset-4 hover:text-text-primary hover:underline"
+                >
+                  {t.label}
+                </button>
+              ))}
+            </div>
           </div>
         )}
       </section>
+      )}
 
-      <p className="mt-10 flex items-center gap-1.5 text-caption text-text-muted">
-        <Icon name="info" size={14} className="shrink-0" />
-        Fixture mode — cases are stored for this session only and reset on reload.
-      </p>
+      {DATA_MODE !== 'live' ? (
+        <p className="mt-10 flex items-center gap-1.5 px-4 text-caption text-text-muted sm:px-6">
+          <Icon name="info" size={14} className="shrink-0" />
+          Fixture mode — cases are stored for this session only and reset on reload.
+        </p>
+      ) : null}
     </div>
   );
 }

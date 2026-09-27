@@ -28,12 +28,15 @@ export function EditGroupSheet({
   open,
   onClose,
   conversation,
+  viewerId,
   onSave,
   onDiscardDirty,
 }: {
   open: boolean;
   onClose: () => void;
   conversation: Conversation;
+  /** Session user id — the mosaic drops the viewer (fixture 'me'). */
+  viewerId: string;
   /** Persist the identity patch — returns success. */
   onSave: (patch: {
     title: string;
@@ -118,7 +121,7 @@ export function EditGroupSheet({
         <div className="flex items-start gap-4 pb-4">
           <div className="relative shrink-0">
             <GroupAvatarMosaic
-              members={mosaicMembers(conversation)}
+              members={mosaicMembers(conversation, viewerId)}
               size={72}
               groupPhoto={displayAvatar}
               fallbackName={name.trim() || 'Group'}
@@ -128,9 +131,11 @@ export function EditGroupSheet({
               type="button"
               onClick={() => avatarInputRef.current?.click()}
               aria-label="Change group photo"
-              className="pressable absolute -bottom-0.5 -right-0.5 flex h-7 w-7 items-center justify-center rounded-full border-2 border-surface bg-brand text-text-inverse"
+              className="pressable absolute -bottom-2.5 -right-2.5 flex h-11 w-11 items-center justify-center"
             >
-              <Icon name="camera" size={13} filled />
+              <span className="flex h-7 w-7 items-center justify-center rounded-full border-2 border-surface bg-brand text-text-inverse">
+                <Icon name="camera" size={13} filled />
+              </span>
             </button>
           </div>
           <div className="min-w-0 flex-1 pt-1">
@@ -173,9 +178,11 @@ export function EditGroupSheet({
                 type="button"
                 onClick={() => coverInputRef.current?.click()}
                 aria-label="Change cover photo"
-                className="pressable absolute bottom-2 right-2 flex h-8 w-8 items-center justify-center rounded-full bg-overlay text-scrim-text-primary"
+                className="pressable absolute bottom-0.5 right-0.5 flex h-11 w-11 items-center justify-center"
               >
-                <Icon name="camera" size={15} />
+                <span className="flex h-8 w-8 items-center justify-center rounded-full bg-overlay text-scrim-text-primary">
+                  <Icon name="camera" size={15} />
+                </span>
               </button>
             </div>
           ) : (

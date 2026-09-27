@@ -17,7 +17,14 @@ function formatTime(iso: string): string {
   return d.toLocaleTimeString('en-GB', { hour: '2-digit', minute: '2-digit' });
 }
 
-export function SupportMessageRow({ message }: { message: SupportTicketMessage }) {
+export function SupportMessageRow({
+  message,
+  onRetry,
+}: {
+  message: SupportTicketMessage;
+  /** Present when the send failed — renders the retry affordance. */
+  onRetry?: () => void;
+}) {
   if (message.role === 'system') {
     return <p className="my-3 px-6 text-center text-meta text-text-muted">{message.body}</p>;
   }
@@ -50,6 +57,21 @@ export function SupportMessageRow({ message }: { message: SupportTicketMessage }
             ) : null}
           </div>
         </div>
+        {mine && message.status === 'failed' ? (
+          <p className="mt-1 flex items-center justify-end gap-1.5 text-meta text-danger-text">
+            <Icon name="alert" size={12} aria-hidden />
+            Not sent
+            {onRetry ? (
+              <button
+                type="button"
+                onClick={onRetry}
+                className="pressable min-h-11 px-2 font-semibold text-danger-text underline-offset-2 hover:underline sm:min-h-0"
+              >
+                Retry
+              </button>
+            ) : null}
+          </p>
+        ) : null}
       </div>
     </div>
   );

@@ -12,6 +12,7 @@ import type { LiveSession } from '@/lib/data/fixtures-media';
 import { userById } from '@/lib/data/fixtures';
 import { Icon } from '@/components/ui/Icon';
 import { useToast } from '@/components/ui/Toast';
+import { DATA_MODE } from '@/lib/api/client';
 import { useLiveReminders } from './liveReminders';
 
 interface ReminderToggleProps {
@@ -30,9 +31,13 @@ export function ReminderToggle({ session, className = '' }: ReminderToggleProps)
       type="button"
       onClick={() => {
         const willRemind = toggle(session);
+        // Mode-honest copy — live mode posts a real reminder through the
+        // service; fixture mode only keeps the flag on this surface.
         show(
           willRemind
-            ? `We'll remind you when ${userById(session.sellerId)?.username ?? 'the show'} goes live`
+            ? DATA_MODE === 'live'
+              ? `We'll remind you when ${userById(session.sellerId)?.username ?? 'the show'} goes live`
+              : 'Reminder saved — it stays marked here until the show starts'
             : 'Reminder removed',
           'info',
         );

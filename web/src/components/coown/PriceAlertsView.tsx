@@ -15,60 +15,31 @@ import { EmptyState } from '@/components/ui/EmptyState';
 import { Icon } from '@/components/ui/Icon';
 import { Sheet } from '@/components/ui/Sheet';
 import { useToast } from '@/components/ui/Toast';
+import { Switch } from '@/components/settings/Switch';
 import { useCoOwnAssets } from '@/lib/hooks/coown-queries';
 import { useHydrated } from '@/lib/store/useStore';
-import type { StoredPriceAlert } from '@/lib/contracts/coown';
 import { formatDate } from '@/lib/utils/format';
-import { PRICE_ALERT_SEED } from '@/lib/data/fixtures-coown';
-import { useCoOwnAlerts } from './alertStore';
+import { useCoOwnAlerts, useEvaluateCoOwnAlerts, type CoOwnAlert } from './alertStore';
 import { gbp } from './format';
-
-function AlertSwitch({
-  checked,
-  label,
-  onToggle,
-}: {
-  checked: boolean;
-  label: string;
-  onToggle: () => void;
-}) {
-  return (
-    <button
-      type="button"
-      role="switch"
-      aria-checked={checked}
-      aria-label={label}
-      onClick={onToggle}
-      className={`pressable relative h-7 w-12 shrink-0 rounded-full border transition-colors ${
-        checked ? 'border-brand bg-brand-subtle' : 'border-border bg-surface-alt'
-      }`}
-    >
-      <span
-        aria-hidden="true"
-        className={`absolute top-1/2 h-5 w-5 -translate-y-1/2 rounded-full transition-all ${
-          checked ? 'left-[24px] bg-brand' : 'left-1 bg-text-muted'
-        }`}
-      />
-    </button>
-  );
-}
 
 function AlertRow({
   alert,
   title,
   paused,
+  fired,
   onToggle,
   onDelete,
 }: {
-  alert: StoredPriceAlert;
+  alert: CoOwnAlert;
   title: string;
   paused: boolean;
+  fired: boolean;
   onToggle: () => void;
   onDelete: () => void;
 }) {
   const isAbove = alert.direction === 'above';
   return (
-    <li className={`flex items-center gap-3 py-3.5 ${paused ? 'opacity-60' : ''}`}>
+    <li className={`flex items-center gap-3 py-3.5 ${paused && !fired ? 'opacity-60' : ''}`}>
       <Link
         href={`/co-own/${alert.assetId}`}
         className="pressable flex min-w-0 flex-1 items-center gap-3"
@@ -76,14 +47,16 @@ function AlertRow({
       >
         <span
           className={`flex h-9 w-9 shrink-0 items-center justify-center rounded-full ${
-            paused
-              ? 'bg-surface-alt text-text-muted'
-              : isAbove
-                ? 'bg-coown-up-subtle text-coown-up'
-                : 'bg-coown-down-subtle text-coown-down'
+            fired
+              ? 'bg-brand-subtle text-brand'
+              : paused
+                ? 'bg-surface-alt text-text-muted'
+                : isAbove
+                  ? 'bg-coown-up-subtle text-coown-up'
+                  : 'bg-coown-down-subtle text-coown-down'
           }`}
         >
-          <Icon name={isAbove ? 'arrowUp' : 'chevronDown'} size={16} />
+          <Icon name={fired ? 'check' : isAbove ? 'chevronUp' : 'chevronDown'} filled={fired} size={16} />
         </span>
         <span className="min-w-0 flex-1">
           <span className="block text-body text-text-secondary">
@@ -92,17 +65,21 @@ function AlertRow({
             <span className="tnum">{isAbove ? 'Above' : 'Below'} {gbp(alert.targetPriceGbp)}</span>
           </span>
           <span className="mt-0.5 block text-meta text-text-muted">
-            {paused ? 'Paused · ' : ''}Alerts when the last-trade price{' '}
-            {isAbove ? 'rises above' : 'drops below'} {gbp(alert.targetPriceGbp)} · set{' '}
-            {formatDate(alert.createdAt)}
+            {fired && alert.triggeredAt
+              ? `Fired ${formatDate(alert.triggeredAt)} — price crossed your target · set ${formatDate(alert.createdAt)}`
+              : `${paused ? 'Paused · ' : ''}Alerts when the last-trade price ${
+                  isAbove ? 'rises above' : 'drops below'
+                } ${gbp(alert.targetPriceGbp)} · set ${formatDate(alert.createdAt)}`}
           </span>
         </span>
       </Link>
-      <AlertSwitch
-        checked={alert.active}
-        label={alert.active ? 'Pause alert' : 'Enable alert'}
-        onToggle={onToggle}
-      />
+      {fired ? null : (
+        <Switch
+          checked={alert.active}
+          onChange={onToggle}
+          aria-label={alert.active ? 'Pause alert' : 'Enable alert'}
+        />
+      )}
       <button
         type="button"
         aria-label="Delete alert"
@@ -119,20 +96,25 @@ export function PriceAlertsView() {
   const router = useRouter();
   const assetsQ = useCoOwnAssets();
   const hydrated = useHydrated();
-  // SSR + the first client render agree on the seed; persisted truth
-  // takes over after mount (persisted reads differ for returning sessions).
+  // SSR + the first client render agree on empty; persisted truth takes
+  // over after mount (persisted reads differ for returning sessions).
   const stored = useCoOwnAlerts((s) => s.alerts);
-  const alerts = hydrated ? stored : PRICE_ALERT_SEED;
+  const alerts = hydrated ? stored : [];
   const toggleAlert = useCoOwnAlerts((s) => s.toggleAlert);
   const removeAlert = useCoOwnAlerts((s) => s.removeAlert);
   const { show } = useToast();
-  const [pendingDelete, setPendingDelete] = useState<StoredPriceAlert | null>(null);
+  const [pendingDelete, setPendingDelete] = useState<CoOwnAlert | null>(null);
+  // Real evaluation: every assets snapshot re-checks armed alerts and a
+  // session fill can fire one the moment it lands.
+  useEvaluateCoOwnAlerts();
 
   const titleFor = (assetId: string) =>
     assetsQ.data?.find((a) => a.id === assetId)?.title ?? 'Unknown market';
 
-  const active = alerts.filter((a) => a.active);
-  const paused = alerts.filter((a) => !a.active);
+  const isFired = (a: CoOwnAlert) => a.triggeredAt != null;
+  const active = alerts.filter((a) => a.active && !isFired(a));
+  const fired = alerts.filter(isFired);
+  const paused = alerts.filter((a) => !a.active && !isFired(a));
 
   if (assetsQ.isLoading) {
     return (
@@ -143,6 +125,23 @@ export function PriceAlertsView() {
             <div key={i} className="skeleton h-14 rounded-sm" />
           ))}
         </div>
+      </div>
+    );
+  }
+
+  // Without the market snapshot alert rows would read "Unknown market" —
+  // surface the failure with retry instead of degrading silently.
+  if (assetsQ.isError || !assetsQ.data) {
+    return (
+      <div className="mx-auto w-full max-w-3xl px-4 pb-20 pt-8 sm:px-6 md:pt-10">
+        <h1 className="text-editorial-display text-text-primary">Price alerts</h1>
+        <EmptyState
+          icon="notifications"
+          title="Couldn't load your alerts"
+          subtitle="Check your connection and try again."
+          actionLabel="Retry"
+          onAction={() => void assetsQ.refetch()}
+        />
       </div>
     );
   }
@@ -182,8 +181,8 @@ export function PriceAlertsView() {
         <>
           <p className="mt-6 flex items-start gap-2 border-b border-border-subtle pb-5 text-meta text-text-secondary">
             <Icon name="info" size={14} className="mt-0.5 shrink-0 text-text-muted" />
-            Alerts are saved on this device. Delivery isn&rsquo;t live yet — check
-            back on a market to see if your target has been crossed.
+            Alerts evaluate against last-trade prices on this device while you browse.
+            There&rsquo;s no push delivery — fired alerts land under Triggered below.
           </p>
 
           {active.length > 0 ? (
@@ -201,10 +200,35 @@ export function PriceAlertsView() {
                     alert={a}
                     title={titleFor(a.assetId)}
                     paused={false}
+                    fired={false}
                     onToggle={() => {
                       toggleAlert(a.id);
                       show('Alert paused', 'info');
                     }}
+                    onDelete={() => setPendingDelete(a)}
+                  />
+                ))}
+              </ul>
+            </section>
+          ) : null}
+
+          {fired.length > 0 ? (
+            <section aria-labelledby="alerts-fired">
+              <h2
+                id="alerts-fired"
+                className="mt-8 text-micro font-semibold uppercase tracking-[0.08em] text-text-muted"
+              >
+                Triggered
+              </h2>
+              <ul className="divide-y divide-border-subtle">
+                {fired.map((a) => (
+                  <AlertRow
+                    key={a.id}
+                    alert={a}
+                    title={titleFor(a.assetId)}
+                    paused={false}
+                    fired
+                    onToggle={() => undefined}
                     onDelete={() => setPendingDelete(a)}
                   />
                 ))}
@@ -227,6 +251,7 @@ export function PriceAlertsView() {
                     alert={a}
                     title={titleFor(a.assetId)}
                     paused
+                    fired={false}
                     onToggle={() => {
                       toggleAlert(a.id);
                       show('Alert enabled', 'info');

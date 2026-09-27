@@ -19,14 +19,16 @@ import { useToast } from '@/components/ui/Toast';
 import { useStore } from '@/lib/store/useStore';
 import { formatCount, formatPrice } from '@/lib/utils/format';
 import { getCategoryFocalPoint, getListingCoverUri } from '@/lib/utils/media';
+import { listingHasPriceDrop, priceDropPercent } from '@/components/closet/closetFilters';
 
 export function ClosetTile({ item, priority }: { item: Listing; priority?: boolean }) {
   const cover = getListingCoverUri(item.images);
+  const hasPriceDrop = listingHasPriceDrop(item);
   return (
     <Link
       href={`/item/${item.id}`}
       className="group block"
-      aria-label={`${item.brand ? `${item.brand} — ` : ''}${item.title}, ${formatPrice(item.price)}, ${formatCount(item.likes)} likes${item.isSold ? ', Sold' : ''}`}
+      aria-label={`${item.brand ? `${item.brand} — ` : ''}${item.title}, ${formatPrice(item.price)}${hasPriceDrop ? `, was ${formatPrice(item.originalPrice!)}` : ''}, ${formatCount(item.likes)} likes${item.isSold ? ', Sold' : ''}`}
     >
       <div className="relative overflow-hidden rounded-lg bg-surface-alt">
         <AppImage
@@ -38,6 +40,14 @@ export function ClosetTile({ item, priority }: { item: Listing; priority?: boole
           sizes="(max-width: 640px) 50vw, (max-width: 1024px) 33vw, 288px"
           className="media-zoom"
         />
+        {/* Price drop — the contract's originalPrice is the only honest
+            signal (mobile ClosetMediaMosaic badge parity). Sold tiles keep
+            the sold treatment instead. */}
+        {hasPriceDrop ? (
+          <span className="tnum absolute left-1.5 top-1.5 z-10 rounded-md bg-overlay px-1.5 py-0.5 text-meta font-semibold text-scrim-text-primary">
+            −{priceDropPercent(item)}%
+          </span>
+        ) : null}
         {item.isSold ? (
           <>
             <div className="absolute inset-0 bg-overlay" />
@@ -82,10 +92,13 @@ function SavedTile({
   item,
   kind,
   priority,
+  onFile,
 }: {
   item: Listing;
   kind: 'saved' | 'favourites';
   priority?: boolean;
+  /** File-to-board affordance (mobile's hold-to-file picker). */
+  onFile?: (item: Listing) => void;
 }) {
   const toggleSaved = useStore((s) => s.toggleSaved);
   const toggleWishlist = useStore((s) => s.toggleWishlist);
@@ -101,14 +114,31 @@ function SavedTile({
     }
   };
 
+  /* top-N is per-button — the file affordance slides below the price-drop
+     chip when a discounted item carries both. */
+  const cornerAction =
+    'pressable absolute flex h-11 w-11 items-center justify-center transition-opacity [@media(hover:hover)]:focus-visible:opacity-100 [@media(hover:hover)]:group-focus-within:opacity-100 [@media(hover:hover)]:group-hover:opacity-100 [@media(hover:hover)]:opacity-0';
+
   return (
     <div className="group relative">
       <ClosetTile item={item} priority={priority} />
+      {onFile ? (
+        <button
+          type="button"
+          onClick={() => onFile(item)}
+          aria-label={`File ${item.title} to a board`}
+          /* Drop chip owns the top-left corner on discounted items — the
+             file affordance slides below it rather than overlapping. */
+          className={`${cornerAction} ${listingHasPriceDrop(item) ? 'top-9' : 'top-0'} left-0`}
+        >
+          <Icon name="layers" size={18} className="text-scrim-text-primary drop-scrim" />
+        </button>
+      ) : null}
       <button
         type="button"
         onClick={remove}
         aria-label={`Remove ${item.title} from ${kind === 'saved' ? 'saved items' : 'favourites'}`}
-        className="pressable absolute right-0 top-0 flex h-11 w-11 items-center justify-center transition-opacity [@media(hover:hover)]:focus-visible:opacity-100 [@media(hover:hover)]:group-focus-within:opacity-100 [@media(hover:hover)]:group-hover:opacity-100 [@media(hover:hover)]:opacity-0"
+        className={`${cornerAction} right-0 top-0`}
       >
         <Icon
           name={kind === 'saved' ? 'bookmark' : 'heart'}
@@ -124,7 +154,7 @@ function SavedTile({
 export function ClosetGridSkeleton({ count = 10 }: { count?: number }) {
   return (
     <div
-      className="grid grid-cols-2 gap-2 px-4 sm:grid-cols-3 sm:px-6 lg:grid-cols-4"
+      className="grid grid-cols-2 gap-[max(4px,var(--density-row-gap))] px-4 sm:grid-cols-3 sm:px-6 lg:grid-cols-4"
       aria-busy
       aria-label="Loading items"
     >
@@ -148,6 +178,8 @@ interface ClosetGridProps {
   onAction?: () => void;
   /** Render tiles with an unsave affordance — bookmark or heart. */
   unsave?: 'saved' | 'favourites';
+  /** File-to-board affordance on unsave tiles (mobile's hold-to-file). */
+  onFileItem?: (item: Listing) => void;
 }
 
 export function ClosetGrid({
@@ -159,6 +191,7 @@ export function ClosetGrid({
   actionLabel,
   onAction,
   unsave,
+  onFileItem,
 }: ClosetGridProps) {
   if (isLoading) return <ClosetGridSkeleton />;
   if (items.length === 0) {
@@ -174,10 +207,18 @@ export function ClosetGrid({
     );
   }
   return (
-    <div className="grid grid-cols-2 gap-2 px-4 sm:grid-cols-3 sm:px-6 lg:grid-cols-4">
+    // Tile gutter tracks the density preference — 4px floor so compact
+    // never welds media together.
+    <div className="grid grid-cols-2 gap-[max(4px,var(--density-row-gap))] px-4 sm:grid-cols-3 sm:px-6 lg:grid-cols-4">
       {items.map((item, i) =>
         unsave ? (
-          <SavedTile key={item.id} item={item} kind={unsave} priority={i < 4} />
+          <SavedTile
+            key={item.id}
+            item={item}
+            kind={unsave}
+            priority={i < 4}
+            onFile={onFileItem}
+          />
         ) : (
           <ClosetTile key={item.id} item={item} priority={i < 4} />
         ),
