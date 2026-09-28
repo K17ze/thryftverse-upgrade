@@ -12,7 +12,7 @@
  */
 
 import React from 'react';
-import { View, Text, StyleSheet, Pressable } from 'react-native';
+import { View, Text, StyleSheet, Pressable, useWindowDimensions, type LayoutChangeEvent } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { useAppTheme } from '../../theme/ThemeContext';
 import { Space, Radius, ExchangeLayout, FontFamily } from '../../theme/designTokens';
@@ -29,6 +29,16 @@ const BOOK_ROW_HEIGHT = 44;
 const PRICE_COL_WIDTH = 90;
 /** Fixed-width size rail — wider to accommodate larger tabular figures. */
 const SIZE_COL_WIDTH = 80;
+/**
+ * Responsive layout breakpoint (audit F10): the price + units rails need
+ * ~170pt plus a usable cumulative column and row padding — roughly 240pt
+ * measured in 1×-text points. Text scales with the OS font scale while the
+ * rails do not, so the comparison divides the measured book width by the
+ * active fontScale. Below the threshold each level switches to a structured
+ * stacked row (exact price on its own line, units + running total below) —
+ * executable quotes are never truncated or abbreviated to fit.
+ */
+const RAIL_LAYOUT_MIN_WIDTH = PRICE_COL_WIDTH + SIZE_COL_WIDTH + 70;
 export type CoOwnBookMode = 'continuous' | 'call_auction' | 'rfq' | 'halted' | 'closed';
 
 export interface CoOwnBookLevel {
@@ -65,6 +75,36 @@ export function CoOwnOrderBook({
   onRequestQuote,
 }: CoOwnOrderBookProps) {
   const { colors } = useAppTheme();
+
+  // ── Responsive financial layout (audit F10) ──
+  // Measure the real width the book is given (the card insets differ
+  // between embedded and standalone contexts) and the OS text scale.
+  // onLayout reports the container's BORDER-box width, so the container's
+  // own padding plus the per-row horizontal padding are subtracted to get
+  // the width the rails actually live in. Before the first layout event,
+  // the fallback subtracts a conservative estimate of the parent's insets
+  // too — a borderline width errs toward stacked rather than flashing the
+  // rails for one frame then reflowing.
+  const { width: windowWidth, fontScale } = useWindowDimensions();
+  const [measuredWidth, setMeasuredWidth] = React.useState(0);
+  const onContainerLayout = React.useCallback(
+    (event: LayoutChangeEvent) => {
+      const next = event.nativeEvent.layout.width;
+      if (next > 0 && next !== measuredWidth) setMeasuredWidth(next);
+    },
+    [measuredWidth],
+  );
+  // Inner chrome: container padding (standalone only — embedded drops it)
+  // plus the level row's paddingHorizontal on both sides.
+  const innerChrome = (embedded ? 0 : Space.md * 2) + Space.xs * 2;
+  // Unmeasured fallback chrome: a conservative estimate of the parent's
+  // insets (section padding + card padding ≈ Space.xl each side).
+  const parentChromeEstimate = Space.xl * 2;
+  const availableWidth = measuredWidth > 0
+    ? measuredWidth - innerChrome
+    : windowWidth - innerChrome - parentChromeEstimate;
+  const stackedLayout = availableWidth / Math.max(fontScale || 1, 1) < RAIL_LAYOUT_MIN_WIDTH;
+
   const containerStyle = [
     styles.container,
     embedded && styles.containerEmbedded,
@@ -77,7 +117,7 @@ export function CoOwnOrderBook({
   // RFQ mode — flat inline notice instead of centered icon box
   if (mode === 'rfq') {
     return (
-      <View style={containerStyle}>
+      <View style={containerStyle} onLayout={onContainerLayout}>
         <View style={styles.rfqBlock}>
           <Text style={[styles.rfqTitle, { color: colors.textPrimary }]}>Request for quote</Text>
           <Text style={[styles.rfqSubtitle, { color: colors.textSecondary }]}>
@@ -102,7 +142,7 @@ export function CoOwnOrderBook({
   if (mode === 'halted' || mode === 'closed') {
     const label = mode === 'halted' ? 'Trading halted' : 'Market closed';
     return (
-      <View style={containerStyle}>
+      <View style={containerStyle} onLayout={onContainerLayout}>
         <View style={styles.haltedBlock}>
           <Text style={[styles.haltedTitle, { color: colors.textSecondary }]}>{label}</Text>
           <Text style={[styles.haltedSubtitle, { color: colors.textMuted }]}>
@@ -117,6 +157,7 @@ export function CoOwnOrderBook({
             colors={colors}
             maxCumulative={getMaxCumulative(asks, bids)}
             onSelectLevel={undefined}
+            stacked={stackedLayout}
           />
           <SpreadRow
             bestBid={bids[0]?.price}
@@ -131,6 +172,7 @@ export function CoOwnOrderBook({
             colors={colors}
             maxCumulative={getMaxCumulative(asks, bids)}
             onSelectLevel={undefined}
+            stacked={stackedLayout}
           />
         </View>
       </View>
@@ -152,7 +194,7 @@ export function CoOwnOrderBook({
   const isCallAuction = mode === 'call_auction';
 
   return (
-    <View style={containerStyle}>
+    <View style={containerStyle} onLayout={onContainerLayout}>
       {/* Header — hidden when embedded (parent section provides the title) */}
       {!embedded ? (
         <View style={styles.headerRow}>
@@ -176,12 +218,22 @@ export function CoOwnOrderBook({
       {/* Column headers — fixed-width rails keep price/quantity columns
           aligned across every row so depth reads as comparable columns
           (U24). The cumulative column flexes to fill remaining space.
-          Header keeps the 44pt hit target; level rows tighten to 32pt. */}
-      <View style={[styles.colHeaderRow, { borderColor: colors.border }]}>
-        <Text style={[styles.colHeader, styles.colHeaderPrice, { color: colors.textMuted }]}>Price · 1ZE</Text>
-        <Text style={[styles.colHeader, styles.colHeaderSize, { color: colors.textMuted }]}>Units</Text>
-        <Text style={[styles.colHeader, { color: colors.textMuted, textAlign: 'right' }]}>Total units</Text>
-      </View>
+          When the responsive layout switches rows to stacked (measured
+          width / fontScale below RAIL_LAYOUT_MIN_WIDTH), the header stacks
+          to match: price line first, units + running total below — the
+          same order the stacked rows use. */}
+      {stackedLayout ? (
+        <View style={[styles.colHeaderRow, styles.colHeaderRowStacked, { borderColor: colors.border }]}>
+          <Text style={[styles.colHeaderStacked, { color: colors.textMuted }]}>Price · 1ZE</Text>
+          <Text style={[styles.colHeaderStacked, { color: colors.textMuted }]}>Units · Total units</Text>
+        </View>
+      ) : (
+        <View style={[styles.colHeaderRow, { borderColor: colors.border }]}>
+          <Text style={[styles.colHeader, styles.colHeaderPrice, { color: colors.textMuted }]}>Price · 1ZE</Text>
+          <Text style={[styles.colHeader, styles.colHeaderSize, { color: colors.textMuted }]}>Units</Text>
+          <Text style={[styles.colHeader, { color: colors.textMuted, textAlign: 'right' }]}>Total units</Text>
+        </View>
+      )}
 
       {/* Asks (descending — highest at top) */}
       <BookSide
@@ -191,6 +243,7 @@ export function CoOwnOrderBook({
         maxCumulative={maxCumulative}
         onSelectLevel={onSelectLevel}
         reverseOrder
+        stacked={stackedLayout}
       />
 
       {/* Spread row — recessed band between the two sides */}
@@ -210,30 +263,39 @@ export function CoOwnOrderBook({
         colors={colors}
         maxCumulative={maxCumulative}
         onSelectLevel={onSelectLevel}
+        stacked={stackedLayout}
       />
 
       {/* Bid/ask imbalance — proportional B/S strip under the ladder.
           Reads like Binance's B/S gauge: green share = resting bid units,
-          red share = resting ask units across the visible depth. */}
+          red share = resting ask units across the visible depth. Visible
+          "Bid"/"Ask" words sit at the strip ends so the gauge explains
+          itself in monochrome; the caption states the scope because the
+          ratio is scaled against the levels on screen, not the full book. */}
       {bidShare != null ? (
-        <View
-          style={styles.imbalanceWrap}
-          accessibilityRole="text"
-          accessibilityLabel={`Order book imbalance: ${Math.round(bidShare * 100)}% bids, ${Math.round((1 - bidShare) * 100)}% asks across visible depth`}
-        >
-          <Text style={[styles.imbalanceLabel, { color: colors.coownUp }]}>
-            {Math.round(bidShare * 100)}%
-          </Text>
-          <View style={[styles.imbalanceTrack, { backgroundColor: colors.coownDown }]}>
-            <View
-              style={[
-                styles.imbalanceFill,
-                { backgroundColor: colors.coownUp, width: `${bidShare * 100}%` },
-              ]}
-            />
+        <View>
+          <View
+            style={styles.imbalanceWrap}
+            accessibilityRole="text"
+            accessibilityLabel={`Order book imbalance: ${Math.round(bidShare * 100)}% bids, ${Math.round((1 - bidShare) * 100)}% asks across visible depth`}
+          >
+            <Text style={[styles.imbalanceLabel, { color: colors.coownUp }]}>
+              {`Bid ${Math.round(bidShare * 100)}%`}
+            </Text>
+            <View style={[styles.imbalanceTrack, { backgroundColor: colors.coownDown }]}>
+              <View
+                style={[
+                  styles.imbalanceFill,
+                  { backgroundColor: colors.coownUp, width: `${bidShare * 100}%` },
+                ]}
+              />
+            </View>
+            <Text style={[styles.imbalanceLabel, { color: colors.coownDown }]}>
+              {`${Math.round((1 - bidShare) * 100)}% Ask`}
+            </Text>
           </View>
-          <Text style={[styles.imbalanceLabel, { color: colors.coownDown }]}>
-            {Math.round((1 - bidShare) * 100)}%
+          <Text style={[styles.imbalanceScope, { color: colors.textMuted }]}>
+            Share of resting units across visible depth
           </Text>
         </View>
       ) : null}
@@ -278,6 +340,7 @@ const BookLevelRow = React.memo(function BookLevelRow({
   depthFraction,
   colors,
   onSelectLevel,
+  stacked = false,
 }: {
   level: CoOwnBookLevel;
   side: 'bid' | 'ask';
@@ -285,6 +348,13 @@ const BookLevelRow = React.memo(function BookLevelRow({
   depthFraction: number;
   colors: ReturnType<typeof useAppTheme>['colors'];
   onSelectLevel?: (side: 'bid' | 'ask', price: number) => void;
+  /**
+   * Stacked mode (audit F10): when the measured width can't carry the
+   * fixed rails at the active text scale, each level renders the exact
+   * price on its own line with units + running total below. Quotes are
+   * never truncated — the row grows instead.
+   */
+  stacked?: boolean;
 }) {
   // Depth fills are the order book's core visual: full-strength theme
   // subtle tints so the green bid / red ask mass reads at a glance.
@@ -292,6 +362,45 @@ const BookLevelRow = React.memo(function BookLevelRow({
   // Per Design.md: use coownUp/coownDown for financial truth (bid=up/buy,
   // ask=down/sell), not generic success/danger.
   const priceColor = side === 'bid' ? colors.coownUp : colors.coownDown;
+
+  const depthBar = (
+    <View
+      style={[
+        side === 'ask' ? styles.depthBarRight : styles.depthBarLeft,
+        {
+          width: `${Math.min(depthFraction * 100, 100)}%`,
+          backgroundColor: barColor,
+        },
+      ]}
+    />
+  );
+
+  if (stacked) {
+    return (
+      <Pressable
+        onPress={() => onSelectLevel?.(side, level.price)}
+        disabled={!onSelectLevel}
+        accessibilityRole={onSelectLevel ? 'button' : undefined}
+        accessibilityLabel={`${side === 'bid' ? 'Bid' : 'Ask'} ${level.price.toFixed(2)} 1ZE, ${level.size} units, ${cumulative} cumulative units`}
+        accessibilityHint={onSelectLevel ? 'Opens a limit order at this price for review' : undefined}
+        style={({ pressed }) => pressed && { opacity: 0.6 }}
+      >
+        <View style={[styles.levelRowStacked, { minHeight: BOOK_ROW_HEIGHT }]}>
+          {depthBar}
+          <View style={styles.levelStackedText}>
+            {/* Exact price on its own line — no numberOfLines clamp, so a
+                long quote wraps instead of clipping at 200% text. */}
+            <Text style={[styles.levelPriceStacked, { color: priceColor }]}>
+              {level.price.toFixed(2)}
+            </Text>
+            <Text style={[styles.levelStackedMeta, { color: colors.textSecondary }]}>
+              {`${level.size.toLocaleString('en-GB')} units · ${cumulative.toLocaleString('en-GB')} total`}
+            </Text>
+          </View>
+        </View>
+      </Pressable>
+    );
+  }
 
   return (
     <Pressable
@@ -307,32 +416,22 @@ const BookLevelRow = React.memo(function BookLevelRow({
             level so the book reads as the classic fan: short bars nearest
             the spread, full bars at the far edge. Bids grow from the left,
             asks from the right. */}
-        <View
-          style={[
-            side === 'ask' ? styles.depthBarRight : styles.depthBarLeft,
-            {
-              width: `${Math.min(depthFraction * 100, 100)}%`,
-              backgroundColor: barColor,
-            },
-          ]}
-        />
-        {/* Financial values must remain exact at large text sizes — two
-            lines inside the fixed rail instead of silently clipping (F12). */}
+        {depthBar}
+        {/* Financial values must remain exact at large text sizes — no
+            line clamp: the row height grows rather than silently clipping
+            an executable quote (F10). */}
         <Text
           style={[styles.levelPrice, { color: priceColor }]}
-          numberOfLines={2}
         >
           {level.price.toFixed(2)}
         </Text>
         <Text
           style={[styles.levelSize, { color: colors.textPrimary }]}
-          numberOfLines={2}
         >
           {level.size.toLocaleString('en-GB')}
         </Text>
         <Text
           style={[styles.levelTotal, { color: colors.textSecondary }]}
-          numberOfLines={2}
         >
           {cumulative.toLocaleString('en-GB')}
         </Text>
@@ -349,6 +448,7 @@ function BookSide({
   maxCumulative,
   onSelectLevel,
   reverseOrder,
+  stacked = false,
 }: {
   levels: CoOwnBookLevel[];
   side: 'bid' | 'ask';
@@ -356,6 +456,7 @@ function BookSide({
   maxCumulative: number;
   onSelectLevel?: (side: 'bid' | 'ask', price: number) => void;
   reverseOrder?: boolean;
+  stacked?: boolean;
 }) {
   // For asks, we want highest price at top (reverse of natural ascending)
 
@@ -402,6 +503,7 @@ function BookSide({
             depthFraction={depthFraction}
             colors={colors}
             onSelectLevel={onSelectLevel}
+            stacked={stacked}
           />
         );
       })}
@@ -572,6 +674,20 @@ const styles = StyleSheet.create({
     flexShrink: 0,
     textAlign: 'right',
   },
+  // Stacked layout (F10): header mirrors the two-line stacked level row —
+  // price label on line one, units + running total on line two.
+  colHeaderRowStacked: {
+    flexDirection: 'column',
+    alignItems: 'flex-start',
+    gap: 2,
+  },
+  colHeaderStacked: {
+    fontSize: TypographyV2.label.size,
+    lineHeight: TypographyV2.label.lineHeight,
+    fontFamily: TypographyV2.label.fontFamily,
+    letterSpacing: TypographyV2.label.letterSpacing,
+    textTransform: 'uppercase',
+  },
   sideWrap: {
     gap: 0,
   },
@@ -600,6 +716,33 @@ const styles = StyleSheet.create({
     overflow: 'hidden',
     paddingHorizontal: Space.xs,
     position: 'relative',
+  },
+  // Stacked level row (F10): same 44pt target and depth-bar grammar, but
+  // the exact price gets its own line and units + running total sit below.
+  levelRowStacked: {
+    overflow: 'hidden',
+    paddingHorizontal: Space.xs,
+    paddingVertical: Space.xs + 2,
+    position: 'relative',
+    justifyContent: 'center',
+  },
+  levelStackedText: {
+    zIndex: 1,
+    gap: 2,
+  },
+  levelPriceStacked: {
+    fontSize: TypographyV2.bodyStrong.size,
+    lineHeight: TypographyV2.bodyStrong.lineHeight,
+    fontFamily: TypographyV2.bodyStrong.fontFamily,
+    letterSpacing: TypographyV2.bodyStrong.letterSpacing,
+    fontVariant: ['tabular-nums'],
+  },
+  levelStackedMeta: {
+    fontSize: TypographyV2.meta.size,
+    lineHeight: TypographyV2.meta.lineHeight,
+    fontFamily: TypographyV2.meta.fontFamily,
+    letterSpacing: TypographyV2.meta.letterSpacing,
+    fontVariant: ['tabular-nums'],
   },
   // Depth bars: bid side grows from left, ask side grows from right.
   // Two mutually exclusive base styles so the absolute edge is
@@ -729,6 +872,17 @@ const styles = StyleSheet.create({
     lineHeight: TypographyV2.meta.lineHeight,
     fontFamily: FontFamily.semibold,
     fontVariant: ['tabular-nums'],
+  },
+  // Scope caption under the gauge — the ratio is computed from the levels
+  // on screen, so the strip states that plainly.
+  imbalanceScope: {
+    fontSize: TypographyV2.meta.size,
+    lineHeight: TypographyV2.meta.lineHeight,
+    fontFamily: TypographyV2.meta.fontFamily,
+    letterSpacing: TypographyV2.meta.letterSpacing,
+    paddingHorizontal: Space.xs,
+    paddingTop: 2,
+    paddingBottom: 2,
   },
   emptyBlock: {
     paddingVertical: Space.md,

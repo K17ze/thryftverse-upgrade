@@ -1,5 +1,13 @@
 import React from 'react';
-import { View, Text, StyleSheet, Pressable, ActivityIndicator, Linking } from 'react-native';
+import {
+  View,
+  Text,
+  StyleSheet,
+  Pressable,
+  ActivityIndicator,
+  Linking,
+  type AccessibilityActionEvent,
+  type AccessibilityActionInfo } from 'react-native';
 import Reanimated, {
   withTiming,
   withSpring,
@@ -18,6 +26,7 @@ import { useMessageTranslation } from '../../hooks/useMessageTranslation';
 import { useAppTranslation } from '../../i18n/useAppTranslation';
 import { getI18nLocale } from '../../i18n/i18n';
 import { useSettingsPreferences } from '../../context/SettingsPreferencesContext';
+import { SwipeReplyContext } from '../SwipeableMessage';
 
 interface Reaction {
   emoji: string;
@@ -184,6 +193,10 @@ function MessageBubbleBase({
   const styles = React.useMemo(() => createStyles(colors), [colors]);
   const { t } = useAppTranslation('messaging');
   const { autoTranslateMessages } = useSettingsPreferences();
+  // Non-null when this bubble sits inside a SwipeableMessage whose swipe
+  // gesture offers reply — invoking it runs the exact same callback the
+  // gesture commits to (same quoted-message context).
+  const swipeReplyAction = React.useContext(SwipeReplyContext);
 
   // AI-powered message translation (WhatsApp/Instagram pattern)
   // Shows a "Translate" link for messages in a foreign language
@@ -268,6 +281,94 @@ function MessageBubbleBase({
           : undefined,
   ].filter(Boolean).join(', ');
 
+  // ── Accessible message node ─────────────────────────────────────────
+  // The bubble is ONE accessibility element. Every affordance a gesture or
+  // a nested control offers is mirrored as a named accessibility action
+  // (TalkBack actions menu / VoiceOver custom actions) so a screen-reader
+  // user never meets a "button" that cannot be activated:
+  //   activate            → opens the media/document this message carries,
+  //                         else the same actions menu a long-press shows
+  //   reply               → the swipe-to-reply callback (when offered)
+  //   longpress           → "Show message actions"
+  //   openMedia / openDocument / showRepliedMessage → the nested controls
+  // Activation is routed through onAccessibilityAction rather than onPress,
+  // so sighted single-tap behaviour is unchanged.
+  const openDocument = React.useCallback(() => {
+    if (!documentUri) return;
+    Linking.openURL(documentUri).catch(() => undefined);
+  }, [documentUri]);
+
+  const bubbleActions = React.useMemo<AccessibilityActionInfo[]>(() => {
+    const actions: AccessibilityActionInfo[] = [];
+    if (onLongPress || swipeReplyAction || (mediaUri && onMediaPress) || documentUri) {
+      actions.push({ name: 'activate' });
+    }
+    if (swipeReplyAction) {
+      actions.push({ name: 'reply', label: t('messageActions.reply') });
+    }
+    if (onLongPress) {
+      actions.push({ name: 'longpress', label: t('messageActions.showMessageActions') });
+    }
+    if (mediaUri && onMediaPress) {
+      actions.push({
+        name: 'openMedia',
+        label: mediaType === 'video' ? t('messageActions.openVideo') : t('messageActions.openPhoto') });
+    }
+    if (documentUri) {
+      actions.push({ name: 'openDocument', label: t('messageActions.openDocument') });
+    }
+    if (replyTo && onReplyPress) {
+      actions.push({ name: 'showRepliedMessage', label: t('messageActions.goToRepliedMessage') });
+    }
+    return actions;
+  }, [onLongPress, swipeReplyAction, mediaUri, mediaType, onMediaPress, documentUri, replyTo, onReplyPress, t]);
+
+  // What a double-tap/activate announces must match what it actually does.
+  const a11yActivateHint = mediaUri && onMediaPress
+    ? t(mediaType === 'video' ? 'messageActions.openVideoHint' : 'messageActions.openPhotoHint')
+    : documentUri
+      ? t('messageActions.openDocumentHint')
+      : onLongPress
+        ? t('messageActions.showMessageActionsHint')
+        : swipeReplyAction
+          ? t('messageActions.replyHint')
+          : undefined;
+
+  const handleBubbleAccessibilityAction = React.useCallback(
+    (event: AccessibilityActionEvent) => {
+      switch (event.nativeEvent.actionName) {
+        case 'activate':
+          if (mediaUri && onMediaPress) {
+            onMediaPress();
+          } else if (documentUri) {
+            openDocument();
+          } else if (onLongPress) {
+            onLongPress();
+          } else {
+            swipeReplyAction?.();
+          }
+          return;
+        case 'reply':
+          swipeReplyAction?.();
+          return;
+        case 'longpress':
+          onLongPress?.();
+          return;
+        case 'openMedia':
+          if (mediaUri) onMediaPress?.();
+          return;
+        case 'openDocument':
+          openDocument();
+          return;
+        case 'showRepliedMessage':
+          if (replyTo) onReplyPress?.();
+          return;
+        default:
+          return;
+      }
+    },
+    [mediaUri, onMediaPress, documentUri, openDocument, onLongPress, swipeReplyAction, replyTo, onReplyPress]);
+
   // WhatsApp 2026 style: fully-rounded 20px bubbles with asymmetric tail radius
   const meRadius = isStandalone
     ? { borderTopRightRadius: Radius.chat, borderBottomRightRadius: Radius.sm }
@@ -329,7 +430,12 @@ function MessageBubbleBase({
           onLongPress={onLongPress}
           delayLongPress={350}
           accessibilityLabel={a11yLabel}
-          accessibilityRole="button"
+          // A "button" is only honest when activation does something: when
+          // no handler exists at all the bubble is plain message content.
+          accessibilityRole={bubbleActions.length ? 'button' : 'text'}
+          accessibilityHint={a11yActivateHint}
+          accessibilityActions={bubbleActions.length ? bubbleActions : undefined}
+          onAccessibilityAction={handleBubbleAccessibilityAction}
           style={({ pressed }) => [
             styles.bubble,
             isMe ? styles.bubbleMe : isAgent ? styles.bubbleAgent : styles.bubbleThem,
@@ -395,7 +501,7 @@ function MessageBubbleBase({
 
           {documentUri ? (
             <Pressable
-              onPress={() => { Linking.openURL(documentUri).catch(() => undefined); }}
+              onPress={openDocument}
               style={[styles.documentRow, { borderColor: isMe ? colors.scrimTextTertiary : colors.border }]}
               accessibilityRole="button"
               accessibilityLabel={documentName ? `Open document ${documentName}` : 'Open document'}

@@ -8,9 +8,11 @@ import type { EvidenceGroup } from '../../platform/commerce/categoryEvidence';
 
 export interface CategoryEvidenceProps {
   groups: EvidenceGroup[];
+  /** Parent section already supplies the page inset. */
+  embedded?: boolean;
 }
 
-export function CategoryEvidence({ groups }: CategoryEvidenceProps) {
+export function CategoryEvidence({ groups, embedded = false }: CategoryEvidenceProps) {
   const { colors } = useAppTheme();
   const styles = React.useMemo(() => createStyles(colors), [colors]);
   const [expandedGroup, setExpandedGroup] = useState<string | null>(null);
@@ -18,7 +20,7 @@ export function CategoryEvidence({ groups }: CategoryEvidenceProps) {
   if (groups.length === 0) return null;
 
   return (
-    <View style={styles.container}>
+    <View style={[styles.container, embedded && styles.embedded]}>
       {groups.map((group, groupIndex) => {
         const isTechnical = group.items.every((i) => i.importance === 'technical');
         const isExpanded = expandedGroup === group.title;
@@ -81,6 +83,7 @@ const createStyles = (colors: ThemeColors) => StyleSheet.create({
   container: {
     paddingHorizontal: Space.md,
     paddingVertical: Space.sm },
+  embedded: { paddingHorizontal: 0 },
   groupGap: {
     marginTop: Space.md },
   primarySummary: {

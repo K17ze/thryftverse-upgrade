@@ -56,6 +56,8 @@ vi.mock('../hooks/useHaptic', () => ({
 }));
 
 import { CommerceDetailSection } from '../components/commerce/detail/CommerceDetailSection';
+import { CommerceDetailDisclosureRow } from '../components/commerce/detail/CommerceDetailDisclosureRow';
+import { AuctionDescription } from '../components/auctiondetail/AuctionDescription';
 import { CommerceDetailIdentity } from '../components/commerce/detail/CommerceDetailIdentity';
 import { CommerceDetailStateDock } from '../components/commerce/detail/CommerceDetailStateDock';
 import { CommerceDetailTransactionSurface } from '../components/commerce/detail/CommerceDetailTransactionSurface';
@@ -97,6 +99,55 @@ function hasText(renderer: TestRenderer.ReactTestRenderer, text: string): boolea
 }
 
 describe('commerce-detail runtime tests (react-test-renderer)', () => {
+  describe('auction description disclosure', () => {
+    it('expands a short description with more than three rendered lines', () => {
+      const renderer = renderTree(<AuctionDescription description={'A\nB\nC\nD'} />);
+      const measurement = renderer.root.findAll((node) => typeof node.props.onTextLayout === 'function')[0];
+      act(() => measurement.props.onTextLayout({ nativeEvent: { lines: [{}, {}, {}, {}] } }));
+      const action = () => renderer.root.findAll((node) => node.props.accessibilityRole === 'button')[0];
+      expect(action().props.accessibilityState.expanded).toBe(false);
+      act(() => action().props.onPress());
+      expect(action().props.accessibilityState.expanded).toBe(true);
+      expect(hasText(renderer, 'Show less')).toBe(true);
+      act(() => action().props.onPress());
+      expect(action().props.accessibilityState.expanded).toBe(false);
+      act(() => renderer.unmount());
+    });
+
+    it('removes unnecessary expansion when the full description fits', () => {
+      const renderer = renderTree(<AuctionDescription description="One concise sentence." />);
+      const measurement = renderer.root.findAll((node) => typeof node.props.onTextLayout === 'function')[0];
+      act(() => measurement.props.onTextLayout({ nativeEvent: { lines: [{}] } }));
+      expect(hasText(renderer, 'Read more')).toBe(false);
+      act(() => renderer.unmount());
+    });
+  });
+
+  describe('disclosure actions', () => {
+    it('announces supporting facts and a zero count, then opens the destination once', () => {
+      const onPress = vi.fn();
+      const renderer = renderTree(
+        <CommerceDetailDisclosureRow label="Distribution history" summary="No distributions yet" count={0} onPress={onPress} />
+      );
+      const action = renderer.root.findAll((node) =>
+        node.props.accessibilityRole === 'button' && typeof node.props.onPress === 'function'
+      )[0];
+      expect(action.props.accessibilityLabel).toBe('Distribution history, No distributions yet, 0');
+      act(() => action.props.onPress());
+      expect(onPress).toHaveBeenCalledTimes(1);
+      act(() => renderer.unmount());
+    });
+
+    it('preserves an explicit accessible destination label', () => {
+      const renderer = renderTree(
+        <CommerceDetailDisclosureRow label="Rules" summary="Auction terms" accessibilityLabel="View bidding rules" onPress={() => {}} />
+      );
+      expect(renderer.root.findAll((node) => node.props.accessibilityRole === 'button')[0].props.accessibilityLabel)
+        .toBe('View bidding rules');
+      act(() => renderer.unmount());
+    });
+  });
+
   // ── CommerceDetailSection ──
   describe('CommerceDetailSection', () => {
     it('renders a standard section with label and children', () => {

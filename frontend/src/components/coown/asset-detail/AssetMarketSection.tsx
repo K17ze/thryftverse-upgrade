@@ -144,6 +144,20 @@ export function AssetMarketSection({
     (orderBook?.bids && orderBook.bids.length > 0) ||
     (orderBook?.asks && orderBook.asks.length > 0);
 
+  // The embedded ladder's spread band is the canonical bid/spread/ask
+  // location (audit F11). It renders only when the ladder is on screen —
+  // live book, market open, ladder tab — under the exact conditions of the
+  // book branch below. When it renders, the quote strip demotes to the
+  // context the band lacks (units resting at the top of the book) instead
+  // of repeating the same quote twice.
+  const canonicalBandVisible =
+    orderBookView === 'ladder'
+    && isMarketOpen
+    && hasBidsOrAsks
+    && !orderBookError
+    && !(orderBook != null && !orderBookIsLive)
+    && !(isSecondaryMarket && marketDataStale);
+
   const mappedBids = React.useMemo(() => (
     orderBook?.bids.map((b) => ({
       price: b.unitPriceGbp,
@@ -261,7 +275,6 @@ export function AssetMarketSection({
             {quoteStateLabel != null ? (
               <Text
                 style={[styles.topOfBookStateText, { color: colors.textMuted }]}
-                numberOfLines={1}
                 accessibilityRole="text"
                 accessibilityLabel={`Market state: ${quoteStateLabel}`}
               >
@@ -271,7 +284,6 @@ export function AssetMarketSection({
             {freshnessLabel != null ? (
               <Text
                 style={[styles.topOfBookFreshness, { color: colors.textMuted }]}
-                numberOfLines={1}
                 accessibilityRole="text"
                 accessibilityLiveRegion="polite"
                 accessibilityLabel={freshnessLabel}
@@ -281,69 +293,87 @@ export function AssetMarketSection({
             ) : null}
           </View>
         ) : null}
-        <View style={styles.topOfBookQuoteRow}>
-          <View style={styles.topOfBookSide}>
-            <Text style={[styles.topOfBookLabel, { color: colors.textMuted }]} numberOfLines={1}>
-              Bid
-            </Text>
+        {canonicalBandVisible ? (
+          /* The embedded ladder's spread band is already carrying the
+             canonical bid/spread/ask quote — repeating the same values as
+             a second large-type header would be noise (audit F11). The
+             strip instead carries the one datum the band does not: the
+             units resting at each top-of-book level. */
+          <View style={styles.topOfBookQuoteRow}>
             <Text
-              style={[styles.topOfBookValue, { color: quotesMuted ? colors.textMuted : colors.coownUp }]}
-              numberOfLines={1}
+              style={[styles.topOfBookDepthNote, { color: colors.textMuted }]}
               accessibilityRole="text"
-              accessibilityLabel={bestBid
-                ? `Bid price ${formatCoOwnIze(bestBid.unitPriceGbp)}${quotesMuted ? ', last known' : ''}`
-                : 'Bid price unavailable'}
             >
-              {bestBid ? formatCoOwnIze(bestBid.unitPriceGbp) : '—'}
+              {[
+                bestBid ? `${bestBid.units.toLocaleString('en-GB')} units at best bid` : null,
+                bestAsk ? `${bestAsk.units.toLocaleString('en-GB')} units at best ask` : null,
+              ].filter(Boolean).join(' · ') || 'No units resting at the top of the book'}
             </Text>
-            {bestBid ? (
-              <Text
-                style={[styles.topOfBookSize, { color: colors.textMuted }]}
-                numberOfLines={1}
-                accessibilityLabel={`${bestBid.units.toLocaleString('en-GB')} units at bid`}
-              >
-                {bestBid.units.toLocaleString('en-GB')}u
+          </View>
+        ) : (
+          /* No canonical band on screen (depth/tape view, error, stale or
+             sync state) — this strip is the only quote surface, so it
+             keeps the full bid/spread/ask row. Values are unclamped:
+             executable quotes wrap rather than truncate (audit F10). */
+          <View style={styles.topOfBookQuoteRow}>
+            <View style={styles.topOfBookSide}>
+              <Text style={[styles.topOfBookLabel, { color: colors.textMuted }]}>
+                Bid
               </Text>
-            ) : null}
-          </View>
-
-          <View style={styles.topOfBookSpread}>
-            <Text style={[styles.topOfBookLabel, { color: colors.textMuted }]} numberOfLines={1}>
-              Spread
-            </Text>
-            <Text
-              style={[styles.topOfBookValue, { color: colors.textSecondary }]}
-              numberOfLines={1}
-            >
-              {spreadGbp != null ? formatCoOwnIze(spreadGbp) : '—'}
-            </Text>
-          </View>
-
-          <View style={[styles.topOfBookSide, styles.topOfBookAskSide]}>
-            <Text style={[styles.topOfBookLabel, { color: colors.textMuted }]} numberOfLines={1}>
-              Ask
-            </Text>
-            <Text
-              style={[styles.topOfBookValue, { color: quotesMuted ? colors.textMuted : colors.coownDown }]}
-              numberOfLines={1}
-              accessibilityRole="text"
-              accessibilityLabel={bestAsk
-                ? `Ask price ${formatCoOwnIze(bestAsk.unitPriceGbp)}${quotesMuted ? ', last known' : ''}`
-                : 'Ask price unavailable'}
-            >
-              {bestAsk ? formatCoOwnIze(bestAsk.unitPriceGbp) : '—'}
-            </Text>
-            {bestAsk ? (
               <Text
-                style={[styles.topOfBookSize, { color: colors.textMuted }]}
-                numberOfLines={1}
-                accessibilityLabel={`${bestAsk.units.toLocaleString('en-GB')} units at ask`}
+                style={[styles.topOfBookValue, { color: quotesMuted ? colors.textMuted : colors.coownUp }]}
+                accessibilityRole="text"
+                accessibilityLabel={bestBid
+                  ? `Bid price ${formatCoOwnIze(bestBid.unitPriceGbp)}${quotesMuted ? ', last known' : ''}`
+                  : 'Bid price unavailable'}
               >
-                {bestAsk.units.toLocaleString('en-GB')}u
+                {bestBid ? formatCoOwnIze(bestBid.unitPriceGbp) : '—'}
               </Text>
-            ) : null}
+              {bestBid ? (
+                <Text
+                  style={[styles.topOfBookSize, { color: colors.textMuted }]}
+                  accessibilityLabel={`${bestBid.units.toLocaleString('en-GB')} units at bid`}
+                >
+                  {`${bestBid.units.toLocaleString('en-GB')} units`}
+                </Text>
+              ) : null}
+            </View>
+
+            <View style={styles.topOfBookSpread}>
+              <Text style={[styles.topOfBookLabel, { color: colors.textMuted }]}>
+                Spread
+              </Text>
+              <Text
+                style={[styles.topOfBookValue, { color: colors.textSecondary }]}
+              >
+                {spreadGbp != null ? formatCoOwnIze(spreadGbp) : '—'}
+              </Text>
+            </View>
+
+            <View style={[styles.topOfBookSide, styles.topOfBookAskSide]}>
+              <Text style={[styles.topOfBookLabel, { color: colors.textMuted }]}>
+                Ask
+              </Text>
+              <Text
+                style={[styles.topOfBookValue, { color: quotesMuted ? colors.textMuted : colors.coownDown }]}
+                accessibilityRole="text"
+                accessibilityLabel={bestAsk
+                  ? `Ask price ${formatCoOwnIze(bestAsk.unitPriceGbp)}${quotesMuted ? ', last known' : ''}`
+                  : 'Ask price unavailable'}
+              >
+                {bestAsk ? formatCoOwnIze(bestAsk.unitPriceGbp) : '—'}
+              </Text>
+              {bestAsk ? (
+                <Text
+                  style={[styles.topOfBookSize, { color: colors.textMuted }]}
+                  accessibilityLabel={`${bestAsk.units.toLocaleString('en-GB')} units at ask`}
+                >
+                  {`${bestAsk.units.toLocaleString('en-GB')} units`}
+                </Text>
+              ) : null}
+            </View>
           </View>
-        </View>
+        )}
       </View>
 
       {/* Market state + 24h stats — compact status line */}
@@ -732,22 +762,27 @@ export function AssetMarketSection({
         </CommerceDetailSection>
       ) : null}
 
-      {/* ── 4. Trading Rules — compact disclosure row ──
-          Replaces the verbose 4-row icon+title+description list with a
-          single tappable row. The full rules are shown in a sheet when
-          expanded. This follows the stock-broker pattern of keeping
-          reference text off the main trading surface. */}
+      {/* ── 4. Trading rules — honest static summary ──
+          Reference facts only; nothing here is tappable (no rules sheet
+          is wired on this surface — the full fee schedule and terms live
+          in the Asset dossier and prospectus sheets). Values wrap rather
+          than clip so complete terms stay readable at 200% text.
+          The price-protection copy mirrors the backend order contract:
+          'protected_market' orders carry maxPriceGbp/minPriceGbp caps and
+          never fill beyond their protection price (utils/tradeFlow.ts,
+          marketApi.ts). The contract has no market-wide circuit-breaker
+          concept, so the row names the mechanism it actually backs. */}
       <CommerceDetailSection label="Trading rules">
         <View style={styles.rulesCompactList}>
           <View style={[styles.ruleCompactRow, { borderTopColor: colors.borderSubtle }]}>
             <Text style={[styles.ruleCompactLabel, { color: colors.textSecondary }]}>Price protection</Text>
-            <Text style={[styles.ruleCompactValue, { color: colors.textPrimary }]} numberOfLines={1}>
-              Circuit breaker on protected orders
+            <Text style={[styles.ruleCompactValue, { color: colors.textPrimary }]}>
+              Protected orders never fill beyond their price cap
             </Text>
           </View>
           <View style={[styles.ruleCompactRow, { borderTopColor: colors.borderSubtle }]}>
             <Text style={[styles.ruleCompactLabel, { color: colors.textSecondary }]}>Settlement</Text>
-            <Text style={[styles.ruleCompactValue, { color: colors.textPrimary }]} numberOfLines={1}>
+            <Text style={[styles.ruleCompactValue, { color: colors.textPrimary }]}>
               1ZE{asset.tradingFeeRate != null ? ` · ${(asset.tradingFeeRate * 100).toFixed(2).replace(/\.00$/, '')}% fee` : ''}
             </Text>
           </View>
@@ -953,7 +988,7 @@ const styles = StyleSheet.create({
   },
   ruleCompactRow: {
     flexDirection: 'row',
-    alignItems: 'center',
+    alignItems: 'flex-start',
     justifyContent: 'space-between',
     paddingVertical: Space.sm,
     borderTopWidth: StyleSheet.hairlineWidth,
@@ -1058,6 +1093,15 @@ const styles = StyleSheet.create({
     fontVariant: ['tabular-nums'] as ['tabular-nums'],
   },
   topOfBookSize: {
+    fontSize: TypographyV2.meta.size,
+    lineHeight: TypographyV2.meta.lineHeight,
+    fontFamily: TypographyV2.meta.fontFamily,
+    letterSpacing: TypographyV2.meta.letterSpacing,
+    fontVariant: ['tabular-nums'] as ['tabular-nums'],
+  },
+  // Quiet depth line used while the ladder's spread band carries the
+  // canonical quote — reports the units resting at the top of the book.
+  topOfBookDepthNote: {
     fontSize: TypographyV2.meta.size,
     lineHeight: TypographyV2.meta.lineHeight,
     fontFamily: TypographyV2.meta.fontFamily,

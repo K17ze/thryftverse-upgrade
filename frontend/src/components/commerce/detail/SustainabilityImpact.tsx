@@ -187,7 +187,7 @@ function MethodRow({
 function createStyles(colors: ThemeColors) {
   return StyleSheet.create({
     container: {
-      paddingHorizontal: Space.md,
+      // The containing commerce section owns the page inset.
       paddingTop: Space.md,
       paddingBottom: Space.sm,
       gap: Space.sm },

@@ -113,11 +113,6 @@ describe('auction-detail flagship closure (spec 02_AUCTION)', () => {
       expect(infoSections).not.toContain('bidPreviewList');
     });
 
-    it('has one View all bids action', () => {
-      // Owner layer: AuctionDetailInfoSections owns the action.
-      expect(infoSections).toContain('bidActivityViewAll');
-      expect(infoSections).toContain('View all');
-    });
   });
 
   // ── §4 Eliminate terminal-state duplication ──

@@ -2,9 +2,8 @@ import React from 'react';
 import { View, StyleSheet, Text, Pressable } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { useAppTheme } from '../../../theme/ThemeContext';
-import { Space, Radius, Control, PressScale } from '../../../theme/designTokens';
+import { Space, Control } from '../../../theme/designTokens';
 import { TypographyV2 } from '../../../theme/typography.v2';
-import { useReducedMotion } from '../../../hooks/useReducedMotion';
 import { useHaptic } from '../../../hooks/useHaptic';
 
 /**
@@ -20,9 +19,9 @@ import { useHaptic } from '../../../hooks/useHaptic';
  */
 export interface CommerceDetailDisclosureRowProps {
   label: string;
-  /** Optional count or summary rendered as a muted trailing line. */
+  /** Supporting fact below the destination; wraps with large text. */
   summary?: string;
-  /** Optional count badge (e.g. "13" for rights terms). */
+  /** Optional trailing count (e.g. "13" for rights terms). */
   count?: number;
   onPress: () => void;
   /** Optional leading glyph. */
@@ -42,67 +41,61 @@ export function CommerceDetailDisclosureRow({
   critical = false,
   accessibilityLabel }: CommerceDetailDisclosureRowProps) {
   const { colors } = useAppTheme();
-  const reducedMotion = useReducedMotion();
   const haptic = useHaptic();
 
   const handlePress = () => {
-    if (!reducedMotion) haptic.light();
+    haptic.light();
     onPress();
   };
 
   return (
     <Pressable
       onPress={handlePress}
-      hitSlop={{ top: 12, bottom: 12, left: 12, right: 12 }}
       style={({ pressed }) => [
         styles.row,
         { borderTopColor: colors.borderSubtle },
         pressed && styles.pressed,
       ]}
-      accessibilityLabel={accessibilityLabel ?? label}
+      accessibilityLabel={accessibilityLabel ?? [label, summary, typeof count === 'number' ? String(count) : null].filter(Boolean).join(', ')}
       accessibilityRole="button"
     >
+      {leadingIcon ? (
+        <Ionicons
+          name={leadingIcon}
+          size={Control.iconCompact}
+          color={critical ? colors.dangerText : colors.textSecondary}
+          accessible={false}
+        />
+      ) : null}
       <View style={styles.labelCluster}>
-        {leadingIcon ? (
-          <Ionicons
-            name={leadingIcon}
-            size={Control.iconCompact}
-            color={critical ? colors.dangerText : colors.textSecondary}
-            style={styles.leadingIcon}
-          />
-        ) : null}
         <Text
           style={[
             styles.label,
             { color: critical ? colors.dangerText : colors.textPrimary },
           ]}
-          numberOfLines={1}
         >
           {label}
         </Text>
-      </View>
-
-      <View style={styles.trailingCluster}>
         {summary ? (
           <Text
             style={[styles.summary, { color: colors.textMuted }]}
-            numberOfLines={1}
           >
             {summary}
           </Text>
         ) : null}
+      </View>
+
+      <View style={styles.trailingCluster}>
         {typeof count === 'number' ? (
-          <View style={[styles.countBadge, { backgroundColor: colors.surfaceAlt }]}>
-            <Text style={[styles.countText, { color: colors.textSecondary }]}>
-              {count}
-            </Text>
-          </View>
+          <Text style={[styles.countText, { color: colors.textSecondary }]}>
+            {count}
+          </Text>
         ) : null}
         <Ionicons
           name="chevron-forward"
           size={Control.iconCompact}
           color={colors.textMuted}
-          style={styles.chevron}
+          accessible={false}
         />
       </View>
     </Pressable>
@@ -116,20 +109,15 @@ const styles = StyleSheet.create({
     justifyContent: 'space-between',
     gap: Space.sm,
     paddingVertical: Space.sm + 2,
-    minHeight: 44,
+    minHeight: Control.hit,
     borderTopWidth: StyleSheet.hairlineWidth },
   pressed: {
-    opacity: 0.85,
-    transform: [{ scale: PressScale.gentle }] },
+    opacity: 0.85 },
   labelCluster: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: Space.sm,
+    gap: Space.xxs,
     flex: 1,
     minWidth: 0,
     flexShrink: 1 },
-  leadingIcon: {
-    marginRight: -2 },
   label: {
     fontSize: TypographyV2.body.size,
     lineHeight: TypographyV2.body.lineHeight,
@@ -139,25 +127,14 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     gap: Space.xs,
-    maxWidth: '52%',
-    minWidth: 18 },
+    flexShrink: 0 },
   summary: {
     fontSize: TypographyV2.meta.size,
     lineHeight: TypographyV2.meta.lineHeight,
     fontFamily: TypographyV2.meta.fontFamily,
-    flexShrink: 1,
-    textAlign: 'right' },
-  countBadge: {
-    minWidth: 22,
-    height: 22,
-    paddingHorizontal: Space.xs + 2,
-    borderRadius: Radius.lg,
-    alignItems: 'center',
-    justifyContent: 'center' },
+    flexShrink: 1 },
   countText: {
     fontSize: TypographyV2.meta.size,
     lineHeight: TypographyV2.meta.lineHeight,
     fontFamily: TypographyV2.meta.fontFamily,
-    fontVariant: ['tabular-nums'] },
-  chevron: {
-    marginLeft: -2 } });
+    fontVariant: ['tabular-nums'] } });

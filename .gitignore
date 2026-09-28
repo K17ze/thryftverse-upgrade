@@ -110,3 +110,6 @@ web/qa-scratch/
 web/qa-shots/
 web/.next/
 web/*.tsbuildinfo
+
+# SDD/agent scratch workspace
+.superpowers/

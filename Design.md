@@ -1,8 +1,8 @@
 ---
-version: "1.9"
+version: "1.10"
 name: "ThryftVerse Neutral Flagship Native Design System"
 benchmark-date: "2026-09-12"
-description: "A machine-readable and human-readable design contract for a media-first native social-commerce marketplace. It is calibrated against current public Pinterest, Coinbase, Corner, Instagram, Depop, Vinted, Vestiaire and Whatnot product evidence while remaining faithful to the ThryftVerse React Native codebase. v1.6 adds reference-evidence discipline plus enforceable control anatomy, navigation geometry, direct-manipulation physics, sheet continuity, dense-row alignment and media-context rules. v1.7 registers the Co-Own detail authored patterns: the editorial section tab rail and the top-of-book quote strip, validated against September 2026 broker and fractional-ownership platform research. v1.8 registers the Co-Own detail density upgrade: the asset dossier ribbon (compact metadata chip bar replacing inline provenance/condition/custody/fee grids) and the asset dossier sheet (unified bottom sheet consolidating provenance, custody, valuation, fees, and risk disclosure), plus the Co-Own typographic rescaling (title 28pt→20pt, market primary value 32pt→20pt, media height 26%→38-42%) validated against September 2026 Masterworks, Instagram, and Pinterest PDP density research. v1.9 registers the media pipeline contract seam (media[] with derivatives/EXIF/ICC/blurhash projected through listing reads), retrieval-scoped visual search facets, recommendation control (signed action weights, topic directives, negative feedback surface), accessibility hardening (SwipeableRow actions, a11yContentWrap sheet isolation, toast announcements, 200% font scaling), and focus/cache propagation (mutation-to-surface invalidation, dead-key fixes). The neutral palette remains canonical; quality comes from geometry, media integrity, hierarchy, interaction, state clarity, accessibility and performance."
+description: "A machine-readable and human-readable design contract for a media-first native social-commerce marketplace. It is calibrated against current public Pinterest, Coinbase, Corner, Instagram, Depop, Vinted, Vestiaire and Whatnot product evidence while remaining faithful to the ThryftVerse React Native codebase. v1.6 adds reference-evidence discipline plus enforceable control anatomy, navigation geometry, direct-manipulation physics, sheet continuity, dense-row alignment and media-context rules. v1.7 registers the Co-Own detail authored patterns: the editorial section tab rail and the top-of-book quote strip, validated against September 2026 broker and fractional-ownership platform research. v1.8 registers the Co-Own detail density upgrade: the asset dossier ribbon (compact metadata chip bar replacing inline provenance/condition/custody/fee grids) and the asset dossier sheet (unified bottom sheet consolidating provenance, custody, valuation, fees, and risk disclosure), plus the Co-Own typographic rescaling (title 28pt→20pt, market primary value 32pt→20pt, media height 26%→38-42%) validated against September 2026 Masterworks, Instagram, and Pinterest PDP density research. v1.9 registers the media pipeline contract seam (media[] with derivatives/EXIF/ICC/blurhash projected through listing reads), retrieval-scoped visual search facets, recommendation control (signed action weights, topic directives, negative feedback surface), accessibility hardening (SwipeableRow actions, a11yContentWrap sheet isolation, toast announcements, 200% font scaling), and focus/cache propagation (mutation-to-surface invalidation, dead-key fixes). v1.10 reconciles the documented palette with the runtime token contract (status fills vs `*Text` foreground roles, media-overlay roles, corrected swatches), and registers the September 28 audit closures: section-owned page insets (embedded children never re-pad), no shrink-to-fit on dominant financial values (reflow instead), single-owner disclosure summaries, three-state zero movement, per-resource failure identity, media failure contracts, and message gesture/action accessibility parity. The neutral palette remains canonical; quality comes from geometry, media integrity, hierarchy, interaction, state clarity, accessibility and performance."
 
 implementation-status:
   current-runtime-theme: "SOURCE-VERIFIED 2026-09-12 — frontend/src/theme/ThemeContext.tsx exposes the neutral base palette plus implemented semantic accents (social, discovery, commerceTrust, coownUp, coownDown and their Subtle/Border variants). Premium accent tokens antiqueGold, bronze and bronzeSubtle are also exposed but marked @deprecated for new use; migration to semantic roles is in progress. The remaining proposed-luxury keys below (champagne, pressed variants, luxuryOnAccent, luxuryFocus*, softGoldSurface*, goldBorder*, goldGlow*) are not implemented."
@@ -28,19 +28,34 @@ colors:
   current-runtime:
     background: "#FFFFFF"          # dark: #0A0A0A
     surface: "#F5F5F5"             # dark: #141414
-    surface-alt: "#EBEBEB"         # dark: #1F1F1F
+    surface-alt: "#EFEFEF"         # dark: #1C1C1C
+    surface-raised: "#F8F8F8"      # dark: #1F1F1F
     surface-elevated: "#FFFFFF"    # dark: #242424
     brand: "#111111"               # dark: #F4F0E8
     brand-pressed: "#333333"       # dark: #D8D0C3
     text-primary: "#000000"        # dark: #FFFFFF
     text-secondary: "#666666"      # dark: #A3A3A3
-    text-muted: "#767676"          # dark: #7A7A7A (WCAG 2.2 AA: 4.65:1 light / 4.64:1 dark)
+    text-muted: "#6C6C6C"          # dark: #888888 (WCAG 2.2 AA: 4.82:1 light on #F5F5F5 / 5.2:1 dark on #141414)
     text-inverse: "#FFFFFF"        # dark: #000000
     border: "#E5E5E5"             # dark: #262626
-    border-subtle: "#F0F0F0"      # dark: #333333
-    danger: "#9b0202"
-    success: "#215634"
-    warning: "#ffc765"
+    border-subtle: "#F0F0F0"      # dark: #1E1E1E
+    # Status FILLS — deep hues for icon accents and tinted backgrounds.
+    # They are not readable text colors on their paired surfaces.
+    danger: "#9b0202"              # dark: #9b0202
+    success: "#215634"             # dark: #215634
+    warning: "#C47A2E"             # dark: #D49454
+    # Status FOREGROUNDS — the readable text/number role for status words
+    # on plain and subtle-tinted surfaces. Always pair: fill for the tint,
+    # *Text for the word. Never render status copy in the fill color.
+    danger-text: "#9b0202"         # dark: #EF6461 (~5.2:1 on #141414)
+    success-text: "#215634"        # dark: #4BB377 (~7:1 on #141414)
+    warning-text: "#8F5A10"        # dark: #D49454 (~7:1 on #141414)
+    # Media overlay — text/glyphs over imagery and scrims; always
+    # white-on-dark-scrim in BOTH themes. `brand` is near-black in light
+    # theme and must never be used over media.
+    media-overlay-text: "#FFFFFF"
+    media-overlay-text-muted: "rgba(255,255,255,0.7)"
+    media-overlay-scrim: "rgba(0,0,0,0.6)"
     overlay: "rgba(0,0,0,0.4)"     # dark: rgba(0,0,0,0.6)
     input: "#FFFFFF"               # dark: #1A1A1A
     input-text: "#000000"          # dark: #FFFFFF
@@ -375,7 +390,8 @@ Choose a mode before designing a screen.
 - `surfaceAlt`: nested or alternating tier; use sparingly.
 - `surfaceElevated`: sheets, dialogs and materially elevated content.
 - `brand`: high-confidence primary action, not general decoration.
-- `danger`, `success`, `warning`: semantic truth only.
+- `danger`, `success`, `warning`: semantic truth only — these are fills and icon accents. Status words and numbers on plain or subtle-tinted surfaces use the readable foreground roles `dangerText`, `successText`, `warningText` (e.g. `warning` ≈3.1:1 on light `surface` fails AA for copy; `warningText` ≈5.3:1 is the text role).
+- `mediaOverlayText` / `mediaOverlayTextMuted` / `mediaOverlayScrim`: text, glyphs and controlled backing over imagery or scrims — always white-on-dark in both themes. `brand` is near-black in light theme and is never an on-media foreground.
 - `commerceTrust` (implemented): protection/verification only.
 - `social` and `discovery` (implemented): selected action states only.
 - `coownUp` / `coownDown` (implemented): financial truth only.
@@ -1079,6 +1095,11 @@ This is used on `ItemDetailScreen`, `CheckoutScreen`, and `InboxScreen`.
 
 `maxFontSizeMultiplier` is raised to `2.0` on CTAs and key text (`AppButton`, `ItemDetailScreen`, `CheckoutScreen`, `CommerceActionDock`, `CommerceIdentityBlock`, `CommerceTrustDossier`). The previous `1.3–1.4` caps contradicted the "works at 200% text" goal.
 
+Two layout rules now hold across detail and financial surfaces:
+
+1. **Dominant values never shrink to fit.** `adjustsFontSizeToFit` / `minimumFontScale` / sub-`2.0` `maxFontSizeMultiplier` are forbidden on primary prices, executable quotes and order-book values. When space runs out, supporting context reflows to its own line (below or beside) instead — the number stays exact and full-size. Constrained financial layouts switch to a structured stacked row rather than squeezing fixed-width rails.
+2. **The section owns the page inset.** A section component supplies horizontal page padding once; children rendered inside it inherit that edge and must not add a second `Space.md` (or equivalent) horizontal inset. A child that is also used standalone takes an explicit `embedded` prop rather than compensating with negative margins. Headings, body copy and disclosure labels share one text edge unless a deliberate subordinate indent communicates hierarchy.
+
 ### Inert toggles
 
 `boldText` and `screenReaderHints` were removed — they had zero consumers and could not be applied globally to ~2,600 raw `<Text>` nodes. `textSize` is retained (real consumers via `ui/Text`, ~30 files) with corrected copy.
@@ -1093,8 +1114,10 @@ This is used on `ItemDetailScreen`, `CheckoutScreen`, and `InboxScreen`.
 6. **Dynamic content has `accessibilityLiveRegion`** — toasts, banners, status changes.
 7. **Decorative elements have `accessible={false}`** — icons, dividers, background media.
 8. **Sheets isolate focus** — `a11yContentWrap` hides behind-sheet content without hiding the sheet.
-9. **Reduced motion is respected** — `useReducedMotion` ORs OS + in-app prefs; no ungated `withRepeat`/`withSequence`.
+9. **Reduced motion is respected** — `useReducedMotion` ORs OS + in-app prefs; no ungated `withRepeat`/`withSequence`. Press feedback and media transitions switch to opacity/instant under reduced motion — reading the preference only to gate haptics is a defect.
 10. **Font scaling is supported** — `allowFontScaling` on text; `maxFontSizeMultiplier={2}` on CTAs; layouts don't break at 200%.
+11. **Every gesture has a named accessible action** — swipe, long-press and double-tap interactions expose equivalent `accessibilityActions`/`onAccessibilityAction` (reply, activate, menu, row actions). A node with button semantics must activate truthfully on normal activation; gesture cleanup runs on finalize/cancel, not only on successful end.
+12. **Hit area is separate from visible shape** — a ≥44pt transparent target may wrap a compact 20–24pt visible glyph or chip; never render a 44pt grey container just to satisfy the target, and never let `hitSlop` overlap adjacent rows.
 
 ## Cache Propagation
 

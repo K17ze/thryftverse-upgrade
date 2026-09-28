@@ -838,7 +838,18 @@
     "messageActions": {
       "dismissReply": "Dismiss reply",
       "scrollToOriginal": "Scrolls to the original message",
-      "quotedReply": "Quoted reply from {{sender}}"
+      "quotedReply": "Quoted reply from {{sender}}",
+      "reply": "Reply",
+      "showMessageActions": "Show message actions",
+      "openPhoto": "Open photo",
+      "openVideo": "Open video",
+      "openDocument": "Open document",
+      "goToRepliedMessage": "Go to replied message",
+      "replyHint": "Replies to this message",
+      "openPhotoHint": "Opens the photo",
+      "openVideoHint": "Opens the video",
+      "openDocumentHint": "Opens the document",
+      "showMessageActionsHint": "Opens message actions"
     },
     "translation": {
       "translate": "Translate",
@@ -1534,7 +1545,16 @@
       "subtitleNoConnections": "Connect a provider server-side to power agent execution",
       "subtitleNoHealthy": "No healthy connections — review your provider keys",
       "subtitleDegraded": "{{healthy}} of {{total}} connections healthy — some providers need attention",
-      "subtitleReady": "Agents run on your connected server-side keys"
+      "subtitleReady": "Agents run on your connected server-side keys",
+      "resources": {
+        "agents": "Agents",
+        "connections": "Connections",
+        "approvals": "Approvals"
+      },
+      "resourceFailed": "{{resource}} couldn't load.",
+      "resourceStale": "{{resource}} may be out of date — last refresh failed.",
+      "resourceRefreshing": "Refreshing {{resource}}…",
+      "retryResource": "Retry {{resource}}"
     },
     "agentStatus": {
       "draft": "Draft",
@@ -1546,7 +1566,8 @@
       "hint": "Keys verified and stored encrypted on the server. These power agent execution.",
       "connectServerSide": "Connect server-side",
       "connectServerSideSub": "Keys are verified and stored encrypted on the server.",
-      "empty": "No server connections yet. Connect a provider to power your agents."
+      "empty": "No server connections yet. Connect a provider to power your agents.",
+      "loadFailed": "Connections couldn't load."
     },
     "deviceLocal": {
       "note": "Discovery only — not used for execution",
@@ -1554,6 +1575,9 @@
     },
     "agents": {
       "empty": "No agents yet. Create one to give it a specialty, boundaries, and context.",
+      "loadFailed": "Your agents couldn't load.",
+      "retry": "Retry",
+      "viewLabel": "View {{name}} — {{status}}",
       "create": "Create agent",
       "pauseAll": "Pause all agents",
       "noSessionsRunning": "No agent sessions running",
@@ -1581,6 +1605,7 @@
       "verifying": "Verifying…",
       "remove": "Remove",
       "removing": "Removing…",
+      "retry": "Retry",
       "verified": "Verified {{time}}",
       "notVerified": "Not yet verified",
       "modelsCount": "{{count}} model(s)",

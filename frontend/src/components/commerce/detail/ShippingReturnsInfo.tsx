@@ -19,7 +19,6 @@ import { useAppTheme } from '../../../theme/ThemeContext';
 import { Space, Radius, Control } from '../../../theme/designTokens';
 import { TypographyV2 } from '../../../theme/typography.v2';
 import { useHaptic } from '../../../hooks/useHaptic';
-import { useReducedMotion } from '../../../hooks/useReducedMotion';
 import { useFormattedPrice } from '../../../hooks/useFormattedPrice';
 import { CommerceDetailMetricRow } from './CommerceDetailMetricRow';
 import type { ListingCommerceContext } from '../../../platform/product';
@@ -41,14 +40,13 @@ export function ShippingReturnsInfo({
   restockingFeeGbp = null }: ShippingReturnsInfoProps) {
   const { colors } = useAppTheme();
   const haptic = useHaptic();
-  const reducedMotion = useReducedMotion();
   const { formatFromFiat, currencyCode } = useFormattedPrice();
   const [expanded, setExpanded] = useState(false);
 
   const toggle = useCallback(() => {
-    if (!reducedMotion) haptic.light();
+    haptic.light();
     setExpanded((prev) => !prev);
-  }, [haptic, reducedMotion]);
+  }, [haptic]);
 
   // ── Shipping summary line (always visible) ──
   const isFreeShipping = commerce.shippingPayer === 'seller';
@@ -73,39 +71,34 @@ export function ShippingReturnsInfo({
         : commerce.returnPolicy.summary ?? 'Confirmed at checkout'
     : 'Confirmed at checkout';
 
-  const summaryLine = shippingCostLabel;
+  const returnsSummary = commerce.returnPolicy?.accepted == null && !commerce.returnPolicy?.summary
+    ? 'Return policy confirmed at checkout'
+    : returnsLabel;
+  const summaryLine = `${shippingCostLabel} · ${returnsSummary}`;
 
   return (
     <View style={styles.container}>
       <Pressable
         onPress={toggle}
         style={({ pressed }) => [styles.headerRow, pressed && styles.pressed]}
-        accessibilityLabel={expanded ? 'Hide shipping and returns details' : 'Show shipping and returns details'}
+        accessibilityLabel={`Shipping and returns. ${summaryLine}`}
         accessibilityRole="button"
         accessibilityState={{ expanded }}
-        accessibilityHint="Expands the full shipping and returns policy"
+        accessibilityHint={expanded ? 'Hide shipping and returns details' : 'Show shipping and returns details'}
       >
         <View style={styles.headerLeft}>
           <Text style={[styles.label, { color: colors.textPrimary }]}>
-            Shipping & Returns
+            Shipping & returns
           </Text>
-          <View style={styles.summaryRow}>
-            {isFreeShipping ? (
-              <Ionicons name="checkmark-circle" size={14} color={colors.successText} />
-            ) : hasKnownShippingCost ? (
-              <Ionicons name="car-outline" size={14} color={colors.textSecondary} />
-            ) : (
-              <Ionicons name="information-circle-outline" size={14} color={colors.textSecondary} />
-            )}
-            <Text style={[styles.summary, { color: colors.textSecondary }]} numberOfLines={2}>
-              {summaryLine || returnsLabel}
-            </Text>
-          </View>
+          <Text style={[styles.summary, { color: colors.textSecondary }]}>
+            {summaryLine}
+          </Text>
         </View>
         <Ionicons
           name={expanded ? 'chevron-up' : 'chevron-down'}
           size={Control.iconCompact}
           color={colors.textMuted}
+          accessible={false}
         />
       </Pressable>
 
@@ -175,7 +168,7 @@ export function ShippingReturnsInfo({
 
 const styles = StyleSheet.create({
   container: {
-    paddingHorizontal: Space.md,
+    // The containing commerce section owns the page inset.
     paddingTop: Space.md,
     paddingBottom: Space.sm },
   headerRow: {
@@ -189,11 +182,6 @@ const styles = StyleSheet.create({
   headerLeft: {
     flex: 1,
     gap: Space.xs / 2 },
-  summaryRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: Space.xs,
-    flexShrink: 1 },
   label: {
     fontSize: TypographyV2.bodyStrong.size,
     lineHeight: TypographyV2.bodyStrong.lineHeight,

@@ -94,6 +94,23 @@ export function AssetDetailIdentity({
   const unitsLabel = `${asset.totalUnits.toLocaleString('en-GB')} units`;
   const hasContextLine = !!contextLabel || showUnits;
 
+  // ── 24h move — three states (audit F13) ──
+  // Sign-aware formatting: a move whose displayed magnitude rounds to
+  // "0.0" is UNCHANGED in both directions — exact zero must never render
+  // positive, and a tiny negative must not print "-0.0%" styled/announced
+  // as down. Non-finite values (NaN / ±Infinity) render no pill at all —
+  // a fabricated direction would be worse than an absent indicator.
+  const movePctFinite = movePct24h != null && Number.isFinite(movePct24h);
+  const displayedMovePct = movePctFinite ? Math.abs(movePct24h).toFixed(1) : null;
+  const moveDirection: 'up' | 'down' | 'unchanged' =
+    !movePctFinite || displayedMovePct === '0.0'
+      ? 'unchanged'
+      : movePct24h > 0 ? 'up' : 'down';
+  const moveColor =
+    moveDirection === 'up' ? colors.coownUp
+    : moveDirection === 'down' ? colors.coownDown
+    : colors.textSecondary;
+
   return (
     <View style={[styles.identity, { borderBottomColor: colors.borderSubtle }]}>
       <CommerceDetailIdentity
@@ -103,47 +120,52 @@ export function AssetDetailIdentity({
       />
 
       {/* Dominant one-unit price — priceList bold tabular-nums with a
-          truthful basis label and 24h delta pill inline. The price,
-          basis, and pill reflow in a flexWrap row so long values wrap
-          instead of truncating. */}
+          truthful basis label and 24h delta pill inline. No shrink caps
+          or font-multiplier clamps (audit F12): at 200% text the exact
+          price wraps and the basis + pill reflow below it — the most
+          important number is never scaled down to fit. */}
       <View style={styles.priceRow}>
         <Text
           style={[styles.priceValue, { color: colors.textPrimary }]}
           accessibilityRole="text"
-          adjustsFontSizeToFit
-          minimumFontScale={0.7}
-          numberOfLines={1}
-          maxFontSizeMultiplier={1.3}
         >
           {formatCoOwnIze(dominantPriceValue)}
         </Text>
         <Text
           style={[styles.priceUnit, { color: colors.textSecondary }]}
-          maxFontSizeMultiplier={1.4}
-          numberOfLines={1}
         >
           {priceBasis === 'Last trade' && lastTradeTimestamp
             ? `${priceBasis} · ${lastTradeTimestamp}`
             : priceBasis}
         </Text>
-        {movePct24h != null && !isInitialOffering && (
+        {movePctFinite && !isInitialOffering && (
           <View style={[
             styles.movePill,
-            { backgroundColor: movePct24h >= 0 ? colors.coownUpSubtle : colors.coownDownSubtle },
+            { backgroundColor:
+                moveDirection === 'up' ? colors.coownUpSubtle
+                : moveDirection === 'down' ? colors.coownDownSubtle
+                : colors.surfaceAlt },
           ]}
-            accessibilityLabel={`24 hour change ${movePct24h >= 0 ? 'up' : 'down'} ${Math.abs(movePct24h).toFixed(1)} percent`}
+            accessibilityLabel={`24 hour change ${
+              moveDirection === 'up' ? `up ${displayedMovePct} percent`
+              : moveDirection === 'down' ? `down ${displayedMovePct} percent`
+              : 'unchanged at 0.0 percent'}`}
             accessibilityRole="text"
           >
             <Ionicons
-              name={movePct24h >= 0 ? 'trending-up' : 'trending-down'}
+              name={moveDirection === 'up' ? 'trending-up' : moveDirection === 'down' ? 'trending-down' : 'remove'}
               size={14}
-              color={movePct24h >= 0 ? colors.coownUp : colors.coownDown}
+              color={moveColor}
             />
             <Text style={[
               styles.movePillText,
-              { color: movePct24h >= 0 ? colors.coownUp : colors.coownDown },
+              { color: moveColor },
             ]}>
-              {`${movePct24h >= 0 ? '+' : ''}${movePct24h.toFixed(1)}%`}
+              {moveDirection === 'up'
+                ? `+${displayedMovePct}%`
+                : moveDirection === 'down'
+                  ? `-${displayedMovePct}%`
+                  : `${displayedMovePct}%`}
             </Text>
           </View>
         )}
@@ -155,8 +177,6 @@ export function AssetDetailIdentity({
       {hasContextLine && (
         <Text
           style={[styles.contextLine, { color: colors.textSecondary }]}
-          numberOfLines={1}
-          maxFontSizeMultiplier={1.4}
         >
           {contextLabel ? (
             <Text style={styles.contextSegment}>{contextLabel}</Text>
@@ -226,8 +246,8 @@ const styles = StyleSheet.create({
     fontFamily: TypographyV2.priceList.fontFamily,
     letterSpacing: TypographyV2.priceList.letterSpacing,
     fontVariant: ['tabular-nums'] as ['tabular-nums'],
-    // Allow the price to shrink so the basis label can claim space in
-    // the flex row when the price is long.
+    // The price may yield row width so the basis label and move pill can
+    // reflow below it — the value wraps, never shrinks (audit F12).
     flexShrink: 1,
   },
   priceUnit: {

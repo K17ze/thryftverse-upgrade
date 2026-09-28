@@ -95,6 +95,23 @@ export function createAgentStudioStyles(colors: ThemeColors) {
       letterSpacing: TypographyV2.meta.letterSpacing,
       flexShrink: 0,
       textAlign: 'right' },
+    /** Agent list: name + status share a wrapping row so a long name and
+     *  "Setup needed" can reflow together at large text (audit F16). */
+    agentTitleRow: {
+      flexDirection: 'row',
+      flexWrap: 'wrap',
+      alignItems: 'baseline',
+      gap: Space.xs },
+    agentTitleText: {
+      fontSize: TypographyV2.bodyStrong.size,
+      fontFamily: TypographyV2.bodyStrong.fontFamily,
+      letterSpacing: TypographyV2.body.letterSpacing,
+      flexShrink: 1 },
+    agentStatusInline: {
+      fontSize: TypographyV2.meta.size,
+      fontFamily: TypographyV2.meta.fontFamily,
+      letterSpacing: TypographyV2.meta.letterSpacing,
+      flexShrink: 1 },
     connectedBody: {
       marginTop: Space.sm,
       gap: Space.xs },
@@ -228,6 +245,13 @@ export function createAgentStudioStyles(colors: ThemeColors) {
       flexDirection: 'row',
       flexWrap: 'wrap',
       gap: Space.xs },
+    /** Full-size transparent press target around the compact visible chip
+     *  (hit area ≠ visible shape, per AGENTS §4). */
+    providerChipTarget: {
+      minHeight: Control.hit,
+      minWidth: Control.hit,
+      alignItems: 'center',
+      justifyContent: 'center' },
     providerChip: {
       flexDirection: 'row',
       alignItems: 'center',
@@ -237,10 +261,6 @@ export function createAgentStudioStyles(colors: ThemeColors) {
       borderRadius: Radius.md,
       borderWidth: Stroke.standard },
     providerChipText: {
-      fontSize: TypographyV2.meta.size,
-      fontFamily: TypographyV2.meta.fontFamily,
-      letterSpacing: TypographyV2.meta.letterSpacing },
-    providerChipSoon: {
       fontSize: TypographyV2.meta.size,
       fontFamily: TypographyV2.meta.fontFamily,
       letterSpacing: TypographyV2.meta.letterSpacing },
@@ -297,6 +317,17 @@ export function createAgentStudioStyles(colors: ThemeColors) {
     // Agent Studio hub (Phase 7)
     statusSkeleton: {
       gap: Space.xs },
+    /** Per-resource freshness row in the status overview (audit F17) —
+     *  marks only the failed/stale/refreshing resource. */
+    statusIssueRow: {
+      marginTop: Space.sm,
+      gap: Space.xs / 2 },
+    /** Quiet in-section marker where a stale resource's list renders —
+     *  a scrolled user must not read last-refresh-failed rows as fresh. */
+    staleMarker: {
+      paddingHorizontal: Space.md,
+      paddingBottom: Space.sm,
+      gap: Space.xs / 2 },
     skeletonLine: {
       height: 14,
       borderRadius: Radius.sm },

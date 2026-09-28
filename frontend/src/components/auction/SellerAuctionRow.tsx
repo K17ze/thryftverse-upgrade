@@ -8,9 +8,11 @@ import { useAppTheme, type ThemeColors } from '../../theme/ThemeContext';
 import { CachedImage } from '../CachedImage';
 import { AnimatedPressable } from '../AnimatedPressable';
 import { SupportedCurrencyCode } from '../../constants/currencies';
-import { toIze, formatAuctionIze } from '../../utils/currency';
+import { toIze, formatAuctionIze, type FxRates } from '../../utils/currency';
 import { resolveAuctionTiming } from '../../hooks/useServerClock';
+import type { useFormattedPrice } from '../../hooks/useFormattedPrice';
 import {
+  resolvePriceAmount,
   resolvePriceLabel,
   resolvePriceText,
   resolveTimeLabel,
@@ -18,10 +20,17 @@ import {
   buildAuctionAccessibilityLabel,
   type AuctionHomeItem } from '../../utils/auctionHomeLogic';
 import { resolveStatePresentation } from './sellerAuctionCentreViewModels';
-import { Space, Radius, Stroke } from '../../theme/designTokens';
+import { Space, Radius, Stroke, ThumbSize, IconGrammar } from '../../theme/designTokens';
 import { TypographyV2 } from '../../theme/typography.v2';
 
 // ── Inventory row — horizontal, operations-studio layout ──
+// Audit finding 09: the row previously behaved like a small dashboard
+// (title, state, brand, internal divider, two stacked values, action,
+// leading status and bid count beside a 96pt image, money clamped to one
+// line). The row now reads in three zones: item identity → one commercial
+// value paired with the next task → a single quiet wrapping metadata line
+// carrying the local-currency conversion, secondary state and activity.
+// Monetary text never clamps — exact values wrap instead (200% text-safe).
 export function SellerAuctionRow({
   item,
   clockMs,
@@ -32,8 +41,10 @@ export function SellerAuctionRow({
   item: AuctionHomeItem;
   clockMs: number;
   onPress: () => void;
-  formatFromFiat: (amount: number, currency?: any, opts?: any) => string;
-  fxRates: any;
+  /** The hook-produced formatter — typed from the source so this money
+   *  surface can never drift from the real conversion contract. */
+  formatFromFiat: ReturnType<typeof useFormattedPrice>['formatFromFiat'];
+  fxRates: FxRates;
   currencyCode: SupportedCurrencyCode;
 }) {
   const { colors } = useAppTheme();
@@ -45,8 +56,12 @@ export function SellerAuctionRow({
   const timeLabel = resolveTimeLabel(timing);
   const presentation = resolveStatePresentation(item, timing, urgency, timeLabel, colors);
 
-  const amount = item.currentBidGbp > 0 ? item.currentBidGbp : item.startingBidGbp;
-  const izeText = amount > 0 ? formatAuctionIze(toIze(amount, currencyCode, fxRates)) : null;
+  // Headline amount is selected by the same resolver that feeds the fiat
+  // line and the accessibility label — the three can never disagree.
+  const amount = resolvePriceAmount(item);
+  const izeText = Number.isFinite(amount)
+    ? formatAuctionIze(toIze(amount, currencyCode, fxRates))
+    : null;
   const localText = priceLabel === 'No bids' ? null : priceText;
 
   // Value prefix depends on state
@@ -55,6 +70,18 @@ export function SellerAuctionRow({
     : priceLabel === 'Final bid' ? 'Final '
     : priceLabel === 'Current bid' ? 'Current '
     : '';
+
+  // One quiet wrapping metadata line: leading operational fact first (it is
+  // the state-derived "most important fact" and carries the only colour
+  // signal), then conversion, brand and bid activity in muted text. Sold
+  // rows already fold the count into `leadingLabel` ("Sold · 3 bids"), so
+  // the count is only appended for non-sold states — same rule as before.
+  const metaParts: string[] = [];
+  if (localText) metaParts.push(localText);
+  if (item.brand) metaParts.push(item.brand);
+  if (item.bidCount > 0 && presentation.stateLabel !== 'Sold') {
+    metaParts.push(`${item.bidCount} ${item.bidCount === 1 ? 'bid' : 'bids'}`);
+  }
 
   return (
     <AnimatedPressable
@@ -65,7 +92,7 @@ export function SellerAuctionRow({
       accessibilityRole="button"
       accessibilityLabel={buildAuctionAccessibilityLabel(item, timing, priceLabel, priceText)}
     >
-      {/* Media — controlled radius, scanable size */}
+      {/* Media — compact inventory thumbnail, live dot preserved */}
       <View style={styles.rowImageWrap}>
         {item.imageUrl ? (
           <CachedImage
@@ -82,55 +109,48 @@ export function SellerAuctionRow({
         {presentation.showLiveDot && <View style={styles.rowLiveDot} />}
       </View>
 
-      {/* Body — identity + operational block */}
+      {/* Body — identity → commercial → metadata, separated by rhythm alone */}
       <View style={styles.rowBody}>
-        {/* Identity */}
+        {/* Identity — what the item is and what state it is in */}
         <View style={styles.rowIdentity}>
           <Text style={styles.rowTitle} numberOfLines={2}>{item.title}</Text>
           <Text style={[styles.rowStateText, { color: presentation.stateColor }]}>
             {presentation.stateLabel}
           </Text>
         </View>
-        {item.brand && <Text style={styles.rowBrand} numberOfLines={1}>{item.brand}</Text>}
 
-        {/* Hairline separator — identity → operational */}
-        <View style={styles.rowHairline} />
-
-        {/* Operational block — value + leading op + action */}
-        <View style={styles.rowOperational}>
-          <View style={styles.rowValueCol}>
-            <Text style={styles.rowIze} numberOfLines={1}>
-              {valuePrefix && <Text style={styles.rowValuePrefix}>{valuePrefix}</Text>}
-              {izeText ?? 'No value'}
-            </Text>
-            {localText && (
-              <Text style={styles.rowLocal} numberOfLines={1}>{localText}</Text>
-            )}
-          </View>
-          <View style={styles.rowActionCol}>
-            <Text style={styles.rowActionLabel}>{presentation.actionLabel}</Text>
-            <Ionicons name="chevron-forward" size={13} color={colors.textMuted} style={styles.rowActionChevron} />
-          </View>
-        </View>
-        <View style={styles.rowLeadingRow}>
-          <Text
-            style={[styles.rowLeading, { color: presentation.leadingColor }]}
-            numberOfLines={1}
-          >
-            {presentation.leadingLabel}
+        {/* Commercial — one exact value (wraps, never truncates) beside the
+            single next task for this state */}
+        <View style={styles.rowCommercial}>
+          <Text style={styles.rowValue}>
+            {valuePrefix ? <Text style={styles.rowValuePrefix}>{valuePrefix}</Text> : null}
+            {izeText ?? 'No value'}
           </Text>
-          {item.bidCount > 0 && presentation.stateLabel !== 'Sold' && (
-            <Text style={styles.rowBidCount}>
-              {item.bidCount} {item.bidCount === 1 ? 'bid' : 'bids'}
-            </Text>
-          )}
+          <View style={styles.rowAction}>
+            <Text style={styles.rowActionLabel}>{presentation.actionLabel}</Text>
+            <Ionicons
+              name="chevron-forward"
+              size={IconGrammar.metadata}
+              color={colors.textMuted}
+            />
+          </View>
         </View>
+
+        {/* Metadata — conversion, secondary state, brand and bid count fold
+            into one quiet line that wraps instead of clipping */}
+        <Text style={styles.rowMeta}>
+          <Text style={{ color: presentation.leadingColor }}>{presentation.leadingLabel}</Text>
+          {metaParts.length > 0 ? ` · ${metaParts.join(' · ')}` : null}
+        </Text>
       </View>
     </AnimatedPressable>
   );
 }
 
-const ROW_IMAGE_SIZE = 96;
+// 80pt — canonical large list-row thumbnail (was 96). The row's height is
+// set by the three text zones, not the media, so this slot stays compact
+// while remaining recognisable for inventory scanning.
+const ROW_IMAGE_SIZE = ThumbSize.lg;
 
 function createStyles(colors: ThemeColors) {
   return StyleSheet.create({
@@ -171,7 +191,8 @@ function createStyles(colors: ThemeColors) {
   rowBody: {
     flex: 1,
     minHeight: ROW_IMAGE_SIZE,
-    justifyContent: 'space-between' },
+    justifyContent: 'center',
+    gap: Space.sm - 2 },
   rowIdentity: {
     flexDirection: 'row',
     alignItems: 'flex-start',
@@ -185,29 +206,22 @@ function createStyles(colors: ThemeColors) {
     fontFamily: TypographyV2.bodyStrong.fontFamily,
     letterSpacing: TypographyV2.bodyStrong.letterSpacing },
   rowStateText: {
+    flexShrink: 1,
+    maxWidth: '45%',
+    textAlign: 'right',
     fontSize: TypographyV2.label.size,
     lineHeight: TypographyV2.label.lineHeight,
     fontFamily: TypographyV2.label.fontFamily,
     letterSpacing: TypographyV2.label.letterSpacing,
     paddingTop: Space.xs / 2 + 1 },
-  rowBrand: {
-    fontSize: TypographyV2.meta.size,
-    color: colors.textMuted,
-    fontFamily: TypographyV2.meta.fontFamily,
-    marginTop: Space.xs / 2 },
-  rowHairline: {
-    height: StyleSheet.hairlineWidth,
-    backgroundColor: colors.border,
-    marginVertical: Space.sm - 2 },
-  rowOperational: {
+  rowCommercial: {
     flexDirection: 'row',
-    alignItems: 'flex-end',
-    justifyContent: 'space-between',
+    alignItems: 'center',
     gap: Space.sm },
-  rowValueCol: {
+  // Primary commercial value — wraps exactly; no line clamp may ever hide
+  // part of a monetary figure.
+  rowValue: {
     flex: 1,
-    gap: Space.xs / 4 },
-  rowIze: {
     fontSize: TypographyV2.priceList.size,
     lineHeight: TypographyV2.priceList.lineHeight,
     fontFamily: TypographyV2.priceList.fontFamily,
@@ -221,42 +235,27 @@ function createStyles(colors: ThemeColors) {
     color: colors.textSecondary,
     fontVariant: ['tabular-nums'],
     letterSpacing: TypographyV2.label.letterSpacing },
-  rowLocal: {
-    fontSize: TypographyV2.meta.size,
-    lineHeight: TypographyV2.meta.lineHeight,
-    fontFamily: TypographyV2.meta.fontFamily,
-    color: colors.textMuted,
-    fontVariant: ['tabular-nums'],
-    letterSpacing: TypographyV2.meta.letterSpacing },
-  rowActionCol: {
+  // Next task — quiet text action with a chevron; bounded so the value keeps
+  // priority, but allowed to wrap so the label never clips at large text.
+  rowAction: {
+    flexShrink: 1,
+    maxWidth: '45%',
     flexDirection: 'row',
     alignItems: 'center',
-    gap: Space.xs / 4,
-    paddingBottom: Space.xs / 4 },
+    justifyContent: 'flex-end',
+    gap: Space.xs / 4 },
   rowActionLabel: {
-    fontSize: TypographyV2.meta.size,
+    fontSize: TypographyV2.captionElevated.size,
+    lineHeight: TypographyV2.captionElevated.lineHeight,
     color: colors.textSecondary,
-    fontFamily: TypographyV2.meta.fontFamily,
-    letterSpacing: 0.1 },
-  rowActionChevron: {
-    marginTop: Space.xs / 4 },
-  rowLeadingRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    gap: Space.sm,
-    marginTop: Space.xs },
-  rowLeading: {
-    flex: 1,
-    fontSize: TypographyV2.meta.size,
-    lineHeight: TypographyV2.meta.lineHeight,
-    fontFamily: TypographyV2.meta.fontFamily,
-    fontVariant: ['tabular-nums'],
-    letterSpacing: TypographyV2.meta.letterSpacing },
-  rowBidCount: {
+    fontFamily: TypographyV2.captionElevated.fontFamily,
+    textAlign: 'right',
+    letterSpacing: TypographyV2.captionElevated.letterSpacing },
+  rowMeta: {
     fontSize: TypographyV2.meta.size,
     lineHeight: TypographyV2.meta.lineHeight,
     color: colors.textMuted,
     fontFamily: TypographyV2.meta.fontFamily,
-    fontVariant: ['tabular-nums'] } });
+    fontVariant: ['tabular-nums'],
+    letterSpacing: TypographyV2.meta.letterSpacing } });
 }

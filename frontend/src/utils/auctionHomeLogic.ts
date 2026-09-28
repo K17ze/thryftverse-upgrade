@@ -110,6 +110,18 @@ export function resolvePriceLabel(item: AuctionHomeItem, timing: { effectiveStat
   return item.bidCount > 0 ? 'Current bid' : 'Starting bid';
 }
 
+/**
+ * Canonical headline amount for an auction: the live bid once bids exist,
+ * else the starting ask. Every surface that prints or announces a price
+ * (fiat text, 1ZE headline, accessibility label) must select through this
+ * resolver so they can never disagree — e.g. `bidCount > 0` with a zeroed
+ * `currentBidGbp` (retracted bids) announces "Current bid" and must print
+ * the same amount, not silently fall back to the starting ask.
+ */
+export function resolvePriceAmount(item: AuctionHomeItem): number {
+  return item.bidCount > 0 ? item.currentBidGbp : item.startingBidGbp;
+}
+
 export function resolvePriceText(
   item: AuctionHomeItem,
   timing: { effectiveState: AuctionEffectiveState },
@@ -117,7 +129,7 @@ export function resolvePriceText(
   formatFromFiat: (amount: number, currency?: any, opts?: any) => string
 ): string {
   if (priceLabel === 'No bids') return 'No bids';
-  const amount = item.bidCount > 0 ? item.currentBidGbp : item.startingBidGbp;
+  const amount = resolvePriceAmount(item);
   return formatFromFiat(amount, DEFAULT_CURRENCY_CODE);
 }
 

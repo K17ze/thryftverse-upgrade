@@ -22,10 +22,21 @@ type ServerConnectionsController = ReturnType<typeof useServerConnections>;
 export function AgentStudioConnectionsSection({
   loading,
   connections,
+  loadError,
+  stale,
+  onRetry,
   controller,
   styles }: {
   loading: boolean;
   connections: ProviderConnectionInfo[];
+  /** Non-null when the connections fetch failed before any data loaded —
+   *  the section must show this instead of a confirmed-empty state. */
+  loadError?: string | null;
+  /** True when the list shows previously loaded data whose last refresh
+   *  failed — renders a quiet "may be out of date" marker in place. */
+  stale?: boolean;
+  /** Retries only the connections resource. */
+  onRetry?: () => void;
   controller: ServerConnectionsController;
   styles: AgentStudioStyles;
 }) {
@@ -88,41 +99,46 @@ export function AgentStudioConnectionsSection({
       {/* Inline connect form */}
       {showConnectForm ? (
         <View style={styles.connectFormBody}>
-          {/* Provider selector — OpenAI and custom OpenAI-compatible
-              endpoints are verified server-side. Anthropic and Gemini are
-              shown as planned: the server verification contract only
-              supports Bearer-keyed /models probes today. */}
+          {/* Provider selector — single-select semantics. Only the providers
+              the server verification contract actually supports are listed:
+              OpenAI plus custom OpenAI-compatible endpoints (Bearer-keyed
+              /models probes). Anthropic and Gemini remain planned and are
+              not rendered as unreachable "coming soon" options.
+              The visible chip stays compact; the Pressable wraps it in a
+              ≥44pt transparent target. */}
           <View style={styles.providerSelectorWrap}>
             {(['openai', 'custom'] as const).map((p) => {
-              const isAvailable = p === 'openai' || p === 'custom';
-              const isSelected = connectProvider === p && isAvailable;
+              const isSelected = connectProvider === p;
               const label = p === 'openai' ? 'OpenAI' : 'Custom';
               return (
                 <Pressable
                   key={p}
                   style={({ pressed }) => [
-                    styles.providerChip,
-                    {
-                      borderColor: isSelected ? colors.brand : colors.border,
-                      backgroundColor: isSelected ? colors.brandSubtle : colors.surface,
-                      opacity: isAvailable ? (pressed ? 0.7 : 1) : 0.5 },
+                    styles.providerChipTarget,
+                    { opacity: pressed ? 0.7 : 1 },
                   ]}
-                  onPress={() => isAvailable && (haptic.light(), setConnectProvider(p))}
-                  disabled={!isAvailable}
-                  accessibilityRole="button"
-                  accessibilityLabel={`${label}${isAvailable ? '' : ' — coming soon'}`}
+                  onPress={() => { haptic.light(); setConnectProvider(p); }}
+                  accessibilityRole="radio"
+                  accessibilityState={{ selected: isSelected }}
+                  accessibilityLabel={label}
                 >
-                  <Text
+                  <View
                     style={[
-                      styles.providerChipText,
-                      { color: isSelected ? colors.brand : isAvailable ? colors.textPrimary : colors.textMuted },
+                      styles.providerChip,
+                      {
+                        borderColor: isSelected ? colors.brand : colors.border,
+                        backgroundColor: isSelected ? colors.brandSubtle : colors.surface },
                     ]}
                   >
-                    {label}
-                  </Text>
-                  {!isAvailable ? (
-                    <Text style={[styles.providerChipSoon, { color: colors.textMuted }]}>{t('provider.soon')}</Text>
-                  ) : null}
+                    <Text
+                      style={[
+                        styles.providerChipText,
+                        { color: isSelected ? colors.brand : colors.textPrimary },
+                      ]}
+                    >
+                      {label}
+                    </Text>
+                  </View>
                 </Pressable>
               );
             })}
@@ -192,9 +208,50 @@ export function AgentStudioConnectionsSection({
         </View>
       ) : null}
 
+      {/* Stale marker — the overview issue row sits above the tab strip, so
+          the list itself also labels last-refresh-failed data (audit F17). */}
+      {stale && !loading ? (
+        <View style={styles.staleMarker}>
+          <Text style={[styles.flatRowCaveat, { color: colors.warningText, marginTop: 0 }]}>
+            {t('status.resourceStale', { resource: t('status.resources.connections') })}
+          </Text>
+          {onRetry ? (
+            <Pressable
+              style={({ pressed }) => [styles.pendingAction, { marginTop: 0, opacity: pressed ? 0.6 : 1 }]}
+              onPress={onRetry}
+              accessibilityRole="button"
+              accessibilityLabel={t('status.retryResource', { resource: t('status.resources.connections') })}
+            >
+              <Text style={[styles.pendingActionText, { color: colors.warningText }]}>
+                {t('status.retryResource', { resource: t('status.resources.connections') })}
+              </Text>
+            </Pressable>
+          ) : null}
+        </View>
+      ) : null}
+
       {/* Server connection list — flat rows, hairline separators */}
       {loading ? (
         <FlagshipState variant="loading" style={styles.loadingWrap} />
+      ) : connections.length === 0 && loadError && !showConnectForm ? (
+        <View style={styles.emptyServerConnections}>
+          <Text style={[styles.connectHint, { color: colors.warningText }]}>
+            {t('serverConnections.loadFailed')}
+          </Text>
+          <Text style={[styles.flatRowCaveat, { color: colors.textSecondary }]}>
+            {loadError}
+          </Text>
+          {onRetry ? (
+            <View style={styles.actionRow}>
+              <SecondaryButton
+                label={t('connection.retry')}
+                onPress={onRetry}
+                colors={colors}
+                styles={styles}
+              />
+            </View>
+          ) : null}
+        </View>
       ) : connections.length === 0 && !showConnectForm ? (
         <View style={styles.emptyServerConnections}>
           <Text style={[styles.connectHint, { color: colors.textMuted }]}>
@@ -205,9 +262,11 @@ export function AgentStudioConnectionsSection({
         <View>
           {connections.map((conn, index) => {
             const isLast = index === connections.length - 1;
+            const healthIsFailure =
+              conn.healthStatus === 'failed' || conn.healthStatus === 'revoked' || conn.healthStatus === 'expired';
             const healthColor =
               conn.healthStatus === 'healthy' ? colors.successText
-                : conn.healthStatus === 'failed' || conn.healthStatus === 'revoked' || conn.healthStatus === 'expired' ? colors.dangerText
+                : healthIsFailure ? colors.dangerText
                   : conn.healthStatus === 'degraded' ? colors.warningText
                     : colors.textMuted;
             const healthLabel =
@@ -245,8 +304,19 @@ export function AgentStudioConnectionsSection({
                       </Text>
                       <Text style={[styles.flatRowCaveat, { color: colors.textMuted }]} numberOfLines={1}>
                         {verifiedText}
-                        {conn.lastError ? ` · ${conn.lastError}` : ''}
                       </Text>
+                      {/* The provider's error is the actionable part of this
+                          row — it wraps in full, never clamped to one line. */}
+                      {conn.lastError ? (
+                        <Text
+                          style={[
+                            styles.flatRowCaveat,
+                            { color: healthIsFailure ? colors.dangerText : colors.textMuted },
+                          ]}
+                        >
+                          {conn.lastError}
+                        </Text>
+                      ) : null}
                     </View>
                   </View>
                   <Text

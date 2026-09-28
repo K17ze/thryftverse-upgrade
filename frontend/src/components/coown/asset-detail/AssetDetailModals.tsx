@@ -206,7 +206,7 @@ export const AssetDetailModals = React.memo(function AssetDetailModals({
         snapPoint={0.7}
       >
         <View style={[styles.riskDisclosureSheetHeader, { borderBottomColor: colors.borderSubtle }]}>
-          <Text style={[styles.riskDisclosureSheetTitle, { color: colors.textPrimary }]} maxFontSizeMultiplier={1.3}>
+          <Text style={[styles.riskDisclosureSheetTitle, { color: colors.textPrimary }]}>
             Risk disclosure
           </Text>
           <Pressable
@@ -243,7 +243,7 @@ export const AssetDetailModals = React.memo(function AssetDetailModals({
         snapPoint={0.82}
       >
         <View style={[styles.riskDisclosureSheetHeader, { borderBottomColor: colors.borderSubtle }]}>
-          <Text style={[styles.riskDisclosureSheetTitle, { color: colors.textPrimary }]} maxFontSizeMultiplier={1.3}>
+          <Text style={[styles.riskDisclosureSheetTitle, { color: colors.textPrimary }]}>
             Asset dossier
           </Text>
           <Pressable
@@ -275,7 +275,7 @@ export const AssetDetailModals = React.memo(function AssetDetailModals({
         snapPoint={0.85}
       >
         <View style={[styles.riskDisclosureSheetHeader, { borderBottomColor: colors.borderSubtle }]}>
-          <Text style={[styles.riskDisclosureSheetTitle, { color: colors.textPrimary }]} maxFontSizeMultiplier={1.3} accessibilityRole="header">
+          <Text style={[styles.riskDisclosureSheetTitle, { color: colors.textPrimary }]} accessibilityRole="header">
             Asset prospectus
           </Text>
           <Pressable
@@ -724,6 +724,12 @@ const styles = StyleSheet.create({
     fontSize: TypographyV2.sectionTitle.size,
     fontFamily: TypographyV2.sectionTitle.fontFamily,
     lineHeight: TypographyV2.sectionTitle.lineHeight,
+    // No font-multiplier cap (audit F12): titles scale with the rest of the
+    // page and wrap within the header instead of clipping or pushing the
+    // close target off-screen.
+    flex: 1,
+    flexShrink: 1,
+    paddingRight: Space.sm,
   },
   riskDisclosureSheetScroll: {
     flex: 1,

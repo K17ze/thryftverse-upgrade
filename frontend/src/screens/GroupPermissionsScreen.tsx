@@ -14,8 +14,9 @@ import {
   type GroupSettings,
   type GroupSettingsCapabilities,
 } from '../services/chatApi';
-import { Control, Space, Stroke } from '../theme/designTokens';
+import { Control, Radius, Space, Stroke } from '../theme/designTokens';
 import { TypographyV2 } from '../theme/typography.v2';
+import { SkeletonLoader } from '../components/SkeletonLoader';
 import { Ionicons } from '@expo/vector-icons';
 
 type Props = NativeStackScreenProps<RootStackParamList, 'GroupPermissions'>;
@@ -123,14 +124,67 @@ export default function GroupPermissionsScreen({ navigation, route }: Props) {
     }
   }, [settings, capabilities?.canManage, conversationId, haptic, pendingKey, show, isOffline]);
 
+  // Intro doubles as the read-only explainer: the reason changes are
+  // unavailable sits directly above the first affected control, not below
+  // the full list. Offline and authority-denied read differently — they
+  // are different problems with different remedies.
+  const introBlock = (
+    <View style={styles.intro}>
+      <Text style={styles.introCopy}>
+        Owners and admins retain access. Changes apply to the whole group.
+      </Text>
+      {capabilities && !capabilities.canManage ? (
+        <Text style={styles.introCopy}>
+          You can review these settings, but only an owner or admin can change them.
+        </Text>
+      ) : null}
+      {isOffline ? (
+        <Text style={styles.introCopy}>
+          Offline — reconnect to change permissions.
+        </Text>
+      ) : null}
+    </View>
+  );
+
   return (
     <FlagshipScreen
       header={<FlagshipHeader title="Group permissions" onBack={() => navigation.goBack()} />}
       scrollEnabled={false}
     >
       {state === 'loading' ? (
-        <View style={styles.centerState} accessibilityLabel="Loading group permissions">
-          <ActivityIndicator color={colors.textPrimary} />
+        // Three skeleton rows matching the loaded geometry — hairline-
+        // separated label rows with a trailing chevron slot, no card stack.
+        <View
+          style={styles.content}
+          accessible
+          accessibilityLabel="Loading group permissions"
+        >
+          {introBlock}
+          <View style={styles.permissionList} testID="group-permissions-skeleton">
+            {PERMISSIONS.map((permission, index) => (
+              <View
+                key={permission.key}
+                style={[styles.permissionBlock, index > 0 && styles.permissionDivider]}
+              >
+                <View style={styles.permissionHeading}>
+                  <View style={styles.permissionCopy}>
+                    <SkeletonLoader
+                      width="55%"
+                      height={TypographyV2.bodyStrong.lineHeight}
+                      borderRadius={Radius.sm}
+                    />
+                    <SkeletonLoader
+                      width="32%"
+                      height={TypographyV2.meta.lineHeight}
+                      borderRadius={Radius.sm}
+                      style={styles.skeletonMeta}
+                    />
+                  </View>
+                  <SkeletonLoader width={20} height={20} borderRadius={Radius.full} />
+                </View>
+              </View>
+            ))}
+          </View>
         </View>
       ) : state === 'error' ? (
         <FlagshipState
@@ -149,11 +203,7 @@ export default function GroupPermissionsScreen({ navigation, route }: Props) {
           showsVerticalScrollIndicator={false}
           contentContainerStyle={styles.content}
         >
-          <View style={styles.intro}>
-            <Text style={styles.introCopy}>
-              {isOffline ? 'Offline. Reconnect to change permissions.' : 'Owners and admins retain access. Changes apply to the whole group.'}
-            </Text>
-          </View>
+          {introBlock}
 
           <View style={styles.permissionList}>
             {PERMISSIONS.map((permission, index) => (
@@ -209,10 +259,6 @@ export default function GroupPermissionsScreen({ navigation, route }: Props) {
               </View>
             ))}
           </View>
-
-          {!capabilities?.canManage ? (
-            <Text style={styles.readOnlyCopy}>Only an owner or admin can change these permissions.</Text>
-          ) : null}
         </ScrollView>
       )}
     </FlagshipScreen>
@@ -226,22 +272,11 @@ function createStyles(colors: ThemeColors) {
       paddingTop: Space.md,
       paddingBottom: Space.xxl,
     },
-    centerState: {
-      flex: 1,
-      alignItems: 'center',
-      justifyContent: 'center',
-      gap: Space.sm,
-      paddingHorizontal: Space.xl,
+    skeletonMeta: {
+      marginTop: Space.xs,
     },
     intro: {
       paddingBottom: Space.xl,
-    },
-    introTitle: {
-      fontFamily: TypographyV2.screenTitle.fontFamily,
-      fontSize: TypographyV2.screenTitle.size,
-      letterSpacing: TypographyV2.screenTitle.letterSpacing,
-      lineHeight: TypographyV2.screenTitle.lineHeight,
-      color: colors.textPrimary,
     },
     introCopy: {
       fontFamily: TypographyV2.body.fontFamily,
@@ -313,14 +348,6 @@ function createStyles(colors: ThemeColors) {
     },
     scopeLabelSelected: {
       color: colors.textPrimary,
-    },
-    readOnlyCopy: {
-      fontFamily: TypographyV2.meta.fontFamily,
-      fontSize: TypographyV2.meta.size,
-      letterSpacing: TypographyV2.meta.letterSpacing,
-      lineHeight: TypographyV2.meta.lineHeight,
-      color: colors.textMuted,
-      marginTop: Space.lg,
     },
     pressed: {
       opacity: 0.68,

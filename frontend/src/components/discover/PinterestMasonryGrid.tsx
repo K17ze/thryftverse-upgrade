@@ -5,6 +5,9 @@ import {
   useWindowDimensions,
   Text,
   Pressable,
+  ImageStyle,
+  ViewStyle,
+  StyleProp,
   NativeSyntheticEvent,
   NativeScrollEvent } from 'react-native';
 import { FlashList } from '@shopify/flash-list';
@@ -381,7 +384,8 @@ export function PinterestMasonryGrid({
           isListingSaved: isItemSaved,
           onLookPress,
           onPosterPress,
-          onMoodboardPress });
+          onMoodboardPress,
+          reducedMotion: reducedMotionEnabled });
       }
       // Legacy listing path — single-column tile with optional save button.
       return (
@@ -404,7 +408,7 @@ export function PinterestMasonryGrid({
         </View>
       );
     },
-    [gap, colWidth, testIDPrefix, firstItemTestID, handleListingPress, handleUnitPress, numColumns, onItemSaveToggle, onItemSaveLongPress, onListingLongPress, isItemSaved, onLookPress, onPosterPress, onMoodboardPress],
+    [gap, colWidth, testIDPrefix, firstItemTestID, handleListingPress, handleUnitPress, numColumns, onItemSaveToggle, onItemSaveLongPress, onListingLongPress, isItemSaved, onLookPress, onPosterPress, onMoodboardPress, reducedMotionEnabled],
   );
 
   // overrideItemLayout — span is decided here from the unit's declared span
@@ -473,11 +477,10 @@ export function PinterestMasonryGrid({
     );
   }
 
-  // `reducedMotionEnabled` is referenced (not gated) so the skeleton path and
-  // future viewability-driven surfaces honour the accessibility preference
-  // without introducing animations that would break recycling.
-  void reducedMotionEnabled;
-
+  // `reducedMotionEnabled` flows into the unit render context — non-listing
+  // media (look/poster/moodboard covers) swap instantly instead of
+  // crossfading when the OS or in-app reduced-motion preference is on.
+  // Listing tiles get the same behavior inside CachedImage.
   return (
     <AnimatedFlashList
       ref={scrollRef}
@@ -503,6 +506,69 @@ export function PinterestMasonryGrid({
 }
 
 // ============================================================================
+// DISCOVERY MEDIA — shared loading/error contract for non-listing units
+// ============================================================================
+// Listing tiles inherit their failure handling from CachedImage (a failed
+// source resolves to the shared ImageEmptyGraphic — never a blank rect).
+// Look, poster and moodboard covers render through expo-image directly, so
+// this wrapper gives them the same behavioral contract:
+//   - missing/empty source → muted fill + a small neutral glyph
+//   - decode/network failure → the same quiet fallback. The failure is keyed
+//     to the failed URI, so a recycled cell carrying a new source recovers
+//     automatically (no stale "failed" state crosses recycled instances).
+//   - reduced motion → the media swap is instant (`transition={0}`), matching
+//     CachedImage's reduced-motion behavior for listing tiles.
+// The tile frame, authored ratio and textual overlay stay with the caller,
+// so a failed tile keeps the unit's shape and identity — restrained, not an
+// error banner, and never a substitute stock image.
+function DiscoveryMediaImage({
+  uri,
+  style,
+  recyclingKey,
+  reducedMotion,
+  onLoad }: {
+  uri: string | null | undefined;
+  style?: StyleProp<ImageStyle>;
+  recyclingKey: string;
+  reducedMotion: boolean;
+  onLoad?: (event: { source?: { width?: number; height?: number } }) => void;
+}) {
+  const { colors } = useAppTheme();
+  const [failedUri, setFailedUri] = React.useState<string | null>(null);
+  const hasSource = typeof uri === 'string' && uri.trim().length > 0;
+  const failed = !hasSource || failedUri === uri;
+  const handleError = useCallback(() => {
+    if (hasSource && uri) {
+      setFailedUri(uri);
+    }
+  }, [hasSource, uri]);
+  if (failed) {
+    return (
+      <View
+        testID="discovery-media-fallback"
+        accessibilityElementsHidden
+        importantForAccessibility="no-hide-descendants"
+        style={[style as StyleProp<ViewStyle>, { alignItems: 'center', justifyContent: 'center' }]}
+      >
+        <Ionicons name="image-outline" size={18} color={colors.textMuted} />
+      </View>
+    );
+  }
+  return (
+    <ExpoImage
+      source={{ uri }}
+      style={style}
+      contentFit="cover"
+      cachePolicy="memory-disk"
+      recyclingKey={recyclingKey}
+      transition={reducedMotion ? 0 : 160}
+      onLoad={onLoad}
+      onError={handleError}
+    />
+  );
+}
+
+// ============================================================================
 // UNIT RENDERER — switches on DiscoveryFeedUnit.type
 // ============================================================================
 
@@ -520,6 +586,8 @@ interface UnitRenderContext {
   onLookPress?: (lookId: string) => void;
   onPosterPress?: (storyId: string) => void;
   onMoodboardPress?: (moodboardId: string) => void;
+  /** OS/in-app reduced-motion preference — media swaps render instantly. */
+  reducedMotion: boolean;
 }
 
 function renderUnit(
@@ -566,7 +634,7 @@ function renderUnit(
       const u = unit as LookFeedUnit;
       return (
         <View style={{ paddingHorizontal: ctx.gap / 2, paddingBottom: ctx.gap }}>
-          <LookDiscoveryTile unit={u} onPress={ctx.onLookPress} />
+          <LookDiscoveryTile unit={u} onPress={ctx.onLookPress} reducedMotion={ctx.reducedMotion} />
         </View>
       );
     }
@@ -574,7 +642,7 @@ function renderUnit(
       const u = unit as PosterFeedUnit;
       return (
         <View style={{ paddingHorizontal: ctx.gap / 2, paddingBottom: ctx.gap }}>
-          <PosterDiscoveryTile unit={u} onPress={ctx.onPosterPress} />
+          <PosterDiscoveryTile unit={u} onPress={ctx.onPosterPress} reducedMotion={ctx.reducedMotion} />
         </View>
       );
     }
@@ -584,7 +652,7 @@ function renderUnit(
         // Same vertical rhythm as every other unit — the grid gutter owns
         // inter-row spacing, not per-unit padding.
         <View style={{ paddingHorizontal: ctx.gap / 2, paddingBottom: ctx.gap }}>
-          <MoodboardDiscoveryTile unit={u} onPress={ctx.onMoodboardPress} />
+          <MoodboardDiscoveryTile unit={u} onPress={ctx.onMoodboardPress} reducedMotion={ctx.reducedMotion} />
         </View>
       );
     }
@@ -600,9 +668,11 @@ function renderUnit(
 
 function LookDiscoveryTile({
   unit,
-  onPress }: {
+  onPress,
+  reducedMotion }: {
   unit: LookFeedUnit;
   onPress?: (lookId: string) => void;
+  reducedMotion: boolean;
 }) {
   const { colors } = useAppTheme();
   const creator = unit.look.creator.username ?? 'creator';
@@ -620,13 +690,11 @@ function LookDiscoveryTile({
   );
   const tile = (
     <View style={{ aspectRatio: ratio, borderRadius: Radius.lg, overflow: 'hidden', backgroundColor: colors.surfaceAlt }}>
-        <ExpoImage
-          source={{ uri: unit.coverImageUri }}
+        <DiscoveryMediaImage
+          uri={unit.coverImageUri}
           style={StyleSheet.absoluteFill}
-          contentFit="cover"
-          cachePolicy="memory-disk"
           recyclingKey={unit.id}
-          transition={160}
+          reducedMotion={reducedMotion}
           onLoad={handleCoverLoad}
         />
         <LinearGradient
@@ -647,7 +715,12 @@ function LookDiscoveryTile({
               <Ionicons
                 name="checkmark-circle"
                 size={14}
-                color={colors.brand}
+                // Media-overlay foreground: the glyph sits on a dark scrim
+                // over arbitrary photography, so it uses the always-light
+                // on-media role — never `colors.brand` (near-black in the
+                // light theme). The soft shadow is its controlled backing.
+                color={colors.mediaOverlayText}
+                style={{ textShadowColor: colors.mediaOverlayScrim, textShadowRadius: 3, textShadowOffset: { width: 0, height: 0 } }}
                 accessibilityLabel="Verified creator"
               />
             )}
@@ -687,9 +760,11 @@ function LookDiscoveryTile({
 
 function PosterDiscoveryTile({
   unit,
-  onPress }: {
+  onPress,
+  reducedMotion }: {
   unit: PosterFeedUnit;
   onPress?: (storyId: string) => void;
+  reducedMotion: boolean;
 }) {
   const { colors } = useAppTheme();
   const creator = unit.story.creator.username ?? 'creator';
@@ -706,13 +781,11 @@ function PosterDiscoveryTile({
   );
   const tile = (
     <View style={{ aspectRatio: ratio, borderRadius: Radius.lg, overflow: 'hidden', backgroundColor: colors.surfaceAlt }}>
-        <ExpoImage
-          source={{ uri: unit.coverUri }}
+        <DiscoveryMediaImage
+          uri={unit.coverUri}
           style={StyleSheet.absoluteFill}
-          contentFit="cover"
-          cachePolicy="memory-disk"
           recyclingKey={unit.id}
-          transition={160}
+          reducedMotion={reducedMotion}
           onLoad={handleCoverLoad}
         />
         <LinearGradient
@@ -733,7 +806,11 @@ function PosterDiscoveryTile({
             <Ionicons
               name="checkmark-circle"
               size={14}
-              color={colors.brand}
+              // Same media-overlay foreground as the look tile — always
+              // light over the dark scrim; `colors.brand` is near-black in
+              // the light theme and would disappear over photography.
+              color={colors.mediaOverlayText}
+              style={{ textShadowColor: colors.mediaOverlayScrim, textShadowRadius: 3, textShadowOffset: { width: 0, height: 0 } }}
               accessibilityLabel="Verified creator"
             />
           )}
@@ -762,9 +839,11 @@ function PosterDiscoveryTile({
 
 function MoodboardDiscoveryTile({
   unit,
-  onPress }: {
+  onPress,
+  reducedMotion }: {
   unit: MoodboardFeedUnit;
   onPress?: (moodboardId: string) => void;
+  reducedMotion: boolean;
 }) {
   const { colors } = useAppTheme();
   const imageUris = [unit.coverUri, ...unit.moodboard.items.map((item) => item.imageUri)]
@@ -775,25 +854,21 @@ function MoodboardDiscoveryTile({
   // describes its shape, so the authored reservation stays the truth.
   const tile = (
     <View style={{ aspectRatio: unit.aspectRatio, borderRadius: Radius.lg, overflow: 'hidden', backgroundColor: colors.surfaceAlt, flexDirection: 'row', gap: 2 }}>
-        <ExpoImage
-          source={{ uri: imageUris[0] }}
+        <DiscoveryMediaImage
+          uri={imageUris[0]}
           style={{ flex: imageUris.length > 1 ? 1.35 : 1 }}
-          contentFit="cover"
-          cachePolicy="memory-disk"
           recyclingKey={`${unit.id}:0`}
-          transition={160}
+          reducedMotion={reducedMotion}
         />
         {imageUris.length > 1 ? (
           <View style={{ flex: 0.9, gap: 2 }}>
             {imageUris.slice(1).map((uri, index) => (
-              <ExpoImage
+              <DiscoveryMediaImage
                 key={uri}
-                source={{ uri }}
+                uri={uri}
                 style={{ flex: 1 }}
-                contentFit="cover"
-                cachePolicy="memory-disk"
                 recyclingKey={`${unit.id}:${index + 1}`}
-                transition={160}
+                reducedMotion={reducedMotion}
               />
             ))}
           </View>

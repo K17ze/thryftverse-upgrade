@@ -73,12 +73,23 @@ export default function AIAgentIntegrationScreen({ navigation }: Props) {
   const pendingApprovals = useStore(useShallow((s) => s.pendingApprovals));
 
   const [studioTab, setStudioTab] = React.useState<AgentStudioTab>('agents');
-  const { loading: resourcesLoading, failed: resourcesFailed, reload: reloadResources } = useAgentStudioResources();
-  const agentsLoading = resourcesLoading;
-  const approvalsLoading = resourcesLoading;
+  // Per-resource freshness (audit F17): bots / connections / approvals each
+  // carry their own loading/ok/stale/error state so a single failure marks
+  // only what failed and never reads as confirmed-empty.
+  const { resources, reload: reloadResources } = useAgentStudioResources();
+  const agentsLoading = resources.bots.status === 'loading';
+  const approvalsLoading = resources.approvals.status === 'loading';
   const [showDeviceKeys, setShowDeviceKeys] = React.useState(false);
 
-  const connectionsLoading = resourcesLoading;
+  const connectionsLoading = resources.connections.status === 'loading';
+  // 'error' means the fetch failed before anything loaded — hand the section
+  // the failure so it never renders an empty state as confirmed-empty.
+  const agentsLoadError = resources.bots.status === 'error' ? resources.bots.errorMessage : null;
+  const connectionsLoadError = resources.connections.status === 'error' ? resources.connections.errorMessage : null;
+  // Stale = previously loaded data whose last refresh failed — the sections
+  // label it in place so scrolled users never read stale rows as fresh.
+  const agentsStale = resources.bots.status === 'stale';
+  const connectionsStale = resources.connections.status === 'stale';
 
   // Server connections controller (connect form, reverify/remove, toast).
   const serverConnections = useServerConnections({
@@ -99,7 +110,9 @@ export default function AIAgentIntegrationScreen({ navigation }: Props) {
   const pendingApprovalCount = pendingApprovals.filter(
     (a) => a.status === 'pending'
   ).length;
-  const statusLoading = deviceKeys.loading || connectionsLoading || agentsLoading || approvalsLoading;
+  // The overview skeleton tracks only the three fetched resources — the
+  // device-local keystore is unrelated and must not hold the gate.
+  const statusLoading = connectionsLoading || agentsLoading || approvalsLoading;
 
   return (
     <FlagshipScreen
@@ -112,8 +125,8 @@ export default function AIAgentIntegrationScreen({ navigation }: Props) {
     >
       {/* 1. Status overview — flat text with colored numbers, no cards */}
       <AgentStudioStatusOverview
-        failed={resourcesFailed}
-        onRetry={() => void reloadResources()}
+        resources={resources}
+        onRetry={(resource) => void reloadResources(resource)}
         loading={statusLoading}
         agentCount={agentCount}
         healthyConnections={healthyConnections}
@@ -130,6 +143,9 @@ export default function AIAgentIntegrationScreen({ navigation }: Props) {
           botVersions={botVersions}
           activeAgentSessions={deviceKeys.activeAgentSessions}
           onPauseAll={deviceKeys.handlePauseAllAgents}
+          loadError={agentsLoadError}
+          stale={agentsStale}
+          onRetry={() => void reloadResources('bots')}
           navigation={navigation}
           styles={styles}
         />
@@ -138,6 +154,9 @@ export default function AIAgentIntegrationScreen({ navigation }: Props) {
         <AgentStudioConnectionsSection
           loading={connectionsLoading}
           connections={providerConnections}
+          loadError={connectionsLoadError}
+          stale={connectionsStale}
+          onRetry={() => void reloadResources('connections')}
           controller={serverConnections}
           styles={styles}
         />

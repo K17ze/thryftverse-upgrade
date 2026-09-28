@@ -69,7 +69,10 @@ export function usePortfolioData() {
         const parsed = parseApiError(err, 'Unable to load portfolio');
         show(parsed.message, 'error');
         setIsError(true);
-        setIsPartial(false);
+        // F23: do NOT clear isPartial here. The previously-fetched positions
+        // and summary stay on screen, so the flag must keep describing that
+        // retained data — clearing it would drop the "totals may be
+        // incomplete" qualifier and present partial data as complete.
       })
       .finally(() => {
         if (!cancelled && token === requestTokenRef.current) {

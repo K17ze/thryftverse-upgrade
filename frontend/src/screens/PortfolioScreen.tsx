@@ -143,7 +143,17 @@ export default function PortfolioScreen() {
     >
       <CoOwnOfflineBanner isOffline={isOffline} />
 
-      {isPartial && <PortfolioPartialBanner />}
+      {/* Partial results: the banner qualifies the totals below and offers
+          a visible retry wired to the same handler as pull-to-refresh.
+          Positions stay visible; per-position stale marks are counted from
+          mark provenance so the warning can name what is degraded. */}
+      {isPartial && (
+        <PortfolioPartialBanner
+          onRetry={handleRefresh}
+          refreshing={refreshing}
+          staleCount={positions.reduce((count, position) => (position.mark?.isStale ? count + 1 : count), 0)}
+        />
+      )}
 
       <FlashList
         data={activePortfolioTab === 'positions' ? positions : []}

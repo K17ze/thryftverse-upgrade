@@ -10,6 +10,7 @@ import { useHaptic } from '../../hooks/useHaptic';
 import { useAppTranslation } from '../../i18n/useAppTranslation';
 import type { ChatBot } from '../../domain';
 import { AgentIcon } from './AgentIcon';
+import { SecondaryButton } from './AgentStudioButtons';
 import type { AgentStudioStyles } from './agentStudioStyles';
 
 /** Minimal structural view of the store's botVersions map — the list only
@@ -27,6 +28,9 @@ export function AgentStudioAgentsSection({
   botVersions,
   activeAgentSessions,
   onPauseAll,
+  loadError,
+  stale,
+  onRetry,
   navigation,
   styles }: {
   loading: boolean;
@@ -34,6 +38,14 @@ export function AgentStudioAgentsSection({
   botVersions: BotVersionsMap;
   activeAgentSessions: number;
   onPauseAll: () => void;
+  /** Non-null when the bots fetch failed before any data loaded — the
+   *  section must show this instead of a confirmed-empty state. */
+  loadError?: string | null;
+  /** True when the list shows previously loaded data whose last refresh
+   *  failed — renders a quiet "may be out of date" marker in place. */
+  stale?: boolean;
+  /** Retries only the bots resource. */
+  onRetry?: () => void;
   navigation: NativeStackScreenProps<RootStackParamList, 'AIAgentIntegration'>['navigation'];
   styles: AgentStudioStyles;
 }) {
@@ -53,6 +65,28 @@ export function AgentStudioAgentsSection({
         <Text style={[styles.sectionLabel, { color: colors.textMuted }]}>{t('sections.yourAgents')}</Text>
       </View>
 
+      {/* Stale marker — the overview issue row sits above the tab strip, so
+          the list itself also labels last-refresh-failed data (audit F17). */}
+      {stale && !loading ? (
+        <View style={styles.staleMarker}>
+          <Text style={[styles.flatRowCaveat, { color: colors.warningText, marginTop: 0 }]}>
+            {t('status.resourceStale', { resource: t('status.resources.agents') })}
+          </Text>
+          {onRetry ? (
+            <Pressable
+              style={({ pressed }) => [styles.pendingAction, { marginTop: 0, opacity: pressed ? 0.6 : 1 }]}
+              onPress={onRetry}
+              accessibilityRole="button"
+              accessibilityLabel={t('status.retryResource', { resource: t('status.resources.agents') })}
+            >
+              <Text style={[styles.pendingActionText, { color: colors.warningText }]}>
+                {t('status.retryResource', { resource: t('status.resources.agents') })}
+              </Text>
+            </Pressable>
+          ) : null}
+        </View>
+      ) : null}
+
       {/* Agents flat list */}
       {loading ? (
         <View style={styles.agentListSkeleton}>
@@ -65,6 +99,25 @@ export function AgentStudioAgentsSection({
               </View>
             </View>
           ))}
+        </View>
+      ) : customBots.length === 0 && loadError ? (
+        <View style={styles.emptyAgents}>
+          <Text style={[styles.emptyText, { color: colors.warningText }]}>
+            {t('agents.loadFailed')}
+          </Text>
+          <Text style={[styles.flatRowCaveat, { color: colors.textSecondary }]}>
+            {loadError}
+          </Text>
+          {onRetry ? (
+            <View style={styles.actionRow}>
+              <SecondaryButton
+                label={t('agents.retry')}
+                onPress={onRetry}
+                colors={colors}
+                styles={styles}
+              />
+            </View>
+          ) : null}
         </View>
       ) : customBots.length === 0 ? (
         <View style={styles.emptyAgents}>
@@ -92,27 +145,50 @@ export function AgentStudioAgentsSection({
                   : t('agentStatus.published');
             const runtimeLabel = bot.runtimeMode === 'ai' ? 'AI' : (bot.runtimeMode ?? 'AI');
             const lastVersion = getLastPublishedVersion(bot.id);
+            // Purpose first (audit F16): the row answers what the agent does
+            // or what it needs before how it is implemented. An unresolved
+            // runtime reports its actionable readiness reason; otherwise the
+            // contract's own description/command hint carries the purpose.
+            const purposeLine = bot.runtimeReady === false && bot.runtimeReadinessReason
+              ? bot.runtimeReadinessReason
+              : bot.description || bot.commandHint;
             return (
               <React.Fragment key={bot.id}>
                 <Pressable
                   style={({ pressed }) => [styles.flatRow, { opacity: pressed ? 0.6 : 1 }]}
                   onPress={() => navigation.navigate('BotDetail', { botId: bot.id })}
                   accessibilityRole="button"
-                  accessibilityLabel={`View ${bot.name}`}
+                  accessibilityLabel={t('agents.viewLabel', { name: bot.name, status: statusLabel })}
                 >
                   <AgentIcon category={bot.category} name={bot.name} size={20} color={colors.textPrimary} />
                   <View style={styles.flatRowText}>
-                    <Text style={[styles.flatRowTitle, { color: colors.textPrimary }]} numberOfLines={1}>
-                      {bot.name}
-                    </Text>
-                    <Text style={[styles.flatRowSubtitle, { color: colors.textSecondary }]} numberOfLines={1}>
+                    {/* Name and status reflow together: at large text the
+                        status wraps beneath a long name instead of pinning
+                        it to a single unshrinkable line. */}
+                    <View style={styles.agentTitleRow}>
+                      <Text style={[styles.agentTitleText, { color: colors.textPrimary }]}>
+                        {bot.name}
+                      </Text>
+                      <Text style={[styles.agentStatusInline, { color: statusColor }]}>
+                        {statusLabel}
+                      </Text>
+                    </View>
+                    {purposeLine ? (
+                      <Text
+                        style={[
+                          styles.flatRowSubtitle,
+                          { color: bot.runtimeReady === false ? colors.warningText : colors.textSecondary },
+                        ]}
+                        numberOfLines={2}
+                      >
+                        {purposeLine}
+                      </Text>
+                    ) : null}
+                    <Text style={[styles.flatRowCaveat, { color: colors.textMuted }]} numberOfLines={1}>
                       {runtimeLabel}
                       {lastVersion !== null ? ` · v${lastVersion}` : ''}
                     </Text>
                   </View>
-                  <Text style={[styles.providerStatus, { color: statusColor }]} numberOfLines={1}>
-                    {statusLabel}
-                  </Text>
                   <AppIcon name="forward" size={IconSize.sm} color="textMuted" opticalCenter accessible={false} />
                 </Pressable>
                 {!isLast ? (

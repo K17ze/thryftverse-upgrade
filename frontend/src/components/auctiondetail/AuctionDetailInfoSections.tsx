@@ -1,23 +1,20 @@
 import React from 'react';
-import { View, Text, Pressable, StyleSheet } from 'react-native';
-import { Ionicons } from '@expo/vector-icons';
+import { View, Text, StyleSheet, useWindowDimensions } from 'react-native';
 import { useAppTheme } from '../../theme/ThemeContext';
 import { useFormattedPrice } from '../../hooks/useFormattedPrice';
-import { haptics } from '../../utils/haptics';
-import { Space, FontFamily, PressScale } from '../../theme/designTokens';
+import { Space, FontFamily } from '../../theme/designTokens';
+import { AuctionDescription } from './AuctionDescription';
 import { TypographyV2 } from '../../theme/typography.v2';
-import {
-  CommerceDetailSection,
-  CommerceDetailDisclosureRow,
-  CommerceDetailUnavailableInline,
-} from '../commerce/detail';
-import { CategoryEvidence } from '../commerce';
+import { CommerceDetailSection } from '../commerce/detail/CommerceDetailSection';
+import { CommerceDetailDisclosureRow } from '../commerce/detail/CommerceDetailDisclosureRow';
+import { CommerceDetailUnavailableInline } from '../commerce/detail/CommerceDetailUnavailableInline';
+import { CategoryEvidence } from '../commerce/CategoryEvidence';
 import { resolveEvidenceGroups } from '../../platform/commerce/categoryEvidence';
 import { formatBidActivityRow } from '../../utils/auctionDetailLogic';
 import type { AuctionBidActivity, AuctionDetail } from '../../services/marketApi';
 
 interface Props {
-  auction: AuctionDetail;
+  auction: Pick<AuctionDetail, 'id' | 'description' | 'category' | 'brand' | 'conditionLabel' | 'bidCount'>;
   bidActivity: AuctionBidActivity[];
   bidActivityError: boolean;
   isLive: boolean;
@@ -41,34 +38,30 @@ export function AuctionDetailInfoSections({
   auction,
   bidActivity,
   bidActivityError,
-  isLive,
   serverNow,
   onViewAllBids,
   onShowRules,
 }: Props) {
   const { colors } = useAppTheme();
   const { formatFromFiat } = useFormattedPrice();
+  const { width, fontScale } = useWindowDimensions();
 
   return (
     <>
       <CommerceDetailSection label="Item details" divider variant="editorial">
         {auction.description && (
-          <View style={styles.descriptionBlock}>
-            <Text style={[styles.descriptionText, { color: colors.textPrimary }]}>
-              {auction.description}
-            </Text>
-          </View>
+          <AuctionDescription key={`${auction.id}:${auction.description}`} description={auction.description} />
         )}
 
         {(() => {
           const evidenceGroups = resolveEvidenceGroups({
             category: auction.category,
             brand: auction.brand,
-            condition: auction.conditionLabel,
+            // The dedicated condition row below owns this fact.
             description: auction.description,
           });
           return evidenceGroups.length > 0 ? (
-            <CategoryEvidence groups={evidenceGroups} />
+            <CategoryEvidence groups={evidenceGroups} embedded />
           ) : null;
         })()}
 
@@ -94,39 +87,32 @@ export function AuctionDetailInfoSections({
         ) : auction.bidCount > 0 && bidActivity.length > 0 ? (
           (() => {
             const topBid = formatBidActivityRow(bidActivity[0], 0, formatFromFiat, serverNow);
+            const stacked = fontScale > 1.2 || width < 390 || topBid.amountText.length > 14;
             return (
-              <View style={styles.bidActivityRow} accessibilityLiveRegion="polite">
+              <View style={[styles.bidActivityRow, stacked && styles.bidActivityStacked]}>
                 <View style={styles.bidActivityLeft}>
-                  <Text style={[styles.bidActivityLabel, { color: colors.textSecondary }]} numberOfLines={1}>
+                  <Text style={[styles.bidActivityLabel, { color: colors.textSecondary }]}>
                     Leading bid
                   </Text>
-                  <Text style={[styles.bidActivityBidder, { color: colors.textPrimary }]} numberOfLines={1}>
+                  <Text style={[styles.bidActivityBidder, { color: colors.textPrimary }]}>
                     {topBid.bidderLabel}
                     {topBid.relativeTime ? `  ·  ${topBid.relativeTime}` : ''}
                   </Text>
                 </View>
-                <Text style={[styles.bidActivityAmount, { color: colors.textPrimary }]}>
+                <Text style={[styles.bidActivityAmount, stacked && styles.bidActivityAmountStacked, { color: colors.textPrimary }]}>
                   {topBid.amountText}
                 </Text>
               </View>
             );
           })()
         ) : null}
-        {!bidActivityError && auction.bidCount > 0 && (
-          <Pressable
-            style={({ pressed }) => [styles.bidActivityViewAll, pressed && { opacity: 0.85, transform: [{ scale: PressScale.gentle }] }]}
-            onPress={() => {
-              haptics.selection();
-              onViewAllBids();
-            }}
-            accessibilityRole="button"
-            accessibilityLabel={`View all ${auction.bidCount} bids`}
-          >
-            <Text style={[styles.bidActivityViewAllText, { color: colors.brand }]}>
-              {`View all ${auction.bidCount} ${auction.bidCount === 1 ? 'bid' : 'bids'}`}
-            </Text>
-            <Ionicons name="chevron-forward" size={14} color={colors.brand} />
-          </Pressable>
+        {auction.bidCount > 0 && (
+          <CommerceDetailDisclosureRow
+            label="View bid history"
+            count={auction.bidCount}
+            onPress={onViewAllBids}
+            accessibilityLabel={`View all ${auction.bidCount} ${auction.bidCount === 1 ? 'bid' : 'bids'}`}
+          />
         )}
         </CommerceDetailSection>
       )}
@@ -157,6 +143,8 @@ const styles = StyleSheet.create({
     gap: Space.xs,
     flexShrink: 1,
   },
+  bidActivityStacked: { flexDirection: 'column', alignItems: 'flex-start' },
+  bidActivityAmountStacked: { textAlign: 'left' },
   bidActivityLabel: {
     fontSize: TypographyV2.meta.size,
     lineHeight: TypographyV2.meta.lineHeight,
@@ -175,17 +163,7 @@ const styles = StyleSheet.create({
     letterSpacing: TypographyV2.priceList.letterSpacing,
     fontVariant: ['tabular-nums'],
     textAlign: 'right',
-  },
-  bidActivityViewAll: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: Space.xs,
-    paddingVertical: Space.sm,
-  },
-  bidActivityViewAllText: {
-    fontSize: TypographyV2.body.size,
-    lineHeight: TypographyV2.body.lineHeight,
-    fontFamily: FontFamily.semibold,
+    flexShrink: 1,
   },
   // ── Item details rows (per spec 02_AUCTION §5) ──
   itemDetailRow: {
@@ -193,6 +171,7 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'space-between',
     gap: Space.sm,
+    flexWrap: 'wrap',
     paddingVertical: Space.sm,
   },
   itemDetailLabel: {
@@ -201,19 +180,9 @@ const styles = StyleSheet.create({
     fontFamily: FontFamily.regular,
   },
   itemDetailValue: {
-    fontSize: TypographyV2.priceList.size,
-    lineHeight: TypographyV2.priceList.lineHeight,
-    fontFamily: FontFamily.bold,
-    fontVariant: ['tabular-nums'],
-  },
-  descriptionText: {
-    fontSize: TypographyV2.body.size,
-    lineHeight: TypographyV2.body.lineHeight + 4,
-    fontFamily: FontFamily.regular,
-  },
-  descriptionBlock: {
-    paddingHorizontal: Space.md,
-    paddingTop: Space.md,
-    paddingBottom: Space.sm,
+    fontSize: TypographyV2.bodyStrong.size,
+    lineHeight: TypographyV2.bodyStrong.lineHeight,
+    fontFamily: TypographyV2.bodyStrong.fontFamily,
+    flexShrink: 1,
   },
 });

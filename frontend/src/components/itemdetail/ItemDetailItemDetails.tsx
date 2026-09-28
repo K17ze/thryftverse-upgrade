@@ -268,7 +268,7 @@ export function ItemDetailItemDetails({
           seaTrialAvailable: pickStr('seaTrialAvailable'),
         });
         return evidenceGroups.length > 0 ? (
-          <CategoryEvidence groups={evidenceGroups} />
+          <CategoryEvidence groups={evidenceGroups} embedded />
         ) : null;
       })()}
 

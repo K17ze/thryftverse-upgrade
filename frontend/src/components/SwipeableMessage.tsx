@@ -16,6 +16,16 @@ import { Radius } from '../theme/designTokens';
 import { useHaptic } from '../hooks/useHaptic';
 import { useReducedMotion } from '../hooks/useReducedMotion';
 
+/**
+ * The swipe-right reply gesture has no visible affordance, so the same
+ * action is offered to screen readers through this context: a descendant
+ * MessageBubble turns it into a labelled `reply` accessibility action
+ * (iOS rotor / TalkBack actions menu) that invokes the identical
+ * callback — preserving the quoted-message context the gesture carries.
+ * `null` when no reply swipe is offered for this row.
+ */
+export const SwipeReplyContext = React.createContext<(() => void) | null>(null);
+
 interface SwipeableMessageProps {
   children: React.ReactNode;
   isMe: boolean;
@@ -42,20 +52,29 @@ export function SwipeableMessage({
 
   const triggerReply = React.useCallback(() => {
     onReply?.();
-    haptic.light();
-  }, [onReply, haptic]);
+  }, [onReply]);
 
   const triggerActions = React.useCallback(() => {
     onActions?.();
-    haptic.light();
-  }, [onActions, haptic]);
+  }, [onActions]);
 
+  // Screen-reader equivalent of the swipe: reply is only offered on the
+  // leading edge (other people's messages). For my own messages the swipe
+  // opens the same actions menu the bubble already exposes as a
+  // `longpress` action, so no second identical action is needed.
+  const replyAction = !isMe && onReply ? triggerReply : null;
+
+  // Single deliberate haptic: it fires once when the finger crosses the
+  // commit threshold (same convention as SwipeableRow's selection haptic),
+  // telling the user the swipe will act on release. Firing a second haptic
+  // when the action runs would double-signal one gesture; the action's own
+  // visible outcome (reply preview / actions sheet) is the confirmation.
   const triggerThresholdHaptic = React.useCallback(() => {
-    haptic.light();
+    haptic.selection();
   }, [haptic]);
 
   const panGesture = React.useMemo(() => {
-    return Gesture.Pan()
+    const gesture = Gesture.Pan()
       .enabled(isSwipeEnabled)
       .activeOffsetX(isMe ? [-10, 0] : [0, 10])
       .failOffsetY([-12, 12])
@@ -93,6 +112,9 @@ export function SwipeableMessage({
         }
       })
       .onEnd((event) => {
+        // Commit only. The reset lives in onFinalize below so every
+        // termination path — end, fail, cancel, or an interrupted gesture —
+        // returns the row to rest instead of keeping a stale translation.
         const { translationX } = event;
 
         if (!isMe && translationX >= replyThreshold) {
@@ -100,13 +122,21 @@ export function SwipeableMessage({
         } else if (isMe && translationX <= -replyThreshold) {
           runOnJS(triggerActions)();
         }
-
-        hasTriggeredHaptic.value = false;
-        translateX.value = withTiming(0, {
-          duration: reducedMotion ? 0 : 200,
-          easing: Easing.out(Easing.cubic),
-        });
       });
+
+    // onFinalize is the single unconditional cleanup point (RNGH ≥2.x):
+    // it runs after end, fail, cancel and interruption alike, so the row
+    // always returns to rest. Optional call — minimal gesture test doubles
+    // may not stub every lifecycle callback.
+    gesture.onFinalize?.(() => {
+      hasTriggeredHaptic.value = false;
+      translateX.value = withTiming(0, {
+        duration: reducedMotion ? 0 : 200,
+        easing: Easing.out(Easing.cubic),
+      });
+    });
+
+    return gesture;
   }, [isSwipeEnabled, isMe, replyThreshold, reducedMotion, triggerReply, triggerActions, triggerThresholdHaptic]);
 
   const foregroundStyle = useAnimatedStyle(() => ({
@@ -156,7 +186,9 @@ export function SwipeableMessage({
 
         {/* Foreground Message */}
         <Reanimated.View style={[styles.messageContainer, foregroundStyle]}>
-          {children}
+          <SwipeReplyContext.Provider value={replyAction}>
+            {children}
+          </SwipeReplyContext.Provider>
         </Reanimated.View>
       </View>
     </GestureDetector>
