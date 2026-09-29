@@ -20,6 +20,7 @@ import { Skeleton } from '@/components/ui/Skeleton';
 import { useToast } from '@/components/ui/Toast';
 import { ApiRequestError, isRecord } from '@/lib/api/http';
 import {
+  useAssertHandoff,
   useFulfilmentQueue,
   useMarkPosted,
   useProposeDispatchExtension,
@@ -56,6 +57,7 @@ export default function FulfilmentPage() {
   const { data: jobs, isLoading, isError, refetch } = useFulfilmentQueue();
   const markPosted = useMarkPosted();
   const proposeExtension = useProposeDispatchExtension();
+  const assertHandoff = useAssertHandoff();
   const [tab, setTab] = useState<Tab>('to-post');
   /** The job the dispatch sheet is collecting tracking for — null closed. */
   const [dispatchJob, setDispatchJob] = useState<FulfilmentJob | null>(null);
@@ -111,6 +113,37 @@ export default function FulfilmentPage() {
       return;
     }
     setDispatchJob(job);
+  };
+
+  /**
+   * Seller drop-off claim — POST /orders/:id/fulfilment/handoff-assertion.
+   * The parcel is already with the carrier but no scan has landed, so the
+   * ship write can't run; this records the claim as a parcel event and
+   * the row keeps saying "waiting for the carrier scan" — it never marks
+   * the job posted. Whatever tracking/carrier the job already holds
+   * travels with the claim.
+   */
+  const submitHandoff = (input: {
+    jobId: string;
+    trackingNumber?: string;
+    carrier?: string;
+    labelUrl?: string;
+  }) => {
+    assertHandoff.mutate(input, {
+      onSuccess: () =>
+        show('Handoff recorded — waiting for the carrier scan to confirm tracking.', 'success'),
+      onError: (err) =>
+        show(
+          err instanceof ApiRequestError &&
+            isRecord(err.details) &&
+            typeof err.details.error === 'string'
+            ? err.details.error
+            : err instanceof Error && err.message === 'HANDOFF_UNAVAILABLE'
+              ? 'This order is no longer awaiting dispatch.'
+              : 'Could not record the handoff — try again',
+          'error',
+        ),
+    });
   };
 
   return (
@@ -193,7 +226,14 @@ export default function FulfilmentPage() {
                 }
                 onMarkPosted={markJobPosted}
                 onExtendDeadline={(j) => setExtensionJob(j)}
-                isMarking={markPosted.isPending}
+                onAssertHandoff={(j) =>
+                  submitHandoff({
+                    jobId: j.id,
+                    trackingNumber: j.trackingNumber,
+                    carrier: j.service || undefined,
+                  })
+                }
+                isMarking={markPosted.isPending || assertHandoff.isPending}
               />
             ))}
           </ul>
@@ -206,12 +246,21 @@ export default function FulfilmentPage() {
       <DispatchSheet
         open={dispatchJob != null}
         defaultCarrier={dispatchJob?.service || null}
-        busy={markPosted.isPending}
+        busy={markPosted.isPending || assertHandoff.isPending}
         onSubmit={({ trackingNumber, carrier }) => {
           const job = dispatchJob;
           setDispatchJob(null);
           if (job) {
             submitPosted({ jobId: job.id, trackingNumber, carrier });
+          }
+        }}
+        /* The sheet's recovery path — seller already dropped the parcel
+           off; record the claim with whatever was typed. */
+        onAssertHandoff={({ trackingNumber, carrier }) => {
+          const job = dispatchJob;
+          setDispatchJob(null);
+          if (job) {
+            submitHandoff({ jobId: job.id, trackingNumber, carrier });
           }
         }}
         onClose={() => setDispatchJob(null)}

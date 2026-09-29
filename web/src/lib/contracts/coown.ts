@@ -70,6 +70,10 @@ export interface CoOwnAssetRights {
   votingRights: string | null;
   exitRights: string | null;
   feeRights: string | null;
+  /** Set when a published right is marked to-be-confirmed — reason and
+   *  expected confirmation date, emitted from coown_rights. */
+  tbcEtaDate: string | null;
+  tbcReason: string | null;
 }
 
 /** GET /co-own/assets/:id → item.riskDisclosures — the published
@@ -112,6 +116,10 @@ export interface CoOwnAsset {
   settlementMode: CoOwnSettlementMode;
   issuerJurisdiction: string | null;
   marketMovePct24h: number | null;
+  /** The market's listing tier — 'preview' means the asset exists but
+   *  the issuer hasn't signed the recourse agreement, so the book is
+   *  sealed. Absent on fixtures and older rows; treated as live. */
+  listingTier?: string | null;
   holders: number;
   volume24hGbp: number | null;
   /** Top-of-book; null price means no orders on that side. */
@@ -160,12 +168,56 @@ export interface CoOwnAssetDossier {
   appraisalValueGbp: number | null;
   appraisalValuedAt: string | null;
   appraisalValuer: string | null;
-  buyerProtection: string | null;
+  /** Backend emits a boolean (coown_assets.buyer_protection) — true means
+   *  the asset is covered, not a description string. */
+  buyerProtection: boolean | null;
   escrowPartner: string | null;
   safeguardingPartner: string | null;
   legalVehicleName: string | null;
   legalVehicleType: string | null;
   legalVehicleJurisdiction: string | null;
+  /** Document links filed with the platform — render as outbound chips;
+   *  null means nothing filed, never a fabricated URL. */
+  escrowTermsUrl: string | null;
+  safeguardingTermsUrl: string | null;
+  safeguardingEvidenceUrl: string | null;
+  buyerProtectionTermsUrl: string | null;
+  safeguarded: boolean | null;
+  listingTier: string | null;
+  settlementEtaHours: number | null;
+  recourseAgreementSigned: boolean | null;
+  recourseStatus: string | null;
+  totalTradedValueGbp: number | null;
+  activeVerificationDemands: number | null;
+  lockupEndDate: string | null;
+  lockupMonths: number | null;
+  /** Days since the appraisal is considered stale — null when fresh or
+   *  unappraised. */
+  appraisalStaleDays: number | null;
+  staleMarkDays: number | null;
+  /** Structured fee sheet — replaces any hard-coded rate in the UI.
+   *  All fields nullable; absent means the issuer filed none. */
+  feeSchedule: {
+    managementFeePct: number | null;
+    performanceFeePct: number | null;
+    platformFeePct: number | null;
+    sourcingFeeGbp: number | null;
+  } | null;
+  /** Platform-level secondary-market trading fee (decimal rate) — the
+   *  asset-level feeSchedule holds issuer fees; this is the trade fee the
+   *  execution path charges. */
+  tradingFeeRate: number | null;
+  trustAuditEvents: Array<{
+    eventType: string;
+    createdAt: string;
+    changedByLabel: string | null;
+  }>;
+  marketAuditEvents: Array<{
+    id: number | string;
+    eventType: string;
+    payload: unknown;
+    createdAt: string;
+  }>;
 }
 
 /**
@@ -282,6 +334,10 @@ export interface FeeSchedule {
 export interface CoOwnOrder {
   id: string;
   assetId: string;
+  /** Market title — carried by the aggregate my-orders read so rows
+   *  render without a second asset lookup. Absent elsewhere; the caller
+   *  falls back to its own asset map. */
+  assetTitle?: string;
   side: TradeSide;
   orderType: OrderType;
   unitPriceGbp: number;
@@ -318,6 +374,9 @@ export interface CoOwnPosition {
   markPriceGbp?: number | null;
   markBasis?: 'last_trade' | 'reference' | 'offering' | 'none';
   markTimestamp?: string | null;
+  /** The projection's own staleness measure for the mark — preferred
+   *  over deriving age client-side from markTimestamp (clock skew). */
+  markAgeSeconds?: number | null;
   marketValueGbp?: number | null;
   costBasisGbp?: number;
   unrealisedPnlGbp?: number | null;
@@ -379,6 +438,12 @@ export interface Distribution {
   scheduledFor: string;
   /** Wire `exDate` verbatim — null stays null, never a NaN date. */
   exDate?: string | null;
+  /** Wire `recordDate` — the holder-snapshot date; null when the row
+   *  was written before the stage dates existed. */
+  recordDate?: string | null;
+  /** Wire `projectedPayableDate` — the expected pay date; null until
+   *  the backend schedules one. `scheduledFor` already folds this in. */
+  projectedPayableDate?: string | null;
 }
 
 /** Per-asset payout facts for anonymous callers — the public aggregates

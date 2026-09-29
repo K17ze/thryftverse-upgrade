@@ -4,8 +4,10 @@
  * DsaReportSheet — the DSA Art. 16 notice-and-action flow, distinct from
  * the standard report: a notice must name the content's location, explain
  * why it is illegal (own reason taxonomy), carry the reporter's contact
- * email, and include a good-faith declaration. Submits as a real support
- * case — the receipt links to the case thread.
+ * email, and include a good-faith declaration. There is no dedicated DSA
+ * notice route — mobile files the notice as a support conversation, so
+ * live mode opens one (POST /support/conversations) and posts the notice
+ * as its first message; the receipt carries the conversation reference.
  *
  * Reuses the report suite's reason list, evidence grid and success receipt
  * so the two flows share one grammar.
@@ -17,6 +19,11 @@ import { Icon } from '@/components/ui/Icon';
 import { Sheet } from '@/components/ui/Sheet';
 import { useToast } from '@/components/ui/Toast';
 import { useSupportActions } from '@/components/support/useSupportTickets';
+import { DATA_MODE } from '@/lib/api/client';
+import {
+  createSupportConversation,
+  sendSupportConversationMessage,
+} from '@/lib/api/services/support';
 import { useSession } from '@/lib/session/SessionProvider';
 import {
   DSA_REPORT_REASONS,
@@ -121,22 +128,35 @@ export function DsaReportSheet({ open, onClose }: DsaReportSheetProps) {
     setSending(true);
     const reasonLabel =
       DSA_REPORT_REASONS.find((r) => r.key === reason)?.label ?? reason;
+    const noticeBody =
+      `DSA notice — ${reasonLabel}` +
+      `\nContent: ${location.trim()}` +
+      `\nReporter email: ${email.trim()}` +
+      `\n\n${details.trim()}` +
+      `\n\nGood-faith declaration: confirmed` +
+      (evidence.length
+        ? ` [${evidence.length} attachment(s) uploaded by reporter]`
+        : '');
     try {
-      const ticket = await createTicket({
-        topicId: 'other',
-        orderRef: null,
-        message:
-          `DSA notice — ${reasonLabel}` +
-          `\nContent: ${location.trim()}` +
-          `\nReporter email: ${email.trim()}` +
-          `\n\n${details.trim()}` +
-          `\n\nGood-faith declaration: confirmed` +
-          (evidence.length
-            ? ` [${evidence.length} attachment(s) uploaded by reporter]`
-            : ''),
-      });
-      setReportId(ticket.ref ?? ticket.id.toUpperCase());
-      setTicketId(ticket.id);
+      if (DATA_MODE === 'live') {
+        // No dedicated notice route exists — the conversational support
+        // channel is the intake (mobile parity). 'general' kind: a
+        // 'report' context would demand an existing report id.
+        const conversation = await createSupportConversation({
+          contextKind: 'general',
+        });
+        await sendSupportConversationMessage(conversation.id, noticeBody);
+        setReportId(conversation.id);
+        setTicketId(null);
+      } else {
+        const ticket = await createTicket({
+          topicId: 'other',
+          orderRef: null,
+          message: noticeBody,
+        });
+        setReportId(ticket.ref ?? ticket.id.toUpperCase());
+        setTicketId(ticket.id);
+      }
       setSubmittedAt(
         new Date().toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' }),
       );

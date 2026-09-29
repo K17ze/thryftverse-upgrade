@@ -74,7 +74,15 @@ export const useCoOwnAlerts = create<PriceAlertsState>()(
       toggleAlert: (id) =>
         set((s) => ({
           alerts: s.alerts.map((a) =>
-            a.id === id ? { ...a, active: !a.active } : a,
+            a.id === id
+              ? {
+                  ...a,
+                  active: !a.active,
+                  // Re-activating a fired alert re-arms it — the same
+                  // contract the backend applies on activate.
+                  triggeredAt: a.active ? a.triggeredAt : null,
+                }
+              : a,
           ),
         })),
       removeAlert: (id) =>
@@ -146,6 +154,10 @@ export function useCoOwnAlertsApi() {
     return {
       alerts: (liveQuery.data ?? []) as CoOwnAlert[],
       ready: isGuest || liveQuery.data !== undefined,
+      // A failed alerts read is not "still loading" — without this the
+      // surface skeletons forever.
+      error: liveQuery.isError,
+      refetch: () => void liveQuery.refetch(),
       requiresAuth: isGuest,
       source: 'server' as const,
       createAlert: async (input: {
@@ -154,19 +166,28 @@ export function useCoOwnAlertsApi() {
         targetPriceGbp: number;
       }) => liveActions.createAlert(input),
       // The backend re-arms a fired alert on activate (triggered_at
-      // clears server-side) — pass the row, not just the id.
-      toggleAlert: (alert: CoOwnAlert) =>
-        void liveActions.toggleAlert({
+      // clears server-side) — pass the row, not just the id. Rejects
+      // on rollback so the caller toasts the failure, not a false
+      // success.
+      toggleAlert: async (alert: CoOwnAlert) => {
+        const ok = await liveActions.toggleAlert({
           ...alert,
           triggeredAt: alert.triggeredAt ?? null,
-        }),
-      removeAlert: (id: string) => void liveActions.removeAlert(id),
+        });
+        if (!ok) throw new Error("Couldn't update the alert — the change didn't save");
+      },
+      removeAlert: async (id: string) => {
+        const ok = await liveActions.removeAlert(id);
+        if (!ok) throw new Error("Couldn't delete the alert — the change didn't save");
+      },
     };
   }
 
   return {
     alerts: hydrated ? storedAlerts : [],
     ready: hydrated,
+    error: false,
+    refetch: () => undefined,
     requiresAuth: false,
     source: 'device' as const,
     createAlert: async (input: {
@@ -177,7 +198,13 @@ export function useCoOwnAlertsApi() {
       createLocal(input);
       return true;
     },
-    toggleAlert: (alert: CoOwnAlert) => toggleLocal(alert.id),
-    removeAlert: (id: string) => removeLocal(id),
+    // Synchronous device-store writes can't fail — resolve so callers
+    // share one promise-returning path with the server branch.
+    toggleAlert: async (alert: CoOwnAlert) => {
+      toggleLocal(alert.id);
+    },
+    removeAlert: async (id: string) => {
+      removeLocal(id);
+    },
   };
 }

@@ -6,20 +6,29 @@
  * open), identity + state label, a hairline, then the operational block:
  * prefixed price on the left, the one truthful action on the right, and a
  * leading line (time or outcome) with the bid count. Whole row deep-links
- * to /auctions/[id] — the only action the mobile surface offers.
+ * to /auctions/[id]; lifecycle writes the row qualifies for (cancel a
+ * running auction, accept a below-reserve hammer) sit in a confirm strip
+ * below the link — the destructive verbs arm inline, never window.confirm.
  */
 
+import { useState } from 'react';
 import Link from 'next/link';
 import { AppImage } from '@/components/ui/AppImage';
 import { Icon } from '@/components/ui/Icon';
 import type { AuctionViewModel } from '@/lib/contracts/auction';
 import { useListingIds } from '@/lib/hooks/listing-resolution';
+import {
+  useAcceptHighestBid,
+  useCancelAuction,
+} from '@/lib/hooks/auction-queries';
 import { MY_LISTING_STATS, listingById } from '@/lib/data/fixtures';
 import { DATA_MODE } from '@/lib/api/client';
 import { formatPrice } from '@/lib/utils/format';
 import {
   resolveSellerRowPresentation,
+  sellerLifecycleActions,
   sellerPrice,
+  type SellerLifecycleAction,
   type SellerRowTone,
 } from './sellerAuctionModel';
 
@@ -30,6 +39,129 @@ const TONE_CLASS: Record<SellerRowTone, string> = {
   secondary: 'text-text-secondary',
   muted: 'text-text-muted',
 };
+
+/** The quiet text-action grammar shared by the idle and confirming
+ *  states — same voice as the bag row's inline confirms. */
+function TextAction({
+  onClick,
+  tone = 'default',
+  disabled = false,
+  children,
+}: {
+  onClick: () => void;
+  tone?: 'default' | 'danger';
+  disabled?: boolean;
+  children: React.ReactNode;
+}) {
+  return (
+    <button
+      type="button"
+      onClick={onClick}
+      disabled={disabled}
+      className={`pressable -my-1.5 rounded-sm py-2 text-caption font-medium disabled:opacity-50 ${
+        tone === 'danger'
+          ? 'text-danger-text hover:text-danger-text'
+          : 'text-text-muted hover:text-text-primary'
+      }`}
+    >
+      {children}
+    </button>
+  );
+}
+
+/**
+ * The row's lifecycle strip — idle shows the verbs the server would
+ * honour right now; armed swaps to a one-line confirm; the mutation's
+ * verbatim server error stays in place until the next attempt. Accept is
+ * live-mode only: a fixture accept would mint a sale with no order
+ * behind it, so the demo never offers the button.
+ */
+function SellerRowActions({ auction }: { auction: AuctionViewModel }) {
+  const actions = sellerLifecycleActions(auction).filter(
+    (action) => action !== 'accept_highest_bid' || DATA_MODE === 'live',
+  );
+  const [confirming, setConfirming] = useState<SellerLifecycleAction | null>(null);
+  const [error, setError] = useState<string | null>(null);
+  const cancel = useCancelAuction(auction.id);
+  const acceptHighest = useAcceptHighestBid(auction.id);
+  const pending = cancel.isPending || acceptHighest.isPending;
+
+  const commit = (action: SellerLifecycleAction) => {
+    setError(null);
+    const options = {
+      onSuccess: () => setConfirming(null),
+      onError: (e: unknown) =>
+        setError(
+          e instanceof Error && e.message
+            ? e.message
+            : 'The auction could not be updated — try again.',
+        ),
+    };
+    if (action === 'cancel') cancel.mutate({}, options);
+    else acceptHighest.mutate(undefined, options);
+  };
+
+  if (actions.length === 0) return null;
+
+  return (
+    <div className="pb-3 pl-28">
+      {confirming == null ? (
+        <div className="flex items-center justify-end gap-4">
+          {actions.includes('accept_highest_bid') ? (
+            <TextAction onClick={() => setConfirming('accept_highest_bid')}>
+              Accept {formatPrice(auction.currentBid)}
+            </TextAction>
+          ) : null}
+          {actions.includes('cancel') ? (
+            <TextAction tone="danger" onClick={() => setConfirming('cancel')}>
+              Cancel auction
+            </TextAction>
+          ) : null}
+        </div>
+      ) : confirming === 'cancel' ? (
+        <div className="flex flex-wrap items-center justify-between gap-2">
+          <span className="text-caption text-text-secondary">
+            Cancel this auction
+            {auction.bidCount > 0 ? ' — every bidder is notified' : ''}? This
+            can&rsquo;t be undone.
+          </span>
+          <span className="flex shrink-0 items-center gap-4">
+            <TextAction
+              tone="danger"
+              disabled={pending}
+              onClick={() => commit('cancel')}
+            >
+              {pending ? 'Cancelling…' : 'Cancel auction'}
+            </TextAction>
+            <TextAction disabled={pending} onClick={() => setConfirming(null)}>
+              Keep
+            </TextAction>
+          </span>
+        </div>
+      ) : (
+        <div className="flex flex-wrap items-center justify-between gap-2">
+          <span className="tnum text-caption text-text-secondary">
+            Sell to the top bidder for {formatPrice(auction.currentBid)}? They
+            get 72h to pay.
+          </span>
+          <span className="flex shrink-0 items-center gap-4">
+            <TextAction disabled={pending} onClick={() => commit('accept_highest_bid')}>
+              {pending ? 'Accepting…' : 'Accept bid'}
+            </TextAction>
+            <TextAction disabled={pending} onClick={() => setConfirming(null)}>
+              Keep
+            </TextAction>
+          </span>
+        </div>
+      )}
+      {error != null ? (
+        <p className="mt-1.5 text-caption text-danger-text" role="alert">
+          {error}
+        </p>
+      ) : null}
+    </div>
+  );
+}
 
 export function SellerAuctionRow({ auction }: { auction: AuctionViewModel }) {
   const presentation = resolveSellerRowPresentation(auction);
@@ -129,6 +261,7 @@ export function SellerAuctionRow({ auction }: { auction: AuctionViewModel }) {
           </span>
         </span>
       </Link>
+      <SellerRowActions auction={auction} />
     </li>
   );
 }

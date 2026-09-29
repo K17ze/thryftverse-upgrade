@@ -32,6 +32,7 @@ import { DispatchExtensionBanner } from '@/components/orders/DispatchExtensionBa
 import { InspectionBanner } from '@/components/orders/InspectionBanner';
 import { OrderTrackingSection } from '@/components/orders/OrderTrackingSection';
 import { OrderAuthenticationSection } from '@/components/orders/OrderAuthenticationSection';
+import { OrderReviewCard } from '@/components/orders/OrderReviewCard';
 import { ReturnCaseCard } from '@/components/orders/ReturnCaseCard';
 import { OrderSupportSection } from '@/components/orders/OrderSupportSection';
 import {
@@ -63,7 +64,7 @@ import {
   useOrderActions,
   useOrderReturnCase,
 } from '@/lib/hooks/queries';
-import { useOrder } from '@/lib/hooks/order-queries';
+import { useOrder, useOrderAuthentication } from '@/lib/hooks/order-queries';
 import { DATA_MODE } from '@/lib/api/client';
 import * as commerceService from '@/lib/api/services/commerce';
 import { parseApiError } from '@/lib/api/http';
@@ -173,6 +174,13 @@ export default function OrderDetailPage() {
   // Live mode pulls the real return case (404 → none); fixture mode reads
   // the enrichment store inline below — no flash for session-local cases.
   const { data: liveReturnCase } = useOrderReturnCase(orderId);
+
+  // Verification pipeline — GET /orders/:id/authentication. The pipeline
+  // record is Redis-backed and ephemeral; 'request_pending' is the honest
+  // state for a durable flag with no live record — never rendered as a
+  // check already running. Fixture mode resolves the session enrichment.
+  const authenticationQuery = useOrderAuthentication(orderId);
+  const authentication = authenticationQuery.data ?? null;
 
   // Live resolution — the listing and counterparty come off the wire
   // (GET /listings/:id, GET /sellers/:id); fixture keeps the catalogue.
@@ -358,6 +366,31 @@ export default function OrderDetailPage() {
       : enrichment.hasReview === true;
   const reviewIsAuto =
     DATA_MODE === 'live' ? orderReview?.isAuto === true : enrichment.reviewIsAuto === true;
+
+  // Seller's read of the order review — the persisted row carries the
+  // seller response (live GET /orders/:id/review; fixture enrichment).
+  // The respond affordance posts POST /reviews/:id/response and edits in
+  // place while the server's window is open.
+  const sellerReview = !isBuyer
+    ? DATA_MODE === 'live'
+      ? orderReview
+        ? {
+            rating: orderReview.rating,
+            text: orderReview.comment,
+            isAuto: orderReview.isAuto,
+            createdAt: orderReview.createdAt,
+            sellerResponse: orderReview.sellerResponse ?? null,
+          }
+        : null
+      : enrichment.hasReview
+        ? {
+            rating: enrichment.reviewRating ?? 0,
+            text: enrichment.reviewText ?? null,
+            isAuto: enrichment.reviewIsAuto === true,
+            sellerResponse: enrichment.reviewResponse ?? null,
+          }
+        : null
+    : null;
 
   const experience = resolveOrderExperience({
     status: order.status,
@@ -1009,13 +1042,22 @@ export default function OrderDetailPage() {
         </section>
       ) : null}
 
-      {/* Authentication — physical verification on qualifying orders */}
-      {order.verificationRequested || enrichment.authentication ? (
+      {/* Authentication — physical verification on qualifying orders.
+          Live reads GET /orders/:id/authentication: the pipeline record
+          when it's live, 'request_pending' when only the durable flag
+          exists. A failed read keeps the recorded-request state and says
+          the live detail couldn't refresh — never a fabricated verdict. */}
+      {order.verificationRequested || authentication ? (
         <section className="border-b border-border-subtle py-4">
           <OrderAuthenticationSection
-            authentication={enrichment.authentication ?? null}
+            authentication={authentication}
             verificationRequested={order.verificationRequested === true}
           />
+          {DATA_MODE === 'live' && authenticationQuery.isError ? (
+            <p className="mt-1 text-caption text-text-muted">
+              Verification status couldn’t be refreshed — the recorded request is shown.
+            </p>
+          ) : null}
         </section>
       ) : null}
 
@@ -1042,6 +1084,32 @@ export default function OrderDetailPage() {
             }
             onAction={(action) =>
               run(() => actions.returnCaseAction(action, returnCase.id), 'Return case updated.')
+            }
+          />
+        </section>
+      ) : null}
+
+      {/* Buyer review — the seller's read + their single public response
+          (POST /reviews/:id/response; edits version server-side until the
+          window closes). Buyer-facing surfaces render the response via
+          the reviews read — this card is the seller's authoring spot. */}
+      {sellerReview ? (
+        <section className="border-b border-border-subtle py-4">
+          <h2 className="mb-3 text-body-emphasis font-semibold text-text-primary">
+            Buyer review
+          </h2>
+          <OrderReviewCard
+            review={sellerReview}
+            busy={busy}
+            onSubmit={(text) =>
+              run(
+                () =>
+                  actions.respondToReview(
+                    DATA_MODE === 'live' ? orderReview!.id : order.id,
+                    text,
+                  ),
+                'Response published.',
+              )
             }
           />
         </section>
@@ -1216,6 +1284,20 @@ export default function OrderDetailPage() {
                   })
                 : actions.markDispatched(trackingNumber),
             'Marked as dispatched — the buyer has been notified.',
+          );
+        }}
+        /* Already dropped off but no scan yet — records the seller's
+           claim (handoff_asserted parcel event). It never marks the
+           order dispatched; the copy says what the carrier still owes. */
+        onAssertHandoff={(input) => {
+          setDispatchOpen(false);
+          run(
+            () =>
+              actions.assertHandoff({
+                trackingNumber: input.trackingNumber,
+                shippingProvider: input.carrier,
+              }),
+            'Handoff recorded — tracking updates when the carrier scans.',
           );
         }}
         onClose={() => setDispatchOpen(false)}

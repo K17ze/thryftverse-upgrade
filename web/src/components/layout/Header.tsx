@@ -253,6 +253,16 @@ export function Header() {
             {hydrated ? <CountBadge count={bagTotal} tone="neutral" /> : null}
           </span>
 
+          {/* Creator entry — desktop counterpart of the tab bar's centre
+              create button; lands on the /create picker (look | poster). */}
+          <IconButton
+            name="create"
+            aria-label={t('chrome.header.create')}
+            onClick={() => {
+              if (requireAuth('create_content')) router.push('/create');
+            }}
+            className="ml-1 hidden sm:inline-flex"
+          />
           <Button
             variant="primary"
             size="sm"

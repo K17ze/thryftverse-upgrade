@@ -245,6 +245,12 @@ export function SettingsView() {
           subtitle="Listings, orders and payouts"
           href="/seller-hub"
         />
+        <SettingsRow
+          icon="analytics"
+          label="Creator analytics"
+          subtitle="Views, engagement and earnings"
+          href="/creator-analytics"
+        />
       </SettingsSection>
 
       <SettingsSection title="Notifications">

@@ -49,8 +49,17 @@ interface MoodboardCommentsSheetProps {
   open: boolean;
   onClose: () => void;
   /** When set, the composer anchors new comments to this canvas item and
-   *  the list filters to that thread — opened from a canvas selection. */
+   *  the list filters to that thread — opened from a canvas selection.
+   *  This is the LISTING id: fixture comments and the display lookup key
+   *  on it. */
   anchorItemId?: string | null;
+  /** Live wire id of the anchored canvas item — moodboard_comments.item_id
+   *  stores the board-item ROW id, not the listing id. Live post + thread
+   *  filter key on this; undefined means the item isn't persisted yet. */
+  anchorRowId?: string | null;
+  /** Live row-id → listing-id map so a wire comment's `itemId` (row id)
+   *  can resolve its item title against `boardItems`. */
+  listingIdByRowId?: Record<string, string>;
   /** Owner/editor moderation — resolve any comment, delete anyone's. The
    *  author's own resolve/delete is always shown regardless. */
   canModerate?: boolean;
@@ -81,6 +90,8 @@ export function MoodboardCommentsSheet({
   open,
   onClose,
   anchorItemId,
+  anchorRowId,
+  listingIdByRowId,
   canModerate = false,
   canComment,
   boardItems,
@@ -107,7 +118,13 @@ export function MoodboardCommentsSheet({
   const rows = useMemo<RenderComment[]>(() => {
     if (LIVE) {
       const all = commentsQuery.data ?? [];
-      return (anchorItemId ? all.filter((c) => c.itemId === anchorItemId) : all).map(
+      // Wire `itemId` is the board-item row id — filter on the row-id
+      // anchor. An anchor with no persisted row yet shows an empty thread,
+      // never the board-level comments.
+      return (anchorItemId
+        ? all.filter((c) => anchorRowId != null && c.itemId === anchorRowId)
+        : all
+      ).map(
         (c: BoardComment) => ({
           id: c.id,
           authorName: c.authorName || null,
@@ -148,7 +165,7 @@ export function MoodboardCommentsSheet({
         mine: user?.id === c.authorId,
       };
     });
-  }, [commentsQuery.data, boardId, collab, hydrated, anchorItemId, user?.id]);
+  }, [commentsQuery.data, boardId, collab, hydrated, anchorItemId, anchorRowId, user?.id]);
 
   const anchorListing = useMemo(
     () => anchorItemId ? boardItems?.find((l) => l.id === anchorItemId) ?? (!LIVE ? listingById(anchorItemId) : null) : null,
@@ -161,7 +178,9 @@ export function MoodboardCommentsSheet({
     if (LIVE) {
       setPosting(true);
       try {
-        await createBoardComment(boardId, { body, itemId: anchorItemId ?? null });
+        // Wire anchor = board-item row id (not the listing id). An item
+        // not yet persisted posts board-level — never a wrong anchor.
+        await createBoardComment(boardId, { body, itemId: anchorRowId ?? null });
         setDraft('');
         show('Comment added', 'success');
       } catch (err) {
@@ -253,7 +272,13 @@ export function MoodboardCommentsSheet({
                 // delete = author or owner/editor (admins aside).
                 const canDelete = c.mine || canModerate;
                 const canResolve = canModerate || c.mine;
-                const itemTitle = !anchorListing ? boardItems?.find((l) => l.id === c.itemId)?.title ?? (!LIVE && c.itemId ? listingById(c.itemId)?.title ?? null : null) : null;
+                const itemListingId =
+                  LIVE && c.itemId ? listingIdByRowId?.[c.itemId] : c.itemId;
+                const itemTitle =
+                  !anchorListing && itemListingId
+                    ? boardItems?.find((l) => l.id === itemListingId)?.title ??
+                      (!LIVE ? listingById(itemListingId)?.title ?? null : null)
+                    : null;
                 return (
                   <li key={c.id} className="flex gap-3 py-3">
                     <Avatar

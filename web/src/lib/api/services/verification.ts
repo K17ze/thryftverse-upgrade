@@ -134,4 +134,36 @@ export async function createKycSession(data: {
   return payload.session;
 }
 
+// ── Age assurance (18+ self-declaration) ────────────────────────────────────
+//
+// The backend has no dedicated age-attestation endpoint — the mobile gate
+// (frontend/src/screens/AgeVerificationScreen.tsx) is device-local
+// SecureStore only and posts nothing. The real authenticated write surface
+// that can carry the declaration is PATCH /compliance/profile/:userId, whose
+// `metadata` field is merged (not replaced) onto user_compliance_profiles.
+// GET /compliance/age-assurance/:userId remains the read contract for the
+// ICO/Ofcom waterfall level (self_declared → pending → kyc_verified).
+
+/** PATCH /compliance/profile/:userId — records the member's 18+ self-
+ *  declaration on the account's compliance profile metadata. Self-scoped:
+ *  the server rejects any userId other than the session's own. */
+export async function recordAgeAttestation(userId: string): Promise<void> {
+  await fetchJson<{ ok: boolean }>(
+    `/compliance/profile/${encodeURIComponent(userId)}`,
+    {
+      method: 'PATCH',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        metadata: {
+          ageAttestation: {
+            declared18OrOver: true,
+            declaredAt: new Date().toISOString(),
+            surface: 'web',
+          },
+        },
+      }),
+    },
+  );
+}
+
 export type { VerificationDemandType };

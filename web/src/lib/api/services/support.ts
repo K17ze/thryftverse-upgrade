@@ -563,6 +563,65 @@ export async function appealSupportCase(caseId: string, reason: string): Promise
   });
 }
 
+// ── Support conversations ───────────────────────────────────────────────────
+// The conversational channel behind cases: POST /support/conversations is
+// the only unbound intake route — non-'general' kinds must carry a
+// contextId the route can project (CONTEXT_ID_REQUIRED otherwise). The DSA
+// notice-and-action flow rides this channel (mobile HelpSupportScreen does
+// the same); tickets stay order-bound.
+
+export type SupportContextKind =
+  | 'general'
+  | 'order'
+  | 'listing'
+  | 'payout'
+  | 'report'
+  | 'auction'
+  | 'coown_asset'
+  | 'catalog_import'
+  | 'media_job';
+
+export async function createSupportConversation(input: {
+  contextKind: SupportContextKind;
+  contextId?: string;
+  locale?: string;
+}): Promise<{ id: string }> {
+  const payload = await fetchJson<{
+    ok: boolean;
+    conversation?: { id?: string };
+  }>('/support/conversations', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({
+      contextKind: input.contextKind,
+      contextId: input.contextId,
+      locale: input.locale,
+    }),
+  });
+  if (!payload.ok || !payload.conversation?.id) {
+    throw new Error('Support conversation was not created');
+  }
+  return { id: payload.conversation.id };
+}
+
+/**
+ * POST /support/conversations/:id/messages — the first message carries the
+ * composed notice body (the route appends a customer message, 201).
+ */
+export async function sendSupportConversationMessage(
+  conversationId: string,
+  body: string,
+): Promise<void> {
+  await fetchJson(
+    `/support/conversations/${encodeURIComponent(conversationId)}/messages`,
+    {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ body }),
+    },
+  );
+}
+
 /**
  * CSAT — POST /support/conversations/:id/feedback. The rating is the
  * server's own binary vocabulary; `note` travels as `reason`.

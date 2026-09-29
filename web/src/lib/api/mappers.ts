@@ -1563,6 +1563,8 @@ export interface MarketCoOwnAssetApi {
     votingRights: string | null;
     exitRights: string | null;
     feeRights: string | null;
+    tbcEtaDate?: string | null;
+    tbcReason?: string | null;
   } | null;
   riskDisclosures?: {
     marketRisk: string | null;
@@ -1586,13 +1588,46 @@ export interface MarketCoOwnAssetApi {
   appraisalValueGbp?: number | null;
   appraisalValuedAt?: string | null;
   appraisalValuer?: string | null;
-  buyerProtection?: string | null;
+  buyerProtection?: boolean | null;
   escrowPartner?: string | null;
   safeguardingPartner?: string | null;
   legalVehicleName?: string | null;
   legalVehicleType?: string | null;
   legalVehicleJurisdiction?: string | null;
   provenance?: string | null;
+  escrowTermsUrl?: string | null;
+  safeguardingTermsUrl?: string | null;
+  safeguardingEvidenceUrl?: string | null;
+  buyerProtectionTermsUrl?: string | null;
+  safeguarded?: boolean | null;
+  listingTier?: string | null;
+  settlementEtaHours?: number | null;
+  recourseAgreementSigned?: boolean | null;
+  recourseStatus?: string | null;
+  totalTradedValueGbp?: number | null;
+  activeVerificationDemands?: number | null;
+  lockupEndDate?: string | null;
+  lockupMonths?: number | null;
+  appraisalStaleDays?: number | null;
+  staleMarkDays?: number | null;
+  feeSchedule?: {
+    managementFeePct?: number | null;
+    performanceFeePct?: number | null;
+    platformFeePct?: number | null;
+    sourcingFeeGbp?: number | null;
+  } | null;
+  tradingFeeRate?: number | null;
+  trustAuditEvents?: Array<{
+    eventType: string;
+    createdAt: string;
+    changedByLabel?: string | null;
+  }>;
+  marketAuditEvents?: Array<{
+    id: number | string;
+    eventType: string;
+    payload: unknown;
+    createdAt: string;
+  }>;
   createdAt: string;
 }
 
@@ -1642,8 +1677,15 @@ export function mapCoOwnAsset(a: MarketCoOwnAssetApi): CoOwnAsset {
     askDepthUnits: a.askDepthUnits ?? 0,
     offeringStatus: a.offeringStatus ?? (a.isOpen === false ? 'closed' : 'offering'),
     marketStatus: a.marketStatus ?? 'trading',
+    listingTier: a.listingTier ?? null,
     custodyNote: a.custodyNote ?? null,
-    rights: a.rights ?? null,
+    rights: a.rights
+      ? {
+          ...a.rights,
+          tbcEtaDate: a.rights.tbcEtaDate ?? null,
+          tbcReason: a.rights.tbcReason ?? null,
+        }
+      : null,
     riskDisclosures: a.riskDisclosures ?? null,
     dossier: {
       authenticityStatus: a.authenticityStatus ?? null,
@@ -1665,6 +1707,41 @@ export function mapCoOwnAsset(a: MarketCoOwnAssetApi): CoOwnAsset {
       legalVehicleName: a.legalVehicleName ?? null,
       legalVehicleType: a.legalVehicleType ?? null,
       legalVehicleJurisdiction: a.legalVehicleJurisdiction ?? null,
+      escrowTermsUrl: a.escrowTermsUrl ?? null,
+      safeguardingTermsUrl: a.safeguardingTermsUrl ?? null,
+      safeguardingEvidenceUrl: a.safeguardingEvidenceUrl ?? null,
+      buyerProtectionTermsUrl: a.buyerProtectionTermsUrl ?? null,
+      safeguarded: a.safeguarded ?? null,
+      listingTier: a.listingTier ?? null,
+      settlementEtaHours: a.settlementEtaHours ?? null,
+      recourseAgreementSigned: a.recourseAgreementSigned ?? null,
+      recourseStatus: a.recourseStatus ?? null,
+      totalTradedValueGbp: a.totalTradedValueGbp ?? null,
+      activeVerificationDemands: a.activeVerificationDemands ?? null,
+      lockupEndDate: a.lockupEndDate ?? null,
+      lockupMonths: a.lockupMonths ?? null,
+      appraisalStaleDays: a.appraisalStaleDays ?? null,
+      staleMarkDays: a.staleMarkDays ?? null,
+      feeSchedule: a.feeSchedule
+        ? {
+            managementFeePct: a.feeSchedule.managementFeePct ?? null,
+            performanceFeePct: a.feeSchedule.performanceFeePct ?? null,
+            platformFeePct: a.feeSchedule.platformFeePct ?? null,
+            sourcingFeeGbp: a.feeSchedule.sourcingFeeGbp ?? null,
+          }
+        : null,
+      tradingFeeRate: a.tradingFeeRate ?? null,
+      trustAuditEvents: (a.trustAuditEvents ?? []).map((e) => ({
+        eventType: e.eventType,
+        createdAt: e.createdAt,
+        changedByLabel: e.changedByLabel ?? null,
+      })),
+      marketAuditEvents: (a.marketAuditEvents ?? []).map((e) => ({
+        id: e.id,
+        eventType: e.eventType,
+        payload: e.payload,
+        createdAt: e.createdAt,
+      })),
     },
     createdAt: a.createdAt,
   };
@@ -1932,6 +2009,10 @@ export function mapCoOwnDistribution(d: CoOwnDistributionApi): Distribution {
     paidAt: d.settledAt,
     scheduledFor: d.projectedPayableDate ?? d.exDate ?? d.createdAt,
     exDate: d.exDate ?? null,
+    // The stage-date trio rides through verbatim — the calendar renders
+    // only the dates the wire actually carries.
+    recordDate: d.recordDate ?? null,
+    projectedPayableDate: d.projectedPayableDate ?? null,
   };
 }
 
@@ -2059,6 +2140,7 @@ export interface CoOwnPortfolioHoldingApi {
   unitPriceGbp: number | null;
   markBasis?: 'last_trade' | 'reference' | 'offering' | 'none';
   markTimestamp?: string | null;
+  markAgeSeconds?: number | null;
   marketValueGbp?: number | null;
   costBasisGbp: number;
   unrealisedPnlGbp?: number | null;
@@ -2086,6 +2168,7 @@ export function mapCoOwnPortfolioHolding(h: CoOwnPortfolioHoldingApi): CoOwnPosi
     markPriceGbp: h.unitPriceGbp,
     markBasis: h.markBasis,
     markTimestamp: h.markTimestamp ?? null,
+    markAgeSeconds: h.markAgeSeconds ?? null,
     marketValueGbp: h.marketValueGbp ?? null,
     costBasisGbp: h.costBasisGbp,
     unrealisedPnlGbp: h.unrealisedPnlGbp ?? null,

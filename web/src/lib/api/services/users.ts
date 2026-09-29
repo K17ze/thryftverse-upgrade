@@ -848,3 +848,86 @@ export async function updateMyLocale(input: MyLocaleUpdate): Promise<void> {
     body: JSON.stringify(input),
   });
 }
+
+// ── Report user (profileApi.ts reportUser) ───────────────────────────────
+// POST /users/:userId/report — the consumer-report write that bridges into
+// the safety case graph via recordConsumerReport (routes/users.ts). The
+// reason enum is the shared 14-value vocabulary; `idempotencyKey` dedupes
+// a retried submit to the original report row server-side.
+
+export type UserReportReason =
+  | 'spam'
+  | 'inappropriate'
+  | 'counterfeit'
+  | 'unresponsive'
+  | 'harassment'
+  | 'off_platform'
+  | 'hate_speech'
+  | 'prohibited'
+  | 'scam'
+  | 'misinformation'
+  | 'privacy'
+  | 'impersonation'
+  | 'minor_safety'
+  | 'other';
+
+export async function reportUser(
+  userId: string,
+  input: {
+    reason: UserReportReason;
+    details?: string;
+    idempotencyKey?: string;
+  },
+): Promise<{ reportId: string; noticeId?: string }> {
+  const payload = await fetchJson<{
+    ok: boolean;
+    reportId?: string;
+    noticeId?: string;
+  }>(`/users/${encodeURIComponent(userId)}/report`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({
+      reason: input.reason,
+      details: input.details?.trim() ? input.details.trim() : undefined,
+      idempotencyKey: input.idempotencyKey,
+    }),
+  });
+  if (!payload.ok || !payload.reportId) {
+    throw new Error('Report was not submitted');
+  }
+  return { reportId: payload.reportId, noticeId: payload.noticeId };
+}
+
+// ── Report review (reviewApi.ts reportReview) ────────────────────────────
+// POST /reviews/:reviewId/report — reviews carry their own reason enum
+// (routes/supportReviews.ts); a repeat report from the same account is a
+// 409 the caller surfaces verbatim.
+
+export type ReviewReportReason =
+  | 'fake_or_incentivized'
+  | 'harmful_or_abusive'
+  | 'personal_data'
+  | 'spam'
+  | 'off_topic'
+  | 'other';
+
+export async function reportReview(
+  reviewId: string,
+  input: { reason: ReviewReportReason; details?: string },
+): Promise<{ reportId: string }> {
+  const payload = await fetchJson<{ ok: boolean; reportId?: string }>(
+    `/reviews/${encodeURIComponent(reviewId)}/report`,
+    {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        reason: input.reason,
+        details: input.details?.trim() ? input.details.trim() : undefined,
+      }),
+    },
+  );
+  if (!payload.ok || !payload.reportId) {
+    throw new Error('Report was not submitted');
+  }
+  return { reportId: payload.reportId };
+}

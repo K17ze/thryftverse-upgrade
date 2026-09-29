@@ -14,7 +14,10 @@ import { Icon, type AppIconName } from '@/components/ui/Icon';
 import { IconButton } from '@/components/ui/IconButton';
 import { lockBodyScroll } from '@/lib/a11y/scrollLock';
 
-const SEEN_KEY = 'thryftverse:coown-onboarded';
+// Distinct from TradePanel's 'thryftverse:coown-onboarded' — that key is
+// the first-trade education consent, not this marketing tour. Sharing it
+// would let a skipped carousel silently waive the trading gate.
+const SEEN_KEY = 'thryftverse:coown-hub-tour';
 
 const SLIDES: { icon: AppIconName; title: string; body: string }[] = [
   {

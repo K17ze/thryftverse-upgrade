@@ -6,6 +6,8 @@ import { Header } from './Header';
 import { MobileTabBar } from './MobileTabBar';
 import { Footer } from './Footer';
 import { useHydrated, useStore } from '@/lib/store/useStore';
+import { useSettingsPrefs } from '@/lib/store/settingsPrefs';
+import { useNotificationRealtime } from '@/lib/hooks/chat-realtime';
 
 /** Routes that render without the global chrome (auth, onboarding, immersive surfaces). */
 const CHROMELESS_PREFIXES = ['/auth', '/onboarding'];
@@ -42,11 +44,33 @@ export function AppShell({ children }: { children: React.ReactNode }) {
   // can return to it. Hydration-gated: SSR can't know the stored flag.
   const hydrated = useHydrated();
   const hasSeenOnboarding = useStore((s) => s.hasSeenOnboarding);
+  const ageConfirmed = useSettingsPrefs((s) => s.ageConfirmedAt !== null);
   const isPublic = PUBLIC_RE.test(pathname);
   const needsOnboarding = hydrated && !hasSeenOnboarding && !chromeless && !isPublic;
 
+  // The 18+ declaration (native AgeVerificationScreen — app-launch gate
+  // ahead of onboarding and auth) fires where native gates it: account
+  // creation / first authenticated use. Web's equivalents are the /auth
+  // entry points plus every account-scoped surface — i.e. the same set
+  // onboarding covers — while public browsing and /onboarding itself
+  // stay open (the marketplace is browsable signed-out; /onboarding is
+  // the destination and must never redirect to itself).
+  const onOnboardingRoute = pathname.startsWith('/onboarding');
+  const onAuthRoute = pathname.startsWith('/auth');
+  const needsAgeDeclaration =
+    hydrated &&
+    !ageConfirmed &&
+    !onOnboardingRoute &&
+    (onAuthRoute || (!chromeless && !isPublic));
+  const needsGate = needsOnboarding || needsAgeDeclaration;
+
+  // Live notification stream — `notifications.user:{id}` keeps the
+  // header badge + feed fresh app-wide. Internally gated: guests,
+  // fixture mode and pre-hydration never open the SSE connection.
+  useNotificationRealtime();
+
   useEffect(() => {
-    if (!needsOnboarding) return;
+    if (!needsGate) return;
     // Stash where the member was heading — full href (path + query) so
     // deep links like /item/x?ref=share survive. sessionStorage keeps the
     // /onboarding URL clean and shareable; the stash is consumed once by
@@ -60,17 +84,19 @@ export function AppShell({ children }: { children: React.ReactNode }) {
       // Storage unavailable (private mode) — completion falls back to home.
     }
     router.replace('/onboarding');
-  }, [needsOnboarding, router]);
+  }, [needsGate, router]);
 
   if (chromeless) {
     return (
       <main id="main-content" tabIndex={-1} className="min-h-dvh">
-        {children}
+        {/* A gated chromeless route (/auth/* for the undeclared) renders
+            nothing while the redirect lands — no auth form under a gate. */}
+        {needsGate ? null : children}
       </main>
     );
   }
 
-  if (needsOnboarding) {
+  if (needsGate) {
     // Redirect in flight — render nothing rather than flash the app shell
     // for a frame before /onboarding lands.
     return <main id="main-content" tabIndex={-1} className="min-h-dvh" />;

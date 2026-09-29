@@ -254,6 +254,24 @@ export interface ApiPosterHighlight {
   frames: { frameId: string; mediaUrl: string; caption?: string }[];
 }
 
+function mapPosterHighlightRow(row: Record<string, unknown>): ApiPosterHighlight {
+  const frames = Array.isArray(row.frames)
+    ? (row.frames as Array<Record<string, unknown>>).map((f) => ({
+        frameId: String(f.frameId ?? f.frame_id ?? f.id ?? ''),
+        // Still-image contexts (archive tile, viewer stage) need the JPEG
+        // preview — a video frame's mediaUrl is an m3u8 playlist.
+        mediaUrl: String(f.previewUrl ?? f.preview_url ?? f.mediaUrl ?? f.media_url ?? ''),
+        caption: typeof f.caption === 'string' && f.caption ? f.caption : undefined,
+      }))
+    : [];
+  const cover =
+    (typeof row.coverUrl === 'string' && row.coverUrl) ||
+    (typeof row.coverUri === 'string' && row.coverUri) ||
+    frames[0]?.mediaUrl ||
+    '';
+  return { id: String(row.id), title: String(row.title ?? ''), coverUri: cover, frames };
+}
+
 export async function fetchPosterHighlights(
   userId: string,
   signal?: AbortSignal,
@@ -263,23 +281,29 @@ export async function fetchPosterHighlights(
     undefined,
     { signal },
   );
-  return (res.items ?? []).map((row) => {
-    const frames = Array.isArray(row.frames)
-      ? (row.frames as Array<Record<string, unknown>>).map((f) => ({
-          frameId: String(f.frameId ?? f.frame_id ?? f.id ?? ''),
-          // Still-image contexts (archive tile, viewer stage) need the JPEG
-          // preview — a video frame's mediaUrl is an m3u8 playlist.
-          mediaUrl: String(f.previewUrl ?? f.preview_url ?? f.mediaUrl ?? f.media_url ?? ''),
-          caption: typeof f.caption === 'string' && f.caption ? f.caption : undefined,
-        }))
-      : [];
-    const cover =
-      (typeof row.coverUrl === 'string' && row.coverUrl) ||
-      (typeof row.coverUri === 'string' && row.coverUri) ||
-      frames[0]?.mediaUrl ||
-      '';
-    return { id: String(row.id), title: String(row.title ?? ''), coverUri: cover, frames };
-  });
+  return (res.items ?? []).map(mapPosterHighlightRow);
+}
+
+/** GET /poster-highlights/:id — public single-highlight read so a deep
+ *  link resolves without knowing the owner. Returns null on 404 (gone)
+ *  so callers can separate absence from transport failure. */
+export async function fetchPosterHighlightById(
+  highlightId: string,
+  signal?: AbortSignal,
+): Promise<(ApiPosterHighlight & { creatorId: string }) | null> {
+  try {
+    const row = await fetchJson<Record<string, unknown>>(
+      `/poster-highlights/${encodeURIComponent(highlightId)}`,
+      undefined,
+      { signal },
+    );
+    return {
+      ...mapPosterHighlightRow(row),
+      creatorId: String(row.creatorId ?? row.creator_id ?? ''),
+    };
+  } catch {
+    return null;
+  }
 }
 
 // ── Moodboards ────────────────────────────────────────────────────────────────

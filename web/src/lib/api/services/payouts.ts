@@ -610,3 +610,55 @@ export async function convertIzeToFiat(input: {
     },
   );
 }
+
+// ── Fiat → 1ZE purchase — mirrors walletApi.buyIze ────────────────────
+// POST /wallet/buy-1ze (index.ts:22850): debits the wallet's DEFAULT fiat
+// pocket (the wallet_currency_balances row, mirrored into
+// wallets.fiat_balance_minor) and mints 1ZE at USD-par minus the platform
+// load fee. No preview endpoint exists — the fee discloses on the
+// committed receipt (native AddMoneySheet's fiat-balance path labels the
+// same figure an estimate). The idempotency key is claimed inside the
+// debit transaction: a same-key retry replays the stored response, and
+// 409 IDEMPOTENCY_IN_PROGRESS means the commit may have landed — retry
+// with the SAME key, never a fresh one.
+
+export interface BuyIzePurchasePayload {
+  fiatAmount: number;
+  principalFiat: number;
+  feeFiat: number;
+  feeBps: number;
+  fiatCurrency: string;
+  izeAmount: number;
+  rateUsed: number;
+}
+
+export interface BuyIzeResult {
+  ok: true;
+  userId: string;
+  wallet: ConvertWalletPayload;
+  purchase: BuyIzePurchasePayload;
+}
+
+export async function buyIze(input: {
+  userId: string;
+  fiatAmount: number;
+  fiatCurrency?: string;
+  idempotencyKey: string;
+}): Promise<BuyIzeResult> {
+  return fetchJson<BuyIzeResult>(
+    '/wallet/buy-1ze',
+    {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        userId: input.userId,
+        fiatAmount: input.fiatAmount,
+        fiatCurrency: input.fiatCurrency ?? 'GBP',
+        idempotencyKey: input.idempotencyKey,
+      }),
+    },
+    // Money write — a lost response is recovered by replaying the same
+    // key, never by a fresh POST.
+    { maxRetries: 0 },
+  );
+}

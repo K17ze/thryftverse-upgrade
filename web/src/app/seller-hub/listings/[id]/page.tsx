@@ -29,12 +29,14 @@ import {
 } from '@/components/seller/listingManagementModel';
 import { useMyListings } from '@/lib/hooks/queries';
 import {
+  useAdjustListingPrice,
   useFulfilmentCounts,
   useLikerOfferHistory,
   useListingBatchCommand,
   useListingStats,
   useListingStatusPatch,
 } from '@/lib/hooks/seller-queries';
+import { ApiRequestError, isRecord } from '@/lib/api/http';
 import { formatCount, formatPrice, timeAgo } from '@/lib/utils/format';
 import type { Listing } from '@/lib/contracts/domain';
 
@@ -100,6 +102,7 @@ export default function ManageListingPage({
   const counts = useFulfilmentCounts();
   const batch = useListingBatchCommand();
   const statusPatch = useListingStatusPatch();
+  const priceAdjust = useAdjustListingPrice();
 
   const { data, isLoading, isError, refetch } = useMyListings();
   const listing = useMemo(
@@ -113,6 +116,8 @@ export default function ManageListingPage({
   const [statsOpen, setStatsOpen] = useState(false);
   const [offerOpen, setOfferOpen] = useState(false);
   const [promoteOpen, setPromoteOpen] = useState(false);
+  const [priceOpen, setPriceOpen] = useState(false);
+  const [priceDraft, setPriceDraft] = useState('');
   const [pending, setPending] = useState<Pending | null>(null);
 
   const share = async () => {
@@ -209,6 +214,44 @@ export default function ManageListingPage({
   };
 
   const likerCount = listing?.likes ?? 0;
+
+  /**
+   * Dedicated repricing write — POST /sellers/:id/listings/:listingId/
+   * price-adjust, NOT the generic listing patch: the route records a
+   * durable price event, runs alert evaluation and search sync. Client
+   * validation mirrors the schema bounds; every other rejection (same
+   * price, unpriceable state) surfaces the server's message verbatim and
+   * the listing only re-renders after confirmation.
+   */
+  const parsedPrice = Number(priceDraft);
+  const priceValid =
+    Number.isFinite(parsedPrice) &&
+    parsedPrice > 0 &&
+    parsedPrice <= 1_000_000;
+  const submitPrice = () => {
+    if (!listing || !priceValid) return;
+    priceAdjust.mutate(
+      { listingId: listing.id, newPriceGbp: Math.round(parsedPrice * 100) / 100 },
+      {
+        onSuccess: (result) => {
+          setPriceOpen(false);
+          setPriceDraft('');
+          show(`Price updated — ${formatPrice(result.newPriceGbp)}`, 'success');
+        },
+        onError: (err) =>
+          show(
+            err instanceof ApiRequestError &&
+              isRecord(err.details) &&
+              typeof err.details.error === 'string'
+              ? err.details.error
+              : err instanceof Error && err.message
+                ? err.message
+                : 'Could not update the price — try again',
+            'error',
+          ),
+      },
+    );
+  };
 
   return (
     <div className="mx-auto w-full max-w-3xl px-4 pb-16 pt-8 sm:px-6 md:pt-12 lg:max-w-[1440px]">
@@ -410,6 +453,27 @@ export default function ManageListingPage({
                 </button>
               </li>
             ) : null}
+            {/* Dedicated repricing — the price-adjust route records the
+                price event, outbox and search sync a generic patch skips.
+                Active/paused only; a sold listing's price is history. */}
+            {status === 'active' || status === 'paused' ? (
+              <li>
+                <button
+                  type="button"
+                  onClick={() => {
+                    setPriceDraft(listing.price > 0 ? listing.price.toFixed(2) : '');
+                    setPriceOpen(true);
+                  }}
+                  className="pressable flex w-full items-center justify-between gap-3 py-3.5 text-left"
+                >
+                  <span className="flex items-center gap-3">
+                    <Icon name="payout" size={18} className="text-text-secondary" />
+                    <span className="text-body text-text-primary">Change price</span>
+                  </span>
+                  <Icon name="forward" size={16} className="text-text-muted" />
+                </button>
+              </li>
+            ) : null}
           </ul>
 
           {/* Lifecycle — destructive verbs separated, each confirmed. */}
@@ -495,6 +559,63 @@ export default function ManageListingPage({
         listing={listing}
         onClose={() => setPromoteOpen(false)}
       />
+
+      {/* Repricing — the dedicated price-adjust write. The new price only
+          lands on the listing after the server confirms; rejections (same
+          price, unpriceable state) surface the server's own message. */}
+      <Sheet
+        open={priceOpen}
+        onClose={() => setPriceOpen(false)}
+        title="Change price"
+        ariaLabel="Change listing price"
+        maxWidth={420}
+      >
+        <div className="px-5 pb-6">
+          <p className="text-body text-text-secondary">
+            Buyers with alerts on this listing are notified, and the new price
+            applies to every open surface.
+          </p>
+          {listing ? (
+            <p className="tnum mt-2 text-caption text-text-muted">
+              Current price: {formatPrice(listing.price)}
+            </p>
+          ) : null}
+          <label className="mt-4 block">
+            <span className="text-label text-text-muted">New price</span>
+            <span className="mt-1.5 flex items-center rounded-md border border-border bg-input px-3 py-2 focus-within:border-text-muted">
+              <span className="text-body text-text-muted">£</span>
+              <input
+                value={priceDraft}
+                onChange={(e) => setPriceDraft(e.target.value)}
+                inputMode="decimal"
+                autoComplete="off"
+                aria-label="New price in pounds"
+                placeholder="0.00"
+                className="tnum ml-1.5 w-full bg-transparent text-body text-input-text placeholder:text-text-muted focus:outline-none"
+              />
+            </span>
+          </label>
+          <div className="mt-5 flex justify-end gap-2">
+            <Button
+              variant="quiet"
+              size="md"
+              onClick={() => setPriceOpen(false)}
+              disabled={priceAdjust.isPending}
+            >
+              Cancel
+            </Button>
+            <Button
+              variant="primary"
+              size="md"
+              onClick={submitPrice}
+              disabled={!priceValid || priceAdjust.isPending}
+              aria-busy={priceAdjust.isPending}
+            >
+              {priceAdjust.isPending ? 'Saving…' : 'Save price'}
+            </Button>
+          </div>
+        </div>
+      </Sheet>
 
       <Sheet
         open={pending != null}

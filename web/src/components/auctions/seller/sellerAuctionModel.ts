@@ -167,6 +167,33 @@ export function sellerPrice(auction: AuctionViewModel): { prefix: string; amount
   return { prefix: 'Starts ', amount };
 }
 
+// ── Seller lifecycle actions — the backend's real preconditions ──
+
+export type SellerLifecycleAction = 'cancel' | 'accept_highest_bid';
+
+/** Which seller lifecycle writes this auction currently qualifies for —
+ *  mirrors the route's own preconditions so the row never offers a write
+ *  the server would refuse:
+ *  - POST /auctions/:id/cancel refuses a settled run and any run with a
+ *    bound winner, so only scheduled/live windows with no terminal stamp
+ *    and no winner show the verb.
+ *  - POST /auctions/:id/accept-highest-bid requires status
+ *    'reserve_not_met' and a standing top bid. */
+export function sellerLifecycleActions(auction: AuctionViewModel): SellerLifecycleAction[] {
+  const actions: SellerLifecycleAction[] = [];
+  const running = auction.lifecycle === 'live' || auction.lifecycle === 'upcoming';
+  if (running && auction.terminalReason == null && auction.winnerBidderId == null) {
+    actions.push('cancel');
+  }
+  const reserveNotMet =
+    auction.serverLifecycle === 'reserve_not_met' ||
+    auction.terminalReason === 'reserve_not_met';
+  if (reserveNotMet && auction.bidCount > 0) {
+    actions.push('accept_highest_bid');
+  }
+  return actions;
+}
+
 // ── Per-tab empty copy — mobile SellerAuctionEmptyState ──
 
 export const SELLER_EMPTY: Record<

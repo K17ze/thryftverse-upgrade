@@ -39,6 +39,7 @@ import type {
   CoOwnOrder,
   CoOwnPosition,
   CoOwnRecourse,
+  CoOwnVerificationDemand,
   CorporateAction,
   Distribution,
   OrderBookSnapshot,
@@ -58,8 +59,9 @@ function toQuery(params: Record<string, string | number | boolean | undefined | 
 }
 
 /** GET /co-own/assets — wire params are `search` (title/jurisdiction
- *  ilike), `openOnly` (is_open filter), `issuerId`, `limit`, and an
- *  opaque base64 offset `cursor`. */
+ *  ilike), `openOnly` (is_open filter), `issuerId`, `limit`, `sort`
+ *  (server-side ordering; default 'volume'), and an opaque base64
+ *  offset `cursor`. */
 export async function fetchCoOwnAssets(
   params: {
     search?: string;
@@ -67,6 +69,7 @@ export async function fetchCoOwnAssets(
     issuerId?: string;
     cursor?: string;
     limit?: number;
+    sort?: 'volume' | 'price_asc' | 'price_desc' | 'newest';
   } = {},
   signal?: AbortSignal,
 ): Promise<{ items: CoOwnAsset[]; nextCursor: string | null }> {
@@ -100,6 +103,84 @@ export async function fetchCoOwnAsset(
   const item = payload.item ?? payload.asset;
   if (!payload.ok || !item) return null;
   return mapCoOwnAsset(item);
+}
+
+/** Wire shape of GET /co-own/assets/by-listing/:listingId — the lightweight
+ *  summary native renders as a "Buy shares" section on the listing detail
+ *  screen (frontend/src/services/marketApi.ts:1717). */
+export interface CoOwnAssetListingSummary {
+  id: string;
+  listingId: string;
+  issuerId: string;
+  title: string;
+  imageUrl: string | null;
+  totalUnits: number;
+  availableUnits: number;
+  unitPriceGbp: number;
+  isOpen: boolean;
+  createdAt: string;
+  issuer: {
+    username: string;
+    displayName: string | null;
+    avatar: string | null;
+  } | null;
+}
+
+/** Listing → co-own asset bridge. A 404 is the honest "this listing is not
+ *  fractionalised" answer, so it maps to null rather than an error. */
+export async function fetchCoOwnAssetByListing(
+  listingId: string,
+  signal?: AbortSignal,
+): Promise<CoOwnAssetListingSummary | null> {
+  try {
+    const payload = await fetchJson<{ ok: boolean; asset?: CoOwnAssetListingSummary }>(
+      `/co-own/assets/by-listing/${encodeURIComponent(listingId)}`,
+      undefined,
+      { signal },
+    );
+    return payload.ok && payload.asset ? payload.asset : null;
+  } catch (error) {
+    if (error instanceof ApiRequestError && error.status === 404) return null;
+    throw error;
+  }
+}
+
+// ── Watchlist — server-backed star set (the coown_watchlist table).
+// All three routes are auth-required (401 unauthenticated — callers gate
+// on the session user), and list rows carry the identical asset payload
+// GET /co-own/assets emits. Mirrors frontend/src/services/marketApi.ts.
+
+/** GET /co-own/watchlist — the session's starred markets, newest star
+ *  first (ORDER BY w.created_at DESC). */
+export async function fetchCoOwnWatchlist(
+  options: { limit?: number } = {},
+  signal?: AbortSignal,
+): Promise<CoOwnAsset[]> {
+  const payload = await fetchJson<{ ok?: boolean; items?: MarketCoOwnAssetApi[] }>(
+    `/co-own/watchlist${toQuery({ limit: options.limit })}`,
+    undefined,
+    { signal },
+  );
+  return (payload.items ?? []).map(mapCoOwnAsset);
+}
+
+/** POST /co-own/watchlist {assetId} — idempotent add (the insert is
+ *  ON CONFLICT DO NOTHING); the route 404s an unknown assetId. */
+export async function addToCoOwnWatchlist(assetId: string): Promise<void> {
+  await fetchJson<{ ok: true }>('/co-own/watchlist', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ assetId }),
+  });
+}
+
+/** DELETE /co-own/watchlist/:assetId — idempotent; deleting an
+ *  unwatched row is a no-op, not an error. */
+export async function removeFromCoOwnWatchlist(assetId: string): Promise<void> {
+  await fetchJson<{ ok: true }>(
+    `/co-own/watchlist/${encodeURIComponent(assetId)}`,
+    { method: 'DELETE' },
+  );
 }
 
 export async function fetchCoOwnPortfolio(
@@ -320,52 +401,27 @@ function withDuration(
   return duration ? { ...order, duration } : order;
 }
 
-/** Cap on the per-asset order fan-out — the backend has no aggregate
- *  "my orders" route, so the caller passes a bounded candidate set
- *  (held + watched assets) and each id gets one my-orders read. */
-export const CO_OWN_ORDERS_FANOUT_CAP = 12;
-
-/** The viewer's open/partially-filled orders across the given markets —
- *  bounded fan-out to GET /co-own/assets/:id/my-orders (the only real
- *  read; there is no /co-own/orders aggregate). A 401/403/404 on one
- *  asset yields no orders for it rather than failing the whole list —
- *  guests and delisted markets are honest empty slices. Results merge
- *  newest-first, matching each endpoint's own ordering. */
-export async function fetchCoOwnOrders(
-  assetIds: readonly string[],
-  options: { limitPerAsset?: number } = {},
+/** The viewer's complete open/partially-filled order book — one
+ *  owner-scoped aggregate read (GET /co-own/my-orders), not a per-asset
+ *  fan-out, so a resting order can never go missing on an asset the
+ *  client didn't think to ask about. `assetTitle` rides the wire so
+ *  rows need no second lookup. */
+export async function fetchCoOwnMyOrders(
   signal?: AbortSignal,
 ): Promise<CoOwnOrder[]> {
-  const ids = [...new Set(assetIds)].slice(0, CO_OWN_ORDERS_FANOUT_CAP);
-  if (ids.length === 0) return [];
-  const perAsset = await Promise.all(
-    ids.map(async (assetId) => {
-      try {
-        const payload = await fetchJson<{
-          ok?: boolean;
-          items?: Array<MarketCoOwnOrderApi & { timeInForce?: 'GFD' | 'GTC90' | null }>;
-        }>(
-          `/co-own/assets/${encodeURIComponent(assetId)}/my-orders${toQuery({
-            limit: options.limitPerAsset,
-          })}`,
-          undefined,
-          { signal },
-        );
-        return (payload.items ?? []).map((o) => withDuration(mapCoOwnOrder(o), o));
-      } catch (error) {
-        if (
-          error instanceof ApiRequestError &&
-          (error.status === 401 || error.status === 403 || error.status === 404)
-        ) {
-          return [] as CoOwnOrder[];
-        }
-        throw error;
+  const payload = await fetchJson<{
+    ok?: boolean;
+    items?: Array<
+      MarketCoOwnOrderApi & {
+        assetTitle?: string | null;
+        timeInForce?: 'GFD' | 'GTC90' | null;
       }
-    }),
-  );
-  return perAsset
-    .flat()
-    .sort((a, b) => Date.parse(b.placedAt) - Date.parse(a.placedAt));
+    >;
+  }>('/co-own/my-orders', undefined, { signal });
+  return (payload.items ?? []).map((o) => ({
+    ...withDuration(mapCoOwnOrder(o), o),
+    ...(o.assetTitle != null ? { assetTitle: o.assetTitle } : {}),
+  }));
 }
 
 export async function fetchCoOwnBuyoutOffers(
@@ -523,11 +579,14 @@ export async function placeCoOwnOrder(input: CoOwnOrderCommand & {
    *  ambiguous failure replays instead of double-placing (the backend
    *  also exposes GET .../orders/lookup-by-key/:key for reconciliation). */
   idempotencyKey: string;
-}): Promise<CoOwnOrder> {
+}): Promise<{ order: CoOwnOrder; aml: { alertId: string; status: string } | null }> {
   const payload = await fetchJson<{
     ok: true;
     status?: string;
     order?: MarketCoOwnOrderApi & { timeInForce?: 'GFD' | 'GTC90' | null };
+    /** Present when the fill tripped the AML monitor — the trade settled
+     *  but is flagged for review; the UI must surface this verbatim. */
+    aml?: { alertId: string; status: string } | null;
   }>(
     `/co-own/assets/${encodeURIComponent(input.assetId)}/orders`,
     {
@@ -557,7 +616,71 @@ export async function placeCoOwnOrder(input: CoOwnOrderCommand & {
       { code: 'ORDER_STILL_PROCESSING' },
     );
   }
-  return withDuration(mapCoOwnOrder(payload.order), payload.order);
+  return {
+    order: withDuration(mapCoOwnOrder(payload.order), payload.order),
+    aml: payload.aml ?? null,
+  };
+}
+
+/** GET /co-own/assets/:assetId/orders/lookup-by-key/:idempotencyKey —
+ *  unknown-result reconciliation. When a placement errors ambiguously
+ *  (network cut, 202 ack) the idempotency key is the only safe way to
+ *  learn whether the write landed:
+ *    - 200 'acknowledged' — replays the stored response body (order inside)
+ *    - 202 'processing' — command accepted, still settling; poll again
+ *    - 404 'safe_to_retry' — no record; resubmission is safe
+ *  (native reference: marketApi.ts lookupCoOwnOrderByIdempotencyKey). */
+export type CoOwnOrderLookupResult =
+  | { status: 'acknowledged'; order: CoOwnOrder; aml: { alertId: string; status: string } | null }
+  | { status: 'processing' }
+  | { status: 'safe_to_retry' };
+
+export async function lookupCoOwnOrderByKey(
+  assetId: string,
+  idempotencyKey: string,
+): Promise<CoOwnOrderLookupResult> {
+  try {
+    const payload = await fetchJson<{
+      ok: boolean;
+      status?: string;
+      order?: MarketCoOwnOrderApi & { timeInForce?: 'GFD' | 'GTC90' | null };
+      aml?: { alertId: string; status: string } | null;
+    }>(
+      `/co-own/assets/${encodeURIComponent(assetId)}/orders/lookup-by-key/${encodeURIComponent(idempotencyKey)}`,
+    );
+    if (payload.order) {
+      return {
+        status: 'acknowledged',
+        order: withDuration(mapCoOwnOrder(payload.order), payload.order),
+        aml: payload.aml ?? null,
+      };
+    }
+    return { status: 'processing' };
+  } catch (error) {
+    if (error instanceof ApiRequestError) {
+      if (error.status === 404) return { status: 'safe_to_retry' };
+      if (error.status === 202) return { status: 'processing' };
+    }
+    throw error;
+  }
+}
+
+/** Poll lookup-by-key until the write settles — acknowledged, or
+ *  safe_to_retry, or the poll budget is spent (still 'processing').
+ *  Short linear backoff; the caller decides how to surface each result. */
+export async function reconcileCoOwnOrder(
+  assetId: string,
+  idempotencyKey: string,
+  opts: { attempts?: number; delayMs?: number } = {},
+): Promise<CoOwnOrderLookupResult> {
+  const attempts = opts.attempts ?? 5;
+  const delayMs = opts.delayMs ?? 1_200;
+  for (let i = 0; i < attempts; i++) {
+    if (i > 0) await new Promise((r) => setTimeout(r, delayMs));
+    const result = await lookupCoOwnOrderByKey(assetId, idempotencyKey);
+    if (result.status !== 'processing') return result;
+  }
+  return { status: 'processing' };
 }
 
 /** POST /co-own/assets/:assetId/orders/:orderId/cancel — the asset-scoped
@@ -691,6 +814,49 @@ export async function fetchCoOwnRecourse(
     { signal },
   );
   return mapCoOwnRecourse(assetId, payload);
+}
+
+// ── Recourse agreement — the signature that takes the asset live ──────
+// POST /co-own/assets/:assetId/recourse-agreement — issuer-only, one
+// agreement per asset (replays the active row on re-sign). The asset is
+// created at 'preview' tier and promotes to 'listed' inside the same
+// transaction as the signature — an unsigned asset cannot trade.
+
+export interface CoOwnRecourseAgreementWire {
+  id: string;
+  sellerId: string;
+  version: number;
+  agreementUrl: string | null;
+  signedAt: string;
+  /** units × issuance price — the full personal-liability ceiling. */
+  maxLiabilityGbp: number;
+  personalGuarantee: boolean;
+  status: 'active' | 'triggered' | 'settled' | 'disputed' | 'void';
+  triggeredAt: string | null;
+  triggeredReason: string | null;
+  settledAt: string | null;
+  settledAmountGbp: number | null;
+}
+
+export async function signCoOwnRecourseAgreement(
+  assetId: string,
+  options: { personalGuarantee?: boolean; agreementUrl?: string } = {},
+): Promise<CoOwnRecourseAgreementWire> {
+  const payload = await fetchJson<{ ok: true; agreement: CoOwnRecourseAgreementWire }>(
+    `/co-own/assets/${encodeURIComponent(assetId)}/recourse-agreement`,
+    {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        agreementUrl: options.agreementUrl,
+        personalGuarantee: options.personalGuarantee ?? true,
+      }),
+    },
+    // Replays into the same UNIQUE(asset_id) row — safe to retry, but a
+    // signature is a deliberate act; the caller locks the button instead.
+    { maxRetries: 0 },
+  );
+  return payload.agreement;
 }
 
 // ── Policy — the versioned commerce limits the server enforces ────────
@@ -881,4 +1047,73 @@ export async function acceptRiskDisclosure(
       ...(evidence ? { evidence } : {}),
     }),
   });
+}
+
+// ── Trust actions — issuer appraisal refresh + holder demands ─────────
+// backend/api/src/routes/coOwn.ts: POST .../trust/refresh-appraisal is
+// issuer-only (403 otherwise; admins allowed) and POST
+// .../verification-demand is holder-only (403 HOLDER_ONLY; the issuer
+// 400s on their own asset). The surfaces hide both affordances when the
+// viewer can't act — these calls assume the gate already applied.
+
+/** The issuer files a fresh third-party appraisal. The valuation
+ *  replaces the dossier figures and writes a public trust + market audit
+ *  event — re-read the asset/diligence queries after success. */
+export async function refreshCoOwnAppraisal(
+  assetId: string,
+  input: {
+    appraisalValueGbp: number;
+    appraisalValuer: string;
+    appraisalNotes?: string;
+  },
+): Promise<{ refreshedAt: string }> {
+  const payload = await fetchJson<{ ok: true; refreshedAt: string }>(
+    `/co-own/assets/${encodeURIComponent(assetId)}/trust/refresh-appraisal`,
+    {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(input),
+    },
+  );
+  return { refreshedAt: payload.refreshedAt };
+}
+
+export type CoOwnVerificationDemandType =
+  | 'authenticity'
+  | 'possession'
+  | 'condition'
+  | 'inspection';
+
+/** A unit holder demands the custodian prove the asset — the liable
+ *  seller is notified and the deadline starts now. The wire also returns
+ *  requestedBy/respondedAt/evidence fields; the recourse contract only
+ *  carries the dossier-facing subset, so that's what we keep. */
+export async function createCoOwnVerificationDemand(
+  assetId: string,
+  input: {
+    demandType: CoOwnVerificationDemandType;
+    /** 1–60 days; the server defaults to 14 when omitted. */
+    deadlineDays?: number;
+    notes?: string;
+  },
+): Promise<CoOwnVerificationDemand> {
+  const payload = await fetchJson<{
+    ok: true;
+    demand: {
+      id: number;
+      demandType: string;
+      deadline: string;
+      status: string;
+      inspectorVerdict: string | null;
+      createdAt: string;
+    };
+  }>(
+    `/co-own/assets/${encodeURIComponent(assetId)}/verification-demand`,
+    {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(input),
+    },
+  );
+  return payload.demand;
 }

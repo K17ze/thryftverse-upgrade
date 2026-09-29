@@ -293,6 +293,60 @@ export async function trackListingView(
   }
 }
 
+/**
+ * POST /listings/:id/interact — the engagement write native fires from the
+ * PDP (mobile trackListingInteraction). `action` is the public vocabulary —
+ * the backend stores 'like' as 'wishlist', which is what seller analytics
+ * count. Auth-required server-side; call sites fire it only on real member
+ * intent, so a guest's local toggle never burns a guaranteed 401. Errors
+ * are swallowed — engagement telemetry must never break the action it rode
+ * in on.
+ */
+export async function trackListingInteraction(
+  listingId: string,
+  action: 'like' | 'save' | 'share',
+  options?: { idempotencyKey?: string },
+): Promise<void> {
+  try {
+    await fetchJson(`/listings/${encodeURIComponent(listingId)}/interact`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        action,
+        idempotencyKey: options?.idempotencyKey,
+      }),
+    });
+  } catch {
+    // Best-effort analytics write — the backend reports recorded:false on
+    // its own failure paths too; the UI never blocks on it.
+  }
+}
+
+/** GET /listings/:id/qa-summary — the aggregate Q&A summary native reads
+ *  for the PDP "View all questions" affordance (questionCount,
+ *  answeredQuestionCount, latest answered exchange). Counts cover only
+ *  publicly-visible rows — quarantined/held content never leaks (§332). */
+export interface ListingQaSummary {
+  listingId: string;
+  questionCount: number;
+  answeredQuestionCount: number;
+  latestAnsweredQuestion: string | null;
+  latestAnswer: string | null;
+  latestActivityAt: string | null;
+}
+
+export async function fetchListingQaSummary(
+  listingId: string,
+  signal?: AbortSignal,
+): Promise<ListingQaSummary | null> {
+  const payload = await fetchJson<{ ok?: boolean; summary?: ListingQaSummary }>(
+    `/listings/${encodeURIComponent(listingId)}/qa-summary`,
+    undefined,
+    { signal },
+  );
+  return payload.ok && payload.summary ? payload.summary : null;
+}
+
 export async function fetchListingById(
   id: string,
   signal?: AbortSignal,
@@ -640,4 +694,53 @@ export async function answerListingQuestion(
     createdAt: payload.answer.createdAt,
     moderationState: toModerationState(payload.answer.moderationState),
   };
+}
+
+// ── Report listing (listingsApi.ts reportListing) ──────────────────────────
+// POST /listings/:listingId/report — the consumer-report write bridged into
+// the safety case graph via recordConsumerReport (routes/listings.ts).
+// Shared 14-value reason enum; `details` is capped at 500 chars server-side;
+// `idempotencyKey` resolves a retried submit to the original report row.
+
+export type ListingReportReason =
+  | 'spam'
+  | 'inappropriate'
+  | 'counterfeit'
+  | 'unresponsive'
+  | 'harassment'
+  | 'off_platform'
+  | 'hate_speech'
+  | 'prohibited'
+  | 'scam'
+  | 'misinformation'
+  | 'privacy'
+  | 'impersonation'
+  | 'minor_safety'
+  | 'other';
+
+export async function reportListing(
+  listingId: string,
+  input: {
+    reason: ListingReportReason;
+    details?: string;
+    idempotencyKey?: string;
+  },
+): Promise<{ reportId: string; noticeId?: string }> {
+  const payload = await fetchJson<{
+    ok: boolean;
+    reportId?: string;
+    noticeId?: string;
+  }>(`/listings/${encodeURIComponent(listingId)}/report`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({
+      reason: input.reason,
+      details: input.details?.trim() ? input.details.trim() : undefined,
+      idempotencyKey: input.idempotencyKey,
+    }),
+  });
+  if (!payload.ok || !payload.reportId) {
+    throw new Error('Report was not submitted');
+  }
+  return { reportId: payload.reportId, noticeId: payload.noticeId };
 }

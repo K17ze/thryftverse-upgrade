@@ -18,7 +18,7 @@ import {
 import { PROFILE_HIGHLIGHTS } from '@/components/profile/fixtures';
 import { DATA_MODE } from '@/lib/api/client';
 import * as socialService from '@/lib/api/services/social';
-import { useSession } from '@/lib/session/SessionProvider';
+
 import { usePosterArchive } from '@/lib/store/posterArchive';
 import { useHydrated } from '@/lib/store/useStore';
 import { AppImage } from '@/components/ui/AppImage';
@@ -39,19 +39,18 @@ export default function PosterHighlightPage({
   const { id } = use(params);
   const router = useRouter();
   const hydrated = useHydrated();
-  const { user, sessionLoading } = useSession();
+
   const createdHighlights = usePosterArchive((s) => s.highlights);
 
   const { data: highlight, isLoading, isError, refetch } = useQuery<PosterHighlight | null>({
-    queryKey: ['poster-highlight', id, hydrated, DATA_MODE, user?.id ?? 'guest'],
-    enabled: DATA_MODE !== 'live' || !!user,
+    queryKey: ['poster-highlight', id, hydrated, DATA_MODE],
     queryFn: async () => {
       if (DATA_MODE === 'live') {
-        // No GET /poster-highlights/:id on the wire — highlights resolve
-        // through the owner's list (the archive is the entry point, so
-        // the viewer is always the owner here).
-        const items = await socialService.fetchPosterHighlights(user!.id);
-        return items.find((h) => h.id === id) ?? null;
+        // Public single-highlight read — resolves for any owner, guests
+        // included (a shared /poster/highlight/:id link needs no session).
+        const hit = await socialService.fetchPosterHighlightById(id);
+        if (!hit) return null;
+        return { id: hit.id, title: hit.title, coverUri: hit.coverUri, frames: hit.frames };
       }
       await tick();
       // Sources: the member's session-created highlights, the archive seed
@@ -148,10 +147,7 @@ export default function PosterHighlightPage({
     advance();
   };
 
-  // Live mode: hold the skeleton while the stored session resolves — the
-  // highlight list is member-scoped, so a null user mid-hydration is
-  // undecided, not guest.
-  if (isLoading || (DATA_MODE === 'live' && sessionLoading)) {
+  if (isLoading) {
     return (
       <div
         className="flex h-[calc(100dvh-4rem-76px)] items-center justify-center md:h-[calc(100dvh-4rem)]"

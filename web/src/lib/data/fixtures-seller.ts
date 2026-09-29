@@ -26,6 +26,7 @@ import {
   markOrderDispatched,
   proposeDispatchExtension as proposeOrderDispatchExtension,
   protectionFeeFor,
+  recordOrderHandoff,
 } from '@/lib/data/fixtures-commerce';
 import { DISPATCH_SLA_DAYS } from '@/lib/commerce/dispatch';
 import type { Listing } from '@/lib/contracts/domain';
@@ -98,6 +99,15 @@ export interface FulfilmentJob {
    * 409 EXTENSION_PENDING (the server withholds the date on a conflict).
    */
   pendingExtension?: { days: number; proposedShipBy: string | null } | null;
+  /**
+   * Seller's drop-off claim instant — the handoff_asserted parcel event.
+   * A claim, not carrier evidence: the job stays 'to-post' (and the order
+   * stays 'paid') until a carrier scan or the dispatch write moves it.
+   * Live mode surfaces it via the HANDOFF_ASSERTED overlay below — the
+   * orders-list wire never projects it, so the row only knows what the
+   * session confirmed.
+   */
+  handoffAssertedAt?: string;
 }
 
 export interface PayoutEntry {
@@ -570,6 +580,45 @@ export function proposeJobExtension(jobId: string, days: number): FulfilmentJob 
     (o) => o.sellerId === 'me' && o.listingId === job.listingId && o.status === 'paid',
   );
   if (order) proposeOrderDispatchExtension(order.id, days);
+  return job;
+}
+
+// ── Handoff assertions ────────────────────────────────────────────────────
+//
+// POST /orders/:id/fulfilment/handoff-assertion records the seller's
+// drop-off claim as an `handoff_asserted` parcel event while no carrier
+// scan has landed — it never advances orders.status. The orders-list wire
+// doesn't project the event, so live mode keeps the confirmed claim in a
+// session overlay (same pattern as PENDING_EXTENSIONS); the parcel-events
+// read on the order detail is the durable surface it lands on.
+const HANDOFF_ASSERTED = new Map<string, string>();
+
+/** Pin a server-confirmed handoff claim onto a queue job (live mode). */
+export function recordHandoffAssertion(orderId: string, claimedAt: string): void {
+  HANDOFF_ASSERTED.set(orderId, claimedAt);
+}
+
+export function handoffAssertedFor(orderId: string): string | null {
+  return HANDOFF_ASSERTED.get(orderId) ?? null;
+}
+
+/**
+ * Fixture-mode handoff claim — mirrors the live gate (only while the job
+ * still owes posting) and writes the stamp onto the row. The paired
+ * commerce order gets the same 'Dropped off (seller reported)' event on
+ * its tracking trail, the same one-truth pairing markJobPosted uses.
+ */
+export function assertJobHandoff(jobId: string): FulfilmentJob | null {
+  const job = FULFILMENT_QUEUE.find((j) => j.id === jobId);
+  if (!job || job.stage !== 'to-post' || job.handoffAssertedAt) return null;
+  job.handoffAssertedAt = new Date().toISOString();
+  const order = allCommerceOrders().find(
+    (o) =>
+      o.sellerId === 'me' &&
+      o.listingId === job.listingId &&
+      ['created', 'pending', 'paid'].includes(o.status),
+  );
+  if (order) recordOrderHandoff(order.id);
   return job;
 }
 

@@ -5,6 +5,11 @@
  * confidential intro → reason list → details + evidence → staged sending →
  * success receipt with a case reference. Same state machine as the mobile
  * ReportScreen: reason gates the submit, details and photos stay optional.
+ *
+ * Live mode posts to the moderation endpoints the report targets —
+ * POST /users/:id/report for accounts, POST /listings/:id/report for
+ * listings — so the report enters the safety case graph, not the support
+ * queue. Fixture mode keeps the session-ticket demo path.
  */
 
 import { useEffect, useRef, useState } from 'react';
@@ -12,6 +17,9 @@ import { Button } from '@/components/ui/Button';
 import { Sheet } from '@/components/ui/Sheet';
 import { useToast } from '@/components/ui/Toast';
 import { useSupportActions } from '@/components/support/useSupportTickets';
+import { DATA_MODE } from '@/lib/api/client';
+import { reportListing } from '@/lib/api/services/listings';
+import { reportUser } from '@/lib/api/services/users';
 import {
   MAX_REPORT_EVIDENCE,
   REPORT_REASONS,
@@ -100,22 +108,46 @@ export function ReportSheet({ open, onClose, target }: ReportSheetProps) {
     const reasonLabel =
       REPORT_REASONS.find((r) => r.key === reason)?.label ?? 'Report';
     try {
-      // A real support case — the ref on the receipt is the case thread's,
-      // and /support/[id] holds the thread for follow-up.
-      const ticket = await createTicket({
-        topicId: reason === 'counterfeit' ? 'verification' : 'other',
-        orderRef: null,
-        message:
-          `${reportTitleFor(target.type)} — ${reasonLabel}` +
-          (target.label ? ` · ${target.label}` : '') +
-          ` (${target.type} ${target.id})` +
-          (details.trim() ? ` — ${details.trim()}` : '') +
-          (evidence.length
-            ? ` [${evidence.length} attachment(s) uploaded by reporter]`
-            : ''),
-      });
-      setReportId(ticket.ref ?? ticket.id.toUpperCase());
-      setTicketId(ticket.id);
+      if (DATA_MODE === 'live') {
+        // The moderation write — a report row + safety notice, not a
+        // support case. The shared web reason vocabulary is a subset of
+        // the endpoint's 14-value enum, so `reason` travels verbatim.
+        const detailsParam = details.trim() ? details.trim() : undefined;
+        const idempotencyKey = `webrpt_${target.type}_${target.id}_${Date.now()}`;
+        const result =
+          target.type === 'user'
+            ? await reportUser(target.id, {
+                reason,
+                details: detailsParam,
+                idempotencyKey,
+              })
+            : await reportListing(target.id, {
+                reason,
+                details: detailsParam,
+                idempotencyKey,
+              });
+        // Moderation reports have no case thread — the receipt shows the
+        // report id and no follow-up link.
+        setReportId(result.reportId);
+        setTicketId(null);
+      } else {
+        // Fixture demo path — a session-scoped case so the receipt's
+        // "View your case" link resolves within the demo dataset.
+        const ticket = await createTicket({
+          topicId: reason === 'counterfeit' ? 'verification' : 'other',
+          orderRef: null,
+          message:
+            `${reportTitleFor(target.type)} — ${reasonLabel}` +
+            (target.label ? ` · ${target.label}` : '') +
+            ` (${target.type} ${target.id})` +
+            (details.trim() ? ` — ${details.trim()}` : '') +
+            (evidence.length
+              ? ` [${evidence.length} attachment(s) uploaded by reporter]`
+              : ''),
+        });
+        setReportId(ticket.ref ?? ticket.id.toUpperCase());
+        setTicketId(ticket.id);
+      }
       setSubmittedAt(
         new Date().toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' }),
       );

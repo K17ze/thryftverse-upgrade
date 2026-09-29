@@ -872,6 +872,8 @@ export interface OrderEnrichment {
   reviewIsAuto?: boolean;
   reviewRating?: number;
   reviewText?: string;
+  /** Seller's public reply — POST /reviews/:id/response's persisted row. */
+  reviewResponse?: { text: string; createdAt: string } | null;
   dispatchExtension?: DispatchExtension | null;
   fulfilmentSnapshot?: FulfilmentSnapshot | null;
   /** Authored timeline override — wins over the derived steps. */
@@ -1221,6 +1223,35 @@ export function submitOrderReview(orderId: string, rating: number, text: string)
   });
 }
 
+/**
+ * Seller's public response to the order's review — fixture mirror of
+ * POST /reviews/:id/response. Editable in place (the live route versions
+ * edits inside an edit window); absent review = no-op.
+ */
+export function respondToOrderReview(orderId: string, text: string): void {
+  const enr = enrichmentEntry(orderId);
+  if (!enr.hasReview) return;
+  enr.reviewResponse = { text, createdAt: new Date().toISOString() };
+}
+
+/**
+ * Seller's drop-off claim — fixture mirror of the handoff_asserted parcel
+ * event. Like the live route it never mutates orders.status: the event is
+ * evidence on the tracking trail while the carrier's first scan is owed.
+ */
+export function recordOrderHandoff(orderId: string): void {
+  const enr = enrichmentEntry(orderId);
+  enr.trackingEvents = [
+    ...(enr.trackingEvents ?? []),
+    {
+      id: `he-${Date.now().toString(36)}`,
+      at: new Date().toISOString(),
+      label: 'Dropped off (seller reported)',
+      detail: 'Seller marked the parcel as handed to the carrier — waiting for the first scan to confirm tracking.',
+    },
+  ];
+}
+
 // ─── Return cases ────────────────────────────────────────────────────────────
 
 export const RETURN_REASONS: { id: string; label: string; description: string }[] = [
@@ -1276,6 +1307,7 @@ export function requestReturnStepIn(orderId: string): void {
  */
 export type ReturnCaseTransition =
   | { type: 'decision'; decision: 'approved' | 'rejected'; reason: string }
+  | { type: 'evidence'; urls: string[] }
   | { type: 'reverse_shipment'; carrier: string; trackingNumber: string; labelUrl?: string }
   | { type: 'receipt' }
   | { type: 'inspection'; notes: string; condition: string }
@@ -1290,6 +1322,14 @@ export function applyReturnCaseTransition(orderId: string, action: ReturnCaseTra
   switch (action.type) {
     case 'decision':
       rc.status = action.decision === 'approved' ? 'approved' : 'rejected';
+      break;
+    case 'evidence':
+      // Server semantics (POST /return-cases/:id/evidence): buyer-only,
+      // legal only while 'requested'/'evidence_review', and a 'requested'
+      // case advances to 'evidence_review' on append.
+      if (rc.status !== 'requested' && rc.status !== 'evidence_review') return;
+      rc.evidenceMediaUrls = [...(rc.evidenceMediaUrls ?? []), ...action.urls];
+      rc.status = 'evidence_review';
       break;
     case 'reverse_shipment':
       rc.status = 'reverse_shipped';

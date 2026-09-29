@@ -1,4 +1,4 @@
-import type { FastifyInstance } from 'fastify';
+import type { FastifyInstance, FastifyRequest, FastifyReply } from 'fastify';
 import type { Pool } from 'pg';
 import { z } from 'zod';
 import {
@@ -381,7 +381,9 @@ export const registerSupportRoutes = ({
   });
 
   // ── 7. POST /support/conversations/:id/resolve-confirmation ──────────
-  app.post('/support/conversations/:id/resolve-confirmation', async (request, reply) => {
+  // Native calls the same contract at /resolution — both paths mount the
+  // identical handler (resolveConfirmationBodySchema + ownership check).
+  const resolveConfirmationHandler = async (request: FastifyRequest, reply: FastifyReply) => {
     const userId = request.authUser?.userId;
     if (!userId) {
       reply.code(401);
@@ -417,7 +419,9 @@ export const registerSupportRoutes = ({
 
     const updated = await getConversationForUser(db, id, userId);
     return { ok: true, conversation: updated };
-  });
+  };
+  app.post('/support/conversations/:id/resolve-confirmation', resolveConfirmationHandler);
+  app.post('/support/conversations/:id/resolution', resolveConfirmationHandler);
 
   // ── 8. POST /support/conversations/:id/feedback ──────────────────────
   app.post('/support/conversations/:id/feedback', async (request, reply) => {

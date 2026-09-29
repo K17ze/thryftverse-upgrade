@@ -34,9 +34,12 @@ interface OfferSheetProps {
   /** amount + the chosen expiry — callers thread both into the
    *  create/counter payload (expiryHours is a real contract field). */
   onSend: (amount: number, expiryHours: number) => void;
+  /** Write in flight — the confirm button locks so a double-tap can't
+   *  fire a second create while the first outcome is unresolved. */
+  busy?: boolean;
 }
 
-export function OfferSheet({ open, onClose, listing, counterTo, onSend }: OfferSheetProps) {
+export function OfferSheet({ open, onClose, listing, counterTo, onSend, busy = false }: OfferSheetProps) {
   const [value, setValue] = useState('');
   const [error, setError] = useState('');
   const [expiryHours, setExpiryHours] = useState<number>(DEFAULT_EXPIRY_HOURS);
@@ -183,17 +186,23 @@ export function OfferSheet({ open, onClose, listing, counterTo, onSend }: OfferS
           </p>
 
           <div className="flex gap-2">
-            <Button variant="secondary" size="lg" onClick={() => setReviewing(false)}>
+            <Button variant="secondary" size="lg" onClick={() => setReviewing(false)} disabled={busy}>
               Back
             </Button>
             <Button
               variant="primary"
               size="lg"
               className="flex-1"
+              disabled={busy}
+              aria-busy={busy}
               onClick={() => onSend(Math.round(numeric * 100) / 100, expiryHours)}
             >
-              Confirm {counterTo ? 'counter' : 'offer'} ·{' '}
-              <span className="tnum">{formatPrice(numeric)}</span>
+              {busy ? 'Sending…' : (
+                <>
+                  Confirm {counterTo ? 'counter' : 'offer'} ·{' '}
+                  <span className="tnum">{formatPrice(numeric)}</span>
+                </>
+              )}
             </Button>
           </div>
         </div>

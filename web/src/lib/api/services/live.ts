@@ -300,6 +300,49 @@ export async function sendStreamChatMessage(
   return res.message;
 }
 
+// ── Chat message report — POST /streaming/sessions/:sessionId/chat/
+//    :messageId/report, bridged into the safety case graph (subject is the
+//    message; severity>=3 reasons can auto-limit the author). Owns its own
+//    reason enum — narrower than the consumer-report vocabulary. ─────────
+
+export type StreamChatReportReason =
+  | 'spam'
+  | 'harassment'
+  | 'scam_fraud'
+  | 'inappropriate_content'
+  | 'off_platform_payment'
+  | 'impersonation'
+  | 'other';
+
+export async function reportStreamChatMessage(
+  sessionId: string,
+  messageId: string,
+  input: {
+    reason: StreamChatReportReason;
+    details?: string;
+    idempotencyKey?: string;
+  },
+): Promise<{ reportId: string; duplicated: boolean }> {
+  const res = await fetchJson<{
+    ok: boolean;
+    reportId?: string;
+    duplicated?: boolean;
+  }>(
+    `/streaming/sessions/${encodeURIComponent(sessionId)}/chat/${encodeURIComponent(messageId)}/report`,
+    {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        reason: input.reason,
+        details: input.details?.trim() ? input.details.trim() : undefined,
+        idempotencyKey: input.idempotencyKey,
+      }),
+    },
+  );
+  if (!res.ok || !res.reportId) throw new Error('Report was not submitted');
+  return { reportId: res.reportId, duplicated: res.duplicated === true };
+}
+
 // ── Host viewer moderation — host/admin only (fail-closed 403). Mute is
 //    reversible and blocks chat + fresh viewer tokens; kick ejects the
 //    viewer from the in-memory room set now. Consumed by the host console

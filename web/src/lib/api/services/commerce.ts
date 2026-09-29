@@ -14,6 +14,8 @@ import type {
   CommerceOrder,
   DispatchExtension,
   Order,
+  OrderAuthentication,
+  OrderAuthenticationStatus,
   OrderTrackingEvent,
   ReturnCase,
   ReturnRemedy,
@@ -318,6 +320,51 @@ export function shipOrder(orderId: string, input: { trackingNumber?: string; shi
 export function confirmDelivery(orderId: string) {
   return postOrderAction(orderId, 'deliver');
 }
+
+export interface HandoffAssertionResult {
+  orderId: string;
+  /** Server-stamped instant the seller's claim was recorded. */
+  handoffClaimedAt: string;
+  /** The route never mutates orders.status — echoes the current value. */
+  status: string;
+}
+
+/**
+ * POST /orders/:id/fulfilment/handoff-assertion — the seller's drop-off
+ * claim. Seller-only while the order is 'paid'; persists an
+ * `handoff_asserted` parcel event (idempotent on
+ * `handoff_asserted:{orderId}`) and returns the UNCHANGED status — a
+ * seller claim is evidence for the waiting-for-scan UI, never carrier
+ * proof, so callers must not report the order as shipped off this write.
+ */
+export async function assertOrderHandoff(
+  orderId: string,
+  input: {
+    trackingNumber?: string;
+    shippingProvider?: string;
+    labelUrl?: string;
+  } = {},
+): Promise<HandoffAssertionResult> {
+  const payload = await fetchJson<{
+    ok: boolean;
+    orderId?: string;
+    handoffClaimedAt?: string;
+    status?: string;
+    error?: string;
+  }>(`/orders/${encodeURIComponent(orderId)}/fulfilment/handoff-assertion`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(input),
+  });
+  if (!payload.ok) {
+    throw new ApiRequestError(payload.error ?? 'Handoff could not be recorded', undefined, payload);
+  }
+  return {
+    orderId: payload.orderId ?? orderId,
+    handoffClaimedAt: payload.handoffClaimedAt ?? new Date().toISOString(),
+    status: payload.status ?? 'paid',
+  };
+}
 /** POST /orders/:orderId/review — the schema takes `comment`/`photoUrls`
  *  (supportReviews.ts orderReviewBodySchema); photoUrls must be finalized
  *  uploads owned by the requester. Sends the Idempotency-Key header like
@@ -368,6 +415,95 @@ export async function fetchOrderReview(
     { signal },
   );
   return payload.ok ? (payload.review ?? null) : null;
+}
+
+export interface ReviewResponseResult {
+  reviewId: string;
+  text: string;
+  /** `createdAt` on first publish, `updatedAt` on an in-window edit. */
+  createdAt?: string;
+  updatedAt?: string;
+}
+
+/**
+ * POST /reviews/:reviewId/response — the seller's single public response
+ * to a review (supportReviews.ts). One response per review; re-posting
+ * edits it while the server's edit window is open, and 409s
+ * "The response edit window has closed" once it isn't — the error must
+ * reach the composer verbatim.
+ */
+export async function respondToOrderReview(
+  reviewId: string,
+  text: string,
+): Promise<ReviewResponseResult> {
+  const payload = await fetchJson<{
+    ok: boolean;
+    response?: ReviewResponseResult;
+    error?: string;
+  }>(`/reviews/${encodeURIComponent(reviewId)}/response`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ text }),
+  });
+  if (!payload.ok || !payload.response) {
+    throw new ApiRequestError(payload.error ?? 'Response could not be published', undefined, payload);
+  }
+  return payload.response;
+}
+
+// ── Authentication pipeline read (authentication.ts) ─────────────────────────
+//
+// GET /orders/:orderId/authentication is party-gated (buyer, seller,
+// admin). The pipeline's working state lives in Redis only —
+// orders.verification_requested is the durable Postgres flag, so the
+// endpoint can honestly report 'request_pending' when the flag exists
+// but no pipeline record is live yet. That is NOT a check in progress;
+// the presentation layer renders it as "request recorded".
+
+interface OrderAuthenticationApi {
+  requested: boolean;
+  status: string;
+  request: {
+    id: string;
+    listingId?: string;
+    status: string;
+    createdAt?: string;
+    updatedAt?: string;
+    badge?: {
+      type: string;
+      certificateId: string;
+      method?: string;
+      authenticator?: string;
+    } | null;
+  } | null;
+}
+
+/** Resolves to a domain OrderAuthentication; absent pipeline records map
+ *  to { status: 'request_pending' } — never null on a successful read. */
+export async function fetchOrderAuthentication(
+  orderId: string,
+  signal?: AbortSignal,
+): Promise<OrderAuthentication | null> {
+  const payload = await fetchJson<{ ok: boolean; authentication?: OrderAuthenticationApi }>(
+    `/orders/${encodeURIComponent(orderId)}/authentication`,
+    undefined,
+    { signal },
+  );
+  const auth = payload.authentication;
+  if (!payload.ok || !auth) return null;
+  const badge = auth.request?.badge ?? null;
+  return {
+    orderId,
+    status: (auth.status || 'not_requested') as OrderAuthenticationStatus,
+    badge: badge
+      ? {
+          type: badge.type,
+          method: badge.method ?? badge.authenticator ?? 'Verification',
+          certificateId: badge.certificateId,
+        }
+      : null,
+    updatedAt: auth.request?.updatedAt,
+  };
 }
 
 // ── Offers (listingOffersApi.ts) ─────────────────────────────────────────────
@@ -424,9 +560,12 @@ export async function fetchOffers(
 
 /**
  * Offer idempotency key — a retried submit must report the prior fan-out,
- * not mint a duplicate offer (mirrors mobile listingOffersApi).
+ * not mint a duplicate offer (mirrors mobile listingOffersApi). Exported
+ * so an offer surface can hold ONE key across the sheet session: a user
+ * retry after a dropped response replays the same key and the server's
+ * (offered_by_user_id, idempotency_key) unique constraint dedupes it.
  */
-function offerIdempotencyKey(): string {
+export function newOfferIdempotencyKey(): string {
   if (typeof crypto !== 'undefined' && typeof crypto.randomUUID === 'function') {
     return crypto.randomUUID();
   }
@@ -456,26 +595,51 @@ export async function respondToOffer(
   if (action === 'counter') {
     // POST /offers/:id/counter — the counter is a new offer row whose
     // contract mirrors createListingOfferOnApi (offerPriceGbp, not
-    // counterPriceGbp).
-    const payload = await fetchJson<OfferActionResponse>(
-      `/offers/${encodeURIComponent(offerId)}/counter`,
-      {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          offerPriceGbp: input?.counterPriceGbp,
-          expiryHours: input?.expiryHours ?? 48,
-          conversationId: input?.conversationId,
-          idempotencyKey: input?.idempotencyKey ?? offerIdempotencyKey(),
-        }),
-      },
-    );
-    // A 200 {ok:false} envelope is a soft failure — reject so the caller's
-    // optimistic row reverts instead of showing a change that never landed.
-    if (payload.ok === false) {
-      throw new ApiRequestError(payload.error ?? 'Could not send the counter', undefined, payload);
+    // counterPriceGbp). Same unknown-outcome contract as makeOffer: a
+    // dropped response reconciles through lookup-by-key before the
+    // failure is allowed to surface.
+    const idempotencyKey = input?.idempotencyKey ?? newOfferIdempotencyKey();
+    try {
+      const payload = await fetchJson<OfferActionResponse>(
+        `/offers/${encodeURIComponent(offerId)}/counter`,
+        {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            offerPriceGbp: input?.counterPriceGbp,
+            expiryHours: input?.expiryHours ?? 48,
+            conversationId: input?.conversationId,
+            idempotencyKey,
+          }),
+        },
+      );
+      // A 200 {ok:false} envelope is a soft failure — reject so the caller's
+      // optimistic row reverts instead of showing a change that never landed.
+      if (payload.ok === false) {
+        throw new ApiRequestError(payload.error ?? 'Could not send the counter', undefined, payload);
+      }
+      return;
+    } catch (error) {
+      // A definitive 4xx is a verdict — the counter was declined, not
+      // ambiguous; it propagates untouched.
+      if (
+        error instanceof ApiRequestError &&
+        typeof error.status === 'number' &&
+        error.status >= 400 &&
+        error.status < 500
+      ) {
+        throw error;
+      }
+      try {
+        // The counter row carries the same (offered_by_user_id,
+        // idempotency_key) contract — an acknowledged lookup means the
+        // write landed even though the response never arrived.
+        if (await lookupOfferByIdempotencyKey(idempotencyKey)) return;
+      } catch {
+        // Reconciliation read failed too — same key stays safe to retry.
+      }
+      throw error;
     }
-    return;
   }
   const payload = await fetchJson<OfferActionResponse>(
     `/offers/${encodeURIComponent(offerId)}/${action}`,
@@ -489,8 +653,56 @@ export async function respondToOffer(
   }
 }
 
-/** POST /listings/:id/offers — mirrors mobile createListingOfferOnApi:
- *  the server needs the original price, expiry and an idempotency key. */
+/**
+ * GET /users/me/offers/lookup-by-key/:key — unknown-outcome
+ * reconciliation (listingOffers.ts). When a create response is lost the
+ * outcome is ambiguous; this read answers it authoritatively for the
+ * authed user's key:
+ *   200 { status: 'acknowledged', offer } → the offer committed
+ *   404 { status: 'safe_to_retry' }       → nothing committed
+ * Returns the offer, or null when the server says the key never landed.
+ */
+export async function lookupOfferByIdempotencyKey(
+  idempotencyKey: string,
+  signal?: AbortSignal,
+): Promise<ListingOffer | null> {
+  try {
+    const payload = await fetchJson<{
+      ok: boolean;
+      status?: 'acknowledged' | 'safe_to_retry';
+      offer?: OfferRow;
+    }>(
+      `/users/me/offers/lookup-by-key/${encodeURIComponent(idempotencyKey)}`,
+      undefined,
+      { signal },
+    );
+    if (payload.ok && payload.status === 'acknowledged' && payload.offer) {
+      return mapOffer(payload.offer);
+    }
+    return null;
+  } catch (error) {
+    // 404 { ok:false, status:'safe_to_retry' } — the server's explicit
+    // "nothing committed" verdict, not a failure.
+    if (error instanceof ApiRequestError && error.status === 404) return null;
+    throw error;
+  }
+}
+
+/**
+ * POST /listings/:id/offers — mirrors mobile createListingOfferOnApi:
+ * the server needs the original price, expiry and an idempotency key.
+ *
+ * Unknown-outcome recovery: a failure with no definitive server verdict
+ * (network drop, 5xx, lost body) is ambiguous — the offer may have
+ * committed before the response died. We reconcile through
+ * lookup-by-key with the SAME key before surfacing the failure:
+ *   - lookup returns the offer  → the write landed; return it (no dup —
+ *     the create path already deduped on the key).
+ *   - lookup says safe_to_retry → the failure is real; rethrow verbatim
+ *     so the caller can offer an honest retry.
+ * A definitive 4xx was received from the server — the offer was
+ * declined, not ambiguous — so it propagates untouched.
+ */
 export async function makeOffer(
   listingId: string,
   offerPriceGbp: number,
@@ -501,26 +713,48 @@ export async function makeOffer(
     idempotencyKey?: string;
   } = {},
 ): Promise<ListingOffer> {
-  const payload = await fetchJson<{ ok: boolean; offer?: OfferRow }>(
-    `/listings/${encodeURIComponent(listingId)}/offers`,
-    {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({
-        listingId,
-        offerPriceGbp,
-        expiryHours: input.expiryHours ?? 48,
-        conversationId: input.conversationId,
-        idempotencyKey: input.idempotencyKey ?? offerIdempotencyKey(),
-        metadata:
-          input.originalPriceGbp !== undefined
-            ? { originalPriceGbp: input.originalPriceGbp }
-            : {},
-      }),
-    },
-  );
-  if (!payload.ok || !payload.offer) throw new Error('Offer not created');
-  return mapOffer(payload.offer);
+  const idempotencyKey = input.idempotencyKey ?? newOfferIdempotencyKey();
+  try {
+    const payload = await fetchJson<{ ok: boolean; offer?: OfferRow }>(
+      `/listings/${encodeURIComponent(listingId)}/offers`,
+      {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          listingId,
+          offerPriceGbp,
+          expiryHours: input.expiryHours ?? 48,
+          conversationId: input.conversationId,
+          idempotencyKey,
+          metadata:
+            input.originalPriceGbp !== undefined
+              ? { originalPriceGbp: input.originalPriceGbp }
+              : {},
+        }),
+      },
+    );
+    if (!payload.ok || !payload.offer) throw new Error('Offer not created');
+    return mapOffer(payload.offer);
+  } catch (error) {
+    // A 4xx is a verdict the server computed — the offer was rejected.
+    // Reconciliation only answers outcomes the server never reported.
+    if (
+      error instanceof ApiRequestError &&
+      typeof error.status === 'number' &&
+      error.status >= 400 &&
+      error.status < 500
+    ) {
+      throw error;
+    }
+    try {
+      const recovered = await lookupOfferByIdempotencyKey(idempotencyKey);
+      if (recovered) return recovered;
+    } catch {
+      // The reconciliation read failed too — the same key remains safe
+      // to retry (the unique constraint dedupes any committed write).
+    }
+    throw error;
+  }
 }
 
 // ── Offer to likers (listingOffersApi.ts — seller-authored fan-out) ──────────
@@ -829,6 +1063,38 @@ export async function appealReturnCase(returnCaseId: string, reason: string): Pr
   });
 }
 
+/**
+ * Buyer appends evidence to an open case — POST /return-cases/:id/evidence.
+ * Buyer-only, and only while the case sits in 'requested' or
+ * 'evidence_review'; the route 409s "Cannot add evidence from status '…'"
+ * otherwise. A 'requested' case moves to 'evidence_review' on append —
+ * the returned status is the truth to re-render, not an optimistic guess.
+ */
+export async function uploadReturnEvidence(
+  returnCaseId: string,
+  evidenceMediaUrls: string[],
+): Promise<{ returnCaseId: string; status: string; evidenceMediaUrls: string[] }> {
+  const payload = await fetchJson<{
+    ok: boolean;
+    returnCaseId?: string;
+    status?: string;
+    evidenceMediaUrls?: string[];
+    error?: string;
+  }>(`/return-cases/${encodeURIComponent(returnCaseId)}/evidence`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ evidenceMediaUrls }),
+  });
+  if (!payload.ok) {
+    throw new ApiRequestError(payload.error ?? 'Evidence could not be added', undefined, payload);
+  }
+  return {
+    returnCaseId: payload.returnCaseId ?? returnCaseId,
+    status: payload.status ?? 'evidence_review',
+    evidenceMediaUrls: payload.evidenceMediaUrls ?? evidenceMediaUrls,
+  };
+}
+
 // ── Shipping labels (commerceApi.ts) ─────────────────────────────────────────
 
 /**
@@ -893,6 +1159,9 @@ interface ParcelEventApi {
 }
 
 const PARCEL_EVENT_LABEL: Record<string, string> = {
+  // Seller drop-off claim — evidence the seller asserts, not a carrier
+  // scan (the handoff-assertion route never moves orders.status).
+  handoff_asserted: 'Dropped off (seller reported)',
   picked_up: 'Picked up by the carrier',
   collection_confirmed: 'Collection confirmed',
   in_transit: 'In transit',

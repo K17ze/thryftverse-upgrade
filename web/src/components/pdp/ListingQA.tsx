@@ -17,6 +17,7 @@
 
 import { useState } from 'react';
 import { useRouter } from 'next/navigation';
+import { useQuery, useQueryClient } from '@tanstack/react-query';
 import type { Listing } from '@/lib/contracts/domain';
 import { Avatar } from '@/components/ui/Avatar';
 import { Icon } from '@/components/ui/Icon';
@@ -24,6 +25,8 @@ import { Skeleton } from '@/components/ui/Skeleton';
 import { useToast } from '@/components/ui/Toast';
 import { useSession } from '@/lib/session/SessionProvider';
 import { parseApiError } from '@/lib/api/http';
+import { DATA_MODE } from '@/lib/api/client';
+import * as listingsService from '@/lib/api/services/listings';
 import {
   useAnswerListingQuestion,
   useListingQuestions,
@@ -42,17 +45,49 @@ export function ListingQA({ listing, isSellerBlocked = false }: ListingQAProps) 
   const router = useRouter();
   const { show } = useToast();
   const { user, isGuest } = useSession();
+  const queryClient = useQueryClient();
 
   const questionsQuery = useListingQuestions(listing.id);
   const questions = questionsQuery.data ?? [];
   const postQuestion = usePostListingQuestion(listing.id);
   const answerQuestion = useAnswerListingQuestion(listing.id);
 
+  /**
+   * Q&A summary — GET /listings/:id/qa-summary, the aggregate read native
+   * uses for its "View all questions" affordance. It gives the server-
+   * authoritative public count (the threads payload can lag or page) and
+   * the answered-count. Live-only: the extra lines hide in fixture mode
+   * rather than fabricating; a failed read just falls back to the loaded
+   * list length — the threads below remain the visible truth.
+   */
+  const liveMode = DATA_MODE === 'live';
+  const summaryQuery = useQuery({
+    queryKey: ['listing-qa-summary', listing.id],
+    enabled: liveMode,
+    staleTime: 30_000,
+    retry: 1,
+    queryFn: ({ signal }) => listingsService.fetchListingQaSummary(listing.id, signal),
+  });
+  const qaSummary = summaryQuery.data ?? null;
+
   const [askText, setAskText] = useState('');
   const [answeringId, setAnsweringId] = useState<string | null>(null);
   const [answerText, setAnswerText] = useState('');
 
   const isSeller = user?.id === listing.sellerId;
+
+  // The server count wins in live mode — it covers every publicly-visible
+  // question, not just the rows this page loaded.
+  const questionTotal =
+    liveMode && qaSummary ? qaSummary.questionCount : questions.length;
+  const answeredTotal = qaSummary?.answeredQuestionCount ?? 0;
+
+  // Native parity: the whole section self-omits when nothing can render.
+  // For the seller viewing their own listing there is no ask composer and,
+  // once the server reports zero public questions, no archive either.
+  if (isSeller && liveMode && qaSummary && qaSummary.questionCount === 0) {
+    return null;
+  }
 
   const handleAsk = () => {
     const trimmed = askText.trim();
@@ -70,6 +105,9 @@ export function ListingQA({ listing, isSellerBlocked = false }: ListingQAProps) 
     postQuestion.mutate(trimmed, {
       onSuccess: (question) => {
         setAskText('');
+        void queryClient.invalidateQueries({
+          queryKey: ['listing-qa-summary', listing.id],
+        });
         show(
           question.moderationState === 'pending_review'
             ? 'Question sent — it appears once review clears'
@@ -99,6 +137,9 @@ export function ListingQA({ listing, isSellerBlocked = false }: ListingQAProps) 
         onSuccess: ({ answer }) => {
           setAnswerText('');
           setAnsweringId(null);
+          void queryClient.invalidateQueries({
+            queryKey: ['listing-qa-summary', listing.id],
+          });
           show(
             answer.moderationState === 'pending_review'
               ? 'Answer sent — it appears once review clears'
@@ -129,9 +170,14 @@ export function ListingQA({ listing, isSellerBlocked = false }: ListingQAProps) 
         >
           Questions &amp; answers
         </h2>
-        {questions.length > 0 ? (
+        {questionTotal > 0 ? (
           <span className="tnum rounded-full bg-surface-alt px-2 py-0.5 text-meta text-text-muted">
-            {questions.length}
+            {questionTotal}
+          </span>
+        ) : null}
+        {answeredTotal > 0 ? (
+          <span className="text-meta text-text-muted">
+            {answeredTotal} answered
           </span>
         ) : null}
       </div>

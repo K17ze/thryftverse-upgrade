@@ -5,6 +5,11 @@
  * only types 'listing' | 'user' targets, so the group path composes the
  * same exported primitives (reason catalogue, staged send, success
  * receipt) with the correct noun.
+ *
+ * Live mode files at POST /chat/conversations/:id/report — the moderation
+ * intake, not a support case. The route's reason enum is narrower than the
+ * shared catalogue, so the chosen reason maps onto the nearest wire value
+ * below (the details field still carries the reporter's own words).
  */
 
 import { useEffect, useState } from 'react';
@@ -12,6 +17,11 @@ import { Button } from '@/components/ui/Button';
 import { Sheet } from '@/components/ui/Sheet';
 import { useToast } from '@/components/ui/Toast';
 import { useSupportActions } from '@/components/support/useSupportTickets';
+import { DATA_MODE } from '@/lib/api/client';
+import {
+  reportConversation,
+  type ConversationReportReason,
+} from '@/lib/api/services/chat';
 import {
   REPORT_REASONS,
   ReportReasonList,
@@ -19,13 +29,35 @@ import {
   type ReportReason,
 } from '@/components/report';
 
+/** Shared report vocabulary → the conversation-report enum the route
+ *  validates (spam|harassment|scam_fraud|inappropriate_content|
+ *  off_platform_payment|impersonation|other). */
+const GROUP_REASON_WIRE: Record<ReportReason, ConversationReportReason> = {
+  spam: 'spam',
+  harassment: 'harassment',
+  scam: 'scam_fraud',
+  counterfeit: 'scam_fraud',
+  off_platform: 'off_platform_payment',
+  impersonation: 'impersonation',
+  hate_speech: 'inappropriate_content',
+  prohibited: 'inappropriate_content',
+  misinformation: 'inappropriate_content',
+  privacy: 'inappropriate_content',
+  minor_safety: 'inappropriate_content',
+  other: 'other',
+};
+
 export function ReportGroupSheet({
   open,
   onClose,
+  conversationId,
   groupLabel,
 }: {
   open: boolean;
   onClose: () => void;
+  /** The group conversation the report is filed against — required for
+   *  the live moderation write. */
+  conversationId: string;
   groupLabel: string;
 }) {
   const { createTicket } = useSupportActions();
@@ -52,15 +84,26 @@ export function ReportGroupSheet({
     const reasonLabel =
       REPORT_REASONS.find((r) => r.key === reason)?.label ?? 'Report';
     try {
-      const ticket = await createTicket({
-        topicId: 'other',
-        orderRef: null,
-        message:
-          `Group report — ${reasonLabel}` +
-          (groupLabel ? ` · ${groupLabel}` : ''),
-      });
-      setReportId(ticket.ref ?? ticket.id.toUpperCase());
-      setTicketId(ticket.id);
+      if (DATA_MODE === 'live') {
+        const result = await reportConversation(conversationId, {
+          reason: GROUP_REASON_WIRE[reason],
+          idempotencyKey: `webrpt_conv_${conversationId}_${Date.now()}`,
+        });
+        // Conversation reports have no case thread — receipt shows the
+        // report id only.
+        setReportId(result.reportId);
+        setTicketId(null);
+      } else {
+        const ticket = await createTicket({
+          topicId: 'other',
+          orderRef: null,
+          message:
+            `Group report — ${reasonLabel}` +
+            (groupLabel ? ` · ${groupLabel}` : ''),
+        });
+        setReportId(ticket.ref ?? ticket.id.toUpperCase());
+        setTicketId(ticket.id);
+      }
       setSubmittedAt(
         new Date().toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' }),
       );

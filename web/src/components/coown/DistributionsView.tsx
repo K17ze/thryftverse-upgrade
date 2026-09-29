@@ -11,6 +11,7 @@ import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import { Badge } from '@/components/ui/Badge';
 import { EmptyState } from '@/components/ui/EmptyState';
+import { Skeleton } from '@/components/ui/Skeleton';
 import { Switch } from '@/components/settings/Switch';
 import { useToast } from '@/components/ui/Toast';
 import { DATA_MODE } from '@/lib/api/client';
@@ -18,11 +19,12 @@ import {
   useCoOwnAssets,
   useCoOwnPositions,
   useDistributionReceipts,
+  useDistributions,
   useDripEnrollments,
   useSetDripEnrollment,
 } from '@/lib/hooks/coown-queries';
 import { useSession } from '@/lib/session/SessionProvider';
-import type { DistributionReceipt } from '@/lib/contracts/coown';
+import type { Distribution, DistributionReceipt } from '@/lib/contracts/coown';
 import { distributionKindLabel, distributionStatusLabel, distributionStatusVariant, gbp } from './format';
 
 function shortDate(iso: string | null): string {
@@ -40,11 +42,16 @@ export function DistributionsView() {
   const { show } = useToast();
   const assetsQ = useCoOwnAssets();
   const receiptsQ = useDistributionReceipts();
+  // The raw distribution rows — the calendar's source. For the signed-in
+  // viewer these are per-recipient rows carrying the record/ex/projected
+  // stage dates; guests never reach this branch (the wall returns early).
+  const distributionsQ = useDistributions();
   const positionsQ = useCoOwnPositions();
   const dripQ = useDripEnrollments();
   const setDrip = useSetDripEnrollment();
 
-  const loading = sessionLoading || assetsQ.isLoading || receiptsQ.isLoading;
+  const loading =
+    sessionLoading || assetsQ.isLoading || receiptsQ.isLoading || distributionsQ.isLoading;
 
   // Income receipts are account-bound — guests sign in rather than read
   // the demo identity's distribution history.
@@ -65,15 +72,15 @@ export function DistributionsView() {
   if (loading) {
     return (
       <div className="mx-auto w-full max-w-5xl px-4 pb-20 pt-8 sm:px-6 md:pt-10 lg:max-w-[1440px]">
-        <div className="skeleton h-8 w-52 rounded-sm" aria-hidden="true" />
+        <Skeleton className="h-8 w-52" />
         <div className="mt-8 grid grid-cols-3 gap-6" aria-hidden="true">
           {[0, 1, 2].map((i) => (
-            <div key={i} className="skeleton h-12 rounded-sm" />
+            <Skeleton key={i} className="h-12" />
           ))}
         </div>
         <div className="mt-10 space-y-1.5" aria-hidden="true">
           {[0, 1, 2, 3, 4].map((i) => (
-            <div key={i} className="skeleton h-12 rounded-sm" />
+            <Skeleton key={i} className="h-12" />
           ))}
         </div>
       </div>
@@ -101,12 +108,19 @@ export function DistributionsView() {
     assetsQ.data?.find((a) => a.id === assetId)?.title ?? 'Unknown market';
 
   const receipts = receiptsQ.data;
-  // DRIP applies to assets the viewer actually holds — the enrolment
-  // list alone would show toggles for assets with no position.
+  // DRIP applies only where a payout can exist: a held asset with at
+  // least one distribution row on the wire (settled or scheduled).
+  // Same gate OwnershipTab applies per-asset — enrolment on a market
+  // that has never published a distribution is a dead toggle.
   const heldAssetIds = new Set(
     (positionsQ.data ?? []).filter((p) => p.units > 0).map((p) => p.assetId),
   );
-  const dripAssets = (assetsQ.data ?? []).filter((a) => heldAssetIds.has(a.id));
+  const distributingIds = new Set(
+    (distributionsQ.data?.items ?? []).map((d) => d.assetId),
+  );
+  const dripAssets = (assetsQ.data ?? []).filter(
+    (a) => heldAssetIds.has(a.id) && distributingIds.has(a.id),
+  );
   const dripByAsset = new Map((dripQ.data ?? []).map((e) => [e.assetId, e.enrolled]));
   // Fixture-anchored "now": the newest ex-date defines the current year.
   const year = receipts.length > 0 ? new Date(receipts[0]!.exDate).getFullYear() : new Date().getFullYear();
@@ -198,6 +212,29 @@ export function DistributionsView() {
         </section>
       ) : null}
 
+      {/* Distribution calendar — record / ex / payable stage dates grouped
+          upcoming vs past. Reads the raw per-recipient rows (not receipts):
+          a scheduled distribution appears here before it's owed, which is
+          exactly what a calendar is for. Only dates the wire carries get a
+          chip. */}
+      {distributionsQ.isError ? (
+        <div className="mt-8 flex items-center justify-between gap-4 border-y border-border-subtle py-4">
+          <p className="text-body text-text-secondary">Couldn’t load the distribution calendar.</p>
+          <button
+            type="button"
+            onClick={() => void distributionsQ.refetch()}
+            className="pressable text-body font-semibold text-text-primary underline-offset-4 hover:underline"
+          >
+            Retry
+          </button>
+        </div>
+      ) : (
+        <DistributionCalendar
+          items={distributionsQ.data?.items ?? []}
+          titleFor={titleFor}
+        />
+      )}
+
       {receipts.length === 0 ? (
         <div className="mt-8 border-t border-border-subtle">
           <EmptyState
@@ -265,6 +302,113 @@ export function DistributionsView() {
         </>
       )}
     </div>
+  );
+}
+
+// ── Calendar ──────────────────────────────────────────────────────────
+// Upcoming = the wire status is still scheduled/pending; everything
+// else (settled, reversed, reinvested, …) is history. Stage chips render
+// only when that date is present on the row — a distribution with no
+// record date simply shows none.
+
+function stageDate(iso: string | null | undefined): string | null {
+  if (!iso) return null;
+  const t = Date.parse(iso);
+  if (!Number.isFinite(t)) return null;
+  return new Date(t).toLocaleDateString('en-GB', { day: 'numeric', month: 'short', timeZone: 'UTC' });
+}
+
+function CalendarRow({ d, title }: { d: Distribution; title: string }) {
+  const upcoming = d.status === 'scheduled' || d.status === 'pending';
+  const record = stageDate(d.recordDate);
+  const ex = stageDate(d.exDate);
+  // For unpaid rows the payable date is the projection (or the derived
+  // scheduledFor); once settled the paid date speaks instead.
+  const paysIso = upcoming && !d.paidAt ? d.projectedPayableDate ?? d.scheduledFor : null;
+  const pays = stageDate(paysIso);
+  const paid = stageDate(d.paidAt);
+  // One badge only where it earns it: a payable date already past on a
+  // row still claiming scheduled/pending is late — everything else is
+  // quiet text, not chrome.
+  const paysOverdue = paysIso != null && Date.parse(paysIso) < Date.now();
+  const stages = [
+    record ? `Record ${record}` : null,
+    ex ? `Ex ${ex}` : null,
+    pays ? `Pays ${pays}` : null,
+    paid ? `Paid ${paid}` : null,
+  ].filter((s): s is string => s != null);
+  return (
+    <li className="flex flex-wrap items-center justify-between gap-x-4 gap-y-1.5 px-1 py-3">
+      <div className="min-w-0">
+        <Link
+          href={`/co-own/${d.assetId}`}
+          className="pressable clamp-1 block text-body font-semibold text-text-primary"
+        >
+          {title}
+        </Link>
+        <p className="mt-0.5 text-meta text-text-muted tnum">
+          {distributionKindLabel(d)} · {gbp(d.amountPerUnitGbp)}/unit
+        </p>
+      </div>
+      <div className="flex shrink-0 flex-wrap items-center justify-end gap-x-2 gap-y-1">
+        {stages.length > 0 ? (
+          <p className="text-meta text-text-muted tnum">{stages.join(' · ')}</p>
+        ) : null}
+        {paysOverdue ? <Badge variant="warning">Overdue</Badge> : null}
+      </div>
+    </li>
+  );
+}
+
+function DistributionCalendar({
+  items,
+  titleFor,
+}: {
+  items: Distribution[];
+  titleFor: (assetId: string) => string;
+}) {
+  if (items.length === 0) return null;
+
+  const upcoming = items
+    .filter((d) => d.status === 'scheduled' || d.status === 'pending')
+    .sort((a, b) => Date.parse(a.scheduledFor) - Date.parse(b.scheduledFor));
+  const past = items
+    .filter((d) => d.status !== 'scheduled' && d.status !== 'pending')
+    .sort(
+      (a, b) =>
+        Date.parse(b.paidAt ?? b.scheduledFor) - Date.parse(a.paidAt ?? a.scheduledFor),
+    );
+
+  return (
+    <section aria-labelledby="calendar-heading" className="mt-8">
+      <h2 id="calendar-heading" className="text-section-title font-semibold text-text-primary">
+        Calendar
+      </h2>
+      {upcoming.length > 0 ? (
+        <>
+          <h3 className="mt-4 text-micro font-semibold uppercase tracking-[0.08em] text-text-muted">
+            Upcoming
+          </h3>
+          <ul className="mt-1 divide-y divide-border-subtle border-b border-border-subtle">
+            {upcoming.map((d) => (
+              <CalendarRow key={d.id} d={d} title={titleFor(d.assetId)} />
+            ))}
+          </ul>
+        </>
+      ) : null}
+      {past.length > 0 ? (
+        <>
+          <h3 className="mt-4 text-micro font-semibold uppercase tracking-[0.08em] text-text-muted">
+            Past
+          </h3>
+          <ul className="mt-1 divide-y divide-border-subtle border-b border-border-subtle">
+            {past.map((d) => (
+              <CalendarRow key={d.id} d={d} title={titleFor(d.assetId)} />
+            ))}
+          </ul>
+        </>
+      ) : null}
+    </section>
   );
 }
 

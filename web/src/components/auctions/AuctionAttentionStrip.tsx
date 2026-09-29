@@ -14,7 +14,7 @@ import { AppImage } from '@/components/ui/AppImage';
 import { formatDuration } from '@/lib/data/fixtures-auctions';
 import { formatPrice } from '@/lib/utils/format';
 
-export type AttentionKind = 'outbid' | 'won' | 'leading';
+export type AttentionKind = 'outbid' | 'won' | 'leading' | 'watching';
 
 const KIND: Record<
   AttentionKind,
@@ -36,6 +36,12 @@ const KIND: Record<
     label: 'Leading',
     accent: 'border-l-brand',
     text: 'text-text-primary',
+    action: 'View auction',
+  },
+  watching: {
+    label: 'Watching',
+    accent: 'border-l-text-muted',
+    text: 'text-text-secondary',
     action: 'View auction',
   },
 };

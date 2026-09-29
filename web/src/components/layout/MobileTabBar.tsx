@@ -90,13 +90,15 @@ export function MobileTabBar() {
           ),
         )}
 
-        {/* Create — center action, not a destination */}
+        {/* Create — center action, not a destination. Mirrors the native
+            + tab opening CreatorStudio: web lands on the /create picker
+            (look | poster | sell an item). */}
         <div className="flex flex-1 items-center justify-center">
           <button
             type="button"
             aria-label={t('chrome.tabs.createAria')}
             onClick={() => {
-              if (requireAuth('create_listing')) router.push('/sell');
+              if (requireAuth('create_content')) router.push('/create');
             }}
             className="pressable flex h-[52px] w-[52px] items-center justify-center"
           >

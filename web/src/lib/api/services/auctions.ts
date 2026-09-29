@@ -146,23 +146,165 @@ export async function fetchAuctionBoard(
   };
 }
 
-export async function fetchAuctionHome(
-  signal?: AbortSignal,
-): Promise<{ featured: AuctionMarketItem[]; endingSoon: AuctionMarketItem[] }> {
+/**
+ * GET /auctions/home — the server's hub feed (backend/api/src/index.ts:36606;
+ * mirrors AuctionHomeResponse in frontend/src/services/marketApi.ts). One
+ * request returns the authored rails: the deterministic attention pick, the
+ * closing-soon programme, the live floor, upcoming, category worlds,
+ * recently closed, the viewer's seller rail and watchlist, plus per-viewer
+ * activity counts computed over the whole inventory (not a bounded page).
+ */
+export type AuctionHomeAttentionReason =
+  | 'won_action'
+  | 'outbid'
+  | 'leading_ending'
+  | 'leading'
+  | 'watching_ending';
+
+export interface AuctionCategoryWorld {
+  categoryKey: string;
+  displayName: string;
+  representativeImageUrl: string | null;
+  availableCount?: number;
+}
+
+export interface AuctionHomeFeed {
+  serverNow: string | null;
+  /** The one auction the server wants in front of the viewer — `reason` is
+   *  null when the pick is a market highlight rather than personal state. */
+  attention: { item: AuctionMarketItem | null; reason: AuctionHomeAttentionReason | null };
+  activity: {
+    activeCount: number;
+    needsAttentionCount: number;
+    leadingCount: number;
+    outbidCount: number;
+    watchingCount: number;
+    unresolvedWonCount: number;
+  };
+  closingSoon: AuctionMarketItem[];
+  live: AuctionMarketItem[];
+  upcoming: AuctionMarketItem[];
+  categoryWorlds: AuctionCategoryWorld[];
+  recentlyClosed: AuctionMarketItem[];
+  sellerSummary: { liveCount: number; scheduledCount: number; completedCount: number } | null;
+  sellerAuctions: AuctionMarketItem[];
+  watchlist: AuctionMarketItem[];
+}
+
+export async function fetchAuctionHome(signal?: AbortSignal): Promise<AuctionHomeFeed> {
   const payload = await fetchJson<{
     ok?: boolean;
-    featured?: MarketAuctionDetailApi[];
-    endingSoon?: MarketAuctionDetailApi[];
+    serverNow?: string;
+    attention?: { item?: MarketAuctionDetailApi | null; reason?: string | null } | null;
+    activity?: {
+      activeCount?: number;
+      needsAttentionCount?: number;
+      leadingCount?: number;
+      outbidCount?: number;
+      watchingCount?: number;
+      unresolvedWonCount?: number;
+    };
+    closingSoon?: MarketAuctionDetailApi[];
+    live?: MarketAuctionDetailApi[];
+    upcoming?: MarketAuctionDetailApi[];
+    categoryWorlds?: AuctionCategoryWorld[];
+    recentlyClosed?: MarketAuctionDetailApi[];
+    sellerSummary?: { liveCount?: number; scheduledCount?: number; completedCount?: number };
+    sellerAuctions?: MarketAuctionDetailApi[];
+    watchlist?: MarketAuctionDetailApi[];
   }>('/auctions/home', undefined, { signal });
+  const stamp = (rows: MarketAuctionDetailApi[] | undefined) =>
+    stampServerNow((rows ?? []).map(mapAuction), payload.serverNow);
   return {
-    featured: (payload.featured ?? []).map(mapAuction),
-    endingSoon: (payload.endingSoon ?? []).map(mapAuction),
+    serverNow: payload.serverNow ?? null,
+    attention: {
+      item: payload.attention?.item ? mapAuction(payload.attention.item) : null,
+      reason:
+        typeof payload.attention?.reason === 'string'
+          ? (payload.attention.reason as AuctionHomeAttentionReason)
+          : null,
+    },
+    activity: {
+      activeCount: payload.activity?.activeCount ?? 0,
+      needsAttentionCount: payload.activity?.needsAttentionCount ?? 0,
+      leadingCount: payload.activity?.leadingCount ?? 0,
+      outbidCount: payload.activity?.outbidCount ?? 0,
+      watchingCount: payload.activity?.watchingCount ?? 0,
+      unresolvedWonCount: payload.activity?.unresolvedWonCount ?? 0,
+    },
+    closingSoon: stamp(payload.closingSoon),
+    live: stamp(payload.live),
+    upcoming: stamp(payload.upcoming),
+    categoryWorlds: payload.categoryWorlds ?? [],
+    recentlyClosed: stamp(payload.recentlyClosed),
+    sellerSummary: payload.sellerSummary
+      ? {
+          liveCount: payload.sellerSummary.liveCount ?? 0,
+          scheduledCount: payload.sellerSummary.scheduledCount ?? 0,
+          completedCount: payload.sellerSummary.completedCount ?? 0,
+        }
+      : null,
+    sellerAuctions: stamp(payload.sellerAuctions),
+    watchlist: stamp(payload.watchlist),
   };
 }
 
-/** The detail serve's companion payload — its own bid ledger (which,
- *  unlike the standalone /bids route on this deployment, carries bidder
- *  usernames) and the server clock. */
+/**
+ * GET /auctions/facets — server-driven filter facets
+ * (backend/api/src/index.ts:36914; mirrors getAuctionFacets in marketApi).
+ * Faceted-search semantics: a dimension ignores its own constraint, every
+ * other active constraint applies — so category counts stay honest while a
+ * category filter is selected. The `status` param is accepted by the route
+ * schema but unused by the facet queries — it is not sent.
+ */
+export interface AuctionFacets {
+  categories: { id: string; label: string; count: number }[];
+  /** Full selectable price spectrum for the current constraints. */
+  price: { min: number; max: number };
+  /** Per-scope totals — 'results' is the ended scope's wire name. */
+  statusCounts: { live: number; upcoming: number; results: number; watching: number };
+}
+
+export async function fetchAuctionFacets(
+  params: {
+    query?: string;
+    category?: string;
+    /** CSV multi-select form of `category`. */
+    categories?: string;
+    priceMin?: number;
+    priceMax?: number;
+  } = {},
+  signal?: AbortSignal,
+): Promise<AuctionFacets> {
+  const payload = await fetchJson<{
+    ok?: boolean;
+    facets?: {
+      categories?: { id?: string; label?: string; count?: number }[];
+      price?: { min?: number; max?: number };
+      statusCounts?: { live?: number; upcoming?: number; results?: number; watching?: number };
+    };
+    serverNow?: string;
+  }>(`/auctions/facets${toQuery(params)}`, undefined, { signal });
+  const facets = payload.facets;
+  return {
+    categories: (facets?.categories ?? []).map((c) => ({
+      id: c.id ?? '',
+      label: c.label ?? c.id ?? '',
+      count: c.count ?? 0,
+    })),
+    price: { min: facets?.price?.min ?? 0, max: facets?.price?.max ?? 0 },
+    statusCounts: {
+      live: facets?.statusCounts?.live ?? 0,
+      upcoming: facets?.statusCounts?.upcoming ?? 0,
+      results: facets?.statusCounts?.results ?? 0,
+      watching: facets?.statusCounts?.watching ?? 0,
+    },
+  };
+}
+
+/** The detail serve's companion payload — its own bid ledger (a top-20
+ *  activity window with usernames) and the server clock. The standalone
+ *  /bids route stays the full-history read (server-capped at 200). */
 export interface AuctionDetailBundle {
   auction: AuctionMarketItem;
   /** Detail-echoed ledger, mapped — null when the serve carries no
@@ -201,25 +343,20 @@ export async function fetchAuctionDetail(
   return bundle ? bundle.auction : null;
 }
 
-export async function fetchAuctionByListing(
-  listingId: string,
-  signal?: AbortSignal,
-): Promise<AuctionMarketItem | null> {
-  const payload = await fetchJson<{ ok: boolean; auction?: MarketAuctionDetailApi | null }>(
-    `/auctions/by-listing/${encodeURIComponent(listingId)}`,
-    undefined,
-    { signal },
-  );
-  if (!payload.ok || !payload.auction) return null;
-  return mapAuction(payload.auction);
-}
-
+/**
+ * GET /auctions/:auctionId/bids — the standalone ledger
+ * (backend/api/src/index.ts:37635; mirrors listAuctionBids in marketApi).
+ * Rows arrive newest-first and carry bidderUsername on this deployment —
+ * `limit` is server-capped at 200, so 200 IS the full-history read (the
+ * detail serve's bidActivity only ever carries the top 20).
+ */
 export async function fetchAuctionBids(
   auctionId: string,
+  options: { limit?: number } = {},
   signal?: AbortSignal,
 ): Promise<AuctionBid[]> {
   const payload = await fetchJson<{ ok?: boolean; items?: AuctionBidActivityApi[]; bids?: AuctionBidActivityApi[] }>(
-    `/auctions/${encodeURIComponent(auctionId)}/bids`,
+    `/auctions/${encodeURIComponent(auctionId)}/bids${toQuery({ limit: options.limit })}`,
     undefined,
     { signal },
   );
@@ -400,13 +537,26 @@ export async function placeAuctionBid(
 
 // ── Post-end actions — mirror mobile marketApi.ts ──────────────────────
 
-/** Winner (or second-chance recipient) accepts the offer — the backend
- *  deduplicates on the idempotency key. */
+/** The lifecycle writes return a REDUCED auction echo — {id, status,
+ *  paymentDeadlineAt} — not a market row. Mapping it through mapAuction
+ *  would fabricate fields (and crash on the absent seller block), so the
+ *  wire shape is returned verbatim and callers refresh the real reads. */
+export interface AuctionLifecycleEcho {
+  id: string;
+  status: string;
+  paymentDeadlineAt?: string | null;
+}
+
+/** Second-chance recipient accepts the offer — POST
+ *  /auctions/:auctionId/second-chance/accept
+ *  (backend/api/src/routes/auctions.ts:1661). The backend deduplicates on
+ *  the idempotency key; success binds this bidder as the winner at THEIR
+ *  bid and reopens the 24h payment window. */
 export async function acceptSecondChance(
   auctionId: string,
   idempotencyKey: string,
-): Promise<AuctionMarketItem> {
-  const payload = await fetchJson<{ ok: boolean; auction: MarketAuctionDetailApi }>(
+): Promise<{ ok: true; auction: AuctionLifecycleEcho }> {
+  const payload = await fetchJson<{ ok: boolean; auction: AuctionLifecycleEcho }>(
     `/auctions/${encodeURIComponent(auctionId)}/second-chance/accept`,
     {
       method: 'POST',
@@ -414,24 +564,50 @@ export async function acceptSecondChance(
       body: JSON.stringify({ idempotencyKey }),
     },
   );
-  return mapAuction(payload.auction);
+  return { ok: true, auction: payload.auction };
 }
 
-export async function declineSecondChance(auctionId: string): Promise<AuctionMarketItem> {
-  const payload = await fetchJson<{ ok: boolean; auction: MarketAuctionDetailApi }>(
-    `/auctions/${encodeURIComponent(auctionId)}/second-chance/decline`,
-    { method: 'POST' },
-  );
-  return mapAuction(payload.auction);
+/** Second-chance recipient declines — POST
+ *  /auctions/:auctionId/second-chance/decline
+ *  (routes/auctions.ts:1814). The wire reports where the chain advanced:
+ *  `relisted` when no eligible bidder remained, else the next recipient. */
+export interface DeclineSecondChanceResult {
+  ok: true;
+  auctionId: string;
+  relisted: boolean;
+  secondChanceOfferedTo: string | null;
+  paymentDeadlineAt: string | null;
 }
 
-/** Seller accepts the highest bid below reserve (reserve-not-met flow). */
-export async function acceptHighestBid(auctionId: string): Promise<AuctionMarketItem> {
-  const payload = await fetchJson<{ ok: boolean; auction: MarketAuctionDetailApi }>(
+export async function declineSecondChance(auctionId: string): Promise<DeclineSecondChanceResult> {
+  const payload = await fetchJson<{
+    ok: boolean;
+    auctionId: string;
+    relisted?: boolean;
+    secondChanceOfferedTo?: string | null;
+    paymentDeadlineAt?: string | null;
+  }>(`/auctions/${encodeURIComponent(auctionId)}/second-chance/decline`, { method: 'POST' });
+  return {
+    ok: true,
+    auctionId: payload.auctionId,
+    relisted: payload.relisted === true,
+    secondChanceOfferedTo: payload.secondChanceOfferedTo ?? null,
+    paymentDeadlineAt: payload.paymentDeadlineAt ?? null,
+  };
+}
+
+/** Seller accepts the standing highest bid below reserve — POST
+ *  /auctions/:auctionId/accept-highest-bid (routes/auctions.ts:1900).
+ *  Requires status 'reserve_not_met'; success binds the top bidder as
+ *  winner with a 72h payment window. */
+export async function acceptHighestBid(
+  auctionId: string,
+): Promise<{ ok: true; auction: AuctionLifecycleEcho }> {
+  const payload = await fetchJson<{ ok: boolean; auction: AuctionLifecycleEcho }>(
     `/auctions/${encodeURIComponent(auctionId)}/accept-highest-bid`,
     { method: 'POST' },
   );
-  return mapAuction(payload.auction);
+  return { ok: true, auction: payload.auction };
 }
 
 /**
@@ -810,4 +986,57 @@ export async function fetchMyAuctionBids(
     { signal },
   );
   return payload.items ?? [];
+}
+
+// ── 1ZE display rates — GET /auctions/1ze-rates ────────────────────────────
+// (backend/api/src/index.ts:20521; mirrors frontend/src/services/
+// onezeQuoteApi.ts). The platform's internal 1ZE↔fiat display rates —
+// native folds them into its FX table for token-denominated price labels.
+// Web auction surfaces are GBP-only today, so this is a contract binding,
+// not a display feed; the route 503s when the pricing tables are absent
+// and that failure propagates verbatim like every other read here.
+
+export interface AuctionOnezeRateEntry {
+  rate: number;
+  source: string;
+  updatedAt: string;
+  settlementSupported: boolean;
+}
+
+export interface AuctionOnezeRates {
+  anchorCurrency: string;
+  anchorValue: number;
+  rates: Record<string, AuctionOnezeRateEntry>;
+  source: string;
+  updatedAt: string;
+}
+
+export async function fetchAuctionOnezeRates(signal?: AbortSignal): Promise<AuctionOnezeRates> {
+  const payload = await fetchJson<{
+    ok?: boolean;
+    anchorCurrency?: string;
+    anchorValue?: number;
+    rates?: Record<string, Partial<AuctionOnezeRateEntry>>;
+    source?: string;
+    updatedAt?: string;
+  }>('/auctions/1ze-rates', undefined, { signal });
+  const rates: Record<string, AuctionOnezeRateEntry> = {};
+  for (const [currency, entry] of Object.entries(payload.rates ?? {})) {
+    if (typeof entry.rate !== 'number' || !Number.isFinite(entry.rate) || entry.rate <= 0) {
+      continue;
+    }
+    rates[currency] = {
+      rate: entry.rate,
+      source: entry.source ?? 'unknown',
+      updatedAt: entry.updatedAt ?? '',
+      settlementSupported: entry.settlementSupported === true,
+    };
+  }
+  return {
+    anchorCurrency: payload.anchorCurrency ?? 'GBP',
+    anchorValue: payload.anchorValue ?? 1,
+    rates,
+    source: payload.source ?? 'internal_pricing',
+    updatedAt: payload.updatedAt ?? '',
+  };
 }

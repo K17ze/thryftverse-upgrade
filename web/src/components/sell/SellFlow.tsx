@@ -33,6 +33,7 @@ import { removeSellerDraft, sellerDraftById, upsertSellerDraft } from '@/lib/dat
 import { DATA_MODE } from '@/lib/api/client';
 import { parseApiError } from '@/lib/api/http';
 import * as listingsService from '@/lib/api/services/listings';
+import * as listingIntelligenceService from '@/lib/api/services/listingIntelligence';
 import * as uploadsService from '@/lib/api/services/uploads';
 import {
   captureVideoPoster,
@@ -40,6 +41,7 @@ import {
   probeImageDimensions,
 } from '@/lib/utils/media';
 import { useMyListings } from '@/lib/hooks/queries';
+import { useTaxonomy } from '@/lib/hooks/sell/useTaxonomy';
 import { useHydrated } from '@/lib/store/useStore';
 import { useSession } from '@/lib/session/SessionProvider';
 import { useSignupWall } from '@/components/auth/SignupWall';
@@ -68,7 +70,17 @@ import {
   type SellErrors,
 } from './constants';
 import { SellProgress, type SellStep } from './SellProgress';
-import { PhotosSection, type PhotoMediaState } from './PhotosSection';
+import {
+  PhotosSection,
+  type AutoFillControl,
+  type PhotoMediaState,
+} from './PhotosSection';
+import {
+  SIZE_OPTIONS,
+  canonicalCategoryId,
+  categoryNodeName,
+  conditionAllowedFor,
+} from './taxonomy';
 import { isCameraCaptureSupported } from '@/lib/media/cameraSupport';
 import { DetailsSection } from './DetailsSection';
 import { PriceSection } from './PriceSection';
@@ -105,6 +117,37 @@ const ERROR_FIELD_IDS: Record<string, string> = {
   originalPrice: 'sell-field-original-price',
 };
 
+/**
+ * Backend condition candidates → the composer's canonical conditions.
+ * 'New' is deliberately unmapped — the notes evidence behind it
+ * ("never worn", nwot) cannot attest to attached tags, and selecting
+ * 'New with tags' would overstate the item. Mapping down never does.
+ */
+const CONDITION_CANDIDATE_MAP: Record<string, ListingCondition> = {
+  'like new': 'Very good',
+  'very good': 'Very good',
+  good: 'Good',
+  fair: 'Satisfactory',
+};
+
+/** Last path segment of a remote media URL — the filename evidence for
+ *  edit-mode media that has no picked File behind it. blob:/data: refs
+ *  carry no filename, so they return undefined honestly. */
+function remoteFileName(url: string): string | undefined {
+  try {
+    const parsed = new URL(url);
+    if (parsed.protocol !== 'http:' && parsed.protocol !== 'https:') {
+      return undefined;
+    }
+    const last = decodeURIComponent(
+      parsed.pathname.split('/').filter(Boolean).pop() ?? '',
+    );
+    return last.includes('.') ? last : undefined;
+  } catch {
+    return undefined;
+  }
+}
+
 export function SellFlow() {
   const router = useRouter();
   const searchParams = useSearchParams();
@@ -113,6 +156,9 @@ export function SellFlow() {
   const { user, sessionLoading } = useSession();
   const seller = user ?? CURRENT_USER;
   const { requireAuth, wall } = useSignupWall();
+  // Canonical vocabulary for the autofill mapping — the seed until the
+  // live taxonomy resolves (same source the Details pickers read).
+  const { taxonomy } = useTaxonomy();
   const importDrafts = useImportDrafts();
   const { updateDraft: updateImportDraft, removeDraft: removeImportDraft } =
     useImportDraftActions();
@@ -173,12 +219,12 @@ export function SellFlow() {
   const draftLoading = Boolean(draftParam && !draftListing && importDrafts.isLoading);
   const draftNotFound = Boolean(draftParam && !draftListing && !importDrafts.isLoading);
 
-  // The edit picker — the seller's real inventory in live mode (the
-  // query's fixture fallback is MY_LISTINGS, so the demo surface keeps
-  // working untouched).
+  // The edit picker — the seller's real inventory in live mode; a failed
+  // or pending read renders empty (the picker self-hides) rather than
+  // fixture rows. Fixture mode keeps MY_LISTINGS for the demo surface.
   const ownListings = useMemo(
     () =>
-      (myListings.data ?? MY_LISTINGS).filter(
+      (DATA_MODE === 'live' ? (myListings.data ?? []) : (myListings.data ?? MY_LISTINGS)).filter(
         (l) => !l.isSold && l.status !== 'sold' && l.status !== 'deleted',
       ),
     [myListings.data],
@@ -200,6 +246,11 @@ export function SellFlow() {
   const [draftSourceId, setDraftSourceId] = useState<string | null>(null);
   /** Photos lost on resume — blob: refs that didn't survive a reload. */
   const [lostPhotos, setLostPhotos] = useState(0);
+  /** Assisted-autofill lifecycle — the PhotosSection affordance reads it;
+   *  idle until the seller explicitly runs a pass. */
+  const [autoFill, setAutoFill] = useState<
+    Omit<AutoFillControl, 'onRun' | 'onDismiss'>
+  >({ phase: 'idle' });
 
   // Object URLs are preview-only — revoke on removal and on unmount, unless
   // they've been committed to the published listing (which still renders them).
@@ -246,6 +297,9 @@ export function SellFlow() {
     finalizationId?: string;
     /** Media already attached to the listing under edit — never re-uploaded. */
     existingRemote?: boolean;
+    /** The picked file's real name — the primary evidence input for the
+     *  listing-intelligence run (the heuristic reads filenames, not pixels). */
+    fileName?: string;
     /** The fully resolved publish record once the upload lands. */
     resolved?: ResolvedMedia;
     /** In-flight upload — publish dedupes onto it rather than re-PUTting. */
@@ -477,6 +531,7 @@ export function SellFlow() {
     });
     setErrors({});
     setDirty(false);
+    setAutoFill({ phase: 'idle' });
     publishIdRef.current = null;
     window.scrollTo({ top: 0 });
   }, [editing, updateMedia]);
@@ -498,6 +553,7 @@ export function SellFlow() {
     setDraftSourceId(current);
     setErrors({});
     setDirty(false);
+    setAutoFill({ phase: 'idle' });
     publishIdRef.current = null;
     window.scrollTo({ top: 0 });
   }, [draftListing]);
@@ -521,10 +577,12 @@ export function SellFlow() {
     const kept = staged.map((f) => URL.createObjectURL(f));
     if (!kept.length) return;
     // Stamp each slot's kind before it renders — kind drives the tile,
-    // the cover rule and the attach contract's mediaType.
+    // the cover rule and the attach contract's mediaType. The real file
+    // name rides along: it's the evidence input for listing intelligence.
     kept.forEach((url, i) => {
       updateMedia(url, {
         kind: staged[i].type.startsWith('video/') ? 'video' : 'image',
+        fileName: staged[i].name,
       });
     });
     update({ photos: [...draft.photos, ...kept] });
@@ -541,6 +599,182 @@ export function SellFlow() {
       updateMedia(url, null);
     }
     update({ photos: draft.photos.filter((_, i) => i !== index) });
+    // No photos left → the affordance unmounts; reset so the next staged
+    // set doesn't inherit a stale result line.
+    if (draft.photos.length <= 1) setAutoFill({ phase: 'idle' });
+  };
+
+  /* ── Assisted autofill — POST /listing-intelligence/run ────────────────
+   * Advisory candidates only (the same endpoint mobile's AI listing flow
+   * consumes). They fill EMPTY fields — a value the seller typed is their
+   * decision and is never overwritten — and the section reports exactly
+   * what landed, what it was derived from, or that nothing readable was
+   * found. The wire has no price/description/tag candidates and no
+   * confidence scores; none are fabricated here. */
+  const runAutoFill = async () => {
+    // Account-bound endpoint (401 for guests) — the same wall publish uses.
+    if (!requireAuth('create_listing')) return;
+    if (autoFill.phase === 'running' || !draft.photos.length) return;
+    setAutoFill({ phase: 'running' });
+    try {
+      const photos = draft.photos.slice(0, 20).map((url, i) => {
+        const m = mediaRef.current[url];
+        return {
+          id: `photo_${i}`,
+          // The verified upload URL when the staged upload has landed —
+          // the still-in-flight local ref otherwise.
+          url: m?.resolved?.publicUrl ?? m?.publicUrl ?? url,
+          ...(m?.resolved?.width ? { width: m.resolved.width } : {}),
+          ...(m?.resolved?.height ? { height: m.resolved.height } : {}),
+        };
+      });
+      const cover = draft.photos[0];
+      const filename =
+        mediaRef.current[cover]?.fileName ?? remoteFileName(cover);
+      const notes = draft.description.trim();
+      const run = await listingIntelligenceService.runListingIntelligence({
+        photos,
+        filename: filename || undefined,
+        sellerNotes: notes || undefined,
+        categoryHint:
+          categoryNodeName(taxonomy.categories, draft.category) ?? undefined,
+        listingId: editing?.id,
+      });
+
+      const patch: Partial<SellDraft> = {};
+      const applied: string[] = [];
+      const errorKeys = new Set<keyof SellErrors>();
+      const basisSources = new Set<string>();
+      let suggested = 0;
+
+      for (const c of run.candidates) {
+        // Abstained means "no evidence found" — honest, never a failure.
+        if (c.abstained) continue;
+        const value = c.value?.trim();
+        if (!value) continue;
+        switch (c.field) {
+          case 'title':
+            suggested++;
+            if (!draft.title.trim()) {
+              patch.title = value.slice(0, 80);
+              applied.push('title');
+              errorKeys.add('title');
+              basisSources.add(c.evidence.source);
+            }
+            break;
+          case 'brand':
+            suggested++;
+            if (!draft.brand.trim()) {
+              patch.brand = value.slice(0, 50);
+              applied.push('brand');
+              basisSources.add(c.evidence.source);
+            }
+            break;
+          case 'category': {
+            suggested++;
+            if (draft.category) break;
+            const canonical =
+              canonicalCategoryId(value) ||
+              taxonomy.categories.find(
+                (n) =>
+                  n.parentId === null &&
+                  n.name.toLowerCase() === value.toLowerCase(),
+              )?.id ||
+              '';
+            if (canonical) {
+              // Same semantics as the picker: a new category retires the
+              // leaf and size choices that belonged to the old one.
+              patch.category = canonical;
+              patch.subcategory = '';
+              patch.size = '';
+              applied.push('category');
+              errorKeys.add('category');
+              basisSources.add(c.evidence.source);
+            }
+            break;
+          }
+          case 'size': {
+            suggested++;
+            if (draft.size || patch.size) break;
+            // Only apply a size the picker vocabulary can represent — a
+            // value outside SIZE_OPTIONS would be invisible stored state.
+            const match = SIZE_OPTIONS.find(
+              (s) => s.toLowerCase() === value.toLowerCase(),
+            );
+            if (match) {
+              patch.size = match;
+              applied.push('size');
+              errorKeys.add('size');
+              basisSources.add(c.evidence.source);
+            }
+            break;
+          }
+          case 'condition': {
+            suggested++;
+            // Condition is a seller attestation — only evidence from the
+            // seller's own description can pre-select it, and only where
+            // the value maps without overstating.
+            const mapped = CONDITION_CANDIDATE_MAP[value.toLowerCase()];
+            if (
+              !draft.condition &&
+              c.evidence.source === 'seller_notes' &&
+              mapped &&
+              conditionAllowedFor(
+                patch.category ?? draft.category,
+                patch.subcategory ?? draft.subcategory,
+                mapped,
+              )
+            ) {
+              patch.condition = mapped;
+              applied.push('condition');
+              errorKeys.add('condition');
+              basisSources.add(c.evidence.source);
+            }
+            break;
+          }
+          default:
+            // 'color' and any future field the draft can't hold stay
+            // informational — never stored silently.
+            break;
+        }
+      }
+
+      if (applied.length) {
+        update(patch);
+        errorKeys.forEach(clearError);
+      }
+      const basis = [...basisSources]
+        .map((s) =>
+          s === 'filename'
+            ? 'the photo filename'
+            : s === 'seller_notes'
+              ? 'your description'
+              : s === 'category_hint'
+                ? 'your category'
+                : 'the photos',
+        )
+        .join(' and ');
+      setAutoFill(
+        applied.length
+          ? { phase: 'done', applied, basis }
+          : {
+              phase: 'empty',
+              message: suggested
+                ? 'Everything it found is already filled in — edit anything below.'
+                : 'Nothing readable to suggest — fill the details below.',
+            },
+      );
+    } catch (error) {
+      // The backend's own message reaches the seller; the manual form is
+      // the always-available path right below.
+      const parsed = parseApiError(error, 'Couldn’t read the photo details.');
+      setAutoFill({
+        phase: 'error',
+        message: parsed.isNetworkError
+          ? 'No connection — check it and try again.'
+          : parsed.message,
+      });
+    }
   };
 
   /**
@@ -558,7 +792,7 @@ export function SellFlow() {
     if (old && !committedRef.current.has(old)) URL.revokeObjectURL(old);
     if (old) updateMedia(old, null);
     // A canvas export is always a still — the slot's kind resets to image.
-    updateMedia(nextUrl, { kind: 'image' });
+    updateMedia(nextUrl, { kind: 'image', fileName: file.name });
     update({ photos: draft.photos.map((p, i) => (i === index ? nextUrl : p)) });
     void ensureMediaUpload(nextUrl);
     setEditIndex(null);
@@ -618,6 +852,7 @@ export function SellFlow() {
     });
     setErrors({});
     setDirty(true);
+    setAutoFill({ phase: 'idle' });
     // Verify blob: refs before restoring — ones that died with the last
     // reload are filtered out and reported, never silently dropped.
     void (async () => {
@@ -1005,6 +1240,7 @@ export function SellFlow() {
           setDirty(false);
           setDraftSourceId(null);
           setPublishError(null);
+          setAutoFill({ phase: 'idle' });
           publishIdRef.current = null;
           setPublishedListing(null);
           window.scrollTo({ top: 0 });
@@ -1189,6 +1425,17 @@ export function SellFlow() {
               media={mediaByUrl}
               error={errors.photos}
               cameraSupported={cameraSupported}
+              autoFill={
+                // Live mode only — fixture mode has no backend to run the
+                // extraction against, and a dead control would be dishonest.
+                DATA_MODE === 'live'
+                  ? {
+                      ...autoFill,
+                      onRun: () => void runAutoFill(),
+                      onDismiss: () => setAutoFill({ phase: 'idle' }),
+                    }
+                  : undefined
+              }
               onAdd={addPhotos}
               onRemove={removePhoto}
               onReorder={reorderPhotos}

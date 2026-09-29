@@ -81,6 +81,9 @@ export interface PlaceOrderResult {
   order: CoOwnOrder;
   /** The evaluated plan — null in live mode (the server owns fills). */
   plan: ExecutionPlan | null;
+  /** AML flag from the settled response (or its reconciled replay) —
+   *  the trade landed but is under review; the receipt surfaces this. */
+  aml: { alertId: string; status: string } | null;
 }
 
 /**
@@ -251,19 +254,49 @@ export function usePlaceCoOwnOrder() {
           { code: 'RESERVATION_MISMATCH' },
         );
       }
-      const order = await coownService.placeCoOwnOrder({
-        assetId: asset.id,
-        ...prepared.command,
-        reservationId: prepared.reservation.id,
-        timeInForce: duration === 'day' ? 'GFD' : duration === 'gtc' ? 'GTC90' : undefined,
-        // Missing keys fail closed — a real money command without a
-        // dedupe key is refused rather than sent unreconcilable.
-        idempotencyKey:
-          input.idempotencyKey ??
-          (() => {
-            throw new Error('idempotency_key_required');
-          })(),
-      });
+      // Missing keys fail closed — a real money command without a dedupe
+      // key is refused rather than sent unreconcilable.
+      const idempotencyKey =
+        input.idempotencyKey ??
+        (() => {
+          throw new Error('idempotency_key_required');
+        })();
+      let order: CoOwnOrder;
+      let aml: { alertId: string; status: string } | null = null;
+      try {
+        const placed = await coownService.placeCoOwnOrder({
+          assetId: asset.id,
+          ...prepared.command,
+          reservationId: prepared.reservation.id,
+          timeInForce: duration === 'day' ? 'GFD' : duration === 'gtc' ? 'GTC90' : undefined,
+          idempotencyKey,
+        });
+        order = placed.order;
+        aml = placed.aml;
+      } catch (err) {
+        // Ambiguous outcomes reconcile through lookup-by-key before the
+        // user is told anything: a 202 ack, a dropped connection, or a
+        // 5xx after the write landed all leave the result unknown. The
+        // idempotency key answers it — acknowledged means the order did
+        // place (return it), safe_to_retry rethrows the original refusal.
+        const ambiguous =
+          err instanceof ApiRequestError &&
+          (err.status === 202 || err.status === undefined || err.status >= 500);
+        if (!ambiguous) throw err;
+        const settled = await coownService.reconcileCoOwnOrder(asset.id, idempotencyKey);
+        if (settled.status === 'acknowledged') {
+          order = settled.order;
+          aml = settled.aml;
+        } else if (settled.status === 'processing') {
+          throw new ApiRequestError(
+            'The order is still settling — check open orders before placing another.',
+            202,
+            { code: 'ORDER_STILL_PROCESSING' },
+          );
+        } else {
+          throw err;
+        }
+      }
       for (const key of [
         ORDERS_KEY,
         POSITIONS_KEY,
@@ -277,7 +310,7 @@ export function usePlaceCoOwnOrder() {
       ]) {
         void queryClient.invalidateQueries({ queryKey: [...key] });
       }
-      return { order, plan: null };
+      return { order, plan: null, aml };
     }
 
     const plan = planExecution({ side, orderType, units, limitPriceGbp, bids: input.bids, asks: input.asks });
@@ -484,7 +517,8 @@ export function usePlaceCoOwnOrder() {
       return { ...old, ize };
     });
 
-    return { order, plan };
+    // Fixture mode has no AML monitor — no flag is a literal absence.
+    return { order, plan, aml: null };
   };
 
   return { prepareOrder, placeOrder };

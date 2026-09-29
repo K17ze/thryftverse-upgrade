@@ -16,6 +16,7 @@ import {
 } from '@/lib/data/fixtures-commerce';
 import { Icon, type AppIconName } from '@/components/ui/Icon';
 import { Button } from '@/components/ui/Button';
+import { EvidencePhotoField, type EvidencePhoto } from '@/components/orders/EvidencePhotoField';
 import { formatPrice } from '@/lib/utils/format';
 
 function formatDateTime(iso: string): string {
@@ -49,6 +50,7 @@ interface Props {
 type FormKind =
   | 'decision_approved'
   | 'decision_rejected'
+  | 'evidence'
   | 'shipment'
   | 'inspection'
   | 'remedy'
@@ -72,6 +74,9 @@ export function ReturnCaseCard({ returnCase, isBuyer, isSubmitting = false, onSt
   const [notes, setNotes] = useState('');
   const [remedy, setRemedy] = useState<ReturnRemedy>('full_refund');
   const [remedyAmount, setRemedyAmount] = useState('');
+  // New evidence being staged — uploads land per tile; nothing is posted
+  // to the case until the form's submit confirms every tile attached.
+  const [evidencePhotos, setEvidencePhotos] = useState<EvidencePhoto[]>([]);
 
   const stepIn = getStepInState(returnCase);
   const status = returnCase.status;
@@ -364,6 +369,51 @@ export function ReturnCaseCard({ returnCase, isBuyer, isSubmitting = false, onSt
       ) : (
         /* Buyer side */
         <>
+          {/* Additional evidence — POST /return-cases/:id/evidence is
+              buyer-only and only legal while the case sits in
+              'requested'/'evidence_review' (the route 409s otherwise). */}
+          {(status === 'requested' || status === 'evidence_review') && (
+            <ActionRow
+              label="Add evidence photos"
+              icon="camera"
+              onPress={() => {
+                setEvidencePhotos([]);
+                setForm('evidence');
+              }}
+            />
+          )}
+          {form === 'evidence' ? (
+            <FormShell
+              submitLabel="Add to case"
+              // Nothing posts until every staged tile has a final upload
+              // URL — a still-uploading or failed tile must never leak
+              // into evidence_media_urls as a phantom attachment.
+              submitDisabled={
+                evidencePhotos.length === 0 ||
+                evidencePhotos.some((p) => p.state === 'uploading' || p.state === 'failed')
+              }
+              onSubmit={() =>
+                submit({
+                  type: 'evidence',
+                  urls: evidencePhotos
+                    .filter((p) => p.state === 'attached')
+                    .map((p) => p.uri),
+                })
+              }
+            >
+              <EvidencePhotoField
+                label="Evidence"
+                hint="Add photos that support your case — damage, packaging, anything the seller should see."
+                items={evidencePhotos}
+                onChange={setEvidencePhotos}
+              />
+              {evidencePhotos.some((p) => p.state === 'failed') ? (
+                <p className="text-caption text-danger-text">
+                  A photo failed to upload — remove it before submitting.
+                </p>
+              ) : null}
+            </FormShell>
+          ) : null}
           {status === 'remedy_proposed' ? (
             <>
               <p className="tnum text-body-emphasis font-medium text-text-primary">

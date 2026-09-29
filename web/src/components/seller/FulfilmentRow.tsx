@@ -20,6 +20,7 @@ export function FulfilmentRow({
   onPrintLabel,
   onMarkPosted,
   onExtendDeadline,
+  onAssertHandoff,
   isMarking,
 }: {
   job: FulfilmentJob;
@@ -30,6 +31,9 @@ export function FulfilmentRow({
   /** Opens the extension sheet — only reachable while 'to-post' (the
    *  server's 'paid' gate) and absent once a proposal is pending. */
   onExtendDeadline?: (job: FulfilmentJob) => void;
+  /** Seller drop-off claim — POST handoff-assertion. Reachable while
+   *  'to-post' and not yet asserted; records evidence, never a status. */
+  onAssertHandoff?: (job: FulfilmentJob) => void;
   isMarking?: boolean;
 }) {
   const { show } = useToast();
@@ -147,6 +151,24 @@ export function FulfilmentRow({
                 className="pressable -mb-0.5 rounded-md px-1.5 py-0.5 text-meta font-semibold text-text-secondary hover:text-text-primary"
               >
                 Need more time?
+              </button>
+            ) : null}
+            {/* Handoff claim — recorded? the row states the waiting-on-
+                scan truth; not recorded? the recovery affordance opens
+                the dispatch sheet's quiet path (the claim never moves
+                the order to dispatched). */}
+            {job.handoffAssertedAt ? (
+              <span className="text-right text-meta text-text-muted">
+                Dropped off — waiting for the carrier scan
+              </span>
+            ) : onAssertHandoff ? (
+              <button
+                type="button"
+                onClick={() => onAssertHandoff(job)}
+                disabled={isMarking}
+                className="pressable -mb-0.5 rounded-md px-1.5 py-0.5 text-meta font-semibold text-text-secondary hover:text-text-primary disabled:opacity-50"
+              >
+                Already dropped off?
               </button>
             ) : null}
           </span>

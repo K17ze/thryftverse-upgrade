@@ -3,9 +3,10 @@
 /**
  * ListingReportMenu — the PDP overflow affordance for reporting a listing.
  * Two sheets: the small options menu ("Report this item") and the report
- * composer (reason list + optional note). Submission creates a REAL
- * support case through useSupportActions — the ref on the case thread is
- * the only reference the user ever sees; nothing is fabricated here.
+ * composer (reason list + optional note). Live mode files the report at
+ * POST /listings/:id/report — the moderation intake, not a support case.
+ * Fixture mode keeps the session-ticket demo path so the receipt link
+ * resolves inside the demo dataset.
  */
 
 import { useState } from 'react';
@@ -16,6 +17,8 @@ import { IconButton } from '@/components/ui/IconButton';
 import { Sheet } from '@/components/ui/Sheet';
 import { useToast } from '@/components/ui/Toast';
 import { useSupportActions } from '@/components/support/useSupportTickets';
+import { DATA_MODE } from '@/lib/api/client';
+import { reportListing } from '@/lib/api/services/listings';
 import {
   MAX_REPORT_DETAILS,
   REPORT_REASONS,
@@ -50,18 +53,31 @@ export function ListingReportMenu({ listing }: ListingReportMenuProps) {
     const reasonLabel =
       REPORT_REASONS.find((r) => r.key === reason)?.label ?? 'Report';
     try {
-      // A real case — the returned ticket carries the ref support works
-      // from, and the thread exists at /support/[id] for follow-up.
-      const ticket = await createTicket({
-        topicId: reason === 'counterfeit' ? 'verification' : 'other',
-        orderRef: null,
-        message:
-          `Listing report — ${reasonLabel}: "${listing.title}" (listing ${listing.id})` +
-          (note.trim() ? ` — ${note.trim()}` : ''),
-      });
-      closeReport();
-      show('Report sent — our team will review it', 'success');
-      router.push(`/support/${ticket.id}`);
+      if (DATA_MODE === 'live') {
+        // The moderation write — reason travels verbatim (web's catalogue
+        // is a subset of the endpoint's 14-value enum), note as details
+        // (≤500 chars per the route schema).
+        await reportListing(listing.id, {
+          reason,
+          details: note.trim() ? note.trim() : undefined,
+          idempotencyKey: `webrpt_listing_${listing.id}_${Date.now()}`,
+        });
+        closeReport();
+        show('Report sent — our team will review it', 'success');
+      } else {
+        // Fixture demo path — a session ticket so the follow-up link
+        // resolves inside the demo dataset.
+        const ticket = await createTicket({
+          topicId: reason === 'counterfeit' ? 'verification' : 'other',
+          orderRef: null,
+          message:
+            `Listing report — ${reasonLabel}: "${listing.title}" (listing ${listing.id})` +
+            (note.trim() ? ` — ${note.trim()}` : ''),
+        });
+        closeReport();
+        show('Report sent — our team will review it', 'success');
+        router.push(`/support/${ticket.id}`);
+      }
     } catch {
       setSending(false);
       show('Could not send the report — try again.', 'error');

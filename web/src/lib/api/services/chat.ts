@@ -191,16 +191,63 @@ export function messageSaveState(m: Message | null | undefined): MessageSaveStat
   return (m as MessageWithSaveState | null | undefined) ?? {};
 }
 
+/** The idempotency key a sent message round-trips — the backend echoes
+ *  `clientMessageId` on both the HTTP response and the
+ *  `chat.message.created` realtime payload, so the optimistic bubble can
+ *  be reconciled by identity, not by text heuristics. Non-contract field,
+ *  same grammar as `savedBy`. */
+export type MessageWithClientId = Message & { clientMessageId?: string };
+
+/** Read the clientMessageId a message payload carried (absent for
+ *  fixture rows and payloads that predate the field). */
+export function messageClientMessageId(m: Message | null | undefined): string | undefined {
+  return (m as MessageWithClientId | null | undefined)?.clientMessageId;
+}
+
+/** Generate the per-send idempotency key — the backend dedupes on
+ *  (conversation_id, sender_user_id, client_message_id), so a retry of
+ *  the same send returns the original row instead of a duplicate. */
+export function newClientMessageId(): string {
+  const uuid =
+    typeof globalThis.crypto?.randomUUID === 'function'
+      ? globalThis.crypto.randomUUID()
+      : `${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 10)}`;
+  return `cmid-${uuid}`;
+}
+
 function attachSaveState(message: Message, raw: ApiMessagePayload): Message {
   const full = raw as ApiMessagePayload & {
     savedBy?: string[];
     savedAt?: string | null;
+    clientMessageId?: string | null;
   };
+  if (typeof full.clientMessageId === 'string' && full.clientMessageId) {
+    (message as MessageWithClientId).clientMessageId = full.clientMessageId;
+  }
   if (!Array.isArray(full.savedBy) || full.savedBy.length === 0) return message;
   const target = message as MessageWithSaveState;
   target.savedBy = full.savedBy;
   if (typeof full.savedAt === 'string') target.savedAt = full.savedAt;
   return message;
+}
+
+/**
+ * `chat.message.created` SSE payload → web `Message`. The realtime payload
+ * is the same serializer output the messages route returns (plus
+ * clientMessageId / savedBy which ride along here too), so the REST mapper
+ * applies verbatim — metadata.mediaUri carries the media/document/voice
+ * URI exactly as the REST path maps it.
+ */
+export function realtimePayloadToWebMessage(
+  payload: Record<string, unknown>,
+  currentUserId?: string,
+): Message | null {
+  if (typeof payload.id !== 'string' || !payload.id) return null;
+  const mapped = mapApiMessageToWebMessage(
+    payload as unknown as ApiMessagePayload,
+    currentUserId,
+  );
+  return attachSaveState(mapped, payload as unknown as ApiMessagePayload);
 }
 
 export async function fetchConversationMessages(
@@ -284,6 +331,11 @@ export interface SendChatMessageApiInput {
   /** Voice metadata — top-level fields the backend voice serializer reads. */
   voiceDurationMs?: number;
   voiceWaveform?: number[];
+  /** Idempotent-send key — generated per send when absent; retries of the
+   *  same send MUST reuse it (the backend returns the original row on a
+   *  (conversation, sender, clientMessageId) conflict). Echoed back on the
+   *  `chat.message.created` realtime event for optimistic dedupe. */
+  clientMessageId?: string;
 }
 
 /**
@@ -300,6 +352,9 @@ export async function sendChatMessage(
   currentUserId?: string,
 ): Promise<Message> {
   const body: Record<string, unknown> = {};
+  // Every send carries an idempotency key — a retried write (or the SSE
+  // echo racing the HTTP response) resolves to the same server row.
+  body.clientMessageId = input.clientMessageId ?? newClientMessageId();
   if (input.text) body.text = input.text;
   if (input.mediaUri) {
     body.type = input.mediaType ?? 'image';
@@ -331,7 +386,10 @@ export async function sendChatMessage(
   if (!payload.ok || !payload.message) {
     throw new Error('Failed to send message');
   }
-  return mapApiMessageToWebMessage(payload.message, currentUserId);
+  return attachSaveState(
+    mapApiMessageToWebMessage(payload.message, currentUserId),
+    payload.message,
+  );
 }
 
 export async function markConversationRead(conversationId: string): Promise<void> {
@@ -429,7 +487,10 @@ export async function editChatMessage(
     },
   );
   if (!payload.message) throw new Error('Failed to edit message');
-  return mapApiMessageToWebMessage(payload.message, currentUserId);
+  return attachSaveState(
+    mapApiMessageToWebMessage(payload.message, currentUserId),
+    payload.message,
+  );
 }
 
 /**
@@ -683,4 +744,120 @@ export async function deleteQuickReply(replyId: string): Promise<void> {
     `/chat/quick-replies/${encodeURIComponent(replyId)}`,
     { method: 'DELETE' },
   );
+}
+
+// ── Group invite links — /chat/conversations/:id/invite-links + /chat/groups/join
+// The mobile chatApi invite edges: create is gated by the `add_members`
+// capability server-side (members can mint links when the group's
+// addMembers scope is 'everyone'); list/revoke are owner/admin-only
+// (ensureGroupManagementAccess). The plaintext link is returned only at
+// create time — list rows carry just the token preview.
+
+export interface GroupInviteLink {
+  id: string;
+  /** The full `thryftverse://group-invite?token=…` link — present only on
+   *  the create response. */
+  inviteLink?: string;
+  tokenPreview?: string;
+  createdBy?: string;
+  ownerId?: string;
+  expiresAt?: string;
+  maxUses?: number;
+  useCount?: number;
+  remainingUses?: number | null;
+  revokedAt?: string | null;
+  createdAt?: string;
+  lastUsedAt?: string | null;
+  lastUsedBy?: string | null;
+  isExpired?: boolean;
+  isRevoked?: boolean;
+}
+
+/** POST /chat/conversations/:id/invite-links — mirrors mobile
+ *  createGroupInviteLinkOnApi. Only the create response carries the full
+ *  link; treat it as a one-time reveal. */
+export async function createGroupInviteLink(
+  conversationId: string,
+  input?: { expiresInHours?: number; maxUses?: number },
+): Promise<GroupInviteLink> {
+  const payload = await fetchJson<{
+    ok: boolean;
+    invite?: GroupInviteLink;
+  }>(`/chat/conversations/${encodeURIComponent(conversationId)}/invite-links`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({
+      ...(input?.expiresInHours ? { expiresInHours: input.expiresInHours } : {}),
+      ...(input?.maxUses !== undefined ? { maxUses: input.maxUses } : {}),
+    }),
+  });
+  if (!payload.ok || !payload.invite?.id) {
+    throw new Error('Failed to create invite link');
+  }
+  return payload.invite;
+}
+
+/** GET /chat/conversations/:id/invite-links — owner/admin only. Active
+ *  links by default; `includeRevoked` for the audit view. The list rows
+ *  carry previews, never the full token. */
+export async function fetchGroupInviteLinks(
+  conversationId: string,
+  options?: { includeRevoked?: boolean; limit?: number },
+  signal?: AbortSignal,
+): Promise<GroupInviteLink[]> {
+  const params = new URLSearchParams();
+  if (options?.includeRevoked) params.set('includeRevoked', 'true');
+  if (options?.limit) params.set('limit', String(options.limit));
+  const qs = params.toString();
+  const payload = await fetchJson<{
+    ok: boolean;
+    items?: GroupInviteLink[];
+    /** Older/native read path names the list `links`. */
+    links?: GroupInviteLink[];
+  }>(
+    `/chat/conversations/${encodeURIComponent(conversationId)}/invite-links${qs ? `?${qs}` : ''}`,
+    undefined,
+    { signal },
+  );
+  return payload.items ?? payload.links ?? [];
+}
+
+/** DELETE /chat/conversations/:id/invite-links/:inviteId — owner/admin. */
+export async function revokeGroupInviteLink(
+  conversationId: string,
+  inviteId: string,
+): Promise<void> {
+  const payload = await fetchJson<{ ok: boolean; revoked?: boolean }>(
+    `/chat/conversations/${encodeURIComponent(conversationId)}/invite-links/${encodeURIComponent(inviteId)}`,
+    { method: 'DELETE' },
+  );
+  if (!payload.ok) throw new Error('Failed to revoke invite link');
+}
+
+/**
+ * POST /chat/groups/join — the invite-token landing call (mobile
+ * joinGroupByInviteOnApi). `joined:false` means the caller was already a
+ * member. The returned conversation is a summary payload — refetch the
+ * full thread before navigating into it.
+ */
+export async function joinGroupByInvite(
+  inviteToken: string,
+  currentUserId?: string,
+): Promise<{ joined: boolean; conversation: Conversation | null }> {
+  const payload = await fetchJson<{
+    ok: boolean;
+    joined?: boolean;
+    conversation?: ApiConversationPayload;
+  }>('/chat/groups/join', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ inviteToken: inviteToken.trim() }),
+  });
+  if (!payload.ok) throw new Error('Failed to join group');
+  return {
+    joined: payload.joined === true,
+    conversation: payload.conversation
+      ? mapApiConversationToWeb(payload.conversation, currentUserId)
+      : null,
+  };
 }

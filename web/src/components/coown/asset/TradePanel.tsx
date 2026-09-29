@@ -17,7 +17,7 @@ import { Button } from '@/components/ui/Button';
 import { Icon } from '@/components/ui/Icon';
 import { useToast } from '@/components/ui/Toast';
 import { useSignupWall } from '@/components/auth/SignupWall';
-import { CO_OWN_MAX_UNITS } from '@/lib/utils/trade';
+import { CO_OWN_FEE_RATE, CO_OWN_MAX_UNITS } from '@/lib/utils/trade';
 import type {
   CoOwnAsset,
   OrderBookLevel,
@@ -33,6 +33,7 @@ import {
   useCoOwnEligibility,
   useCoOwnPolicy,
   useRiskDisclosure,
+  useSignCoOwnRecourse,
 } from '@/lib/hooks/coown-queries';
 import * as coownService from '@/lib/api/services/coown';
 import { useQueryClient } from '@tanstack/react-query';
@@ -52,6 +53,7 @@ import {
   type PreparedLiveOrder,
 } from '@/components/trading/useCoOwnTrading';
 import { gbp, signedGbp, signedPct } from '../format';
+import { RecourseTerms } from '../RecourseTerms';
 
 const SIDE_LABEL = { buy: 'Buy', sell: 'Sell' } as const;
 const TYPE_LABEL = { market: 'Market', limit: 'Limit', protected_market: 'Protected' } as const;
@@ -80,6 +82,8 @@ interface QuoteDisplay {
   restingUnits: number;
   grossNotionalGbp: number;
   feeGbp: number;
+  /** Platform trading fee as a percentage figure — display only. */
+  feeRatePct: number;
   totalGbp: number;
 }
 
@@ -128,6 +132,11 @@ export function TradePanel({
   // Ref mirror so unmount/back cleanup can release the live reservation.
   const preparedRef = useRef<PreparedLiveOrder | null>(null);
   const [receipt, setReceipt] = useState<PlaceOrderResult | null>(null);
+  // First-trade education gate — mirrors native's educationCompleted check
+  // before the Trade entry (AssetDetailScreen.tsx:842). Persisted
+  // device-local on both platforms; hydrated in an effect so SSR renders
+  // the gate-free path for returning users.
+  const [educated, setEducated] = useState(true);
   // Risk-disclosure acceptance is a server-side consent record — ticked
   // on the review step, then recorded before the order writes.
   const [riskAccepted, setRiskAccepted] = useState(false);
@@ -139,6 +148,23 @@ export function TradePanel({
 
   const bestAsk = asks[0]?.unitPriceGbp ?? null;
   const bestBid = bids[0]?.unitPriceGbp ?? null;
+
+  useEffect(() => {
+    setEducated(
+      window.localStorage.getItem('thryftverse:coown-onboarded') === '1',
+    );
+  }, []);
+
+  const completeEducation = () => {
+    window.localStorage.setItem('thryftverse:coown-onboarded', '1');
+    setEducated(true);
+  };
+
+  // Platform trading fee — the detail wire's own rate (the same constant
+  // the server charges) where the dossier carries it; fixtures keep the
+  // 1% their orders actually bill. Display + pre-preview estimate only —
+  // live reservation/commit math stays server-quoted.
+  const feeRate = asset.dossier?.tradingFeeRate ?? CO_OWN_FEE_RATE;
 
   // Server-computed market capabilities (list/detail wire) — where they
   // exist they gate the side picker early (pre_market takes buys but no
@@ -171,7 +197,9 @@ export function TradePanel({
     if (ref != null) setLimitText(ref.toFixed(2));
   }, [orderType, side, bestAsk, bestBid, limitTouched]);
 
-  const units = Math.min(maxOrderUnits, Math.max(0, Math.round(Number(unitsText)) || 0));
+  // Units are integers — the field strips to digits on change, so the
+  // displayed number IS what quotes and submits. Never re-interpret it.
+  const units = Math.min(maxOrderUnits, Math.max(0, Number(unitsText) || 0));
   const limitPriceGbp =
     orderType === 'limit' && Number(limitText) > 0 ? Number(limitText) : null;
 
@@ -211,7 +239,7 @@ export function TradePanel({
   const quote = useMemo<QuoteDisplay>(() => {
     const restingGross = plan.restingUnits * (limitPriceGbp ?? 0);
     const gross = round2(plan.fillGrossGbp + restingGross);
-    const fee = round2(gross * 0.01);
+    const fee = round2(gross * feeRate);
     return {
       side,
       orderType,
@@ -226,9 +254,10 @@ export function TradePanel({
       restingUnits: plan.restingUnits,
       grossNotionalGbp: gross,
       feeGbp: fee,
+      feeRatePct: Number((feeRate * 100).toFixed(2)),
       totalGbp: side === 'buy' ? round2(gross + fee) : round2(gross - fee),
     };
-  }, [plan, limitPriceGbp, side, orderType]);
+  }, [plan, limitPriceGbp, side, orderType, feeRate]);
 
   // ── Submit gate — every reason is a real ledger constraint ──────────
   const holdingUnits = position?.units ?? 0;
@@ -430,6 +459,26 @@ export function TradePanel({
     show('That quote expired — review the order again', 'info');
   };
 
+  // Adverse-movement check (native parity): the reservation locks the
+  // user's price server-side, so drift can only mean the live book moved
+  // in the user's favour — committing would settle at the stale locked
+  // price. Warn and offer re-quote; the locked price itself stays valid.
+  const lockedRefPrice = prepared?.preview.estimatedFill.filledUnits
+    ? prepared.preview.estimatedFill.avgFillPrice
+    : (prepared?.preview.estimatedFill.worstPrice ?? limitPriceGbp ?? null);
+  const liveBestPrice = reviewing
+    ? side === 'buy'
+      ? (effectiveAsks[0]?.unitPriceGbp ?? null)
+      : bestBid
+    : null;
+  const quoteDriftPct =
+    lockedRefPrice != null && liveBestPrice != null
+      ? side === 'buy'
+        ? ((lockedRefPrice - liveBestPrice) / lockedRefPrice) * 100
+        : ((liveBestPrice - lockedRefPrice) / liveBestPrice) * 100
+      : null;
+  const marketMoved = quoteDriftPct != null && quoteDriftPct > 2;
+
   // A fully-closed position (0 units left after a sell) is not a holding
   // — the row only renders while units remain.
   const held = position && position.units > 0 ? position : null;
@@ -485,6 +534,8 @@ export function TradePanel({
           duration={duration}
           quote={quote}
           prepared={prepared}
+          marketMoved={marketMoved}
+          liveBestPriceGbp={liveBestPrice}
           onExpire={onReservationExpired}
           maxReservedLabel={
             prepared
@@ -509,6 +560,11 @@ export function TradePanel({
             setReviewing(false);
           }}
           onConfirm={confirm}
+        />
+      ) : !educated ? (
+        <FirstTradeGate
+          assetTitle={asset.title}
+          onComplete={completeEducation}
         />
       ) : (
         <form onSubmit={openReview} className={held ? 'mt-4' : ''} aria-label={`Trade ${asset.title}`}>
@@ -586,7 +642,13 @@ export function TradePanel({
                 max={maxOrderUnits}
                 step={1}
                 value={unitsText}
-                onChange={(e) => setUnitsText(e.target.value)}
+                onChange={(e) =>
+                  // Whole units only — drop non-digits and leading zeros
+                  // rather than letting '2.5' quote as 3.
+                  setUnitsText(
+                    e.target.value.replace(/\D/g, '').replace(/^0+(?=\d)/, ''),
+                  )
+                }
                 className="h-11 w-full rounded-lg bg-input px-3 text-center text-body-emphasis text-input-text tnum outline-none focus:ring-2 focus:ring-text-primary"
               />
               <button
@@ -722,7 +784,7 @@ function QuoteCard({ quote }: { quote: QuoteDisplay }) {
         <dd className="text-text-primary tnum">{gbp(quote.grossNotionalGbp)}</dd>
       </div>
       <div className="flex items-baseline justify-between">
-        <dt className="text-text-secondary">Fee (1%)</dt>
+        <dt className="text-text-secondary">Platform fee ({quote.feeRatePct}%)</dt>
         <dd className="text-text-primary tnum">{gbp(quote.feeGbp)}</dd>
       </div>
       <div className="flex items-baseline justify-between border-t border-border-subtle pt-2.5">
@@ -762,6 +824,8 @@ function ReviewCard({
   duration,
   quote,
   prepared,
+  marketMoved,
+  liveBestPriceGbp,
   onExpire,
   maxReservedLabel,
   requireHold,
@@ -783,6 +847,10 @@ function ReviewCard({
   /** Live mode: the server preview + reservation this review is bound
    *  to. Null in fixture mode, where the local quote is the display. */
   prepared: PreparedLiveOrder | null;
+  /** Live book moved >2% in the user's favour since the quote locked —
+   *  the review surfaces it so commit is an informed choice. */
+  marketMoved: boolean;
+  liveBestPriceGbp: number | null;
   /** Fired once when the reservation's commit deadline passes. */
   onExpire: () => void;
   /** Full obligation — 1ZE locked for buys, units committed for sells. */
@@ -882,7 +950,7 @@ function ReviewCard({
           ) : null}
           <div className="flex items-baseline justify-between">
             <dt className="text-text-secondary">
-              Fee ({(prepared.preview.feeRate * 100).toFixed(0)}%)
+              Platform fee ({Number((prepared.preview.feeRate * 100).toFixed(2))}%)
             </dt>
             <dd className="text-text-primary tnum">{gbp(prepared.preview.fee)}</dd>
           </div>
@@ -921,6 +989,23 @@ function ReviewCard({
           </div>
         ) : null}
       </dl>
+      {/* Native's "quote changed" notice, adapted to the reservation
+          model: the locked price can't hurt the user, but the live book
+          may now be better — Back re-quotes, confirm settles locked. */}
+      {marketMoved && liveBestPriceGbp != null ? (
+        <p
+          role="status"
+          className="mt-4 flex items-start gap-2 rounded-md border border-warning-border bg-warning-subtle px-3 py-2.5 text-meta text-warning-text"
+        >
+          <Icon name="warning" size={14} className="mt-0.5 shrink-0" />
+          <span>
+            The market moved —{' '}
+            {side === 'buy' ? 'asks now print from' : 'bids now reach'}{' '}
+            {gbp(liveBestPriceGbp)}. Back returns a fresh quote; confirming
+            settles at the locked price above.
+          </span>
+        </p>
+      ) : null}
       <p className="mt-3 flex items-start gap-1.5 text-caption text-text-muted">
         <Icon name="info" size={13} className="mt-px shrink-0" />
         Orders settle in 1ZE — buyer funds are held in escrow until the
@@ -1065,7 +1150,7 @@ function HoldToConfirmButton({
 }
 
 function ReceiptView({ result, onDone }: { result: PlaceOrderResult; onDone: () => void }) {
-  const { order, plan } = result;
+  const { order, plan, aml } = result;
   const est = plan && plan.filledUnits > 0 ? plan : null;
   const resting = plan?.restingUnits ?? 0;
 
@@ -1138,6 +1223,21 @@ function ReceiptView({ result, onDone }: { result: PlaceOrderResult; onDone: () 
           <dd className="text-meta text-text-muted tnum">{order.id.toUpperCase().slice(0, 18)}</dd>
         </div>
       </dl>
+      {/* Post-trade AML monitor flag — the trade executed and the server
+          logged a review alert against it. Persistent on the receipt,
+          not a disappearing toast; the alert id is the support ref. */}
+      {aml ? (
+        <p
+          role="status"
+          className="mt-4 flex items-start gap-2 rounded-md border border-warning-border bg-warning-subtle px-3 py-2.5 text-meta text-warning-text"
+        >
+          <Icon name="warning" size={14} className="mt-0.5 shrink-0" />
+          <span>
+            This trade was flagged for AML review.
+            <span className="tnum text-text-muted"> Ref {aml.alertId}</span>
+          </span>
+        </p>
+      ) : null}
       {order.status !== 'filled' ? (
         <p className="mt-3 text-meta text-text-muted">
           Open orders live under Portfolio — cancelling releases the remainder.
@@ -1149,12 +1249,57 @@ function ReceiptView({ result, onDone }: { result: PlaceOrderResult; onDone: () 
         </Button>
         {order.status !== 'filled' ? (
           <Link
-            href="/co-own/portfolio"
+            href={`/co-own/orders?order=${encodeURIComponent(order.id)}`}
             className="pressable text-caption font-semibold text-text-secondary underline-offset-4 hover:text-text-primary hover:underline"
           >
-            View open orders in portfolio
+            View in your orders
           </Link>
         ) : null}
+      </div>
+    </div>
+  );
+}
+
+/** First-trade gate — the web port of native's education check. A unit of
+ *  a co-owned asset isn't a listing purchase; the guide explains units,
+ *  the order book and what "settling" means before the first order. The
+ *  acknowledgment is device-local, same as native's Zustand flag. */
+function FirstTradeGate({
+  assetTitle,
+  onComplete,
+}: {
+  assetTitle: string;
+  onComplete: () => void;
+}) {
+  return (
+    <div aria-label="Before your first Co-Own trade">
+      <div className="flex items-start gap-2.5">
+        <Icon name="info" size={18} className="mt-0.5 shrink-0 text-text-secondary" />
+        <div className="min-w-0">
+          <p className="text-body-emphasis font-semibold text-text-primary">
+            Before your first Co-Own trade
+          </p>
+          <p className="mt-1.5 text-body text-text-secondary">
+            Units of {assetTitle} trade on a live order book, settle in 1ZE
+            and carry platform fees. The two-minute guide covers how a
+            unit works, what a limit order does and when money moves.
+          </p>
+        </div>
+      </div>
+      <div className="mt-4 flex flex-col gap-2">
+        <Link
+          href="/co-own/guide"
+          className="pressable flex h-11 items-center justify-center rounded-md bg-brand text-body-emphasis font-semibold text-text-inverse hover:bg-brand-pressed"
+        >
+          Read the Co-Own guide
+        </Link>
+        <button
+          type="button"
+          onClick={onComplete}
+          className="pressable flex h-11 items-center justify-center rounded-md text-body text-text-secondary hover:text-text-primary"
+        >
+          I understand — continue to trade
+        </button>
       </div>
     </div>
   );
@@ -1177,6 +1322,87 @@ export function PausedNotice({ exitUnderway }: { exitUnderway: boolean }) {
           ? 'This asset is exiting. Units redeem from the sale proceeds — no further trades.'
           : 'Orders are paused on this market. Your position and resting orders are unaffected.'}
       </p>
+    </div>
+  );
+}
+
+/** Preview tier — the market exists but the issuer hasn't signed the
+ *  recourse agreement yet, so the book is sealed. The issuer gets the
+ *  signature rail here (the same terms the wizard showed); everyone else
+ *  gets the honest not-live read. A successful signature refetches the
+ *  asset at 'listed' and this panel swaps to the live composer. */
+export function PreviewPanel({
+  asset,
+  isIssuer,
+}: {
+  asset: CoOwnAsset;
+  isIssuer: boolean;
+}) {
+  const [accepted, setAccepted] = useState(false);
+  const [signError, setSignError] = useState<string | null>(null);
+  const signRecourse = useSignCoOwnRecourse(asset.id);
+
+  if (!isIssuer) {
+    return (
+      <div
+        role="status"
+        className="rounded-lg border border-border-subtle p-4"
+      >
+        <p className="text-body-emphasis font-semibold text-text-primary">
+          Not live yet
+        </p>
+        <p className="mt-2 text-body text-text-secondary">
+          The issuer hasn&rsquo;t signed the recourse agreement — units
+          can&rsquo;t be bought or sold until they do.
+        </p>
+      </div>
+    );
+  }
+
+  const sign = async () => {
+    if (!accepted || signRecourse.isPending) return;
+    setSignError(null);
+    try {
+      await signRecourse.mutateAsync({ personalGuarantee: true });
+    } catch (err) {
+      setSignError(
+        err instanceof Error ? err.message : 'Signing failed — try again',
+      );
+    }
+  };
+
+  return (
+    <div className="rounded-lg border border-border-subtle p-4">
+      <p className="text-body-emphasis font-semibold text-text-primary">
+        Your market is unsigned
+      </p>
+      <p className="mt-2 text-body text-text-secondary">
+        One signature left — the recourse agreement — before units can
+        trade. You keep custody of the item and are personally liable for
+        it.
+      </p>
+      <div className="mt-4">
+        <RecourseTerms
+          asset={asset}
+          accepted={accepted}
+          onAccept={(v) => {
+            setAccepted(v);
+            setSignError(null);
+          }}
+        />
+      </div>
+      {signError ? (
+        <p role="alert" className="mt-3 text-meta text-danger-text">
+          {signError}
+        </p>
+      ) : null}
+      <Button
+        className="mt-4 w-full"
+        onClick={() => void sign()}
+        disabled={!accepted || signRecourse.isPending}
+      >
+        {signRecourse.isPending ? 'Signing…' : 'Sign and take live'}
+      </Button>
     </div>
   );
 }

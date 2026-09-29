@@ -181,16 +181,6 @@ export default function CoOwnPriceAlertsScreen({ navigation }: Props) {
           />
         ) : (
           <>
-            {/* U51: Alert monitoring is not yet active — the backend has
-                CRUD but no evaluator/delivery consumer for Co-Own alerts.
-                Do not imply the alerts work. */}
-            <View style={[styles.monitoringNotice, { backgroundColor: colors.warningSubtle, borderColor: colors.warning }]}>
-              <Ionicons name="alert-circle-outline" size={16} color={colors.warningText} />
-              <Text style={[styles.monitoringNoticeText, { color: colors.warningText }]}>
-                Alert monitoring is not yet active. Alerts are saved but will not trigger until this feature is live.
-              </Text>
-            </View>
-
             {/* Active alerts — simple flat list with toggle + delete */}
             {alerts.filter((a) => a.active && !a.triggeredAt).length > 0 && (
               <View>
@@ -402,23 +392,6 @@ export default function CoOwnPriceAlertsScreen({ navigation }: Props) {
 function createStyles(colors: ThemeColors) {
   return StyleSheet.create({
     scrollContent: { paddingHorizontal: Space.md, paddingBottom: Space.xl },
-
-    // U51: Monitoring-inactive notice
-    monitoringNotice: {
-      flexDirection: 'row',
-      alignItems: 'flex-start',
-      gap: Space.xs,
-      padding: Space.sm,
-      borderRadius: Radius.md,
-      borderWidth: StyleSheet.hairlineWidth,
-      marginBottom: Space.sm,
-    },
-    monitoringNoticeText: {
-      fontSize: TypographyV2.meta.size,
-      fontFamily: TypographyV2.meta.fontFamily,
-      lineHeight: TypographyV2.meta.lineHeight,
-      flex: 1,
-    },
 
     // U51: Trigger basis line
     alertBasis: {

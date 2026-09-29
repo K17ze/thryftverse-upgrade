@@ -1,13 +1,21 @@
 'use client';
 
+import { useState } from 'react';
 import Link from 'next/link';
+import dynamic from 'next/dynamic';
 import { AppImage } from '@/components/ui/AppImage';
 import { Icon } from '@/components/ui/Icon';
 import { IconButton } from '@/components/ui/IconButton';
 import type { CoOwnAsset } from '@/lib/contracts/coown';
+import { useListing } from '@/lib/hooks/queries';
+import { isUsableUri } from '@/lib/utils/media';
 import { verificationLabel } from '../format';
 import { LifecycleTag } from '../LifecycleTag';
 import { Avatar } from '@/components/ui/Avatar';
+
+const PdpLightbox = dynamic(
+  () => import('@/components/pdp/PdpLightbox').then((m) => m.PdpLightbox),
+);
 
 /**
  * Market header — back path, identity block (media, title, issuer row),
@@ -32,6 +40,16 @@ export function MarketHeader({
   actions?: React.ReactNode;
 }) {
   const tier = asset.issuer.verificationTier;
+
+  // The item's photos are the asset's physical evidence — the cover opens
+  // the full listing set in the PDP lightbox. Fixture assets carry no
+  // listingId, so the read disables and the single cover is the set.
+  const [lightboxOpen, setLightboxOpen] = useState(false);
+  const [lightboxIndex, setLightboxIndex] = useState(0);
+  const { data: listing } = useListing(asset.listingId ?? '');
+  const lightboxImages =
+    listing?.images.filter(isUsableUri) ??
+    (isUsableUri(asset.imageUrl) ? [asset.imageUrl] : []);
 
   return (
     <header>
@@ -71,13 +89,22 @@ export function MarketHeader({
 
       <div className="mt-4 flex flex-wrap items-start justify-between gap-x-6 gap-y-4">
         <div className="flex min-w-0 items-start gap-4">
-          <AppImage
-            src={asset.imageUrl}
-            alt={asset.title}
-            aspectRatio={1}
-            sizes="96px"
-            className="h-[72px] w-[72px] shrink-0 rounded-lg"
-          />
+          <button
+            type="button"
+            onClick={() => lightboxImages.length > 0 && setLightboxOpen(true)}
+            aria-label={`View ${asset.title} photos`}
+            aria-haspopup="dialog"
+            disabled={lightboxImages.length === 0}
+            className="pressable shrink-0 rounded-lg"
+          >
+            <AppImage
+              src={asset.imageUrl}
+              alt={asset.title}
+              aspectRatio={1}
+              sizes="96px"
+              className="h-[72px] w-[72px] rounded-lg"
+            />
+          </button>
           <div className="min-w-0">
             <h1 className="text-editorial-display leading-tight text-text-primary">{asset.title}</h1>
             {asset.subtitle ? <p className="mt-1 text-body text-text-secondary">{asset.subtitle}</p> : null}
@@ -115,6 +142,17 @@ export function MarketHeader({
       </div>
 
       {tier ? <p className="sr-only">Issuer {verificationLabel(tier)}</p> : null}
+
+      {lightboxOpen && lightboxImages.length > 0 ? (
+        <PdpLightbox
+          images={lightboxImages}
+          index={lightboxIndex}
+          onIndexChange={setLightboxIndex}
+          onClose={() => setLightboxOpen(false)}
+          title={asset.title}
+          aspectRatio={listing?.mediaAspectRatio ?? 1}
+        />
+      ) : null}
     </header>
   );
 }

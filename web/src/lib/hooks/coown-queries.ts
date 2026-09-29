@@ -4,7 +4,7 @@
  */
 
 import { useMemo } from 'react';
-import { useQueries, useQuery, useQueryClient } from '@tanstack/react-query';
+import { useMutation, useQueries, useQuery, useQueryClient } from '@tanstack/react-query';
 import type {
   CandlePoint,
   CoOwnAsset,
@@ -69,6 +69,26 @@ export function useCoOwnAssets() {
   });
 }
 
+/** The caller's own issuances — every tier, including 'preview' drafts
+ *  the public list hides. The backend lifts the tier gate only when
+ *  ?issuerId equals the bearer, so this is the one complete read of
+ *  "markets you issued" (an unsigned market is otherwise unfindable). */
+export function useMyIssuances() {
+  const { user } = useSession();
+  return useQuery({
+    queryKey: ['coown', 'issuances', user?.id ?? 'anon'],
+    enabled: DATA_MODE === 'live' && !!user,
+    queryFn: async (): Promise<CoOwnAsset[]> => {
+      const page = await coownService.fetchCoOwnAssets({
+        issuerId: user!.id,
+        limit: 50,
+        sort: 'newest',
+      });
+      return page.items;
+    },
+  });
+}
+
 export function useCoOwnAsset(id: string) {
   return useQuery({
     queryKey: ['coown', 'asset', id],
@@ -79,6 +99,41 @@ export function useCoOwnAsset(id: string) {
       await tick(140);
       return CO_OWN_ASSETS.find((a) => a.id === id) ?? null;
     },
+  });
+}
+
+/** Listing → asset bridge for the PDP "Co-owned" section. Fixture assets
+ *  carry `listingId: null` so the fixture path resolves to no binding; live
+ *  mode turns a backend 404 into the same null. */
+export function useCoOwnAssetForListing(listingId: string) {
+  return useQuery({
+    queryKey: ['coown', 'asset-by-listing', listingId],
+    queryFn: async (): Promise<coownService.CoOwnAssetListingSummary | null> => {
+      if (DATA_MODE === 'live') {
+        return coownService.fetchCoOwnAssetByListing(listingId);
+      }
+      await tick(90);
+      const fixture = CO_OWN_ASSETS.find((a) => a.listingId === listingId);
+      if (!fixture) return null;
+      return {
+        id: fixture.id,
+        listingId: fixture.listingId!,
+        issuerId: fixture.issuer.id,
+        title: fixture.title,
+        imageUrl: fixture.imageUrl,
+        totalUnits: fixture.totalUnits,
+        availableUnits: fixture.availableUnits,
+        unitPriceGbp: fixture.unitPriceGbp,
+        isOpen: fixture.offeringStatus === 'offering',
+        createdAt: fixture.createdAt,
+        issuer: {
+          username: fixture.issuer.username,
+          displayName: fixture.issuer.displayName,
+          avatar: fixture.issuer.avatar ?? null,
+        },
+      };
+    },
+    staleTime: 60_000,
   });
 }
 
@@ -200,19 +255,9 @@ export function useCoOwnOrders() {
     enabled: DATA_MODE !== 'live' || !!user,
     queryFn: async (): Promise<CoOwnOrder[]> => {
       if (DATA_MODE === 'live') {
-        // There is no aggregate "my orders" route — fan out per asset,
-        // bounded. Candidates: held positions (orders can exist on assets
-        // with zero units only for unfilled buys, so also the first
-        // market page — the same bound useCoOwnActivity('all') uses).
-        const [assetsPage, portfolio] = await Promise.all([
-          coownService.fetchCoOwnAssets({ limit: 12 }),
-          coownService.fetchCoOwnPortfolio(),
-        ]);
-        const assetIds = [
-          ...portfolio.positions.map((p) => p.assetId),
-          ...assetsPage.items.map((a) => a.id),
-        ];
-        return coownService.fetchCoOwnOrders(assetIds);
+        // One owner-scoped aggregate read — every open order the caller
+        // has on every market; no candidate list can miss a resting order.
+        return coownService.fetchCoOwnMyOrders();
       }
       await tick(120);
       return CO_OWN_OPEN_ORDERS;
@@ -795,6 +840,29 @@ export function useCoOwnRecourse(assetId: string) {
   });
 }
 
+/** Issuer signs the recourse agreement — the act that promotes a
+ *  'preview' asset to 'listed' inside the server's transaction. The
+ *  signature is deliberate: no optimistic flip, the refetched tier is
+ *  the confirmation. */
+export function useSignCoOwnRecourse(assetId: string) {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: (options?: { personalGuarantee?: boolean; agreementUrl?: string }) =>
+      coownService.signCoOwnRecourseAgreement(assetId, options),
+    onSuccess: () => {
+      // The promote touches every read that derived from the tier:
+      // detail, the public markets list, eligibility, the recourse
+      // dossier, and the trust section's signature record.
+      void queryClient.invalidateQueries({ queryKey: ['coown', 'asset', assetId] });
+      void queryClient.invalidateQueries({ queryKey: ['coown', 'assets'] });
+      void queryClient.invalidateQueries({ queryKey: ['coown', 'markets'] });
+      void queryClient.invalidateQueries({ queryKey: ['coown', 'recourse', assetId] });
+      void queryClient.invalidateQueries({ queryKey: ['coown', 'eligibility', assetId] });
+      void queryClient.invalidateQueries({ queryKey: ['coown', 'diligence', assetId] });
+    },
+  });
+}
+
 // ── Eligibility — the server's advisory verdict for this viewer ───────
 
 export function useCoOwnEligibility(assetId: string) {
@@ -886,4 +954,43 @@ export function useRiskDisclosure() {
     },
     staleTime: 60_000,
   });
+}
+
+// ── Trust actions — issuer appraisal refresh + holder demands ──────────
+// Live-only writes; the issuer/holder gates are server-enforced and the
+// surfaces hide the affordances for anyone they don't apply to. Errors
+// propagate verbatim — callers render the server's refusal.
+
+export function useCoOwnTrustActions(assetId: string) {
+  const queryClient = useQueryClient();
+
+  const refreshAppraisal = useMutation({
+    mutationFn: (input: {
+      appraisalValueGbp: number;
+      appraisalValuer: string;
+      appraisalNotes?: string;
+    }) => coownService.refreshCoOwnAppraisal(assetId, input),
+    onSuccess: () => {
+      // The dossier figures and both audit trails changed server-side —
+      // re-read the detail wire and its diligence projection.
+      void queryClient.invalidateQueries({ queryKey: ['coown', 'asset', assetId] });
+      void queryClient.invalidateQueries({ queryKey: ['coown', 'diligence', assetId] });
+    },
+  });
+
+  const demandVerification = useMutation({
+    mutationFn: (input: {
+      demandType: coownService.CoOwnVerificationDemandType;
+      deadlineDays?: number;
+      notes?: string;
+    }) => coownService.createCoOwnVerificationDemand(assetId, input),
+    onSuccess: () => {
+      // The demand lands on the recourse dossier and bumps the asset's
+      // active_verification_demands count.
+      void queryClient.invalidateQueries({ queryKey: ['coown', 'recourse', assetId] });
+      void queryClient.invalidateQueries({ queryKey: ['coown', 'asset', assetId] });
+    },
+  });
+
+  return { refreshAppraisal, demandVerification };
 }

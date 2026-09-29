@@ -24,7 +24,9 @@ export function DistributionsTable({
         <h2 id="distributions-heading" className="text-section-title font-semibold text-text-primary">
           Distributions
         </h2>
-        <p className="text-meta text-text-muted tnum">{receipts.length} receipts</p>
+        <p className="text-meta text-text-muted tnum">
+          {receipts.length} {receipts.length === 1 ? 'receipt' : 'receipts'}
+        </p>
       </div>
 
       {receipts.length === 0 ? (

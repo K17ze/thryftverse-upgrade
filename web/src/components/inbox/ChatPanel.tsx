@@ -43,7 +43,6 @@ import { useRouter } from 'next/navigation';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import type { Message } from '@/lib/contracts/domain';
 import { DATA_MODE } from '@/lib/api/client';
-import { getApiBaseUrl, getAuthSession } from '@/lib/api/http';
 import {
   useConversation,
   useConversations,
@@ -52,10 +51,14 @@ import {
   useUser,
   type SendChatMessageInput,
 } from '@/lib/hooks/queries';
+import { useConversationRealtime } from '@/lib/hooks/chat-realtime';
 import {
   fetchConversationPresence,
   marketplaceMeta,
+  messageClientMessageId,
+  newClientMessageId,
   type ConversationPresence,
+  type MessageWithClientId,
 } from '@/lib/api/services/chat';
 import { useSession } from '@/lib/session/SessionProvider';
 import { useHydrated } from '@/lib/store/useStore';
@@ -242,7 +245,9 @@ function NewMessagesDivider() {
 // The web has no shared WS client — the SSE twin (/realtime/stream) is the
 // transport (same grammar as useCoOwnOrderBookStream: fetch + bearer,
 // browser WebSocket can't send the Authorization header). One stream per
-// open thread carries the two surfaces the conversation topic pair owns:
+// open thread carries the conversation topic pair's full vocabulary —
+// useConversationRealtime owns the pump and the message/member/receipt
+// event merges; the two surfaces still read:
 //
 //   chat.typing.update on `chat.conversation:{id}` — per-user typing set,
 //   4s auto-clear per typer, self filtered (mirrors mobile useTypingUsers).
@@ -253,12 +258,6 @@ function NewMessagesDivider() {
 // 15s conversation poll stay the baseline.
 
 const PRESENCE_KEY = (id: string) => ['conversation-presence', id] as const;
-
-interface RealtimeEnvelope {
-  topic?: string;
-  type?: string;
-  payload?: Record<string, unknown>;
-}
 
 /** REST snapshot for the DM peer's presence — the live-mode source for the
  *  header's "Active now" / "Last active X" line. `null` data means the
@@ -277,159 +276,12 @@ function useConversationPresence(conversationId: string, enabled: boolean) {
 }
 
 /**
- * Subscribe to the thread's realtime topics — returns the set of
- * counterparty user ids currently typing, and keeps the presence query
- * cache current off `presence.update` events. A dropped stream reconnects
- * with backoff; typing state is cleared on reconnect (a missed
- * isTyping=false would otherwise stick the indicator).
+ * The thread's realtime surface moved to useConversationRealtime
+ * (lib/hooks/chat-realtime) — the SSE pump plus the full conversation-topic
+ * event vocabulary (message created/deleted/edited, reactions, saves,
+ * pins, read receipts, membership + group lifecycle) merged into the same
+ * query caches the REST hooks own.
  */
-function useThreadRealtime(
-  conversationId: string,
-  peerUserId: string | null,
-  viewerId: string,
-  enabled: boolean,
-): string[] {
-  const queryClient = useQueryClient();
-  const [typingIds, setTypingIds] = useState<string[]>([]);
-  const clearTimers = useRef(new Map<string, ReturnType<typeof setTimeout>>());
-
-  useEffect(() => {
-    if (DATA_MODE !== 'live' || !enabled || !conversationId) {
-      setTypingIds([]);
-      return;
-    }
-
-    const topics = [`chat.conversation:${conversationId}`];
-    if (peerUserId) topics.push(`presence.user:${peerUserId}`);
-
-    let disposed = false;
-    let controller: AbortController | null = null;
-    let retryTimer: ReturnType<typeof setTimeout> | null = null;
-    let attempt = 0;
-
-    const markTyping = (userId: string, isTyping: boolean) => {
-      if (!userId || userId === viewerId) return;
-      const existing = clearTimers.current.get(userId);
-      if (existing) clearTimeout(existing);
-      if (isTyping) {
-        setTypingIds((prev) => (prev.includes(userId) ? prev : [...prev, userId]));
-        clearTimers.current.set(
-          userId,
-          setTimeout(() => {
-            setTypingIds((prev) => prev.filter((id) => id !== userId));
-            clearTimers.current.delete(userId);
-          }, 4000),
-        );
-      } else {
-        clearTimers.current.delete(userId);
-        setTypingIds((prev) => prev.filter((id) => id !== userId));
-      }
-    };
-
-    const clearAllTyping = () => {
-      for (const t of clearTimers.current.values()) clearTimeout(t);
-      clearTimers.current.clear();
-      setTypingIds([]);
-    };
-
-    const handleEvent = (event: RealtimeEnvelope) => {
-      const payload = event.payload ?? {};
-      if (event.type === 'chat.typing.update') {
-        if (
-          typeof payload.conversationId === 'string' &&
-          payload.conversationId !== conversationId
-        )
-          return;
-        if (typeof payload.userId !== 'string') return;
-        markTyping(payload.userId, payload.isTyping === true);
-        return;
-      }
-      if (event.type === 'presence.update' && typeof payload.userId === 'string') {
-        // Keep the REST snapshot's cache honest — a transition event is
-        // fresher than the last poll and carries the same shape.
-        queryClient.setQueryData(
-          [...PRESENCE_KEY(conversationId)],
-          (): ConversationPresence => ({
-            userId: payload.userId as string,
-            isOnline: payload.isOnline === true,
-            lastSeenAt:
-              typeof payload.lastSeenAt === 'string' ? payload.lastSeenAt : null,
-          }),
-        );
-      }
-    };
-
-    const connect = async () => {
-      controller = new AbortController();
-      try {
-        const session = await getAuthSession();
-        if (disposed || !session?.accessToken) return;
-        const url = `${getApiBaseUrl()}/realtime/stream?topics=${encodeURIComponent(
-          topics.join(','),
-        )}`;
-        const response = await fetch(url, {
-          headers: { Authorization: `Bearer ${session.accessToken}` },
-          signal: controller.signal,
-        });
-        if (!response.ok || !response.body) {
-          throw new Error(`stream failed (${response.status})`);
-        }
-        attempt = 0;
-
-        const reader = response.body.getReader();
-        const decoder = new TextDecoder();
-        let buffer = '';
-        let dataLines: string[] = [];
-        const flush = () => {
-          if (dataLines.length === 0) return;
-          try {
-            handleEvent(JSON.parse(dataLines.join('\n')) as RealtimeEnvelope);
-          } catch {
-            // Malformed frame — drop it; typing entries still expire.
-          }
-          dataLines = [];
-        };
-        for (;;) {
-          const { done, value } = await reader.read();
-          if (done || disposed) break;
-          buffer += decoder.decode(value, { stream: true });
-          let newline: number;
-          while ((newline = buffer.indexOf('\n')) >= 0) {
-            const line = buffer.slice(0, newline).replace(/\r$/, '');
-            buffer = buffer.slice(newline + 1);
-            if (line === '') flush();
-            else if (line.startsWith('data:')) dataLines.push(line.slice(5).trimStart());
-          }
-        }
-      } catch {
-        // Aborted intentionally or network drop — reconnect below.
-      } finally {
-        controller = null;
-      }
-
-      if (disposed) return;
-      // A missed isTyping=false on the gap would stick the row — clear
-      // rather than trust state carried across a dead connection.
-      clearAllTyping();
-      const delayMs = Math.min(1000 * 2 ** attempt, 15_000);
-      attempt += 1;
-      retryTimer = setTimeout(() => {
-        if (!disposed) void connect();
-      }, delayMs);
-    };
-
-    void connect();
-
-    return () => {
-      disposed = true;
-      controller?.abort();
-      if (retryTimer) clearTimeout(retryTimer);
-      clearAllTyping();
-    };
-  }, [conversationId, peerUserId, viewerId, enabled, queryClient]);
-
-  return typingIds;
-}
 
 // ── Component ────────────────────────────────────────────────────────────
 
@@ -558,12 +410,37 @@ export function ChatPanel({ conversationId }: { conversationId: string }) {
     conversationId,
     !!conversation && !isGroup && !isGuest,
   );
-  const typingUserIds = useThreadRealtime(
+  // The realtime stream's clientMessageId echo — the server row lands in
+  // the conversation cache before/independent of the send response, so the
+  // matching optimistic bubble (and its failed-marker/retry payload) drops
+  // here rather than waiting on the reconcile effect.
+  const pendingRef = useRef(pending);
+  pendingRef.current = pending;
+  const onServerEcho = useCallback((clientMessageId: string) => {
+    for (const pm of pendingRef.current) {
+      if (messageClientMessageId(pm) === clientMessageId) {
+        pendingInputs.current.delete(pm.id);
+        setFailedIds((s) => {
+          if (!s.has(pm.id)) return s;
+          const n = new Set(s);
+          n.delete(pm.id);
+          return n;
+        });
+      }
+    }
+    setPending((p) =>
+      p.filter((pm) => messageClientMessageId(pm) !== clientMessageId),
+    );
+  }, []);
+  const { typingUserIds } = useConversationRealtime({
     conversationId,
-    peerUserId,
     viewerId,
-    hydrated && !isGuest && !!conversation,
-  );
+    peerUserId,
+    enabled: hydrated && !isGuest && !!conversation,
+    onServerEcho,
+    onPinChanged: refreshPinned,
+    patchOlder: history.patchOlder,
+  });
   const peerTyping = typingUserIds.length > 0;
   // Message-request state — the detail payload doesn't carry
   // requestStatus; the conversations list does (and the open row shares
@@ -669,29 +546,32 @@ export function ChatPanel({ conversationId }: { conversationId: string }) {
     if (needsRead) markConversationRead(conversationId);
   }, [conversationId, needsRead, markConversationRead]);
 
-  // Reconcile optimistic sends: once the outgoing write refetches into the
-  // query result, drop the matching pending bubble. Matches on text +
-  // media presence + send order (server/fixture timestamps are at-or-after
-  // the optimistic stamp) rather than a fixture-only id prefix, so live
-  // sends reconcile the same way.
+  // Reconcile optimistic sends: once the outgoing write lands in the
+  // query result (SSE echo or REST refetch — both serializers carry
+  // clientMessageId), drop the matching pending bubble. A live-mode send
+  // reconciles strictly on its idempotency key — two identical texts sent
+  // back-to-back can no longer cross-match; fixture sends (no cmid) keep
+  // the text + media + send-order heuristic.
   useEffect(() => {
     if (!conversation) return;
     setPending((p) =>
       p.filter((pm) => {
         const sentAt = new Date(pm.timestamp).getTime();
+        const pmCmid = messageClientMessageId(pm);
         const attachmentUri = (m: Message) =>
           m.mediaUri ?? m.documentUri ?? m.voiceUri ?? '';
-        const keep = !conversation.messages.some(
-          (dm) =>
-            !dm.id.startsWith('opt-') &&
-            dm.sender === 'me' &&
+        const keep = !conversation.messages.some((dm) => {
+          if (dm.id.startsWith('opt-') || dm.sender !== 'me') return false;
+          if (pmCmid) return messageClientMessageId(dm) === pmCmid;
+          return (
             (dm.text ?? '') === (pm.text ?? '') &&
             (dm.type ?? 'text') === (pm.type ?? 'text') &&
             Boolean(attachmentUri(dm)) === Boolean(attachmentUri(pm)) &&
             (Number.isNaN(sentAt) ||
               Number.isNaN(new Date(dm.timestamp).getTime()) ||
-              new Date(dm.timestamp).getTime() >= sentAt - 5_000),
-        );
+              new Date(dm.timestamp).getTime() >= sentAt - 5_000)
+          );
+        });
         // Reconciled sends — the server copy landed, so the stashed retry
         // payload is dead weight. Idempotent, safe under StrictMode replays.
         if (!keep) {
@@ -1030,12 +910,22 @@ export function ChatPanel({ conversationId }: { conversationId: string }) {
   };
 
   const send = (input: SendChatMessageInput) => {
-    const replyToMessageId = replyTarget?.id;
+    // A retry replays the stashed input — its reply linkage rides there
+    // (replyTarget cleared when the first attempt fired).
+    const replyToMessageId = replyTarget?.id ?? input.replyToMessageId;
+    // Idempotency key — the backend dedupes on it and echoes it back on
+    // chat.message.created. A retry reuses the stashed key so a send that
+    // landed but lost its response can't double-post. Lives outside
+    // Message so stripForPersist can't leak it.
+    const clientMessageId =
+      DATA_MODE === 'live'
+        ? (input.clientMessageId ?? newClientMessageId())
+        : undefined;
     // Same narrowing the mutation's fixture write applies — document/voice
     // ride their own uri fields + type tag; mediaType is image|video only.
     const isDoc = input.mediaType === 'document';
     const isVoice = input.mediaType === 'voice';
-    const optimistic: Message = {
+    const optimistic: Message & MessageWithClientId = {
       id: `opt-${Date.now()}`,
       senderId: viewerId,
       sender: 'me',
@@ -1061,12 +951,17 @@ export function ChatPanel({ conversationId }: { conversationId: string }) {
             : 'text',
       timestamp: new Date().toISOString(),
       readStatus: 'sending',
+      clientMessageId,
     };
     setPending((p) => [...p, optimistic]);
     setReplyTarget(null);
-    pendingInputs.current.set(optimistic.id, { ...input, replyToMessageId });
+    pendingInputs.current.set(optimistic.id, {
+      ...input,
+      replyToMessageId,
+      clientMessageId,
+    });
     sendMessage.mutate(
-      { ...input, replyToMessageId },
+      { ...input, replyToMessageId, clientMessageId },
       {
         onError: () => {
           // The send failed — keep the optimistic bubble in place marked

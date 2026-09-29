@@ -31,6 +31,25 @@ export interface PhotoMediaState {
   poster?: string | null;
 }
 
+/**
+ * Auto-fill control — the assisted-extraction affordance for the photos
+ * step (POST /listing-intelligence/run via the parent). Rendered only in
+ * live mode: fixture mode has no backend to consult and a dead button
+ * would be dishonest. Candidates are advisory — the flow applies them to
+ * empty fields only and the seller reviews everything below.
+ */
+export interface AutoFillControl {
+  phase: 'idle' | 'running' | 'done' | 'empty' | 'error';
+  /** Field labels the last run filled (e.g. 'title', 'brand'). */
+  applied?: string[];
+  /** The backend's own failure text when phase === 'error'. */
+  message?: string | null;
+  /** Honest provenance for the done line (e.g. 'the photo filename'). */
+  basis?: string | null;
+  onRun: () => void;
+  onDismiss?: () => void;
+}
+
 interface PhotosSectionProps {
   photos: string[];
   /** Live upload state per staged URL — absent in fixture mode. */
@@ -38,6 +57,8 @@ interface PhotosSectionProps {
   error?: string;
   /** Camera entry is only rendered when the browser supports capture. */
   cameraSupported?: boolean;
+  /** Assisted autofill — present only where the endpoint exists. */
+  autoFill?: AutoFillControl;
   onAdd: (files: File[]) => void;
   onRemove: (index: number) => void;
   onReorder: (from: number, to: number) => void;
@@ -51,6 +72,7 @@ export function PhotosSection({
   media,
   error,
   cameraSupported,
+  autoFill,
   onAdd,
   onRemove,
   onReorder,
@@ -199,6 +221,80 @@ export function PhotosSection({
                 </button>
               ) : null}
             </div>
+
+            {/* Assisted autofill — advisory field candidates from the
+                backend's listing-intelligence run. Never silent: the run
+                reports what it filled (or that it found nothing) and every
+                value stays editable below. */}
+            {autoFill ? (
+              <div className="mt-4 border-t border-border-subtle pt-4">
+                {autoFill.phase === 'idle' || autoFill.phase === 'running' ? (
+                  <button
+                    type="button"
+                    onClick={autoFill.onRun}
+                    disabled={autoFill.phase === 'running'}
+                    className="pressable flex h-11 items-center gap-2 rounded-md text-body font-medium text-text-secondary transition-colors hover:text-text-primary disabled:opacity-50"
+                  >
+                    <Icon name="scan" size={16} />
+                    {autoFill.phase === 'running'
+                      ? 'Reading photo details…'
+                      : 'Auto-fill details'}
+                  </button>
+                ) : autoFill.phase === 'error' ? (
+                  <div role="alert" className="flex items-start gap-2.5">
+                    <Icon
+                      name="warning"
+                      size={16}
+                      className="mt-0.5 shrink-0 text-danger-text"
+                    />
+                    <div className="min-w-0 flex-1">
+                      <p className="text-caption text-text-secondary">
+                        {autoFill.message ??
+                          'Couldn’t read the photo details.'}{' '}
+                        Fill them in below.
+                      </p>
+                      <button
+                        type="button"
+                        onClick={autoFill.onRun}
+                        className="pressable mt-1 text-caption font-semibold text-text-primary underline-offset-4 hover:underline"
+                      >
+                        Try again
+                      </button>
+                    </div>
+                  </div>
+                ) : (
+                  <div className="flex items-start gap-2.5">
+                    <Icon
+                      name={autoFill.phase === 'done' ? 'check' : 'info'}
+                      size={16}
+                      className={`mt-0.5 shrink-0 ${
+                        autoFill.phase === 'done'
+                          ? 'text-success-text'
+                          : 'text-text-muted'
+                      }`}
+                    />
+                    <p className="min-w-0 flex-1 text-caption text-text-secondary">
+                      {autoFill.phase === 'done' && autoFill.applied?.length
+                        ? `Auto-filled ${autoFill.applied.join(', ')}${
+                            autoFill.basis ? ` from ${autoFill.basis}` : ''
+                          } — review them below.`
+                        : autoFill.message ??
+                          'Nothing readable to suggest — fill the details below.'}
+                    </p>
+                    {autoFill.onDismiss ? (
+                      <button
+                        type="button"
+                        onClick={autoFill.onDismiss}
+                        aria-label="Dismiss"
+                        className="pressable -m-1 shrink-0 rounded-md p-1 text-text-muted transition-colors hover:text-text-primary"
+                      >
+                        <Icon name="close" size={14} />
+                      </button>
+                    ) : null}
+                  </div>
+                )}
+              </div>
+            ) : null}
           </>
         )}
       </div>

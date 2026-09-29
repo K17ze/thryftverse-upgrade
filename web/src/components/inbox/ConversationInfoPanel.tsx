@@ -38,6 +38,7 @@ import { CLOSED_CONFIRM, ConfirmSheet, type ConfirmSheetState } from './ConfirmS
 import { EditGroupSheet } from './EditGroupSheet';
 import { GroupInfoHero } from './GroupInfoHero';
 import { InfoRow, InfoSection } from './InfoSection';
+import { InviteLinksSection } from './InviteLinksSection';
 import { MemberActionsSheet, type MemberActionsTarget } from './MemberActionsSheet';
 import { MemberDirectory } from './MemberDirectory';
 import { PermissionsSection } from './PermissionsSection';
@@ -538,6 +539,17 @@ export function ConversationInfoPanel({ conversationId }: { conversationId: stri
               />
             </div>
 
+            {/* Invite links — live edges only, management-gated like the
+                list/revoke endpoints; create additionally honours the
+                group's add_members scope. Fixture mode never renders it. */}
+            {capabilities?.canManage ? (
+              <InviteLinksSection
+                conversationId={conversation.id}
+                canManage={capabilities.canManage}
+                canCreate={capabilities.canAddMembers}
+              />
+            ) : null}
+
             {settings && capabilities ? (
               <PermissionsSection
                 settings={settings}
@@ -769,6 +781,7 @@ export function ConversationInfoPanel({ conversationId }: { conversationId: stri
       <ReportGroupSheet
         open={groupReportOpen}
         onClose={() => setGroupReportOpen(false)}
+        conversationId={conversation.id}
         groupLabel={conversationTitle(conversation)}
       />
       {settingsFailed && isGroup ? (

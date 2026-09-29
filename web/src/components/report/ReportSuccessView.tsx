@@ -46,8 +46,12 @@ export function ReportSuccessView({
       ) : null}
       <p className="mt-1.5 max-w-[330px] text-body leading-relaxed text-text-secondary">
         {isDsa
-          ? 'We assess every notice under the Digital Services Act and confirm receipt by email. Updates appear on your case.'
-          : 'We review every report — replies and updates appear on your case.'}
+          ? caseHref
+            ? 'We assess every notice under the Digital Services Act and confirm receipt by email. Updates appear on your case.'
+            : 'We assess every notice under the Digital Services Act and confirm receipt by email.'
+          : caseHref
+            ? 'We review every report — replies and updates appear on your case.'
+            : 'We review every report — keep the reference for follow-up.'}
       </p>
       {submittedAt ? (
         <p className="mt-1.5 text-meta text-text-muted">Received at {submittedAt}</p>

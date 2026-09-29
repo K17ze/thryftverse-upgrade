@@ -5,12 +5,19 @@
  * top, bottom-anchored welcome block, one CTA that asks for notification
  * permission, a Skip link, and the denial recovery states. Completion
  * writes the persisted flag the app shell honours on first visit.
+ *
+ * Native ordering puts AgeVerificationScreen BEFORE this screen — the
+ * web gate lands here instead: until `ageConfirmedAt` exists the 18+
+ * self-declaration renders first, and a member who declines gets the
+ * denied statement rather than a redirect loop.
  */
 
 import { useRouter } from 'next/navigation';
 import { useEffect, useState } from 'react';
 import { Button } from '@/components/ui/Button';
 import { useHydrated, useStore } from '@/lib/store/useStore';
+import { useSettingsPrefs } from '@/lib/store/settingsPrefs';
+import { useConfirmAge } from '@/lib/hooks/useConfirmAge';
 import { ONBOARDING_RETURN_KEY } from '@/components/layout/AppShell';
 import { DATA_MODE } from '@/lib/api/client';
 
@@ -41,15 +48,23 @@ export function OnboardingView() {
   const [step, setStep] = useState<Step>('intro');
   const [requesting, setRequesting] = useState(false);
   const [denial, setDenial] = useState<Denial>(null);
+  const [underAge, setUnderAge] = useState(false);
 
   // Mirror of the AppShell gate: a session that already completed
   // onboarding has no business here — land on home. Hydration-gated
   // because the flag lives in persisted storage SSR can't see.
   const hydrated = useHydrated();
   const hasSeenOnboarding = useStore((s) => s.hasSeenOnboarding);
+  const ageConfirmedAt = useSettingsPrefs((s) => s.ageConfirmedAt);
+  const confirmAge = useConfirmAge();
   useEffect(() => {
-    if (hydrated && hasSeenOnboarding) router.replace('/');
-  }, [hydrated, hasSeenOnboarding, router]);
+    // Both flags are the exit condition: a returning member gated here for
+    // the age declaration continues to their stashed destination once it
+    // lands; anyone fully seen goes home (or to the stash, same rule).
+    if (hydrated && hasSeenOnboarding && ageConfirmedAt) {
+      router.replace(returnTo());
+    }
+  }, [hydrated, hasSeenOnboarding, ageConfirmedAt, router]);
 
   /**
    * The stashed deep-link destination (AppShell writes it when it gates
@@ -127,7 +142,7 @@ export function OnboardingView() {
     if (Notification.permission === 'default') setDenial('dismissed');
   };
 
-  if (hydrated && hasSeenOnboarding) {
+  if (hydrated && hasSeenOnboarding && ageConfirmedAt) {
     // Redirect in flight — render nothing rather than flash the welcome.
     return null;
   }
@@ -141,7 +156,48 @@ export function OnboardingView() {
         <p className="text-body-emphasis font-bold tracking-tight text-text-primary">ThryftVerse</p>
 
         <div className="mt-auto max-w-sm lg:mt-10 lg:max-w-none">
-        {denial === 'blocked' ? (
+        {!hydrated || !ageConfirmedAt ? (
+          /* The 18+ gate renders first — AgeVerificationScreen sits ahead
+             of onboarding natively, so this step is the default paint
+             (SSR-safe: pre-hydration renders it for everyone). */
+          underAge ? (
+            /* Denied — statement only, a quiet way back to re-answer,
+               no forward path (mobile's "close app" honesty). */
+            <>
+              <h1 className="text-display font-bold tracking-tight text-text-primary">
+                ThryftVerse is 18+
+              </h1>
+              <p className="mt-3 max-w-xs text-body text-text-secondary">
+                This marketplace is only available to members 18 and older.
+              </p>
+              <button
+                type="button"
+                onClick={() => setUnderAge(false)}
+                className="pressable mt-6 text-body font-medium text-text-secondary hover:text-text-primary"
+              >
+                Go back
+              </button>
+            </>
+          ) : (
+            <>
+              <h1 className="text-display font-bold tracking-tight text-text-primary">
+                You must be 18 or older to use ThryftVerse.
+              </h1>
+              <p className="mt-3 max-w-xs text-caption leading-relaxed text-text-muted">
+                A self-declaration stored on this device. Some features may
+                require age verification later.
+              </p>
+              <div className="mt-6 space-y-2">
+                <Button variant="primary" className="w-full" onClick={confirmAge}>
+                  I&rsquo;m 18 or older
+                </Button>
+                <Button variant="quiet" className="w-full" onClick={() => setUnderAge(true)}>
+                  I&rsquo;m under 18
+                </Button>
+              </div>
+            </>
+          )
+        ) : denial === 'blocked' ? (
           <>
             <h1 className="text-display font-bold tracking-tight text-text-primary">
               Notifications are blocked

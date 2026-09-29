@@ -3989,13 +3989,48 @@ app.post('/chat/conversations/:conversationId/report', async (request, reply) =>
     conversationId: z.string().min(2).max(120),
   });
   const bodySchema = z.object({
-    reason: z.enum([
-      'spam', 'harassment', 'scam_fraud', 'inappropriate_content',
-      'off_platform_payment', 'impersonation', 'other',
-    ]),
+    // The shared report catalogue (native reportLogic.ts + web
+    // ReportSheet — 12 keys) is wider than this route's canonical
+    // buckets. Aliases fold the extra reasons into the canonical reason
+    // rather than 400ing a real report.
+    reason: z
+      .string()
+      .trim()
+      .min(2)
+      .max(60)
+      .transform(
+        (v) =>
+          (
+            {
+              scam: 'scam_fraud',
+              counterfeit: 'scam_fraud',
+              off_platform: 'off_platform_payment',
+              hate_speech: 'inappropriate_content',
+              prohibited: 'inappropriate_content',
+              misinformation: 'inappropriate_content',
+              privacy: 'inappropriate_content',
+              minor_safety: 'inappropriate_content',
+            } as Record<string, string>
+          )[v] ?? v,
+      )
+      .pipe(
+        z.enum([
+          'spam',
+          'harassment',
+          'scam_fraud',
+          'inappropriate_content',
+          'off_platform_payment',
+          'impersonation',
+          'other',
+        ]),
+      ),
     details: z.string().trim().max(2000).optional(),
     messageId: z.string().trim().min(2).max(120).optional(),
     idempotencyKey: z.string().min(2).optional(),
+    // Native attaches uploaded evidence URIs — conversation_reports has
+    // no evidence column, so they fold into details below (visible to
+    // ops) rather than being silently stripped.
+    evidence_uris: z.array(z.string().trim().min(1).max(2000)).max(6).optional(),
   });
 
   const actorUserId = resolveAuthenticatedUserId(request);
@@ -4026,13 +4061,25 @@ app.post('/chat/conversations/:conversationId/report', async (request, reply) =>
   // idempotent retry the helper resolves the original report id so the
   // notice dedupes on `conversation_report:<reportId>` instead of
   // double-filing.
+  // Evidence URIs ride details (no dedicated column) — appended as
+  // labeled lines so ops can open them; capped at the column's 2000
+  // bound so a long user note plus URIs can't fail the write.
+  const detailsWithEvidence =
+    [
+      payload.details ?? '',
+      ...(payload.evidence_uris ?? []).map((u) => `Evidence: ${u}`),
+    ]
+      .filter(Boolean)
+      .join('\n')
+      .slice(0, 2000) || null;
+
   const { reportId: effectiveReportId, noticeId } = await recordConsumerReport(db, {
     kind: 'conversation',
     reportId,
     reporterId: actorUserId,
     subjectId: conversationId,
     reason: payload.reason,
-    details: payload.details ?? null,
+    details: detailsWithEvidence,
     evidenceMessageId: payload.messageId ?? null,
     idempotencyKey: payload.idempotencyKey ?? null,
     subjectSnapshot: {

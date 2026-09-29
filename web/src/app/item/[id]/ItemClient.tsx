@@ -28,6 +28,7 @@ import { PdpAbout } from '@/components/pdp/PdpAbout';
 import { PdpReviews } from '@/components/pdp/PdpReviews';
 import { SustainabilityBadge } from '@/components/pdp/SustainabilityBadge';
 import { PdpMarket } from '@/components/pdp/PdpMarket';
+import { PdpCoOwn } from '@/components/pdp/PdpCoOwn';
 import { ListingQA } from '@/components/pdp/ListingQA';
 import { PdpRails } from '@/components/pdp/PdpRails';
 import { PdpRecentlyViewed } from '@/components/pdp/PdpRecentlyViewed';
@@ -123,6 +124,7 @@ export function ItemClient() {
           <PdpReviews listing={listing} />
           <SustainabilityBadge grade={listing.sustainabilityGrade} />
           <PdpMarket listing={listing} />
+          <PdpCoOwn listingId={listing.id} />
           <ListingQA listing={listing} isSellerBlocked={sellerBlocked} />
         </div>
       </div>

@@ -6,6 +6,11 @@
  * the carrier that issued it. The backend rejects a dispatch with no
  * tracking reference (TRACKING_REQUIRED), so the sheet is the collection
  * point — a bare confirm could only ever fire a doomed request.
+ *
+ * The quiet secondary path mirrors mobile's recovery affordance: a seller
+ * who already dropped the parcel off but whose scan hasn't landed can
+ * assert the handoff (POST /orders/:id/fulfilment/handoff-assertion)
+ * instead of dispatching — evidence, never a status change.
  */
 
 import { useEffect, useState } from 'react';
@@ -24,10 +29,14 @@ interface Props {
   defaultCarrier?: string | null;
   busy?: boolean;
   onSubmit: (input: DispatchInput) => void;
+  /** Recovery path — the seller asserts the parcel is already with the
+   *  carrier. Carries whatever tracking/carrier the seller typed (may be
+   *  empty → undefined). */
+  onAssertHandoff?: (input: { trackingNumber?: string; carrier?: string }) => void;
   onClose: () => void;
 }
 
-export function DispatchSheet({ open, defaultCarrier, busy = false, onSubmit, onClose }: Props) {
+export function DispatchSheet({ open, defaultCarrier, busy = false, onSubmit, onAssertHandoff, onClose }: Props) {
   const [trackingNumber, setTrackingNumber] = useState('');
   const [carrier, setCarrier] = useState('');
 
@@ -94,6 +103,25 @@ export function DispatchSheet({ open, defaultCarrier, busy = false, onSubmit, on
             {busy ? 'Working…' : 'Mark as dispatched'}
           </Button>
         </div>
+
+        {/* Handoff assertion — a seller claim, not carrier evidence.
+            Records the drop-off so the buyer sees it while the first
+            scan is owed; never flips the order to dispatched. */}
+        {onAssertHandoff ? (
+          <button
+            type="button"
+            disabled={busy}
+            onClick={() =>
+              onAssertHandoff({
+                trackingNumber: trackingNumber.trim() || undefined,
+                carrier: carrier.trim() || undefined,
+              })
+            }
+            className="pressable mt-3 w-full py-1 text-center text-caption font-medium text-text-secondary hover:text-text-primary disabled:opacity-50"
+          >
+            Already dropped it off? Record the handoff
+          </button>
+        ) : null}
       </div>
     </Sheet>
   );

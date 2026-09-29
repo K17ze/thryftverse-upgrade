@@ -15,10 +15,11 @@
  *    the fixture store. A failed write toasts and changes nothing.
  */
 
-import { useCallback } from 'react';
+import { useCallback, useRef } from 'react';
 import { useRouter } from 'next/navigation';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { DATA_MODE } from '@/lib/api/client';
+import { parseApiError } from '@/lib/api/http';
 import * as commerceService from '@/lib/api/services/commerce';
 import {
   OFFERS,
@@ -146,6 +147,14 @@ export function useChatOfferActions(conversationId: string) {
     void qc.invalidateQueries({ queryKey: ['conversations'] });
   }, [qc, conversationId]);
 
+  /** One idempotency key per listing per send session — a retry after a
+   *  dropped response replays the same key so the server's unique
+   *  constraint dedupes instead of double-creating; makeOffer also
+   *  reconciles unknown outcomes via lookup-by-key before surfacing a
+   *  failure. Keyed by listing — one thread can carry several. Entries
+   *  clear once a send is confirmed. */
+  const offerKeysRef = useRef(new Map<string, string>());
+
   const respond = useCallback(
     (offer: OfferWithOrder, action: Exclude<OfferRowAction, 'counter'>) => {
       if (!viewerId) return;
@@ -223,18 +232,31 @@ export function useChatOfferActions(conversationId: string) {
     (listing: Listing, amount: number, expiryHours = 48) => {
       if (!viewerId) return;
       if (DATA_MODE === 'live') {
+        // The offer only reads as sent once the backend confirms — via
+        // the create response or the lookup-by-key recovery inside
+        // makeOffer when the response was lost mid-flight.
+        let key = offerKeysRef.current.get(listing.id);
+        if (!key) {
+          key = commerceService.newOfferIdempotencyKey();
+          offerKeysRef.current.set(listing.id, key);
+        }
         void commerceService
           .makeOffer(listing.id, amount, {
             originalPriceGbp: listing.price,
             expiryHours,
             conversationId,
+            idempotencyKey: key,
           })
           .then(() => {
+            offerKeysRef.current.delete(listing.id);
             refresh();
             toast.show(`Offer sent — ${formatPrice(amount)}`, 'success');
           })
-          .catch(() =>
-            toast.show('Could not send the offer — try again.', 'error'),
+          .catch((error) =>
+            toast.show(
+              parseApiError(error, 'Could not send the offer — try again.').message,
+              'error',
+            ),
           );
         return;
       }

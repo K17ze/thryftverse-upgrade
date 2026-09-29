@@ -11,7 +11,7 @@
  * OfferSheet the buy panel uses — one composer, one send grammar.
  */
 
-import { useState } from 'react';
+import { useRef, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { useQueryClient } from '@tanstack/react-query';
 import { Button } from '@/components/ui/Button';
@@ -19,6 +19,7 @@ import { useToast } from '@/components/ui/Toast';
 import { useSignupWall } from '@/components/auth/SignupWall';
 import { useSession } from '@/lib/session/SessionProvider';
 import { DATA_MODE } from '@/lib/api/client';
+import { parseApiError } from '@/lib/api/http';
 import * as commerceService from '@/lib/api/services/commerce';
 import { listingCapabilities, listingStateCopy } from '@/lib/commerce/capabilities';
 import { useIsBlockedUser } from '@/components/inbox/inboxSafety';
@@ -42,6 +43,11 @@ export function PdpBuyDock({ listing }: { listing: Listing }) {
   const { user } = useSession();
   const queryClient = useQueryClient();
   const [offerOpen, setOfferOpen] = useState(false);
+  const [offerSending, setOfferSending] = useState(false);
+  /** Stable idempotency key per send attempt — same recovery contract as
+   *  BuyPanel: retries replay the key, makeOffer reconciles dropped
+   *  responses through lookup-by-key before any error surfaces. */
+  const offerKeyRef = useRef<string | null>(null);
 
   const isSold = listing.isSold === true || listing.status === 'sold';
   // Owners get no dock — the manage grammar lives in the panel.
@@ -82,18 +88,29 @@ export function PdpBuyDock({ listing }: { listing: Listing }) {
   const handleSendOffer = (amount: number, expiryHours: number) => {
     if (DATA_MODE === 'live') {
       // Same live-write honesty as the buy panel — the offer only reads
-      // as sent once the backend records it.
+      // as sent once the backend records it (create, or lookup-by-key
+      // recovery on a dropped response); retries replay the stable key.
+      offerKeyRef.current ??= commerceService.newOfferIdempotencyKey();
+      setOfferSending(true);
       void commerceService
         .makeOffer(listing.id, amount, {
           originalPriceGbp: listing.price,
           expiryHours,
+          idempotencyKey: offerKeyRef.current,
         })
         .then(() => {
+          offerKeyRef.current = null;
           setOfferOpen(false);
           void queryClient.invalidateQueries({ queryKey: ['listing-offer', listing.id] });
           show(`Offer sent — ${formatPrice(amount)}`, 'success');
         })
-        .catch(() => show('Could not send the offer — try again.', 'error'));
+        .catch((error) =>
+          show(
+            parseApiError(error, 'Could not send the offer — try again.').message,
+            'error',
+          ),
+        )
+        .finally(() => setOfferSending(false));
       return;
     }
     recordSentOffer(listing, amount, expiryHours);
@@ -195,6 +212,7 @@ export function PdpBuyDock({ listing }: { listing: Listing }) {
         open={offerOpen}
         onClose={() => setOfferOpen(false)}
         listing={listing}
+        busy={offerSending}
         onSend={handleSendOffer}
       />
     </div>

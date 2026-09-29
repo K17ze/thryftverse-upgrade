@@ -4,9 +4,11 @@
  * AgeConfirmationSheet — web port of AgeVerificationScreen's 18+
  * self-declaration. Mobile stores the flag in SecureStore and gates app
  * entry; the honest web equivalent persists `ageConfirmedAt` in
- * settingsPrefs and is reachable from the settings index. The copy says
- * plainly what it is: a self-declaration stored on this device, not
- * identity verification.
+ * settingsPrefs — the flag the onboarding gate honours — and is
+ * reachable from the settings index. Signed-in live sessions also mirror
+ * the declaration onto the account's compliance profile (useConfirmAge).
+ * The copy says plainly what it is: a self-declaration, not identity
+ * verification.
  */
 
 import { useState } from 'react';
@@ -15,6 +17,7 @@ import { Button } from '@/components/ui/Button';
 import { Icon } from '@/components/ui/Icon';
 import { useHydrated } from '@/lib/store/useStore';
 import { useSettingsPrefs } from '@/lib/store/settingsPrefs';
+import { useConfirmAge } from '@/lib/hooks/useConfirmAge';
 import { formatDate } from '@/lib/utils/format';
 
 interface AgeConfirmationSheetProps {
@@ -25,7 +28,7 @@ interface AgeConfirmationSheetProps {
 export function AgeConfirmationSheet({ open, onClose }: AgeConfirmationSheetProps) {
   const hydrated = useHydrated();
   const ageConfirmedAt = useSettingsPrefs((s) => s.ageConfirmedAt);
-  const confirmAge = useSettingsPrefs((s) => s.confirmAge);
+  const confirmAge = useConfirmAge();
   const resetAgeConfirmation = useSettingsPrefs((s) => s.resetAgeConfirmation);
   const [declined, setDeclined] = useState(false);
 

@@ -20,7 +20,7 @@ import { Icon } from '@/components/ui/Icon';
 import { Sheet } from '@/components/ui/Sheet';
 import { useToast } from '@/components/ui/Toast';
 import { useCancelCoOwnOrder } from '@/components/trading/useCoOwnTrading';
-import type { PriceWindow } from '@/lib/contracts/coown';
+import type { CoOwnOrder, PriceWindow } from '@/lib/contracts/coown';
 import { coOwnMarkGbp } from '@/lib/contracts/coown';
 import {
   useCoOwnActivity,
@@ -53,7 +53,8 @@ import { OwnershipTab } from './OwnershipTab';
 import { PricePanel } from './PricePanel';
 import { RelatedAssets } from './RelatedAssets';
 import { RiskDisclosure } from './RiskDisclosure';
-import { PausedNotice, TradePanel, type TradePrefill } from './TradePanel';
+import { PausedNotice, PreviewPanel, TradePanel, type TradePrefill } from './TradePanel';
+import { useSession } from '@/lib/session/SessionProvider';
 
 type Tab = 'overview' | 'ownership' | 'activity';
 
@@ -95,6 +96,7 @@ export function AssetDetailView({ id }: { id: string }) {
   const storedWatching = useCoOwnWatchlist((s) => s.watchedIds.includes(id));
   const toggleWatch = useCoOwnWatchlist((s) => s.toggleWatch);
   const watching = hydrated && storedWatching;
+  const { user } = useSession();
   // Fixture-mode evaluator — no-op when the server owns evaluation.
   useEvaluateCoOwnAlerts();
 
@@ -105,6 +107,10 @@ export function AssetDetailView({ id }: { id: string }) {
   const seq = useRef(0);
   const { show } = useToast();
   const { cancelOrder } = useCancelCoOwnOrder();
+  // Resting-order cancel is a two-tap armed confirm (same grammar as
+  // OpenOrders): the first tap arms the row, the confirm releases it.
+  const [confirmingId, setConfirmingId] = useState<string | null>(null);
+  const [cancellingId, setCancellingId] = useState<string | null>(null);
 
   // Resting orders for this market — read straight from the shared cache
   // so the list stays in step with Portfolio and open-orders surfaces.
@@ -114,15 +120,28 @@ export function AssetDetailView({ id }: { id: string }) {
 
   const position = positions?.find((p) => p.assetId === id) ?? null;
 
-  const cancel = async (orderId: string) => {
+  const cancel = async (order: CoOwnOrder) => {
+    setCancellingId(order.id);
     try {
-      const ok = await cancelOrder(orderId);
+      const ok = await cancelOrder(order.id);
       show(ok ? 'Order cancelled — remainder released' : 'Could not cancel that order', ok ? 'info' : 'error');
     } catch (err) {
       // Live mode throws — the backend's refusal (locked, not yours,
       // already filled) is the message worth showing.
       show(err instanceof Error ? err.message : 'Could not cancel that order', 'error');
+    } finally {
+      setCancellingId(null);
+      setConfirmingId(null);
     }
+  };
+
+  // OpenOrders' armed-copy grammar — names exactly what releasing the
+  // order frees.
+  const confirmCancelCopy = (o: CoOwnOrder) => {
+    const remaining = o.units - o.filledUnits;
+    return `Cancel this ${o.side} order — ${remaining} unfilled ${
+      remaining === 1 ? 'unit is' : 'units are'
+    } released right away.`;
   };
 
   const pickLevel = (price: number, side: 'buy' | 'sell') => {
@@ -147,9 +166,16 @@ export function AssetDetailView({ id }: { id: string }) {
   }
 
   const halted = asset.marketStatus === 'paused' || asset.marketStatus === 'closed';
+  // 'preview' = created but unsigned — the book is sealed server-side
+  // until the issuer signs the recourse agreement, so the composer swaps
+  // to the sign/not-live rail instead of pretending orders can rest.
+  const preview = asset.listingTier === 'preview';
+  const isIssuer = !!user && user.id === asset.issuer.id;
 
   const tradePanel = halted ? (
     <PausedNotice exitUnderway={asset.marketStatus === 'closed'} />
+  ) : preview ? (
+    <PreviewPanel asset={asset} isIssuer={isIssuer} />
   ) : (
     <TradePanel
       asset={asset}
@@ -238,41 +264,78 @@ export function AssetDetailView({ id }: { id: string }) {
                 <p className="text-meta text-text-muted tnum">{orders.length}</p>
               </div>
               <ul className="mt-3 divide-y divide-border-subtle border-y border-border-subtle">
-                {orders.map((o) => (
-                  <li
-                    key={o.id}
-                    className="flex flex-wrap items-center justify-between gap-x-4 gap-y-2 py-3"
-                  >
-                    <p className="text-body text-text-primary tnum">
-                      <span
-                        className={`font-semibold ${o.side === 'buy' ? 'text-coown-up' : 'text-coown-down'}`}
-                      >
-                        {o.side === 'buy' ? 'Buy' : 'Sell'}
-                      </span>
-                      <span className="text-text-secondary">
-                        {' '}
-                        · {o.orderType === 'limit' ? 'Limit' : o.orderType === 'market' ? 'Market' : 'Protected'} ·{' '}
-                        {gbp(o.unitPriceGbp)} · {o.units} {o.units === 1 ? 'unit' : 'units'}
-                      </span>
-                    </p>
-                    <div className="flex items-center gap-3">
-                      <span className="text-meta text-text-muted">
-                        {o.status === 'open'
-                          ? 'Open'
-                          : `Partial — ${o.filledUnits} of ${o.units} filled`}
-                      </span>
-                      <Button size="sm" variant="outline" onClick={() => void cancel(o.id)}>
-                        Cancel
-                      </Button>
-                    </div>
-                  </li>
-                ))}
+                {orders.map((o) => {
+                  const confirming = confirmingId === o.id;
+                  const busy = cancellingId === o.id;
+                  return (
+                    <li
+                      key={o.id}
+                      className="flex flex-wrap items-center justify-between gap-x-4 gap-y-2 py-3"
+                    >
+                      <p className="text-body text-text-primary tnum">
+                        <span
+                          className={`font-semibold ${o.side === 'buy' ? 'text-coown-up' : 'text-coown-down'}`}
+                        >
+                          {o.side === 'buy' ? 'Buy' : 'Sell'}
+                        </span>
+                        <span className="text-text-secondary">
+                          {' '}
+                          · {o.orderType === 'limit' ? 'Limit' : o.orderType === 'market' ? 'Market' : 'Protected'} ·{' '}
+                          {gbp(o.unitPriceGbp)} · {o.units} {o.units === 1 ? 'unit' : 'units'}
+                        </span>
+                      </p>
+                      <div className="flex items-center gap-3">
+                        <span className="text-meta text-text-muted">
+                          {o.status === 'open'
+                            ? 'Open'
+                            : `Partial — ${o.filledUnits} of ${o.units} filled`}
+                        </span>
+                        {confirming ? (
+                          <div className="flex items-center gap-2">
+                            <Button
+                              size="sm"
+                              variant="quiet"
+                              onClick={() => setConfirmingId(null)}
+                              disabled={busy}
+                            >
+                              Keep
+                            </Button>
+                            <Button
+                              size="sm"
+                              variant="danger"
+                              onClick={() => void cancel(o)}
+                              disabled={busy}
+                            >
+                              {busy ? 'Cancelling…' : 'Cancel order'}
+                            </Button>
+                          </div>
+                        ) : (
+                          <Button
+                            size="sm"
+                            variant="outline"
+                            onClick={() => setConfirmingId(o.id)}
+                          >
+                            Cancel
+                          </Button>
+                        )}
+                      </div>
+                      {confirming ? (
+                        <p className="w-full text-meta text-text-secondary">
+                          {confirmCancelCopy(o)}
+                        </p>
+                      ) : null}
+                    </li>
+                  );
+                })}
               </ul>
             </section>
           ) : null}
         </div>
 
-        <aside className="min-w-0">
+        {/* Below the dock's breakpoint the composer lives only in the
+            mobile dock Sheet — a second inline instance here would mount
+            two divergent composers at once. */}
+        <aside className="hidden min-w-0 md:block">
           <div className="lg:sticky lg:top-24">{tradePanel}</div>
         </aside>
       </div>
@@ -347,6 +410,14 @@ export function AssetDetailView({ id }: { id: string }) {
               <Icon name="pause" size={16} />
               {asset.marketStatus === 'closed' ? 'Exit underway' : 'Paused'}
             </span>
+          ) : preview ? (
+            isIssuer ? (
+              <Button onClick={() => setComposerOpen(true)}>Sign</Button>
+            ) : (
+              <span className="text-meta font-semibold text-text-muted">
+                Not live
+              </span>
+            )
           ) : (
             <Button onClick={() => setComposerOpen(true)}>Trade</Button>
           )}
@@ -356,7 +427,15 @@ export function AssetDetailView({ id }: { id: string }) {
       <Sheet
         open={composerOpen}
         onClose={() => setComposerOpen(false)}
-        title={halted ? 'Market halted' : `Trade ${asset.title}`}
+        title={
+          halted
+            ? 'Market halted'
+            : preview
+              ? isIssuer
+                ? 'Take your market live'
+                : 'Not live yet'
+              : `Trade ${asset.title}`
+        }
         maxWidth={520}
       >
         <div className="p-5">{tradePanel}</div>

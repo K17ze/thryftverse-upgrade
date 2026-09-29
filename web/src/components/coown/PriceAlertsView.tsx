@@ -77,13 +77,15 @@ function AlertRow({
           </span>
         </span>
       </Link>
-      {fired ? null : (
-        <Switch
-          checked={alert.active}
-          onChange={onToggle}
-          aria-label={alert.active ? 'Pause alert' : 'Enable alert'}
-        />
-      )}
+      {/* Fired alerts keep the switch — re-enabling re-arms the alert
+          (server clears triggered_at; the device store mirrors it). */}
+      <Switch
+        checked={alert.active}
+        onChange={onToggle}
+        aria-label={
+          alert.active ? `Pause alert for ${title}` : `Enable alert for ${title}`
+        }
+      />
       <button
         type="button"
         aria-label="Delete alert"
@@ -102,11 +104,20 @@ export function PriceAlertsView() {
   // One API for both backends — server-persisted in live mode, the
   // device store in fixture mode. `ready` is the authoritative-source
   // equivalent of hydration.
-  const { alerts, ready, source, requiresAuth, toggleAlert, removeAlert } =
-    useCoOwnAlertsApi();
+  const {
+    alerts,
+    ready,
+    error: alertsError,
+    refetch: refetchAlerts,
+    source,
+    requiresAuth,
+    toggleAlert,
+    removeAlert,
+  } = useCoOwnAlertsApi();
   const { show } = useToast();
   const { requireAuth, wall } = useSignupWall();
   const [pendingDelete, setPendingDelete] = useState<CoOwnAlert | null>(null);
+  const [deleting, setDeleting] = useState(false);
   // Fixture-mode evaluator — no-op when the server owns evaluation.
   useEvaluateCoOwnAlerts();
 
@@ -118,7 +129,23 @@ export function PriceAlertsView() {
   const fired = alerts.filter(isFired);
   const paused = alerts.filter((a) => !a.active && !isFired(a));
 
-  if (assetsQ.isLoading || !ready) {
+  // Await the action before toasting — a rolled-back write must surface
+  // the failure, never a fabricated success.
+  const onToggleAlert = (a: CoOwnAlert) => {
+    const wasActive = a.active;
+    void toggleAlert(a).then(
+      () => show(wasActive ? 'Alert paused' : 'Alert enabled', 'info'),
+      (err: unknown) =>
+        show(
+          err instanceof Error ? err.message : "Couldn't update the alert",
+          'error',
+        ),
+    );
+  };
+
+  // `ready` only advances on a resolved read — a failed alerts query
+  // must fall through to the error branch, not skeleton forever.
+  if (assetsQ.isLoading || (!ready && !alertsError)) {
     return (
       <div className="mx-auto w-full max-w-3xl px-4 pb-20 pt-8 sm:px-6 md:pt-10 lg:max-w-[1440px]">
         <div className="skeleton h-8 w-44 rounded-sm" aria-hidden="true" />
@@ -132,8 +159,9 @@ export function PriceAlertsView() {
   }
 
   // Without the market snapshot alert rows would read "Unknown market" —
-  // surface the failure with retry instead of degrading silently.
-  if (assetsQ.isError || !assetsQ.data) {
+  // surface the failure with retry instead of degrading silently. Same
+  // for a failed alerts read: retry whichever source errored.
+  if (assetsQ.isError || !assetsQ.data || alertsError) {
     return (
       <div className="mx-auto w-full max-w-3xl px-4 pb-20 pt-8 sm:px-6 md:pt-10 lg:max-w-[1440px]">
         <h1 className="text-editorial-display text-text-primary">Price alerts</h1>
@@ -142,7 +170,10 @@ export function PriceAlertsView() {
           title="Couldn't load your alerts"
           subtitle="Check your connection and try again."
           actionLabel="Retry"
-          onAction={() => void assetsQ.refetch()}
+          onAction={() => {
+            void assetsQ.refetch();
+            refetchAlerts();
+          }}
         />
       </div>
     );
@@ -214,10 +245,7 @@ export function PriceAlertsView() {
                     title={titleFor(a.assetId)}
                     paused={false}
                     fired={false}
-                    onToggle={() => {
-                      toggleAlert(a);
-                      show('Alert paused', 'info');
-                    }}
+                    onToggle={() => onToggleAlert(a)}
                     onDelete={() => setPendingDelete(a)}
                   />
                 ))}
@@ -241,7 +269,7 @@ export function PriceAlertsView() {
                     title={titleFor(a.assetId)}
                     paused={false}
                     fired
-                    onToggle={() => undefined}
+                    onToggle={() => onToggleAlert(a)}
                     onDelete={() => setPendingDelete(a)}
                   />
                 ))}
@@ -265,10 +293,7 @@ export function PriceAlertsView() {
                     title={titleFor(a.assetId)}
                     paused
                     fired={false}
-                    onToggle={() => {
-                      toggleAlert(a);
-                      show('Alert enabled', 'info');
-                    }}
+                    onToggle={() => onToggleAlert(a)}
                     onDelete={() => setPendingDelete(a)}
                   />
                 ))}
@@ -297,15 +322,26 @@ export function PriceAlertsView() {
             <Button
               variant="danger"
               fullWidth
+              disabled={deleting}
               onClick={() => {
-                if (pendingDelete) {
-                  removeAlert(pendingDelete.id);
-                  show('Alert deleted', 'success');
-                }
-                setPendingDelete(null);
+                const target = pendingDelete;
+                if (!target || deleting) return;
+                setDeleting(true);
+                void removeAlert(target.id)
+                  .then(() => {
+                    show('Alert deleted', 'success');
+                    setPendingDelete(null);
+                  })
+                  .catch((err: unknown) =>
+                    show(
+                      err instanceof Error ? err.message : "Couldn't delete the alert",
+                      'error',
+                    ),
+                  )
+                  .finally(() => setDeleting(false));
               }}
             >
-              Delete
+              {deleting ? 'Deleting…' : 'Delete'}
             </Button>
           </div>
         </div>

@@ -16,8 +16,16 @@
 import { ChatPanel } from './ChatPanel';
 import { ConversationListPane } from './ConversationList';
 import { EmptyState } from '@/components/ui/EmptyState';
+import { useInboxRealtime } from '@/lib/hooks/chat-realtime';
 
 export function InboxSplitView({ activeId }: { activeId?: string }) {
+  // Inbox realtime — `chat.user:{id}` carries the new-DM / new-group /
+  // added-to-group signals that can never arrive on a known conversation
+  // topic, and the loaded rows' topics keep previews + unread badges
+  // live. The open thread's badge is owned by its own mark-read, so
+  // arrivals there never bump the row. Guests/fixtures never connect;
+  // the 45s useConversations poll stays the baseline.
+  useInboxRealtime(activeId);
   return (
     <div
       className={`mx-auto w-full max-w-[1440px] md:flex md:h-[calc(100dvh-4rem)] ${

@@ -2,9 +2,12 @@
 
 import Link from 'next/link';
 import { Icon } from '@/components/ui/Icon';
-import { usePriceHistory } from '@/lib/hooks/coown-queries';
-import type { CoOwnAsset } from '@/lib/contracts/coown';
-import { coOwnMarkGbp } from '@/lib/contracts/coown';
+import type {
+  AssetLifecycleState,
+  CandlePoint,
+  CoOwnAsset,
+} from '@/lib/contracts/coown';
+import { coOwnMarkGbp, deriveLifecycleState } from '@/lib/contracts/coown';
 import { formatCount } from '@/lib/utils/format';
 import { AssetThumb } from './AssetThumb';
 import { gbp, gbpCompact, pctAllocated } from './format';
@@ -61,28 +64,27 @@ function WatchStar({
 }
 
 /**
- * Per-row 7d sparkline — the query layer owns the data, so live mode reads
- * the price-history endpoint rather than fixtures. Until the series lands
+ * Per-row 7d sparkline — the list resolves every visible series in one
+ * batched read and hands each row its candles. Until the series lands
  * the cell stays empty: an absent sparkline beats a fabricated one.
  */
 function MarketSparkline({
-  assetId,
+  candles,
   title,
   width,
   height,
 }: {
-  assetId: string;
+  candles: CandlePoint[] | undefined;
   title: string;
   width: number;
   height: number;
 }) {
-  const { data } = usePriceHistory(assetId, '1W');
-  if (!data || data.length < 2) {
+  if (!candles || candles.length < 2) {
     return <span className="inline-block" style={{ width, height }} aria-hidden="true" />;
   }
   return (
     <Sparkline
-      candles={data}
+      candles={candles}
       width={width}
       height={height}
       label={`${title} 7-day trend`}
@@ -94,12 +96,19 @@ export function MarketRow({
   asset,
   watched,
   onToggleWatch,
+  candles,
+  lifecycleTagStates,
 }: {
   asset: CoOwnAsset;
   watched: boolean;
   onToggleWatch: (assetId: string) => void;
+  candles?: CandlePoint[];
+  /** States worth a tag — the ones the surrounding tab can't already
+   *  assert, so a plain trading row on the Trading board stays quiet. */
+  lifecycleTagStates: readonly AssetLifecycleState[];
 }) {
   const tier = asset.issuer.verificationTier;
+  const showLifecycleTag = lifecycleTagStates.includes(deriveLifecycleState(asset));
 
   return (
     <li className="group relative transition-colors hover:bg-row">
@@ -122,7 +131,7 @@ export function MarketRow({
                 <Icon name="verified" size={13} className="shrink-0 text-commerce-trust" aria-label={tier} />
               ) : null}
             </p>
-            <LifecycleTag asset={asset} className="mt-1" />
+            {showLifecycleTag ? <LifecycleTag asset={asset} className="mt-1" /> : null}
           </div>
           <WatchStar
             watched={watched}
@@ -136,7 +145,7 @@ export function MarketRow({
             <p className="text-body-emphasis text-text-primary tnum">{gbp(coOwnMarkGbp(asset))}</p>
             <MovePill pct={asset.marketMovePct24h} className="mt-1" />
           </div>
-          <MarketSparkline assetId={asset.id} title={asset.title} width={96} height={28} />
+          <MarketSparkline candles={candles} title={asset.title} width={96} height={28} />
         </div>
         <div className="mt-3 flex items-center gap-3">
           <AllocationMeter pct={pctAllocated(asset)} />
@@ -157,9 +166,9 @@ export function MarketRow({
               {tier ? (
                 <Icon name="verified" size={13} className="shrink-0 text-commerce-trust" aria-label={tier} />
               ) : null}
-              {/* Halted/closed grammar — same tag the mobile card shows on
-                  every row, rendered inline at desktop density. */}
-              <LifecycleTag asset={asset} />
+              {/* Halted/closed grammar — only when the state carries
+                  information the current tab doesn't already assert. */}
+              {showLifecycleTag ? <LifecycleTag asset={asset} /> : null}
             </p>
           </div>
         </div>
@@ -167,7 +176,7 @@ export function MarketRow({
           <p className="text-body-emphasis text-text-primary tnum">{gbp(coOwnMarkGbp(asset))}</p>
           <MovePill pct={asset.marketMovePct24h} className="mt-1" />
         </div>
-        <MarketSparkline assetId={asset.id} title={asset.title} width={76} height={26} />
+        <MarketSparkline candles={candles} title={asset.title} width={76} height={26} />
         <p className="hidden text-body text-text-secondary tnum lg:block">{formatCount(asset.holders)}</p>
         <p className="text-body text-text-secondary tnum">{gbpCompact(asset.volume24hGbp)}</p>
         <div className="hidden lg:block">

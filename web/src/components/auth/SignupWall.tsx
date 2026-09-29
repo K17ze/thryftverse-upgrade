@@ -37,7 +37,8 @@ export type SignupAction =
   | 'place_bid'
   | 'purchase'
   | 'create_listing'
-  | 'create_board';
+  | 'create_board'
+  | 'create_content';
 
 /** One title + one sentence per action — a value prop, never a hard sell. */
 const ACTION_COPY: Record<SignupAction, { title: string; body: string; icon: AppIconName }> = {
@@ -76,6 +77,11 @@ const ACTION_COPY: Record<SignupAction, { title: string; body: string; icon: App
     body: 'Create moodboards and collections to plan your next find.',
     icon: 'images',
   },
+  create_content: {
+    title: 'Join ThryftVerse to create',
+    body: 'Publish looks and posters — drafts save to your account so you can finish later.',
+    icon: 'create',
+  },
 };
 
 /**
@@ -94,6 +100,7 @@ const NUDGE_COPY: Record<SignupAction, string> = {
   purchase: 'Sign up to buy securely',
   create_listing: 'Sign up to sell',
   create_board: 'Sign up to build boards',
+  create_content: 'Sign up to create',
 };
 
 /**

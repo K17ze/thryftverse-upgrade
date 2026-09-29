@@ -2,15 +2,19 @@
 
 /**
  * DueDiligenceSection — the market rules collectors check before buying,
- * as a quiet accordion: issuer, custody & condition, fees & settlement,
- * and the filed documents. Every line comes from the asset record or the
+ * as a quiet accordion: custody & condition, fees & settlement, and the
+ * filed documents. Every line comes from the asset record or the
  * diligence profile — absent data fails closed, it is never dressed up.
+ * Issuer identity renders once on this surface (the Ownership tab's rich
+ * card) plus the header's compact row — it is not restated here.
  */
 
 import { useState } from 'react';
 import Link from 'next/link';
 import { Badge } from '@/components/ui/Badge';
+import { Button } from '@/components/ui/Button';
 import { Icon } from '@/components/ui/Icon';
+import { SegmentedControl } from '@/components/feed/SegmentedControl';
 import type {
   CoOwnAsset,
   CoOwnAssetRights,
@@ -21,7 +25,13 @@ import type {
 } from '@/lib/contracts/coown';
 import { CO_OWN_FEE_RATE } from '@/lib/utils/trade';
 import { DATA_MODE } from '@/lib/api/client';
-import { useCoOwnRecourse } from '@/lib/hooks/coown-queries';
+import type { CoOwnVerificationDemandType } from '@/lib/api/services/coown';
+import {
+  useCoOwnPositions,
+  useCoOwnRecourse,
+  useCoOwnTrustActions,
+} from '@/lib/hooks/coown-queries';
+import { useSession } from '@/lib/session/SessionProvider';
 import { formatDate } from '@/lib/utils/format';
 import { gbp, verificationLabel } from '../format';
 
@@ -33,7 +43,14 @@ const DOC_KIND: Record<DiligenceDocKind, string> = {
   appraisal: 'Appraisal',
 };
 
-type RuleKey = 'issuer' | 'custody' | 'fees' | 'rights' | 'risks' | 'documents' | 'recourse';
+type RuleKey =
+  | 'custody'
+  | 'fees'
+  | 'rights'
+  | 'risks'
+  | 'documents'
+  | 'audit'
+  | 'recourse';
 
 const RISK_ROWS: { key: keyof Omit<CoOwnRiskDisclosures, 'publishedAt'>; label: string }[] = [
   { key: 'marketRisk', label: 'Market' },
@@ -50,6 +67,27 @@ const RIGHTS_ROWS: { key: keyof CoOwnAssetRights; label: string }[] = [
   { key: 'exitRights', label: 'Exit' },
   { key: 'feeRights', label: 'Fees' },
 ];
+
+/** Filed document links on the detail wire — the only "documents" a live
+ *  asset can carry (the lab-doc rows are fixture-authored). Null means
+ *  nothing filed; the row simply doesn't render. */
+const DOSSIER_DOC_LINKS: {
+  key: 'escrowTermsUrl' | 'safeguardingTermsUrl' | 'safeguardingEvidenceUrl' | 'buyerProtectionTermsUrl';
+  label: string;
+}[] = [
+  { key: 'escrowTermsUrl', label: 'Escrow terms' },
+  { key: 'safeguardingTermsUrl', label: 'Safeguarding terms' },
+  { key: 'safeguardingEvidenceUrl', label: 'Safeguarding evidence' },
+  { key: 'buyerProtectionTermsUrl', label: 'Buyer protection terms' },
+];
+
+
+
+/** 'buyout_offer_created' → 'Buyout offer created'. */
+function humaniseEventType(eventType: string): string {
+  const words = eventType.replace(/[_.\-]+/g, ' ').trim();
+  return words.charAt(0).toUpperCase() + words.slice(1);
+}
 
 function DossierRow({ label, value }: { label: string; value: string }) {
   return (
@@ -106,14 +144,26 @@ export function DueDiligenceSection({
   diligence: DueDiligenceProfile | null | undefined;
 }) {
   const tierLabel = verificationLabel(asset.issuer.verificationTier);
-  // Issuer open by default — identity is the first thing to verify.
-  const [open, setOpen] = useState<RuleKey | null>('issuer');
+  // Custody open by default — authentication is the first thing to verify.
+  const [open, setOpen] = useState<RuleKey | null>('custody');
   const toggle = (key: RuleKey) => setOpen((cur) => (cur === key ? null : key));
   // Recourse is an authenticated record — the query no-ops for guests
   // and in fixture mode, where nothing is rendered in its place.
   const recourseQ = useCoOwnRecourse(asset.id);
   const showRecourse = DATA_MODE === 'live';
   const recourse = recourseQ.data ?? null;
+  // Actionable trust affordances — live wire only, and only on the side
+  // the server enforces: the issuer refreshes the appraisal, a holder
+  // (units > 0, never the issuer) demands verification. Fixture mode has
+  // no write path, so both stay hidden.
+  const { user } = useSession();
+  const { data: positions } = useCoOwnPositions();
+  const isIssuer =
+    DATA_MODE === 'live' && user != null && user.id === asset.issuer.id;
+  const isHolder =
+    DATA_MODE === 'live' &&
+    !isIssuer &&
+    (positions?.find((p) => p.assetId === asset.id)?.units ?? 0) > 0;
   // Detail-endpoint dossier — custody/authenticity/appraisal rows.
   const dossier = diligence?.dossier ?? null;
   // Published rights sheet + per-asset risk narrative — absent fields
@@ -124,7 +174,43 @@ export function DueDiligenceSection({
 
   const docs = diligence?.documents ?? [];
   const custodyMeta = asset.custodyNote ? asset.custodyNote.split('.')[0] : null;
-  const feePct = `${Math.round(CO_OWN_FEE_RATE * 100)}%`;
+  // Platform trading fee — the detail wire's own rate where it exists;
+  // the fixture constant stays because fixture orders really charge it.
+  const feeRate = dossier?.tradingFeeRate ?? CO_OWN_FEE_RATE;
+  const feePct = `${Number((feeRate * 100).toFixed(2))}%`;
+  // Issuer-filed fee schedule — every field nullable; absent stays absent.
+  const feeScheduleRows = (
+    dossier?.feeSchedule
+      ? [
+          { label: 'Management fee', value: dossier.feeSchedule.managementFeePct, fmt: 'pct' },
+          { label: 'Performance fee', value: dossier.feeSchedule.performanceFeePct, fmt: 'pct' },
+          { label: 'Platform fee', value: dossier.feeSchedule.platformFeePct, fmt: 'pct' },
+          { label: 'Sourcing fee', value: dossier.feeSchedule.sourcingFeeGbp, fmt: 'gbp' },
+        ]
+      : []
+  ).filter(
+    (r): r is { label: string; value: number; fmt: 'pct' | 'gbp' } => r.value != null,
+  );
+  // Filed terms links (live wire only — fixtures file lab docs instead).
+  const docLinks = DOSSIER_DOC_LINKS.flatMap((l) =>
+    dossier?.[l.key] ? [{ href: dossier[l.key] as string, label: l.label }] : [],
+  );
+  const docCount = docs.length + docLinks.length;
+  // Trust + public market audit events — one merged, newest-first trail.
+  const auditEvents = [
+    ...(dossier?.trustAuditEvents ?? []).map((e) => ({
+      eventType: e.eventType,
+      createdAt: e.createdAt,
+      changedByLabel: e.changedByLabel ?? null,
+    })),
+    ...(dossier?.marketAuditEvents ?? []).map((e) => ({
+      eventType: e.eventType,
+      createdAt: e.createdAt,
+      changedByLabel: null as string | null,
+    })),
+  ]
+    .sort((a, b) => Date.parse(b.createdAt) - Date.parse(a.createdAt))
+    .slice(0, 12);
 
   return (
     <section aria-labelledby="diligence-heading" className="mt-10">
@@ -152,44 +238,6 @@ export function DueDiligenceSection({
         </div>
       ) : (
         <div className="mt-3 divide-y divide-border-subtle border-y border-border-subtle">
-          {/* Issuer */}
-          <div>
-            <RuleHead
-              label="Issuer"
-              meta={`@${asset.issuer.username}`}
-              open={open === 'issuer'}
-              onToggle={() => toggle('issuer')}
-            />
-            {open === 'issuer' ? (
-              <dl className="divide-y divide-border-subtle pb-4">
-                <div className="flex items-baseline justify-between gap-6 py-2">
-                  <dt className="text-meta font-semibold uppercase tracking-wide text-text-muted">Name</dt>
-                  <dd className="text-right text-body text-text-primary">
-                    {asset.issuer.displayName ?? `@${asset.issuer.username}`}
-                  </dd>
-                </div>
-                <div className="flex items-baseline justify-between gap-6 py-2">
-                  <dt className="text-meta font-semibold uppercase tracking-wide text-text-muted">Verification</dt>
-                  <dd className="text-right text-body text-text-primary">
-                    {tierLabel ?? 'Unverified — diligence file pending'}
-                  </dd>
-                </div>
-                {asset.issuer.location ? (
-                  <div className="flex items-baseline justify-between gap-6 py-2">
-                    <dt className="text-meta font-semibold uppercase tracking-wide text-text-muted">Location</dt>
-                    <dd className="text-right text-body text-text-primary">{asset.issuer.location}</dd>
-                  </div>
-                ) : null}
-                {asset.issuerJurisdiction ? (
-                  <div className="flex items-baseline justify-between gap-6 py-2">
-                    <dt className="text-meta font-semibold uppercase tracking-wide text-text-muted">Jurisdiction</dt>
-                    <dd className="text-right text-body text-text-primary">{asset.issuerJurisdiction}</dd>
-                  </div>
-                ) : null}
-              </dl>
-            ) : null}
-          </div>
-
           {/* Custody & condition */}
           <div>
             <RuleHead
@@ -199,7 +247,8 @@ export function DueDiligenceSection({
               onToggle={() => toggle('custody')}
             />
             {open === 'custody' ? (
-              <dl className="divide-y divide-border-subtle pb-4">
+              <>
+                <dl className="divide-y divide-border-subtle pb-4">
                 {asset.custodyNote ? (
                   <DossierText label="Custody" value={asset.custodyNote} />
                 ) : null}
@@ -284,10 +333,20 @@ export function DueDiligenceSection({
                 {dossier?.safeguardingPartner ? (
                   <DossierRow label="Safeguarding" value={dossier.safeguardingPartner} />
                 ) : null}
-                {dossier?.buyerProtection ? (
-                  <DossierText label="Buyer protection" value={dossier.buyerProtection} />
+                {dossier?.buyerProtection != null ? (
+                  <DossierRow
+                    label="Buyer protection"
+                    value={dossier.buyerProtection ? 'Covered' : 'Not covered'}
+                  />
                 ) : null}
-              </dl>
+                </dl>
+                {isIssuer ? (
+                  <RefreshAppraisalAffordance
+                    assetId={asset.id}
+                    currentValuer={dossier?.appraisalValuer ?? null}
+                  />
+                ) : null}
+              </>
             ) : null}
           </div>
 
@@ -308,9 +367,24 @@ export function DueDiligenceSection({
                     <span className="text-text-secondary"> — added to buys, deducted from sale proceeds</span>
                   </dd>
                 </div>
+                {feeScheduleRows.map((row) => (
+                  <div key={row.label} className="flex items-baseline justify-between gap-6 py-2">
+                    <dt className="text-meta font-semibold uppercase tracking-wide text-text-muted">
+                      {row.label}
+                    </dt>
+                    <dd className="text-right text-body text-text-primary tnum">
+                      {row.fmt === 'pct' ? `${row.value}%` : gbp(row.value)}
+                    </dd>
+                  </div>
+                ))}
                 <div className="flex items-baseline justify-between gap-6 py-2">
                   <dt className="text-meta font-semibold uppercase tracking-wide text-text-muted">Settlement</dt>
-                  <dd className="text-right text-body text-text-primary">1ZE — single-price clearing</dd>
+                  <dd className="text-right text-body text-text-primary">
+                    1ZE — single-price clearing
+                    {dossier?.settlementEtaHours != null ? (
+                      <span className="text-text-secondary"> · ~{dossier.settlementEtaHours}h</span>
+                    ) : null}
+                  </dd>
                 </div>
               </dl>
             ) : null}
@@ -327,6 +401,21 @@ export function DueDiligenceSection({
               />
               {open === 'rights' ? (
                 <dl className="divide-y divide-border-subtle pb-4">
+                  {rights.tbcReason || rights.tbcEtaDate ? (
+                    <div className="py-2">
+                      <dt className="text-meta font-semibold uppercase tracking-wide text-text-muted">
+                        To be confirmed
+                      </dt>
+                      <dd className="mt-1 text-body text-text-secondary">
+                        {[
+                          rights.tbcReason,
+                          rights.tbcEtaDate ? `expected ${formatDate(rights.tbcEtaDate)}` : null,
+                        ]
+                          .filter(Boolean)
+                          .join(' · ')}
+                      </dd>
+                    </div>
+                  ) : null}
                   <DossierText label="Terms" value={rights.summaryTerms} />
                   {RIGHTS_ROWS.filter((r) => rights[r.key] != null).map((r) => (
                     <DossierText
@@ -378,16 +467,18 @@ export function DueDiligenceSection({
             </div>
           ) : null}
 
-          {/* Documents — flat rows, verified mark fails closed */}
+          {/* Documents — fixture lab-doc rows plus the filed terms links
+              the live wire carries (escrow / safeguarding / buyer
+              protection). Verified mark fails closed. */}
           <div>
             <RuleHead
               label="Documents"
-              meta={docs.length > 0 ? `${docs.length} on file` : 'None filed yet'}
+              meta={docCount > 0 ? `${docCount} on file` : 'None filed yet'}
               open={open === 'documents'}
               onToggle={() => toggle('documents')}
             />
             {open === 'documents' ? (
-              docs.length > 0 ? (
+              docCount > 0 ? (
                 <ul className="divide-y divide-border-subtle pb-4">
                   {docs.map((doc) => (
                     <li key={doc.id} className="flex items-center gap-3 py-2.5 first:pt-0">
@@ -411,6 +502,25 @@ export function DueDiligenceSection({
                       )}
                     </li>
                   ))}
+                  {docLinks.map((link) => (
+                    <li key={link.href}>
+                      <a
+                        href={link.href}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        className="pressable flex items-center gap-3 py-2.5 first:pt-0"
+                      >
+                        <Icon name="document" size={17} className="shrink-0 text-text-muted" />
+                        <div className="min-w-0 flex-1">
+                          <p className="clamp-1 text-body text-text-primary">{link.label}</p>
+                          <p className="mt-0.5 text-meta text-text-muted">
+                            Filed terms — opens externally
+                          </p>
+                        </div>
+                        <Icon name="forward" size={15} className="shrink-0 text-text-muted" />
+                      </a>
+                    </li>
+                  ))}
                 </ul>
               ) : (
                 <p className="pb-4 text-body text-text-secondary">
@@ -419,6 +529,40 @@ export function DueDiligenceSection({
               )
             ) : null}
           </div>
+
+          {/* Audit trail — trust-dossier changes and public market audit
+              events merged newest-first. Omitted entirely when the wire
+              carries no events. */}
+          {auditEvents.length > 0 ? (
+            <div>
+              <RuleHead
+                label="Audit trail"
+                meta={`${auditEvents.length} ${auditEvents.length === 1 ? 'event' : 'events'}`}
+                open={open === 'audit'}
+                onToggle={() => toggle('audit')}
+              />
+              {open === 'audit' ? (
+                <ul className="divide-y divide-border-subtle pb-4">
+                  {auditEvents.map((e, i) => (
+                    <li
+                      key={`${e.eventType}-${e.createdAt}-${i}`}
+                      className="flex items-baseline justify-between gap-6 py-2"
+                    >
+                      <span className="text-body text-text-primary">
+                        {humaniseEventType(e.eventType)}
+                        {e.changedByLabel ? (
+                          <span className="text-text-secondary"> · {e.changedByLabel}</span>
+                        ) : null}
+                      </span>
+                      <span className="shrink-0 text-meta text-text-muted">
+                        {formatDate(e.createdAt)}
+                      </span>
+                    </li>
+                  ))}
+                </ul>
+              ) : null}
+            </div>
+          ) : null}
 
           {/* Recourse — the seller's liability agreement and the demand/
               event trail. Live-only record: absent for guests it fails
@@ -438,7 +582,12 @@ export function DueDiligenceSection({
                 onToggle={() => toggle('recourse')}
               />
               {open === 'recourse' ? (
-                <RecourseBody recourse={recourse} loading={recourseQ.isLoading} />
+                <>
+                  <RecourseBody recourse={recourse} loading={recourseQ.isLoading} />
+                  {isHolder ? (
+                    <VerificationDemandAffordance assetId={asset.id} />
+                  ) : null}
+                </>
               ) : null}
             </div>
           ) : null}
@@ -573,5 +722,263 @@ function RecourseBody({
         </dd>
       </div>
     </dl>
+  );
+}
+
+// ── Trust affordances — live-only, role-gated by the caller ────────────
+// The role checks upstream are display-only: both endpoints re-enforce
+// issuer/holder on the wire, and a refusal renders verbatim.
+
+const FIELD_CLASS =
+  'mt-1.5 h-11 w-full rounded-lg bg-input px-3 text-body-emphasis text-input-text outline-none focus:ring-2 focus:ring-text-primary';
+const LABEL_CLASS =
+  'text-meta font-semibold uppercase tracking-wide text-text-muted';
+
+/** Issuer-only: file a fresh third-party appraisal — the response
+ *  replaces the dossier figures on the invalidated asset/diligence reads
+ *  and writes a public audit event. */
+function RefreshAppraisalAffordance({
+  assetId,
+  currentValuer,
+}: {
+  assetId: string;
+  currentValuer: string | null;
+}) {
+  const { refreshAppraisal } = useCoOwnTrustActions(assetId);
+  const [open, setOpen] = useState(false);
+  const [valuer, setValuer] = useState('');
+  const [valueText, setValueText] = useState('');
+  const [notes, setNotes] = useState('');
+
+  const value = Number(valueText);
+  const canSubmit =
+    valuer.trim().length >= 2 &&
+    valueText !== '' &&
+    Number.isFinite(value) &&
+    value >= 0 &&
+    !refreshAppraisal.isPending;
+  const error = refreshAppraisal.isError
+    ? refreshAppraisal.error instanceof Error
+      ? refreshAppraisal.error.message
+      : 'Could not record the appraisal'
+    : null;
+
+  const submit = (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!canSubmit) return;
+    refreshAppraisal.mutate(
+      {
+        appraisalValueGbp: Math.round(value * 100) / 100,
+        appraisalValuer: valuer.trim(),
+        appraisalNotes: notes.trim() || undefined,
+      },
+      {
+        onSuccess: () => {
+          setOpen(false);
+          setValueText('');
+          setNotes('');
+        },
+      },
+    );
+  };
+
+  if (!open) {
+    return (
+      <div className="pb-4">
+        <Button
+          size="sm"
+          variant="outline"
+          icon="refresh"
+          onClick={() => setOpen(true)}
+        >
+          Refresh appraisal
+        </Button>
+      </div>
+    );
+  }
+
+  return (
+    <form
+      onSubmit={submit}
+      aria-label="Refresh appraisal"
+      className="space-y-3 border-t border-border-subtle pb-4 pt-3"
+    >
+      <div>
+        <label htmlFor="appraisal-valuer" className={LABEL_CLASS}>
+          Valuer
+        </label>
+        <input
+          id="appraisal-valuer"
+          value={valuer}
+          onChange={(e) => setValuer(e.target.value)}
+          placeholder={currentValuer ?? 'Appraisal firm or valuer'}
+          maxLength={180}
+          autoComplete="off"
+          className={FIELD_CLASS}
+        />
+      </div>
+      <div>
+        <label htmlFor="appraisal-value" className={LABEL_CLASS}>
+          Appraised value · GBP
+        </label>
+        <input
+          id="appraisal-value"
+          type="number"
+          inputMode="decimal"
+          min={0}
+          step="0.01"
+          value={valueText}
+          onChange={(e) => setValueText(e.target.value)}
+          className={`${FIELD_CLASS} tnum`}
+        />
+      </div>
+      <div>
+        <label htmlFor="appraisal-note" className={LABEL_CLASS}>
+          Note <span className="font-normal normal-case">(optional)</span>
+        </label>
+        <input
+          id="appraisal-note"
+          value={notes}
+          onChange={(e) => setNotes(e.target.value)}
+          maxLength={4000}
+          autoComplete="off"
+          className={FIELD_CLASS}
+        />
+      </div>
+      <div className="flex items-center gap-2">
+        <Button type="submit" size="sm" disabled={!canSubmit}>
+          {refreshAppraisal.isPending ? 'Recording…' : 'Record appraisal'}
+        </Button>
+        <Button
+          type="button"
+          size="sm"
+          variant="quiet"
+          onClick={() => setOpen(false)}
+          disabled={refreshAppraisal.isPending}
+        >
+          Cancel
+        </Button>
+      </div>
+      {error ? (
+        <p role="alert" className="text-meta text-danger-text">
+          {error}
+        </p>
+      ) : null}
+    </form>
+  );
+}
+
+const DEMAND_TYPES: { value: CoOwnVerificationDemandType; label: string }[] = [
+  { value: 'authenticity', label: 'Authenticity' },
+  { value: 'possession', label: 'Possession' },
+  { value: 'condition', label: 'Condition' },
+  { value: 'inspection', label: 'Inspection' },
+];
+
+/** Holder-only: demand the custodian prove the asset. The seller is
+ *  notified and the deadline (server default 14 days) starts on post —
+ *  the recourse query invalidation lands the demand on the dossier. */
+function VerificationDemandAffordance({ assetId }: { assetId: string }) {
+  const { demandVerification } = useCoOwnTrustActions(assetId);
+  const [open, setOpen] = useState(false);
+  const [demandType, setDemandType] =
+    useState<CoOwnVerificationDemandType>('authenticity');
+  const [notes, setNotes] = useState('');
+  const sent = demandVerification.isSuccess;
+
+  const error = demandVerification.isError
+    ? demandVerification.error instanceof Error
+      ? demandVerification.error.message
+      : 'Could not send the demand'
+    : null;
+
+  const submit = (e: React.FormEvent) => {
+    e.preventDefault();
+    if (demandVerification.isPending) return;
+    demandVerification.mutate(
+      { demandType, notes: notes.trim() || undefined },
+      {
+        onSuccess: () => {
+          setOpen(false);
+          setNotes('');
+        },
+      },
+    );
+  };
+
+  if (!open) {
+    return (
+      <div className="border-t border-border-subtle pb-4 pt-3">
+        <Button
+          size="sm"
+          variant="outline"
+          icon="scan"
+          onClick={() => setOpen(true)}
+        >
+          Request verification
+        </Button>
+        {sent ? (
+          <p className="mt-2 text-meta text-text-secondary">
+            Demand sent — the deadline is on record.
+          </p>
+        ) : null}
+      </div>
+    );
+  }
+
+  return (
+    <form
+      onSubmit={submit}
+      aria-label="Request verification"
+      className="space-y-3 border-t border-border-subtle pb-4 pt-3"
+    >
+      <div>
+        <span className={LABEL_CLASS}>Demand type</span>
+        <div className="mt-1.5">
+          <SegmentedControl
+            options={DEMAND_TYPES}
+            value={demandType}
+            onChange={setDemandType}
+            className="flex-wrap gap-y-1"
+          />
+        </div>
+      </div>
+      <div>
+        <label htmlFor="demand-note" className={LABEL_CLASS}>
+          Note <span className="font-normal normal-case">(optional)</span>
+        </label>
+        <input
+          id="demand-note"
+          value={notes}
+          onChange={(e) => setNotes(e.target.value)}
+          maxLength={4000}
+          autoComplete="off"
+          className={FIELD_CLASS}
+        />
+      </div>
+      <p className="text-meta text-text-muted">
+        The seller is notified and has 14 days to respond — an unanswered
+        demand can trigger recourse.
+      </p>
+      <div className="flex items-center gap-2">
+        <Button type="submit" size="sm" disabled={demandVerification.isPending}>
+          {demandVerification.isPending ? 'Sending…' : 'Send demand'}
+        </Button>
+        <Button
+          type="button"
+          size="sm"
+          variant="quiet"
+          onClick={() => setOpen(false)}
+          disabled={demandVerification.isPending}
+        >
+          Cancel
+        </Button>
+      </div>
+      {error ? (
+        <p role="alert" className="text-meta text-danger-text">
+          {error}
+        </p>
+      ) : null}
+    </form>
   );
 }

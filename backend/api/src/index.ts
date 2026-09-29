@@ -1544,6 +1544,12 @@ function isPublicRoute(method: string, path: string) {
     return true;
   }
 
+  // Single-highlight read — same public posture as the per-user list so a
+  // shared /poster/highlight/:id link resolves for guests.
+  if (method === 'GET' && /^\/poster-highlights\/[^/]+$/.test(path)) {
+    return true;
+  }
+
   // Poster product tag clicks are public (no auth required) so anonymous
   // viewers can register engagement on published posters.
   if (method === 'POST' && /^\/posters\/[^/]+\/tags\/[^/]+\/click$/.test(path)) {
@@ -36451,6 +36457,18 @@ app.get('/users/:userId/market-history', async (request, reply) => {
   const { userId } = paramsSchema.parse(request.params);
   const { channel, limit, cursorTs, cursorId } = querySchema.parse(request.query);
 
+  // Order history is private financial activity — owner-scoped, same as
+  // /co-own/settlements. The route's own contract requires :userId to
+  // equal the bearer.
+  if (!request.authUser) {
+    reply.code(401);
+    return { ok: false, error: 'Authentication required' };
+  }
+  if (userId !== request.authUser.userId && request.authUser.role !== 'admin') {
+    reply.code(403);
+    return { ok: false, error: 'You can only read your own market history' };
+  }
+
   if ((cursorTs && !cursorId) || (!cursorTs && cursorId)) {
     reply.code(400);
     return {
@@ -41247,6 +41265,84 @@ app.get('/users/:userId/poster-highlights', async (request) => {
   }
 
   return { items: highlights };
+});
+
+// GET /poster-highlights/:highlightId — public. Single-highlight read so a
+// viewer deep-link resolves without knowing the owner (both clients
+// previously fanned out through the owner's list). Same payload shape as a
+// list row, plus creatorId for ownership checks.
+app.get('/poster-highlights/:highlightId', async (request, reply) => {
+  const paramsSchema = z.object({ highlightId: z.string().min(2).max(120) });
+  const { highlightId } = paramsSchema.parse(request.params);
+
+  const h = (
+    await db.query<{
+      id: string;
+      creator_id: string;
+      title: string;
+      cover_frame_id: string | null;
+      sort_order: number;
+      created_at: string;
+    }>(
+      `SELECT id, creator_id, title, cover_frame_id, sort_order, created_at
+       FROM poster_highlights WHERE id = $1 LIMIT 1`,
+      [highlightId]
+    )
+  ).rows[0];
+  if (!h) {
+    reply.code(404);
+    return { ok: false, error: 'highlight_not_found' };
+  }
+
+  const itemsResult = await db.query<{
+    frame_id: string;
+    sort_order: number;
+    media_url: string;
+    media_type: string;
+    poster_caption: string;
+    caption: string;
+    background_color: string | null;
+    preview_url: string | null;
+    download_url: string | null;
+  }>(
+    `SELECT phi.frame_id, phi.sort_order, p.media_url, p.media_type, p.poster_caption, p.caption, p.background_color,
+            COALESCE(p.poster_url, p.media_url) AS preview_url,
+            p.download_media_url AS download_url
+     FROM poster_highlight_items phi
+     JOIN posters p ON p.id = phi.frame_id
+     WHERE phi.highlight_id = $1
+     ORDER BY phi.sort_order ASC`,
+    [h.id]
+  );
+
+  let coverUrl: string | null = null;
+  if (h.cover_frame_id) {
+    const coverResult = await db.query<{ preview_url: string | null }>(
+      `SELECT COALESCE(poster_url, media_url) AS preview_url FROM posters WHERE id = $1 LIMIT 1`,
+      [h.cover_frame_id]
+    );
+    coverUrl = coverResult.rows[0]?.preview_url ?? null;
+  }
+
+  return {
+    id: h.id,
+    creatorId: h.creator_id,
+    title: h.title,
+    coverFrameId: h.cover_frame_id,
+    coverUrl,
+    sortOrder: h.sort_order,
+    createdAt: h.created_at,
+    frames: itemsResult.rows.map((r) => ({
+      frameId: r.frame_id,
+      sortOrder: r.sort_order,
+      mediaUrl: r.media_url,
+      previewUrl: r.preview_url,
+      downloadUrl: r.download_url,
+      mediaType: r.media_type,
+      caption: r.poster_caption || r.caption,
+      backgroundColor: r.background_color,
+    })),
+  };
 });
 
 // POST /poster-highlights â€” create highlight

@@ -15,6 +15,11 @@ import { useToast } from '@/components/ui/Toast';
 import { useSession } from '@/lib/session/SessionProvider';
 import { useSupportActions } from '@/components/support/useSupportTickets';
 import { useLocale } from '@/lib/i18n/useLocale';
+import { DATA_MODE } from '@/lib/api/client';
+import {
+  createSupportConversation,
+  sendSupportConversationMessage,
+} from '@/lib/api/services/support';
 
 interface SheetProps {
   open: boolean;
@@ -178,6 +183,10 @@ export function VerificationSheet({ open, onClose }: SheetProps) {
 }
 
 // ── Report a problem ────────────────────────────────────────────────────────
+// A support case, not a moderation report: live mode rides the unbound
+// support-conversation channel (POST /support/conversations + the notice as
+// first message) — /support/tickets only accepts order-bound creates, so an
+// unbound write would 4xx. Fixture mode keeps the session-ticket path.
 
 export function ReportSheet({ open, onClose }: SheetProps) {
   const { show } = useToast();
@@ -209,19 +218,30 @@ export function ReportSheet({ open, onClose }: SheetProps) {
             const message = text.trim();
             if (message.length < 10 || sending) return;
             setSending(true);
-            void Promise.resolve(
-              createTicket({ topicId: 'other', orderRef: null, message }),
-            )
-              .then((ticket) => {
+            void (async () => {
+              if (DATA_MODE === 'live') {
+                const conversation = await createSupportConversation({
+                  contextKind: 'general',
+                });
+                await sendSupportConversationMessage(conversation.id, message);
                 setText('');
                 onClose();
                 show('Report sent — thank you', 'success');
-                router.push(`/support/${ticket.id}`);
-              })
-              .catch(() => {
-                setSending(false);
-                show('Could not send the report — try again.', 'error');
+                return;
+              }
+              const ticket = await createTicket({
+                topicId: 'other',
+                orderRef: null,
+                message,
               });
+              setText('');
+              onClose();
+              show('Report sent — thank you', 'success');
+              router.push(`/support/${ticket.id}`);
+            })().catch(() => {
+              setSending(false);
+              show('Could not send the report — try again.', 'error');
+            });
           }}
         >
           {sending ? 'Sending…' : 'Send report'}

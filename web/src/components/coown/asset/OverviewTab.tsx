@@ -8,6 +8,7 @@
 import { Icon } from '@/components/ui/Icon';
 import type { CoOwnAsset, DueDiligenceProfile } from '@/lib/contracts/coown';
 import { coOwnMarkGbp } from '@/lib/contracts/coown';
+import { CO_OWN_FEE_RATE } from '@/lib/utils/trade';
 import { gbpCompact } from '../format';
 import { DueDiligenceSection } from './DueDiligenceSection';
 
@@ -31,6 +32,10 @@ export function OverviewTab({
       value: `${asset.availableUnits} of ${asset.totalUnits}`,
     },
   ];
+
+  // Platform trading fee — the detail wire's own rate where the dossier
+  // carries it; fixtures keep the constant their orders actually charge.
+  const feePct = Number(((asset.dossier?.tradingFeeRate ?? CO_OWN_FEE_RATE) * 100).toFixed(2));
 
   const provenance: { label: string; value: string | null }[] = [
     { label: 'Custody', value: asset.custodyNote },
@@ -67,8 +72,8 @@ export function OverviewTab({
 
         <p className="mt-4 flex items-start gap-2 text-meta text-text-muted">
           <Icon name="info" size={14} className="mt-0.5 shrink-0" />
-          A 1% platform fee applies to every Co-Own trade, added to buys and
-          deducted from sale proceeds.
+          A {feePct}% platform fee applies to every Co-Own trade, added to
+          buys and deducted from sale proceeds.
         </p>
 
         <DueDiligenceSection asset={asset} diligence={diligence} />

@@ -1,22 +1,25 @@
 'use client';
 
 /**
- * Convert surface — 1ZE ⇄ GBP. Mirrors the mobile WalletExchange flow:
+ * Convert surface — 1ZE ⇄ fiat. Mirrors the mobile wallet flows:
  * amount → review sheet → executing → receipt.
- *  - Live mode wires the real contract the native app uses:
- *    POST /wallet/convert-1ze-to-fiat with preview:true for the debounced
- *    quote (client never assumes a fee) and an idempotency-keyed execute.
- *    Only the 1ZE → GBP direction is supported live — GBP → 1ZE has no
- *    wallet-balance debit endpoint (mint is a payment-intent top-up), so
- *    that direction renders an honest unavailable state.
+ *  - Live mode wires both real contracts the native app uses:
+ *    1ZE→fiat via POST /wallet/convert-1ze-to-fiat (preview:true debounced
+ *    quote — client never assumes a fee) and fiat→1ZE via
+ *    POST /wallet/buy-1ze, which debits the wallet's DEFAULT fiat pocket
+ *    (wallet_currency_balances, not the GBP projection) — the spend cap
+ *    and currency come from /wallets/:id/currency-balances. buy-1ze has
+ *    no preview endpoint, so its review labels fee/net an estimate built
+ *    from the live USD→fiat pair rate; the receipt carries the executed
+ *    fee/rate verbatim. Both executes are idempotency-keyed.
  *  - Fixture mode keeps the simulated Polymarket-grade swap UI:
  *    quick percentage selectors, rate lock countdown, seeded rate math.
  * Flat canvas, hairline borders, strictly following ANTI-AI design policy.
  */
 
-import { useMemo, useState, useEffect, useRef } from 'react';
+import { useMemo, useState, useEffect, useRef, useCallback } from 'react';
 import { useRouter } from 'next/navigation';
-import { useQueryClient } from '@tanstack/react-query';
+import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { Button } from '@/components/ui/Button';
 import { Badge } from '@/components/ui/Badge';
 import { EmptyState } from '@/components/ui/EmptyState';
@@ -28,6 +31,7 @@ import { useToast } from '@/components/ui/Toast';
 import { DATA_MODE } from '@/lib/api/client';
 import { parseApiError } from '@/lib/api/http';
 import * as payoutsService from '@/lib/api/services/payouts';
+import * as fxService from '@/lib/api/services/fx';
 import { useSession } from '@/lib/session/SessionProvider';
 import { formatPrice } from '@/lib/utils/format';
 import type { WalletLedgerEntry } from './ledgerViewModel';
@@ -140,21 +144,64 @@ export function ConvertView() {
     return () => clearInterval(timer);
   }, [isLive]);
 
+  // ── Default fiat pocket — the wallet_currency_balances row that
+  //  POST /wallet/buy-1ze debits. The hero's ledger-backed availability is
+  //  the accounting projection, NOT the spendable pocket the buy reads, so
+  //  the buy direction keys its cap and currency on this query. ──
+  const pocketsQuery = useQuery({
+    queryKey: [...walletKeys.root, 'pockets', user?.id],
+    enabled: isLive && !!user?.id,
+    staleTime: 30_000,
+    queryFn: ({ signal }) => fxService.getCurrencyBalances(user!.id, signal),
+  });
+  const fiatPocket = pocketsQuery.data;
+  const pocketCurrency = fiatPocket?.fiatCurrency ?? 'GBP';
+  const pocketMajor = fiatPocket
+    ? fxService.minorUnitsToMajor(fiatPocket.fiatBalanceMinor, fiatPocket.fiatCurrency)
+    : 0;
+
+  // USD→fiat pair rate for the buy-side estimate (1ZE is USD-par; the
+  // backend prices buy-1ze with the same internal rate). Estimate only —
+  // the committed receipt carries the executed rate.
+  const buyPairQuery = useQuery({
+    queryKey: [...walletKeys.root, 'buy-pair', pocketCurrency],
+    enabled: isLive && !!fiatPocket && direction === 'gbp_to_ize',
+    staleTime: 60_000,
+    queryFn: ({ signal }) => fxService.getFxPairRate('USD', pocketCurrency, signal),
+  });
+  const buyRate = buyPairQuery.data ? Number(buyPairQuery.data.rate) : NaN;
+
   const numericAmount = Number(amount) || 0;
+  // The cap floors at the pocket's own minor-unit precision — a JPY
+  // pocket (0dp) can't spend a fractional major, a TND pocket (3dp) can.
+  const pocketExp = fxService.currencyMinorExponent(pocketCurrency);
+  const roundToPocket = useCallback(
+    (v: number) => {
+      const f = Math.pow(10, pocketExp);
+      return Math.round(v * f) / f;
+    },
+    [pocketExp],
+  );
+  const pocketCap = Math.floor(pocketMajor * Math.pow(10, pocketExp)) / Math.pow(10, pocketExp);
   const maxAmount = data
     ? direction === 'ize_to_gbp'
       ? data.ize
         ? data.ize.available
         : 0
-      : round2(data.available)
+      : isLive
+        ? pocketCap
+        : round2(data.available)
     : 0;
-  const exceeds = numericAmount > maxAmount;
+  const exceeds = numericAmount > maxAmount + 1e-9;
 
-  // GBP → 1ZE has no live wallet-balance contract: /wallet/1ze/mint is a
-  // payment-intent top-up (external rails), and /wallet/buy-1ze debits the
-  // 1ZE-wallet fiat pocket — not the ledger-backed GBP balance this screen
-  // sells against. The direction stays honestly unavailable in live mode.
-  const directionSupported = !isLive || direction === 'ize_to_gbp';
+  // Live supports both directions: 1ZE→fiat via /wallet/convert-1ze-to-fiat
+  // (preview:true quote), fiat→1ZE via /wallet/buy-1ze (no preview — the
+  // review labels its fee/rate an estimate, the receipt shows the real
+  // breakdown). The buy direction needs the pocket read to cap + denominate.
+  const directionSupported =
+    !isLive ||
+    direction === 'ize_to_gbp' ||
+    (fiatPocket != null && !pocketsQuery.isError);
 
   // Changed inputs are a different attempt — the stored request hash would
   // mismatch, so the idempotency key resets when they do.
@@ -184,7 +231,7 @@ export function ConvertView() {
       setQuoteError(false);
       payoutsService
         .getConvertQuote(
-          { userId: user.id, izeAmount: numericAmount, fiatCurrency: 'GBP' },
+          { userId: user.id, izeAmount: numericAmount, fiatCurrency: pocketCurrency },
           controller.signal,
         )
         .then((res) => {
@@ -205,11 +252,28 @@ export function ConvertView() {
       controller.abort();
       window.clearTimeout(timer);
     };
-  }, [isLive, direction, numericAmount, exceeds, user?.id, quoteNonce]);
+  }, [isLive, direction, numericAmount, exceeds, user?.id, quoteNonce, pocketCurrency]);
+
+  // Server-side load fee (backend PLATFORM_LOAD_FEE_BPS = 200) mirrored
+  // for the buy-side ESTIMATE — buy-1ze has no preview endpoint, so the
+  // review marks fee/net as estimated; the receipt shows the real values.
+  const BUY_IZE_FEE_BPS_ESTIMATE = 200;
 
   const quote: ConvertQuote | null = useMemo(() => {
     if (exceeds || numericAmount <= 0 || !directionSupported) return null;
     if (!isLive) return buildQuote(direction, numericAmount);
+    if (direction === 'gbp_to_ize') {
+      if (!Number.isFinite(buyRate) || buyRate <= 0) return null;
+      const principal = roundToPocket(numericAmount / (1 + BUY_IZE_FEE_BPS_ESTIMATE / 10_000));
+      return {
+        direction,
+        sourceAmount: roundToPocket(numericAmount),
+        principal,
+        fee: roundToPocket(numericAmount - principal),
+        feeBps: BUY_IZE_FEE_BPS_ESTIMATE,
+        net: round2(principal / buyRate),
+      };
+    }
     // A quote is only shown for the amount it was fetched for — the fee
     // the user reviews must be the fee execution would charge.
     if (!liveQuote || Math.abs(liveQuote.izeAmount - numericAmount) > 1e-6) {
@@ -223,18 +287,25 @@ export function ConvertView() {
       feeBps: liveQuote.feeBps,
       net: liveQuote.netFiatAmount,
     };
-  }, [exceeds, numericAmount, directionSupported, isLive, direction, liveQuote]);
+  }, [exceeds, numericAmount, directionSupported, isLive, direction, liveQuote, buyRate, roundToPocket]);
 
   const liveRatePerIze = liveQuote?.rateUsed ?? liveQuote?.fxRate ?? null;
   const quoteRateLabel =
-    isLive && liveRatePerIze != null
-      ? `1 1ZE = £${liveRatePerIze.toFixed(4)}`
-      : rateLabel(direction);
+    isLive && direction === 'gbp_to_ize'
+      ? Number.isFinite(buyRate)
+        ? `≈ 1 1ZE = ${formatPrice(buyRate, pocketCurrency)} (estimate)`
+        : 'Fetching estimate…'
+      : isLive && liveRatePerIze != null
+        ? `1 1ZE = ${formatPrice(liveRatePerIze, pocketCurrency)}`
+        : rateLabel(direction);
 
   const setPercentage = (pct: number) => {
     if (maxAmount <= 0) return;
-    const computed = round2(maxAmount * pct);
-    setAmount(computed.toFixed(2));
+    const computed =
+      direction === 'gbp_to_ize' && isLive
+        ? roundToPocket(maxAmount * pct)
+        : round2(maxAmount * pct);
+    setAmount(computed.toFixed(direction === 'gbp_to_ize' && isLive ? pocketExp : 2));
   };
 
   const applyConversion = (r: ConversionResult) => {
@@ -261,12 +332,14 @@ export function ConvertView() {
     });
   };
 
-  /** Live execution — POST /wallet/convert-1ze-to-fiat with the attempt's
-   *  idempotency key. The key is kept across failures: the server only
-   *  persists it on commit, so a retry either replays the stored result
-   *  (a lost response) or re-executes the identical request safely. */
+  /** Live execution — /wallet/convert-1ze-to-fiat for 1ZE→fiat,
+   *  /wallet/buy-1ze for fiat→1ZE (debits the default fiat pocket). Both
+   *  carry the attempt's idempotency key: the server only persists it on
+   *  commit, so a retry either replays the stored result (a lost
+   *  response) or re-executes the identical request safely. */
   const executeLive = async () => {
-    if (!user?.id || direction !== 'ize_to_gbp' || numericAmount <= 0) return;
+    if (!user?.id || numericAmount <= 0) return;
+    if (direction === 'gbp_to_ize' && !fiatPocket) return;
     setReviewing(false);
     setErrorMessage('');
     setStep('executing');
@@ -274,10 +347,47 @@ export function ConvertView() {
       idempotencyKeyRef.current = payoutsService.newConvertAttemptKey();
     }
     try {
+      if (direction === 'gbp_to_ize') {
+        const res = await payoutsService.buyIze({
+          userId: user.id,
+          fiatAmount: numericAmount,
+          fiatCurrency: pocketCurrency,
+          idempotencyKey: idempotencyKeyRef.current,
+        });
+        const p = res.purchase;
+        const executed: ConversionResult = {
+          direction: 'gbp_to_ize',
+          sourceAmount: p.fiatAmount,
+          principal: p.principalFiat,
+          fee: p.feeFiat,
+          feeBps: p.feeBps,
+          net: p.izeAmount,
+          // The contract returns no client-facing reference — the
+          // receipt's Reference row renders only when one exists.
+          id: '',
+          gbpDelta: -p.fiatAmount,
+          izeDelta: p.izeAmount,
+          rate: p.rateUsed,
+          timestamp: new Date().toISOString(),
+        };
+        setResult(executed);
+        setNewIzeBalance(
+          typeof res.wallet?.onezeBalance === 'number' ? res.wallet.onezeBalance : null,
+        );
+        idempotencyKeyRef.current = null;
+        setStep('receipt');
+        // Pocket + ledger both moved — re-read every wallet surface.
+        void queryClient.invalidateQueries({ queryKey: walletKeys.root });
+        show(
+          `Bought ${formatIze(executed.net)} 1ZE for ${formatPrice(executed.sourceAmount, pocketCurrency)}`,
+          'success',
+        );
+        return;
+      }
       const res = await payoutsService.convertIzeToFiat({
         userId: user.id,
         izeAmount: numericAmount,
-        fiatCurrency: 'GBP',
+        fiatCurrency: pocketCurrency,
         idempotencyKey: idempotencyKeyRef.current,
       });
       const c = res.conversion;
@@ -308,7 +418,7 @@ export function ConvertView() {
       // writing optimistic deltas onto a ledger-backed balance.
       void queryClient.invalidateQueries({ queryKey: walletKeys.root });
       show(
-        `Converted ${formatIze(executed.sourceAmount)} 1ZE to ${formatPrice(executed.net, 'GBP')}`,
+        `Converted ${formatIze(executed.sourceAmount)} 1ZE to ${formatPrice(executed.net, pocketCurrency)}`,
         'success',
       );
     } catch (e) {
@@ -346,7 +456,7 @@ export function ConvertView() {
       <EmptyState
         icon="wallet"
         title="Sign in to convert"
-        subtitle="Conversions move between your own GBP and 1ZE balances."
+        subtitle="Conversions move between your fiat balance and 1ZE."
         actionLabel="Sign in"
         onAction={() => router.push('/auth')}
       />
@@ -386,10 +496,10 @@ export function ConvertView() {
     const sourceLabel =
       result.direction === 'ize_to_gbp'
         ? `${formatIze(result.sourceAmount)} 1ZE`
-        : formatPrice(result.sourceAmount, 'GBP');
+        : formatPrice(result.sourceAmount, pocketCurrency);
     const destinationLabel =
       result.direction === 'ize_to_gbp'
-        ? formatPrice(result.net, 'GBP')
+        ? formatPrice(result.net, pocketCurrency)
         : `${formatIze(result.net)} 1ZE`;
     return (
       <div className="mx-auto w-full max-w-xl pb-16 lg:max-w-2xl">
@@ -414,7 +524,7 @@ export function ConvertView() {
           <ConvertSummaryRow label="You converted" value={sourceLabel} />
           <ConvertSummaryRow
             label={`Platform fee (${result.feeBps} bps)`}
-            value={`−${formatPrice(result.fee, 'GBP')}`}
+            value={`−${formatPrice(result.fee, pocketCurrency)}`}
             negative
           />
           <ConvertSummaryRow label="You received" value={destinationLabel} total />
@@ -422,7 +532,7 @@ export function ConvertView() {
             <>
               <ConvertSummaryRow
                 label="Rate applied"
-                value={`1 1ZE = £${result.rate.toFixed(4)}`}
+                value={`1 1ZE = ${formatPrice(result.rate, pocketCurrency)}`}
               />
               {newIzeBalance != null ? (
                 <ConvertSummaryRow
@@ -474,7 +584,11 @@ export function ConvertView() {
   const settledLabel =
     direction === 'ize_to_gbp'
       ? `${formatIze(ize.available)} 1ZE`
-      : formatPrice(data.available, data.currency);
+      : isLive
+        ? fiatPocket
+          ? fxService.formatMinorAmount(fiatPocket.fiatBalanceMinor, pocketCurrency)
+          : '—'
+        : formatPrice(data.available, data.currency);
 
   // Fixture-only display rate; live quotes carry their own rateUsed.
   const inverseRate =
@@ -489,7 +603,9 @@ export function ConvertView() {
         <div>
           <h1 className="text-screen-title text-text-primary">Instant Convert</h1>
           <p className="text-caption text-text-secondary">
-            Real-time zero-slippage liquidity exchange
+            {isLive
+              ? `Between your ${pocketCurrency} balance and 1ZE`
+              : 'Real-time zero-slippage liquidity exchange'}
           </p>
         </div>
       </div>
@@ -529,7 +645,11 @@ export function ConvertView() {
               ) : null}
               <PocketRow
                 label="Withdrawable / Convertible"
-                value={formatPrice(round2(data.available), data.currency)}
+                value={
+                  isLive && fiatPocket
+                    ? fxService.formatMinorAmount(fiatPocket.fiatBalanceMinor, pocketCurrency)
+                    : formatPrice(round2(data.available), data.currency)
+                }
                 emphasize
               />
             </>
@@ -543,7 +663,12 @@ export function ConvertView() {
         <div className="rounded-lg border border-border bg-input p-4">
           <div className="flex items-center justify-between text-meta text-text-muted">
             <span>You convert</span>
-            <span className="tnum">Max: {maxAmount.toFixed(2)}</span>
+            <span className="tnum">
+              Max:{' '}
+              {maxAmount.toFixed(
+                direction === 'ize_to_gbp' ? 6 : isLive ? pocketExp : 2,
+              )}
+            </span>
           </div>
           <div className="mt-2 flex items-center gap-3">
             <input
@@ -555,11 +680,13 @@ export function ConvertView() {
               }}
               inputMode="decimal"
               placeholder="0.00"
-              aria-label={direction === 'ize_to_gbp' ? 'Amount in 1ZE' : 'Amount in GBP'}
+              aria-label={
+                direction === 'ize_to_gbp' ? 'Amount in 1ZE' : `Amount in ${pocketCurrency}`
+              }
               className="tnum h-12 min-w-0 flex-1 bg-transparent text-price-hero font-bold text-input-text placeholder:text-text-muted focus:outline-none"
             />
             <span className="shrink-0 text-body-emphasis font-bold text-text-primary">
-              {direction === 'ize_to_gbp' ? '1ZE' : data.currency}
+              {direction === 'ize_to_gbp' ? '1ZE' : pocketCurrency}
             </span>
           </div>
 
@@ -598,25 +725,32 @@ export function ConvertView() {
         </div>
 
         {isLive && !directionSupported ? (
-          /* GBP → 1ZE has no live wallet-balance contract — say so rather
-             than render a quote no endpoint can honour. */
+          /* The buy direction needs the fiat pocket read (cap + currency)
+             — a failed pocket fetch gets retry, never a guessed balance. */
           <div className="rounded-lg border border-border-subtle bg-surface-alt p-4">
             <div className="flex items-start gap-2.5">
               <Icon name="info" size={15} className="mt-0.5 shrink-0 text-text-muted" />
               <div>
                 <p className="text-body font-medium text-text-primary">
-                  GBP → 1ZE isn&apos;t available in this build
+                  {pocketsQuery.isError
+                    ? `Couldn't load your ${pocketCurrency} balance`
+                    : 'Loading your fiat balance…'}
                 </p>
                 <p className="mt-1 text-caption text-text-secondary">
-                  The live wallet converts 1ZE into GBP only — buying 1ZE from your
-                  GBP balance isn&apos;t wired to a real endpoint yet.
+                  {pocketsQuery.isError
+                    ? `Buying 1ZE debits your ${pocketCurrency} pocket — we can't quote a spend limit without it.`
+                    : 'Checking your fiat pocket before quoting.'}
                 </p>
                 <button
                   type="button"
-                  onClick={() => setDirection('ize_to_gbp')}
+                  onClick={() =>
+                    pocketsQuery.isError
+                      ? void pocketsQuery.refetch()
+                      : setDirection('ize_to_gbp')
+                  }
                   className="pressable mt-2.5 text-caption font-semibold text-text-primary underline underline-offset-2 hover:text-text-secondary"
                 >
-                  Convert 1ZE to GBP instead
+                  {pocketsQuery.isError ? 'Try again' : `Convert 1ZE to ${pocketCurrency} instead`}
                 </button>
               </div>
             </div>
@@ -642,12 +776,12 @@ export function ConvertView() {
               >
                 {quote
                   ? direction === 'ize_to_gbp'
-                    ? formatPrice(quote.net, data.currency)
+                    ? formatPrice(quote.net, pocketCurrency)
                     : `${formatIze(quote.net)} 1ZE`
                   : '—'}
               </p>
               <span className="shrink-0 text-body-emphasis font-bold text-text-primary">
-                {direction === 'ize_to_gbp' ? data.currency : '1ZE'}
+                {direction === 'ize_to_gbp' ? pocketCurrency : '1ZE'}
               </span>
             </div>
           </div>
@@ -661,18 +795,26 @@ export function ConvertView() {
               <Icon name="info" size={14} className="shrink-0" />
               <span className="tnum font-medium text-text-secondary">
                 {isLive
-                  ? numericAmount <= 0
-                    ? 'Enter an amount for a live quote'
-                    : quoteError
-                      ? 'Quote unavailable'
-                      : quoteLoading || !quote
-                        ? 'Fetching live quote…'
+                  ? direction === 'gbp_to_ize'
+                    ? numericAmount <= 0
+                      ? 'Enter an amount for an estimate'
+                      : !quote
+                        ? 'Fetching estimate…'
                         : quoteRateLabel
+                    : numericAmount <= 0
+                      ? 'Enter an amount for a live quote'
+                      : quoteError
+                        ? 'Quote unavailable'
+                        : quoteLoading || !quote
+                          ? 'Fetching live quote…'
+                          : quoteRateLabel
                   : inverseRate}
               </span>
             </div>
             {isLive ? (
-              quoteError ? (
+              direction === 'gbp_to_ize' ? (
+                <span className="text-meta text-text-muted">Estimate — settled at execution</span>
+              ) : quoteError ? (
                 <button
                   type="button"
                   onClick={() => setQuoteNonce((n) => n + 1)}
@@ -752,20 +894,26 @@ export function ConvertView() {
                 value={
                   direction === 'ize_to_gbp'
                     ? `${formatIze(numericAmount)} 1ZE`
-                    : formatPrice(numericAmount, data.currency)
+                    : formatPrice(numericAmount, pocketCurrency)
                 }
               />
               <ConvertSummaryRow label="Exchange rate" value={quoteRateLabel} />
               <ConvertSummaryRow
                 label={`Platform fee (${quote.feeBps} bps)`}
-                value={`−${formatPrice(quote.fee, data.currency)}`}
+                value={`−${formatPrice(quote.fee, pocketCurrency)}`}
                 negative
               />
               <ConvertSummaryRow
-                label={isLive ? 'Net you receive' : 'Guaranteed net receive'}
+                label={
+                  isLive
+                    ? direction === 'gbp_to_ize'
+                      ? 'Est. you receive'
+                      : 'Net you receive'
+                    : 'Guaranteed net receive'
+                }
                 value={
                   direction === 'ize_to_gbp'
-                    ? formatPrice(quote.net, data.currency)
+                    ? formatPrice(quote.net, pocketCurrency)
                     : `${formatIze(quote.net)} 1ZE`
                 }
                 total
@@ -780,7 +928,9 @@ export function ConvertView() {
             <p className="mt-4 flex items-start gap-1.5 text-caption text-text-muted">
               <Icon name="info" size={13} className="mt-px shrink-0" />
               {isLive
-                ? 'This debits your 1ZE balance and credits the quoted GBP amount to your fiat wallet. The fee above is the fee execution charges.'
+                ? direction === 'gbp_to_ize'
+                  ? `This debits your ${pocketCurrency} balance and mints 1ZE. Fee and rate are estimates — the receipt shows the executed breakdown.`
+                  : `This debits your 1ZE balance and credits the quoted ${pocketCurrency} amount to your fiat wallet. The fee above is the fee execution charges.`
                 : 'Fixture mode — this conversion is simulated for design review. No money moves.'}
             </p>
             <Button

@@ -28,7 +28,7 @@ import { useToast } from '@/components/ui/Toast';
 import { DATA_MODE } from '@/lib/api/client';
 import * as commerceService from '@/lib/api/services/commerce';
 import { shippingLabelFor, type ShippingLabel } from '@/lib/data/fixtures-seller';
-import { useFulfilmentQueue, useMarkPosted } from '@/lib/hooks/seller-queries';
+import { useAssertHandoff, useFulfilmentQueue, useMarkPosted } from '@/lib/hooks/seller-queries';
 import { useSession } from '@/lib/session/SessionProvider';
 import { formatPrice } from '@/lib/utils/format';
 
@@ -43,6 +43,7 @@ function LabelSheet() {
   const { data: jobs, isLoading: jobsLoading } = useFulfilmentQueue();
   const job = (jobs ?? []).find((j) => j.id === jobId);
   const markPosted = useMarkPosted();
+  const assertHandoff = useAssertHandoff();
 
   // Live labels are server artifacts — POST /orders/:id/shipping-label is
   // idempotent and returns the real tracking number + hosted label URL.
@@ -130,6 +131,36 @@ function LabelSheet() {
             'success',
           ),
         onError: () => show('Could not mark posted — try again', 'error'),
+      },
+    );
+  };
+
+  /**
+   * Dropped-off recovery — the seller handed the parcel to the carrier
+   * but no scan has landed, so the ship write still can't run. POST
+   * /orders/:id/fulfilment/handoff-assertion records the claim with the
+   * label's own tracking/service/URL; it never marks the job posted —
+   * the carrier's first scan is still owed.
+   */
+  const recordHandoff = () => {
+    if (!jobId) return;
+    assertHandoff.mutate(
+      {
+        jobId,
+        trackingNumber: label.trackingNumber || undefined,
+        carrier: job?.service || label.service,
+        labelUrl: labelUrl ?? undefined,
+      },
+      {
+        onSuccess: () =>
+          show('Handoff recorded — waiting for the carrier scan to confirm tracking.', 'success'),
+        onError: (err) =>
+          show(
+            err instanceof Error && err.message !== 'HANDOFF_UNAVAILABLE'
+              ? err.message
+              : 'This order is no longer awaiting dispatch.',
+            'error',
+          ),
       },
     );
   };
@@ -224,6 +255,27 @@ function LabelSheet() {
         <p className="mt-4 flex items-center gap-1.5 text-caption text-success-text print:hidden">
           <Icon name="check" size={14} />
           Marked posted — this order is in the Posted lane.
+        </p>
+      ) : null}
+
+      {/* Dropped-off recovery — the claim records evidence for the
+          parcel trail; it never moves the job out of to-post (the
+          carrier's scan still owes the dispatch truth). */}
+      {stillToPost && !job?.handoffAssertedAt ? (
+        <button
+          type="button"
+          onClick={recordHandoff}
+          disabled={assertHandoff.isPending}
+          className="pressable mt-4 inline-flex items-center gap-1.5 text-caption font-semibold text-text-secondary hover:text-text-primary disabled:opacity-50 print:hidden"
+        >
+          <Icon name="check" size={14} />
+          {assertHandoff.isPending ? 'Recording…' : 'Already dropped it off? Record the handoff'}
+        </button>
+      ) : null}
+      {job?.handoffAssertedAt ? (
+        <p className="mt-4 flex items-center gap-1.5 text-caption text-text-muted print:hidden">
+          <Icon name="check" size={14} />
+          Dropped off — waiting for the carrier scan to confirm tracking.
         </p>
       ) : null}
 

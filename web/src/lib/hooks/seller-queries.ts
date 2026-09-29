@@ -27,6 +27,9 @@ import {
   recordPendingExtension,
   pendingExtensionFor,
   dropPendingExtension,
+  assertJobHandoff,
+  handoffAssertedFor,
+  recordHandoffAssertion,
   pauseFixtureListing,
   resumeFixtureListing,
   deleteFixtureListing,
@@ -51,6 +54,7 @@ import { DATA_MODE } from '@/lib/api/client';
 import { ApiRequestError, isRecord } from '@/lib/api/http';
 import * as sellerHubService from '@/lib/api/services/sellerHub';
 import * as commerceService from '@/lib/api/services/commerce';
+import * as sellersService from '@/lib/api/services/sellers';
 import * as listingsService from '@/lib/api/services/listings';
 import { MY_LISTINGS } from '@/lib/data/fixtures';
 import { MY_LISTING_STATS, OFFERS, setListingStatus } from '@/lib/data/fixtures-commerce';
@@ -452,7 +456,17 @@ export function useFulfilmentQueue() {
               return j;
             }
             const pending = pendingExtensionFor(j.id);
-            return pending ? { ...j, pendingExtension: pending } : j;
+            const handoffAt = handoffAssertedFor(j.id);
+            return pending || handoffAt
+              ? {
+                  ...j,
+                  pendingExtension: pending ?? j.pendingExtension,
+                  // Session-scoped truth: the list wire never projects
+                  // handoff_asserted events; the order's parcel trail is
+                  // the durable surface for the claim.
+                  handoffAssertedAt: handoffAt ?? j.handoffAssertedAt,
+                }
+              : j;
           })
           .sort((a, b) => Date.parse(b.orderedAt) - Date.parse(a.orderedAt));
       }
@@ -603,6 +617,101 @@ function isExtensionPendingConflict(error: unknown): boolean {
     isRecord(error.details) &&
     error.details.code === 'EXTENSION_PENDING'
   );
+}
+
+/** The handoff claim input — tracking/carrier/label the seller already
+ *  holds; every field is optional on the wire. */
+export interface AssertHandoffInput {
+  /** The queue job id IS the order id — same pairing markJobPosted uses. */
+  jobId: string;
+  trackingNumber?: string;
+  carrier?: string;
+  labelUrl?: string;
+}
+
+/**
+ * POST /orders/:id/fulfilment/handoff-assertion — the seller reports the
+ * parcel is already with the carrier and the scan hasn't landed yet.
+ * NOT optimistic and NOT a dispatch: the route never mutates orders.status
+ * (it 409s unless 'paid'), so success records the claim as evidence and
+ * leaves the row 'to-post' awaiting the first carrier scan. Live mode
+ * pins the confirmed claim into the session overlay so the row stops
+ * offering the affordance; the durable surface is the order's parcel
+ * events read.
+ */
+export function useAssertHandoff() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: async (input: AssertHandoffInput) => {
+      if (DATA_MODE === 'live') {
+        const result = await commerceService.assertOrderHandoff(input.jobId, {
+          trackingNumber: input.trackingNumber,
+          shippingProvider: input.carrier,
+          labelUrl: input.labelUrl,
+        });
+        recordHandoffAssertion(input.jobId, result.handoffClaimedAt);
+        return result;
+      }
+      await tick(320);
+      const job = assertJobHandoff(input.jobId);
+      if (!job?.handoffAssertedAt) throw new Error('HANDOFF_UNAVAILABLE');
+      return { orderId: input.jobId, handoffClaimedAt: job.handoffAssertedAt, status: 'paid' };
+    },
+    onSettled: (_r, _e, input) => {
+      void qc.invalidateQueries({ queryKey: ['seller', 'fulfilment'] });
+      if (input?.jobId) {
+        // The claim lands on the order's parcel trail — refresh the
+        // detail reads so the buyer-side surface shows the same event.
+        void qc.invalidateQueries({ queryKey: ['order', input.jobId] });
+      }
+      void qc.invalidateQueries({ queryKey: ['orders'] });
+    },
+  });
+}
+
+/**
+ * POST /sellers/:id/listings/:listingId/price-adjust — the dedicated
+ * repricing write (durable price event, outbox, alert evaluation, search
+ * sync — none of which a generic listing patch performs). Never
+ * optimistic: the listing only re-renders at the new price once the
+ * server confirms it. Fixture mode applies the same field edit the
+ * listing tools use, rejecting sold/unchanged like the route does.
+ */
+export function useAdjustListingPrice() {
+  const qc = useQueryClient();
+  const { user } = useSession();
+  return useMutation({
+    mutationFn: async (input: { listingId: string; newPriceGbp: number }) => {
+      if (DATA_MODE === 'live' && user?.id) {
+        return sellersService.adjustListingPrice(user.id, input.listingId, input.newPriceGbp);
+      }
+      await tick(320);
+      const current = MY_LISTINGS.find((l) => l.id === input.listingId);
+      if (!current) throw new Error('Listing not found');
+      if (Math.abs(current.price - input.newPriceGbp) < 0.005) {
+        throw new Error('New price must differ from current price');
+      }
+      const receipt = applyFixtureListingEdit(input.listingId, { priceGbp: input.newPriceGbp });
+      if (receipt.state === 'rejected') throw new Error(receipt.reason ?? 'Listing cannot be repriced');
+      return {
+        listingId: input.listingId,
+        previousPriceGbp: current.price,
+        newPriceGbp: input.newPriceGbp,
+        changedAt: new Date().toISOString(),
+      };
+    },
+    onSettled: (_r, _e, input) => {
+      if (input?.listingId) {
+        void qc.invalidateQueries({ queryKey: ['listing', input.listingId] });
+        void qc.invalidateQueries({ queryKey: ['seller', 'listing', input.listingId] });
+      }
+      // The manage surface itself reads the my-listings projection.
+      void qc.invalidateQueries({ queryKey: ['my-listings'] });
+      void qc.invalidateQueries({ queryKey: ['seller', 'listings'] });
+      void qc.invalidateQueries({ queryKey: ['seller', 'performance'] });
+      void qc.invalidateQueries({ queryKey: ['seller', 'overview'] });
+    },
+  });
 }
 
 /** Statuses whose proceeds are still inside the clearance window. */

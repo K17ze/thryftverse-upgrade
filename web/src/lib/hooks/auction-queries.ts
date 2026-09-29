@@ -12,6 +12,7 @@ import { useEffect, useMemo, useState } from 'react';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import type {
   AuctionBid,
+  AuctionLifecycle,
   AuctionMarketItem,
   CreateAuctionInput,
 } from '@/lib/contracts/auction';
@@ -31,7 +32,7 @@ import {
   sortAuctions,
   toViewModel,
 } from '@/lib/data/fixtures-auctions';
-import { CURRENT_USER } from '@/lib/data/fixtures';
+import { CURRENT_USER, listingById } from '@/lib/data/fixtures';
 import { DATA_MODE } from '@/lib/api/client';
 import * as auctionsService from '@/lib/api/services/auctions';
 import { mergeServerWatches } from '@/components/auctions/auctionWatchlist';
@@ -47,6 +48,10 @@ const runtimeAuctions: AuctionMarketItem[] = [];
 const runtimeBids: AuctionBid[] = [];
 const runtimeBidState = new Map<string, { currentBid: number; bidCount: number }>();
 const runtimeEnds = new Map<string, number>();
+/** Fixture-mode seller cancellations — session-scoped like the rest of
+ *  the runtime: the row reads cancelled (terminalReason wins over the
+ *  still-future endsAt) and lands in the seller's unsold bucket. */
+const runtimeCancelled = new Set<string>();
 /**
  * The viewer's proxy ceiling per auction — the "Set maximum bid" value
  * this session submitted. Session-scoped like the rest of the runtime;
@@ -69,13 +74,15 @@ function allAuctions(): AuctionMarketItem[] {
   return [...runtimeAuctions, ...AUCTIONS].map((auction) => {
     const overlay = runtimeBidState.get(auction.id);
     const extendedEnd = runtimeEnds.get(auction.id);
-    if (!overlay && extendedEnd == null) return auction;
+    const cancelled = runtimeCancelled.has(auction.id);
+    if (!overlay && extendedEnd == null && !cancelled) return auction;
     return {
       ...auction,
       currentBid: overlay?.currentBid ?? auction.currentBid,
       bidCount: overlay?.bidCount ?? auction.bidCount,
       endsAt:
         extendedEnd != null ? new Date(extendedEnd).toISOString() : auction.endsAt,
+      ...(cancelled ? { terminalReason: 'cancelled' as const } : {}),
     };
   });
 }
@@ -126,35 +133,79 @@ function mergeEchoedWatches(items: AuctionMarketItem[]): void {
   mergeServerWatches(items.filter((item) => item.isWatched === true).map((item) => item.id));
 }
 
+/** Post-end states the server still mutates: an awaiting-payment run
+ *  settles or expires on the sweep clock, a second-chance offer advances
+ *  when its deadline lapses, and a reserve-not-met run converts the
+ *  moment the seller accepts. These read 'ended' by timestamps but are
+ *  not settled — the detail surface keeps polling until the server
+ *  declares a terminal state. */
+const POST_END_POLL_MS = new Map<string, number>([
+  ['awaiting_payment', 15_000],
+  ['second_chance_offered', 15_000],
+  ['payment_expired', 15_000],
+  ['reserve_not_met', 30_000],
+]);
+
 /** Lifecycle-keyed poll grammar — mirrors native useAuctionDetail:
  *  10s while live (rival bids, outbid state), 45s while upcoming (the
- *  window may open), and no polling once ended. Resolved through
+ *  window may open), and no polling once truly ended. Resolved through
  *  toViewModel so server-declared lifecycles decide, not timestamps. */
 function auctionPollInterval(item: AuctionMarketItem | null | undefined): number | false {
   if (item === null) return false;
   if (item === undefined) return 10_000;
   const lifecycle = toViewModel(item, Date.now()).lifecycle;
-  return lifecycle === 'live' ? 10_000 : lifecycle === 'upcoming' ? 45_000 : false;
+  if (lifecycle === 'live') return 10_000;
+  if (lifecycle === 'upcoming') return 45_000;
+  return POST_END_POLL_MS.get(item.serverLifecycle ?? '') ?? false;
 }
 
-/** The detail serve carries its own bid ledger (with usernames); the
- *  standalone /bids route doesn't echo bidder usernames on this
- *  deployment, so detail rows win whenever the payload provides them.
- *  Session-scoped like the other runtime stores. */
+/** The detail serve carries its own bid ledger (top 20, with usernames).
+ *  It seeds the bids cache so the first paint renders instantly; the
+ *  standalone /bids route (≤200 rows, usernames included) is the
+ *  full-history read that replaces it on resolve. */
 const detailBidLedger = new Map<string, AuctionBid[]>();
 
 // ============================================================================
 // Queries
 // ============================================================================
 
-/** Hub board — sorted live → upcoming → ended, recomputed on every tick. */
-export function useAuctionBoard() {
+/** Hub board — sorted live → upcoming → ended, recomputed on every tick.
+ *
+ *  Live mode scopes the read server-side: each scope fetches its own
+ *  60-row page instead of sharing one 30-row 'all' window (the bare board
+ *  sorts ends_at ASC, so the oldest-ended auctions crowd out live
+ *  inventory). `scope` maps to the route's status enum; `categories` is
+ *  the CSV multi-select filter the route ANDs in. Zero-arg keeps the
+ *  legacy unscoped read for non-board consumers. Fixture mode always
+ *  returns the session runtime — the caller filters client-side. */
+export function useAuctionBoard(
+  scope?: AuctionLifecycle,
+  options: { categories?: string; enabled?: boolean } = {},
+) {
   const now = useNowTick(1000);
+  const enabled = options.enabled ?? true;
+  const categories = options.categories?.trim() || undefined;
+  const status =
+    scope === 'live'
+      ? 'live'
+      : scope === 'upcoming'
+        ? 'scheduled'
+        : scope === 'ended'
+          ? 'ended'
+          : undefined;
+  // Results read newest-first — 'endingSoon' would lead with the oldest
+  // ended run. Live/upcoming keep the time-sensitive ordering.
+  const sort = scope === 'ended' ? 'newest' : 'endingSoon';
+  const scopedLive = DATA_MODE === 'live' && (status !== undefined || categories != null);
   const { data, dataUpdatedAt, isLoading, isError, refetch } = useQuery({
-    queryKey: ['auctions'],
+    queryKey: scopedLive ? ['auctions', 'board', status, sort, categories] : ['auctions'],
+    enabled,
     queryFn: async ({ signal }) => {
       if (DATA_MODE === 'live') {
-        const page = await auctionsService.fetchAuctionBoard(undefined, signal);
+        const page = await auctionsService.fetchAuctionBoard(
+          scopedLive ? { status, sort, categories, limit: 60 } : undefined,
+          signal,
+        );
         mergeEchoedWatches(page.items);
         return page.items;
       }
@@ -167,7 +218,84 @@ export function useAuctionBoard() {
     () => sortAuctions((data ?? []).map((item) => toViewModel(item, now + skew))),
     [data, now, skew],
   );
-  return { auctions, isLoading, isError, refetch };
+  return { auctions, isLoading: enabled && isLoading, isError, refetch };
+}
+
+/**
+ * Hub facets — GET /auctions/facets in live mode: scope counts over the
+ * whole inventory (not the loaded page), the selectable categories with
+ * counts, and the price spectrum. `categories` keeps the counts honest
+ * while a filter is active (the route ignores a dimension's own
+ * constraint, so category counts don't collapse under selection).
+ * Fixture mode derives the same shape from the session runtime — the
+ * counts are the real fixture board's, not invented numbers.
+ */
+export function useAuctionFacets(options: { categories?: string } = {}) {
+  const now = useNowTick(60_000);
+  const categories = options.categories?.trim() || undefined;
+  const query = useQuery({
+    queryKey: ['auctions', 'facets', DATA_MODE === 'live' ? (categories ?? '') : 'fixture'],
+    queryFn: async ({ signal }) => {
+      if (DATA_MODE === 'live') {
+        return auctionsService.fetchAuctionFacets({ categories }, signal);
+      }
+      await tick();
+      return null;
+    },
+  });
+  const fixture = useMemo<auctionsService.AuctionFacets>(() => {
+    const items = allAuctions().map((item) => toViewModel(item, now));
+    const statusCounts = { live: 0, upcoming: 0, results: 0, watching: 0 };
+    const categoryCounts = new Map<string, number>();
+    let priceMin = Infinity;
+    let priceMax = 0;
+    for (const item of items) {
+      if (item.lifecycle === 'ended') statusCounts.results += 1;
+      else statusCounts[item.lifecycle] += 1;
+      const category = listingById(item.listingId)?.category;
+      if (category) categoryCounts.set(category, (categoryCounts.get(category) ?? 0) + 1);
+      priceMin = Math.min(priceMin, item.currentBid);
+      priceMax = Math.max(priceMax, item.currentBid);
+    }
+    return {
+      categories: [...categoryCounts.entries()]
+        .sort((a, b) => b[1] - a[1] || a[0].localeCompare(b[0]))
+        .map(([id, count]) => ({ id, label: id, count })),
+      price: { min: items.length ? priceMin : 0, max: priceMax },
+      statusCounts,
+    };
+  }, [now]);
+  if (DATA_MODE === 'live') {
+    return { facets: query.data ?? null, isLoading: query.isLoading };
+  }
+  return { facets: fixture, isLoading: false };
+}
+
+/**
+ * The server's hub feed — attention pick (deduped across every rail),
+ * per-viewer activity counts and the authored programmes. Live-mode only:
+ * fixture mode derives the same strip locally and returns null.
+ */
+export function useAuctionHome() {
+  const { data, dataUpdatedAt, isLoading, isError } = useQuery({
+    queryKey: ['auctions', 'home'],
+    enabled: DATA_MODE === 'live',
+    staleTime: 30_000,
+    queryFn: async ({ signal }) => auctionsService.fetchAuctionHome(signal),
+  });
+  // The feed stamps serverNow onto every item — skew resolves off any of
+  // them so the attention item's countdown runs on the corrected clock.
+  const skew = serverSkewMs(
+    data
+      ? [
+          ...(data.attention?.item ? [data.attention.item] : []),
+          ...data.closingSoon,
+          ...data.live,
+        ]
+      : null,
+    dataUpdatedAt,
+  );
+  return { home: data ?? null, skew, isLoading, isError };
 }
 
 export function useAuction(id: string) {
@@ -180,9 +308,9 @@ export function useAuction(id: string) {
         const bundle = await auctionsService.fetchAuctionDetailBundle(id, signal);
         if (!bundle) return null;
         mergeEchoedWatches([bundle.auction]);
-        // The detail serve's own ledger carries usernames — seed the bids
-        // cache so the ledger renders real names even before its own
-        // query resolves (the /bids route can't provide them).
+        // The detail serve's own ledger (top 20) seeds the bids cache so
+        // the first paint renders instantly; the dedicated /bids query
+        // then replaces it with the full ≤200-row history.
         if (bundle.bids) {
           detailBidLedger.set(id, bundle.bids);
           qc.setQueryData<AuctionBid[]>(['auction-bids', id], bundle.bids);
@@ -211,11 +339,11 @@ export function useAuctionBids(auctionId: string) {
     queryKey: ['auction-bids', auctionId],
     queryFn: async ({ signal }) => {
       if (DATA_MODE === 'live') {
-        // Prefer the detail payload's ledger — it carries usernames the
-        // standalone /bids route omits on this deployment.
-        const seeded = detailBidLedger.get(auctionId);
-        if (seeded) return seeded;
-        return auctionsService.fetchAuctionBids(auctionId, signal);
+        // The standalone route IS the full-history read — detail's
+        // bidActivity is a top-20 window and stays in the cache only as
+        // the instant-paint seed (the query key already holds it). The
+        // route's 200-row cap is the server's own ledger bound.
+        return auctionsService.fetchAuctionBids(auctionId, { limit: 200 }, signal);
       }
       await tick();
       return allBids().filter((bid) => bid.auctionId === auctionId);
@@ -661,6 +789,63 @@ export function useCreateAuction() {
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ['auctions'] });
       qc.invalidateQueries({ queryKey: ['auction-bids-all'] });
+    },
+  });
+}
+
+// ============================================================================
+// Seller lifecycle — cancel a running auction, accept a below-reserve hammer
+// ============================================================================
+
+/** Shared post-write refresh — every surface reading this auction
+ *  (detail, hub scopes, seller board, my-bids) re-reads after a state
+ *  transition the server owns. */
+function invalidateAuctionSurfaces(qc: ReturnType<typeof useQueryClient>, auctionId: string) {
+  qc.invalidateQueries({ queryKey: ['auction', auctionId] });
+  qc.invalidateQueries({ queryKey: ['auctions'] });
+  qc.invalidateQueries({ queryKey: ['auction-bids-all'] });
+}
+
+/**
+ * POST /auctions/:auctionId/cancel — seller-only. The route refuses a
+ * settled run and any run with a bound winner; surfaces only render this
+ * while the auction can still legally cancel. Live hits the real route;
+ * fixture marks the session auction cancelled (the row lands in Unsold —
+ * an honest simulation of the same write, not a fake success).
+ */
+export function useCancelAuction(auctionId: string) {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: async (input: { reason?: string } = {}) => {
+      if (DATA_MODE === 'live') {
+        return auctionsService.cancelAuction(auctionId, input.reason);
+      }
+      await tick(300);
+      runtimeCancelled.add(auctionId);
+      return { ok: true as const, auctionId, cancelledAt: new Date().toISOString() };
+    },
+    onSuccess: () => invalidateAuctionSurfaces(qc, auctionId),
+  });
+}
+
+/**
+ * POST /auctions/:auctionId/accept-highest-bid — seller-only, and only
+ * while the server holds status 'reserve_not_met'. Live-mode only by
+ * construction: a fixture accept would mint a sale with no order behind
+ * it, so the mutation refuses rather than fabricate one.
+ */
+export function useAcceptHighestBid(auctionId: string) {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: async () => {
+      if (DATA_MODE !== 'live') {
+        throw new Error('Accepting bids isn’t supported in the demo');
+      }
+      return auctionsService.acceptHighestBid(auctionId);
+    },
+    onSuccess: () => {
+      invalidateAuctionSurfaces(qc, auctionId);
+      qc.invalidateQueries({ queryKey: ['orders'] });
     },
   });
 }

@@ -11,7 +11,7 @@ import { Button } from '@/components/ui/Button';
 import { Icon } from '@/components/ui/Icon';
 import { usePriceHistory } from '@/lib/hooks/coown-queries';
 import type { CoOwnAsset } from '@/lib/contracts/coown';
-import { coOwnMarkGbp, deriveLifecycleState } from '@/lib/contracts/coown';
+import { coOwnMarkGbp } from '@/lib/contracts/coown';
 import { formatCount } from '@/lib/utils/format';
 import { gbp, gbpCompact } from './format';
 import { LifecycleTag } from './LifecycleTag';
@@ -25,11 +25,6 @@ export function FeaturedHero({ asset }: { asset: CoOwnAsset }) {
   const weekQ = usePriceHistory(asset.id, '1W');
   const tier = asset.issuer.verificationTier;
   const href = `/co-own/${asset.id}`;
-
-  // A halted or exiting market's hero CTA navigates, it doesn't promise
-  // a trade — label follows the lifecycle.
-  const state = deriveLifecycleState(asset);
-  const tradable = state === 'secondaryTrading' || state === 'initialOffering';
 
   const stats = [
     { label: 'Holders', value: formatCount(asset.holders) },
@@ -95,12 +90,11 @@ export function FeaturedHero({ asset }: { asset: CoOwnAsset }) {
           ))}
         </dl>
 
+        {/* One CTA — the hero navigates to the market; a second button to
+            the same place is noise, not choice. */}
         <div className="mt-6 flex flex-wrap gap-3">
           <Button icon="trending" className="min-w-36 flex-1 sm:flex-none" onClick={() => router.push(href)}>
-            {tradable ? 'Trade' : 'View market'}
-          </Button>
-          <Button variant="secondary" icon="document" className="min-w-36 flex-1 sm:flex-none" onClick={() => router.push(href)}>
-            View dossier
+            View market
           </Button>
         </div>
       </div>

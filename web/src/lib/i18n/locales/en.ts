@@ -144,7 +144,8 @@ export const en = {
       "inbox": "Inbox",
       "bag": "Bag",
       "departments": "Departments",
-      "sellNow": "Sell now"
+      "sellNow": "Sell now",
+      "create": "Create"
     },
     "footer": {
       "tagline": "The marketplace for pre-loved fashion.",

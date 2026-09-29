@@ -164,11 +164,15 @@ export function MoodboardClient() {
   const createdBoards = useBoardPrefs((s) => s.createdMoodboards);
   const setBoardPrivate = useBoardPrefs((s) => s.setPrivate);
   const privacyPref = useBoardPrefs((s) => s.boards[id]?.isPrivate);
+  // Fixture boards must never become live-mode truth — when the server
+  // read misses (404 → null data) or fails, `board` stays undefined and
+  // the honest gravestone/error states below own the surface.
   const board =
-    liveBoard?.board ??
-    MOODBOARDS.find((b) => b.id === id) ??
-    (hydrated ? createdBoards.find((b) => b.id === id) : undefined) ??
-    publicMoodboardById(id);
+    DATA_MODE === 'live'
+      ? liveBoard?.board
+      : (MOODBOARDS.find((b) => b.id === id) ??
+        (hydrated ? createdBoards.find((b) => b.id === id) : undefined) ??
+        publicMoodboardById(id));
   const { data: owner } = useUser(board?.ownerId ?? '');
 
   // Persisted owner edits — gated behind hydration so the first client
@@ -189,7 +193,21 @@ export function MoodboardClient() {
   // /moodboards/* endpoints + optimistic overlay + revert-on-failure);
   // fixture mode writes the overlay store directly.
   const boardActions = useMoodboardActions();
-  const rowIdByListing = liveBoard?.rowIdByListing ?? {};
+  // Stable empty map — a fresh `{}` each render would churn the
+  // listingIdByRowId memo below on every pass.
+  const rowIdByListing = useMemo(
+    () => liveBoard?.rowIdByListing ?? {},
+    [liveBoard?.rowIdByListing],
+  );
+  // Reverse map — wire comment anchors carry the moodboard_items row id,
+  // so resolving a comment's item title needs row id → listing id.
+  const listingIdByRowId = useMemo(() => {
+    const m: Record<string, string> = {};
+    for (const [listingId, rowId] of Object.entries(rowIdByListing)) {
+      m[rowId] = listingId;
+    }
+    return m;
+  }, [rowIdByListing]);
   const edits = hydrated ? (DATA_MODE === 'live' ? liveOverlay : overlay) : undefined;
 
   /** Track a write-through action: the action mirrors optimistically into
@@ -211,14 +229,19 @@ export function MoodboardClient() {
   const itemIds = useMemo(
     () =>
       edits?.itemIds ??
-      (board ? MOODBOARD_ITEM_IDS[board.id] ?? ('itemIds' in board ? board.itemIds : []) : []),
+      (board
+        ? (DATA_MODE === 'live'
+            ? undefined
+            : MOODBOARD_ITEM_IDS[board.id]) ?? ('itemIds' in board ? board.itemIds : [])
+        : []),
     [edits?.itemIds, board],
   );
-  // Live mode's items arrive hydrated from the board query; fixture mode
+  // Live mode's items arrive hydrated from the board query — a missing
+  // live read is an empty board, never fixture listings. Fixture mode
   // resolves ids against the bundled catalogue.
   const liveItems = liveBoard?.items;
   const items = useMemo(
-    () => (liveItems ? liveItems : listingsForIds(itemIds)),
+    () => (DATA_MODE === 'live' ? (liveItems ?? []) : listingsForIds(itemIds)),
     [liveItems, itemIds],
   );
 
@@ -229,11 +252,14 @@ export function MoodboardClient() {
   const themeId =
     edits?.themeId ??
     (board && 'themeId' in board ? board.themeId : undefined) ??
-    DEFAULT_MOODBOARD_THEME_ID[id] ??
+    (DATA_MODE === 'live' ? undefined : DEFAULT_MOODBOARD_THEME_ID[id]) ??
     'theme-linen';
   const theme = moodboardThemeById(themeId);
   const canvasPositions = useMemo(
-    () => ({ ...MOODBOARD_CANVAS[id], ...liveBoard?.positions, ...edits?.positions }),
+    () =>
+      DATA_MODE === 'live'
+        ? { ...liveBoard?.positions, ...edits?.positions }
+        : { ...MOODBOARD_CANVAS[id], ...liveBoard?.positions, ...edits?.positions },
     [id, liveBoard?.positions, edits?.positions],
   );
 
@@ -583,7 +609,12 @@ export function MoodboardClient() {
                 setCommentsOpen(true);
               }}
             />
-            <IconButton name="share" aria-label="Share board" onClick={shareBoard} />
+            {/* Public share only — a private board's link 404s for
+                recipients; invites (collaborators sheet) are the private
+                mechanism, same gate as the options-sheet share. */}
+            {!isPrivate ? (
+              <IconButton name="share" aria-label="Share board" onClick={shareBoard} />
+            ) : null}
             {canEditItems ? (
               isEditing ? (
                 <Button
@@ -930,6 +961,8 @@ export function MoodboardClient() {
           setCommentAnchor(null);
         }}
         anchorItemId={commentAnchor}
+        anchorRowId={commentAnchor ? rowIdByListing[commentAnchor] ?? null : null}
+        listingIdByRowId={listingIdByRowId}
         boardItems={items}
         canModerate={isOwner || viewerRole === 'editor'}
         canComment={!LIVE ? undefined : canComment}

@@ -67,6 +67,7 @@ export const SETTINGS_DESTINATIONS: SettingsDestination[] = [
   { id: 'postage', label: 'Shipping preferences', section: 'Buying & selling', icon: 'box', keywords: 'postage carrier dispatch parcel', target: { kind: 'route', href: '/settings/postage' } },
   { id: 'seller-hub', label: 'Seller hub', section: 'Buying & selling', icon: 'dashboard', keywords: 'listings orders payouts selling', target: { kind: 'route', href: '/seller-hub' } },
   { id: 'holiday-mode', label: 'Holiday mode', section: 'Buying & selling', icon: 'bag', keywords: 'away pause shop vacation sellers hide listings shop activity', target: { kind: 'route', href: '/seller-hub/settings' } },
+  { id: 'creator-analytics', label: 'Creator analytics', section: 'Buying & selling', icon: 'analytics', keywords: 'views engagement earnings creator insights stats performance looks posters', target: { kind: 'route', href: '/creator-analytics' } },
   // ── Notifications ──
   { id: 'notifications', label: 'Notifications', section: 'Notifications', icon: 'notifications', keywords: 'push email alerts quiet hours price drops offers likes messages marketing pause', target: { kind: 'route', href: '/settings/notifications' } },
   // ── Experience ──

@@ -15,8 +15,8 @@
 
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
-import { useState } from 'react';
-import { useQueryClient } from '@tanstack/react-query';
+import { useRef, useState } from 'react';
+import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import type { Listing } from '@/lib/contracts/domain';
 import { Avatar } from '@/components/ui/Avatar';
 import { Button } from '@/components/ui/Button';
@@ -35,7 +35,10 @@ import {
   recordSentOffer,
 } from '@/lib/data/fixtures-commerce';
 import { DATA_MODE } from '@/lib/api/client';
+import { parseApiError } from '@/lib/api/http';
 import * as commerceService from '@/lib/api/services/commerce';
+import * as listingsService from '@/lib/api/services/listings';
+import * as priceAlertsService from '@/lib/api/services/priceAlerts';
 import { listingCapabilities, listingStateCopy } from '@/lib/commerce/capabilities';
 import { DISPATCH_SLA_DAYS } from '@/lib/commerce/dispatch';
 import {
@@ -147,6 +150,14 @@ export function BuyPanel({ listing }: BuyPanelProps) {
   const inBag = hydrated && bagged;
 
   const [offerOpen, setOfferOpen] = useState(false);
+  const [offerSending, setOfferSending] = useState(false);
+  /** One idempotency key per offer-send attempt — a user retry after a
+   *  dropped response replays the same key so the server's
+   *  (offered_by_user_id, idempotency_key) constraint dedupes instead of
+   *  double-creating; makeOffer itself reconciles unknown outcomes via
+   *  lookup-by-key before the failure reaches the toast. Cleared once a
+   *  send is confirmed so the next offer mints a fresh key. */
+  const offerKeyRef = useRef<string | null>(null);
   const [sizeGuideOpen, setSizeGuideOpen] = useState(false);
   const [protectionOpen, setProtectionOpen] = useState(false);
   const [boardOpen, setBoardOpen] = useState(false);
@@ -225,6 +236,60 @@ export function BuyPanel({ listing }: BuyPanelProps) {
   const withdrawOffer = useWithdrawListingOffer(listing.id);
 
   /**
+   * Price-drop alerts — the listing-level /price-alerts contract (distinct
+   * from Co-Own asset alerts): POST to enable, DELETE to disable, and the
+   * GET status read reflects the member's real subscription. Native's gate
+   * (mobile ItemDetailPriceMarket): the listing is purchasable, the viewer
+   * isn't the seller, and the seller isn't restricted. Live-only — the row
+   * hides in fixture mode rather than fabricating a subscription state.
+   * Guests read as off and hit the signup wall on tap; the status read is
+   * member-scoped, so it only runs for a signed-in viewer.
+   */
+  const showPriceAlert =
+    DATA_MODE === 'live' &&
+    caps.isAvailable &&
+    !caps.isOwner &&
+    !caps.sellerSuspended;
+  const priceAlertKey = ['price-alert', listing.id, user?.id ?? 'guest'] as const;
+  const priceAlertQuery = useQuery({
+    queryKey: priceAlertKey,
+    enabled: showPriceAlert && !!user,
+    staleTime: 60_000,
+    retry: 1,
+    queryFn: () => priceAlertsService.getPriceAlertStatus(listing.id),
+  });
+  const priceAlertEnabled = priceAlertQuery.data === true;
+  const priceAlertMutation = useMutation({
+    mutationFn: async (next: boolean) => {
+      if (next) {
+        await priceAlertsService.enablePriceAlert(listing.id);
+      } else {
+        await priceAlertsService.disablePriceAlert(listing.id);
+      }
+    },
+    onMutate: (next) => {
+      queryClient.setQueryData(priceAlertKey, next);
+    },
+    onSuccess: (_result, next) => {
+      show(
+        next
+          ? 'Price drop alerts on — we’ll notify you if the price falls'
+          : 'Price drop alerts off',
+        next ? 'success' : 'info',
+      );
+    },
+    onError: (_error, next) => {
+      // Roll back the optimistic flip — the subscription is server truth.
+      queryClient.setQueryData(priceAlertKey, !next);
+      show('Could not update the price alert — try again.', 'error');
+    },
+  });
+  const handleTogglePriceAlert = () => {
+    if (!requireAuth('save_item') || priceAlertMutation.isPending) return;
+    priceAlertMutation.mutate(!priceAlertEnabled);
+  };
+
+  /**
    * Conversational signal line — the eBay VI beat that sits directly under
    * the buy buttons. Every clause comes from a real field: views/likes are
    * contract counters, the sold-comps count is the same evidence PdpMarket
@@ -276,6 +341,15 @@ export function BuyPanel({ listing }: BuyPanelProps) {
   const handleHeart = () => {
     if (!requireAuth('save_item')) return;
     const adding = !isFav;
+    if (adding && DATA_MODE === 'live') {
+      // Engagement 'like' — the same write native fires on the heart
+      // (POST /listings/:id/interact, stored as 'wishlist' for seller
+      // analytics). Deterministic key: an unlike/re-like cycle still
+      // records exactly once.
+      void listingsService.trackListingInteraction(listing.id, 'like', {
+        idempotencyKey: `like_${listing.id}`,
+      });
+    }
     void toggleFav(listing.id).then((ok) => {
       if (ok) {
         if (adding) show('Added to wishlist', 'success');
@@ -288,6 +362,11 @@ export function BuyPanel({ listing }: BuyPanelProps) {
   const handleSave = () => {
     if (!requireAuth('save_item')) return;
     const removing = isSaved;
+    if (!removing && DATA_MODE === 'live') {
+      void listingsService.trackListingInteraction(listing.id, 'save', {
+        idempotencyKey: `save_${listing.id}`,
+      });
+    }
     void toggleSaved(listing.id).then((ok) => {
       show(
         ok
@@ -308,7 +387,14 @@ export function BuyPanel({ listing }: BuyPanelProps) {
    */
   const handleSaveToBoard = () => {
     if (!requireAuth('save_item')) return;
-    if (!savedItem) void toggleSaved(listing.id);
+    if (!savedItem) {
+      if (DATA_MODE === 'live') {
+        void listingsService.trackListingInteraction(listing.id, 'save', {
+          idempotencyKey: `save_${listing.id}`,
+        });
+      }
+      void toggleSaved(listing.id);
+    }
     setBoardOpen(true);
   };
 
@@ -338,6 +424,11 @@ export function BuyPanel({ listing }: BuyPanelProps) {
   /** Share — the native share sheet where the platform offers it,
    *  a copied link where it doesn't. */
   const handleShare = async () => {
+    if (DATA_MODE === 'live') {
+      // Native fires the 'share' engagement write when its share sheet
+      // opens — on web the equivalent beat is the affordance press itself.
+      void listingsService.trackListingInteraction(listing.id, 'share');
+    }
     const url = `${window.location.origin}/item/${listing.id}`;
     if (typeof navigator !== 'undefined' && navigator.share) {
       try {
@@ -715,6 +806,30 @@ export function BuyPanel({ listing }: BuyPanelProps) {
         </span>
       </div>
 
+      {/* Price-drop alert — the member-scoped /price-alerts subscription
+          (mobile's toggle row inside "Price history & market"). A text
+          switch, not a card: quiet affordance under the save row. Live
+          only — it hides rather than fabricating state in fixture mode. */}
+      {showPriceAlert ? (
+        <button
+          type="button"
+          role="switch"
+          aria-checked={priceAlertEnabled}
+          aria-busy={priceAlertMutation.isPending || priceAlertQuery.isPending}
+          disabled={priceAlertMutation.isPending}
+          onClick={handleTogglePriceAlert}
+          className="pressable -ml-2 mt-3 inline-flex items-center gap-1.5 self-start rounded-md px-2 py-1.5 text-caption font-semibold text-text-secondary hover:text-text-primary disabled:opacity-50"
+        >
+          <Icon
+            name="notifications"
+            filled={priceAlertEnabled}
+            size={15}
+            className={priceAlertEnabled ? 'text-brand' : ''}
+          />
+          {priceAlertEnabled ? 'Price drop alerts on' : 'Notify me if the price drops'}
+        </button>
+      ) : null}
+
       {/* Delivery + returns + protection — the mobile ShippingReturnsInfo
           block, mirrored at the decision point. Every line is contract-
           backed: shippingPrice / ETA window from the listing commerce
@@ -870,16 +985,23 @@ export function BuyPanel({ listing }: BuyPanelProps) {
         open={offerOpen}
         onClose={() => setOfferOpen(false)}
         listing={listing}
+        busy={offerSending}
         onSend={(amount, expiryHours) => {
           if (DATA_MODE === 'live') {
             // Live write — the offer only reads as sent once the backend
-            // has recorded it; failure surfaces an error, no fake success.
+            // has recorded it (direct 201, or the lookup-by-key recovery
+            // inside makeOffer after a dropped response); failure
+            // surfaces the server's own message, no fake success.
+            offerKeyRef.current ??= commerceService.newOfferIdempotencyKey();
+            setOfferSending(true);
             void commerceService
               .makeOffer(listing.id, amount, {
                 originalPriceGbp: listing.price,
                 expiryHours,
+                idempotencyKey: offerKeyRef.current,
               })
               .then((offer) => {
+                offerKeyRef.current = null;
                 setOfferOpen(false);
                 void queryClient.invalidateQueries({ queryKey: ['listing-offer', listing.id] });
                 show(`Offer sent — ${formatPrice(amount)}`, 'success');
@@ -889,7 +1011,13 @@ export function BuyPanel({ listing }: BuyPanelProps) {
                   router.push(`/inbox/${offer.conversationId}`);
                 }
               })
-              .catch(() => show('Could not send the offer — try again.', 'error'));
+              .catch((error) =>
+                show(
+                  parseApiError(error, 'Could not send the offer — try again.').message,
+                  'error',
+                ),
+              )
+              .finally(() => setOfferSending(false));
             return;
           }
           recordSentOffer(listing, amount, expiryHours);

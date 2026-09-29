@@ -68,7 +68,7 @@ export function ReportIssueView({ id }: { id: string }) {
   const [categoryError, setCategoryError] = useState<string | null>(null);
   const [descriptionError, setDescriptionError] = useState<string | null>(null);
   const [submitting, setSubmitting] = useState(false);
-  const [submitted, setSubmitted] = useState<{ ref: string; id: string } | null>(null);
+  const [submitted, setSubmitted] = useState<{ ref: string; id: string | null } | null>(null);
 
   if (sessionLoading || isLoading) return <IssueSkeleton />;
 
@@ -80,7 +80,7 @@ export function ReportIssueView({ id }: { id: string }) {
         <EmptyState
           icon="alert"
           title="Sign in to report an issue"
-          subtitle="Reports open a support case on your account."
+          subtitle="Reports are filed against your account."
           actionLabel="Sign in"
           onAction={() => router.push('/auth')}
         />
@@ -121,27 +121,28 @@ export function ReportIssueView({ id }: { id: string }) {
     setSubmitting(true);
     const categoryLabel = CATEGORIES.find((c) => c.value === category)?.label ?? 'Issue';
     try {
-      let issueRef: string | null = null;
       if (DATA_MODE === 'live') {
         // The asset-anchored record — same endpoint the mobile app posts
         // to; lands in the compliance audit trail with the category.
+        // Issue reports have no order, so no support ticket follows —
+        // the receipt carries the issue id the audit trail wrote.
         const issue = await reportCoOwnIssue(asset.id, {
           category: category!,
           description: description.trim(),
         });
-        issueRef = issue.id;
+        setSubmitted({ ref: issue.id, id: null });
+      } else {
+        // The support thread — /support/[id] is where follow-up lands.
+        // No minted local refs; the receipt carries the real case id.
+        const ticket = await createTicket({
+          topicId: 'other',
+          orderRef: null,
+          message:
+            `Co-Own issue — ${categoryLabel} · ${asset.title} (${asset.id})` +
+            ` — ${description.trim()}`,
+        });
+        setSubmitted({ ref: ticket.ref ?? ticket.id.toUpperCase(), id: ticket.id });
       }
-      // The support thread — /support/[id] is where follow-up lands.
-      // No minted local refs; the receipt carries the real case id.
-      const ticket = await createTicket({
-        topicId: 'other',
-        orderRef: null,
-        message:
-          `Co-Own issue — ${categoryLabel} · ${asset.title} (${asset.id})` +
-          (issueRef ? ` · ref ${issueRef}` : '') +
-          ` — ${description.trim()}`,
-      });
-      setSubmitted({ ref: issueRef ?? ticket.ref ?? ticket.id.toUpperCase(), id: ticket.id });
       show('Issue reported', 'success');
     } catch {
       show("Couldn't submit the report — check your connection and try again.", 'error');
@@ -176,7 +177,9 @@ export function ReportIssueView({ id }: { id: string }) {
             Reference #{submitted.ref}
           </p>
           <p className="mt-3 max-w-sm text-body text-text-muted">
-            Your report opened a support case — replies and updates appear on the case thread.
+            {submitted.id
+              ? 'Your report opened a support case — replies and updates appear on the case thread.'
+              : 'Your report was filed with the team — keep the reference for follow-up.'}
           </p>
           <div className="mt-8 flex flex-col items-center gap-3">
             <Button
@@ -186,12 +189,14 @@ export function ReportIssueView({ id }: { id: string }) {
             >
               Done
             </Button>
-            <Link
-              href={`/support/${submitted.id}`}
-              className="pressable text-body font-medium text-brand underline-offset-4 hover:underline"
-            >
-              View your case
-            </Link>
+            {submitted.id ? (
+              <Link
+                href={`/support/${submitted.id}`}
+                className="pressable text-body font-medium text-brand underline-offset-4 hover:underline"
+              >
+                View your case
+              </Link>
+            ) : null}
           </div>
         </section>
       ) : (
@@ -286,8 +291,9 @@ export function ReportIssueView({ id }: { id: string }) {
             <div>
               <p className="text-body font-semibold text-text-primary">How this works</p>
               <p className="mt-1 text-meta text-text-muted">
-                Your report opens a support case for the team to review — you can follow the thread
-                in Help &amp; Support.
+                {DATA_MODE === 'live'
+                  ? 'Your report is filed for the team to review — keep the reference for follow-up.'
+                  : 'Your report opens a support case for the team to review — you can follow the thread in Help & Support.'}
               </p>
             </div>
           </div>

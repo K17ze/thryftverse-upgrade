@@ -20,6 +20,7 @@ import * as socialService from '@/lib/api/services/social';
 import { boardHref } from '@/components/profile/profileViewModel';
 import { useOwnerBoards, type OwnerBoard } from '@/components/profile/useOwnerBoards';
 import { ShopRail } from '@/components/profile/ShopRail';
+import { HighlightsRail } from '@/components/profile/HighlightsRail';
 import { BoardSortControl } from '@/components/profile/BoardSortControl';
 import { sortBoards, useBoardPrefs } from '@/components/profile/boardPrefs';
 import { CreateBoardSheet } from '@/components/profile/CreateBoardSheet';
@@ -144,6 +145,8 @@ export default function ProfilePage() {
         variant="self"
         onStatPress={onStatPress}
       />
+
+      <HighlightsRail ownerId={user.id} isOwner />
 
       <ShopRail ownerId={user.id} isOwner listings={listings} />
 

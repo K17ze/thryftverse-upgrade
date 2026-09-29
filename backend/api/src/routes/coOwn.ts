@@ -1872,6 +1872,11 @@ app.get('/co-own/eligibility/:assetId', async (request, reply) => {
   if (!asset.is_open) {
     reasonCodes.push('ASSET_CLOSED');
   }
+  // Preview assets are unsigned drafts — recourse must be signed before
+  // they trade; delisted assets are gone markets.
+  if (asset.listing_tier !== 'listed' && asset.listing_tier !== 'badged') {
+    reasonCodes.push('ASSET_NOT_LIVE');
+  }
 
   // Compliance / jurisdiction / KYC / sanctions / limits. orderNotionalGbp
   // is 0 for the standalone eligibility probe — per-order notional limits
@@ -1930,6 +1935,95 @@ app.get('/co-own/eligibility/:assetId', async (request, reply) => {
   };
 });
 
+/** Shared list-row shape + serializer — GET /co-own/assets and
+ *  /co-own/watchlist emit identical asset payloads. */
+interface CoOwnAssetListRow {
+  id: string;
+  listing_id: string;
+  issuer_id: string;
+  title: string;
+  image_url: string | null;
+  total_units: number;
+  available_units: number;
+  unit_price_gbp: number | string;
+  unit_price_stable: number | string;
+  settlement_mode: 'GBP' | 'TVUSD' | 'HYBRID' | 'ONEZE';
+  issuer_jurisdiction: string | null;
+  market_move_pct_24h: number | string;
+  holders: number;
+  volume_24h_gbp: number | string;
+  best_bid_gbp: number | string | null;
+  best_ask_gbp: number | string | null;
+  bid_depth_units: number | string;
+  ask_depth_units: number | string;
+  is_open: boolean;
+  created_at: string;
+  updated_at: string;
+  has_exit: boolean;
+  last_trade_price_gbp: number | string | null;
+  category: string | null;
+  issuer_username: string | null;
+  issuer_display_name: string | null;
+  issuer_avatar: string | null;
+  issuer_location: string | null;
+  issuer_verification_tier: string | null;
+  listing_tier: 'preview' | 'listed' | 'badged' | 'delisted';
+}
+
+function toCoOwnAssetListItem(row: CoOwnAssetListRow, isReconciliationHalted: boolean) {
+  const offeringStatus = computeOfferingStatus(row.is_open, row.available_units);
+  const marketStatus = computeMarketStatus(offeringStatus, row.has_exit, isReconciliationHalted);
+  return {
+    id: row.id,
+    listingId: row.listing_id,
+    issuerId: row.issuer_id,
+    // Issuer identity + verification tier — the same object the detail
+    // payload emits, joined here so market/watchlist rows carry the
+    // seller's face, not just a raw id.
+    issuer: row.issuer_username
+      ? {
+          username: row.issuer_username,
+          displayName: row.issuer_display_name,
+          avatar: row.issuer_avatar,
+          location: row.issuer_location,
+        }
+      : null,
+    issuerVerification: row.issuer_verification_tier
+      ? {
+          tier: row.issuer_verification_tier,
+          kycVerified:
+            row.issuer_verification_tier === 'id' || row.issuer_verification_tier === 'seller',
+        }
+      : null,
+    title: row.title,
+    imageUrl: row.image_url,
+    category: row.category,
+    totalUnits: row.total_units,
+    availableUnits: row.available_units,
+    unitPriceGbp: Number(row.unit_price_gbp),
+    unitPriceStable: Number(row.unit_price_stable),
+    settlementMode: row.settlement_mode,
+    issuerJurisdiction: row.issuer_jurisdiction,
+    marketMovePct24h: row.market_move_pct_24h == null ? null : Number(row.market_move_pct_24h),
+    holders: row.holders,
+    volume24hGbp: row.volume_24h_gbp == null ? null : Number(row.volume_24h_gbp),
+    // The tier a market sits at — 'preview' (unsigned) only ever reaches
+    // the issuer's own read; the public WHERE clause lists listed/badged.
+    listingTier: row.listing_tier,
+    bestBidGbp: row.best_bid_gbp == null ? null : Number(row.best_bid_gbp),
+    bestAskGbp: row.best_ask_gbp == null ? null : Number(row.best_ask_gbp),
+    bidDepthUnits: Number(row.bid_depth_units),
+    askDepthUnits: Number(row.ask_depth_units),
+    isOpen: row.is_open,
+    offeringStatus,
+    marketStatus,
+    capabilities: resolveCoOwnCapabilities(marketStatus),
+    lastTradePriceGbp: row.last_trade_price_gbp == null ? null : Number(row.last_trade_price_gbp),
+    createdAt: row.created_at,
+    updatedAt: row.updated_at,
+  };
+}
+
 app.get('/co-own/assets', async (request) => {
   const querySchema = z.object({
     openOnly: z.union([z.string(), z.boolean()]).optional(),
@@ -1943,10 +2037,23 @@ app.get('/co-own/assets', async (request) => {
     // Free-text filter over title + issuer jurisdiction — the hub's market
     // search. Without it the client can only filter already-loaded pages.
     search: z.string().max(200).optional(),
+    // Server-side ordering — the hub's sort control must be true across
+    // all pages, not a client re-sort of whatever pages happened to load.
+    sort: z
+      .enum(['volume', 'price_asc', 'price_desc', 'newest'])
+      .default('volume'),
   });
   const parsedQuery = querySchema.parse(request.query);
   const openOnly = parseQueryBoolean(parsedQuery.openOnly, false);
-  const { limit, issuerId, search } = parsedQuery;
+  const { limit, issuerId, search, sort } = parsedQuery;
+  const orderClause =
+    sort === 'price_asc'
+      ? 'ORDER BY sa.unit_price_gbp ASC, sa.id ASC'
+      : sort === 'price_desc'
+        ? 'ORDER BY sa.unit_price_gbp DESC, sa.id ASC'
+        : sort === 'newest'
+          ? 'ORDER BY sa.created_at DESC, sa.id DESC'
+          : 'ORDER BY sa.volume_24h_gbp DESC, sa.created_at DESC, sa.id DESC';
 
   let offset = 0;
   if (parsedQuery.cursor) {
@@ -1961,7 +2068,15 @@ app.get('/co-own/assets', async (request) => {
     }
   }
 
-  const whereConditions: string[] = [];
+  // Only live markets appear on the public tape — 'preview' assets are the
+  // issuer's unsigned drafts and 'delisted' rows are gone markets. The one
+  // exception is the issuer reading their own issuances (?issuerId=me):
+  // an unsigned or delisted market is still theirs to finish or audit.
+  const ownIssuances =
+    !!issuerId && !!request.authUser && issuerId === request.authUser.userId;
+  const whereConditions: string[] = ownIssuances
+    ? []
+    : [`sa.listing_tier IN ('listed', 'badged')`];
   const whereParams: Array<string | number> = [];
 
   if (openOnly) {
@@ -1979,7 +2094,7 @@ app.get('/co-own/assets', async (request) => {
     const escaped = searchTerm.replace(/[\\%_]/g, (ch) => `\\${ch}`);
     whereParams.push(`%${escaped}%`);
     whereConditions.push(
-      `(sa.title ILIKE $${whereParams.length} OR sa.issuer_jurisdiction ILIKE $${whereParams.length})`,
+      `(sa.title ILIKE $${whereParams.length} OR sa.issuer_jurisdiction ILIKE $${whereParams.length} OR u.username ILIKE $${whereParams.length})`,
     );
   }
 
@@ -1990,31 +2105,7 @@ app.get('/co-own/assets', async (request) => {
   const limitPlaceholder = `$${whereParams.length - 1}`;
   const offsetPlaceholder = `$${whereParams.length}`;
 
-  const result = await db.query<{
-    id: string;
-    listing_id: string;
-    issuer_id: string;
-    title: string;
-    image_url: string | null;
-    total_units: number;
-    available_units: number;
-    unit_price_gbp: number | string;
-    unit_price_stable: number | string;
-    settlement_mode: 'GBP' | 'TVUSD' | 'HYBRID' | 'ONEZE';
-    issuer_jurisdiction: string | null;
-    market_move_pct_24h: number | string;
-    holders: number;
-    volume_24h_gbp: number | string;
-    best_bid_gbp: number | string | null;
-    best_ask_gbp: number | string | null;
-    bid_depth_units: number | string;
-    ask_depth_units: number | string;
-    is_open: boolean;
-    created_at: string;
-    updated_at: string;
-    has_exit: boolean;
-    last_trade_price_gbp: number | string | null;
-  }>(
+  const result = await db.query<CoOwnAssetListRow>(
     `
       SELECT
         sa.id,
@@ -2038,6 +2129,7 @@ app.get('/co-own/assets', async (request) => {
         sa.is_open,
         sa.created_at,
         sa.updated_at,
+        sa.listing_tier,
         EXISTS (
           SELECT 1 FROM coown_corporate_actions ca
           WHERE ca.asset_id = sa.id AND ca.action_type = 'exit'
@@ -2049,8 +2141,17 @@ app.get('/co-own/assets', async (request) => {
           WHERE t.asset_id = sa.id AND t.settlement_status = 'settled'
           ORDER BY t.created_at DESC, t.id DESC
           LIMIT 1
-        ) AS last_trade_price_gbp
+        ) AS last_trade_price_gbp,
+        l.category,
+        u.username AS issuer_username,
+        u.display_name AS issuer_display_name,
+        u.avatar AS issuer_avatar,
+        u.location AS issuer_location,
+        ivp.verification_tier AS issuer_verification_tier
       FROM coOwn_assets sa
+      LEFT JOIN listings l ON l.id = sa.listing_id
+      LEFT JOIN users u ON u.id = sa.issuer_id
+      LEFT JOIN coown_issuer_verification_profile ivp ON ivp.user_id = sa.issuer_id
       LEFT JOIN LATERAL (
         SELECT
           MAX(o.unit_price_gbp) FILTER (WHERE o.side = 'buy') AS best_bid_gbp,
@@ -2064,7 +2165,7 @@ app.get('/co-own/assets', async (request) => {
           AND (o.expires_at IS NULL OR o.expires_at > NOW())
       ) book ON TRUE
       ${whereClause}
-      ORDER BY sa.volume_24h_gbp DESC, sa.created_at DESC, sa.id DESC
+      ${orderClause}
       LIMIT ${limitPlaceholder}
       OFFSET ${offsetPlaceholder}
     `,
@@ -2084,37 +2185,165 @@ app.get('/co-own/assets', async (request) => {
     nextCursor: hasMore
       ? Buffer.from(String(offset + limit)).toString('base64')
       : null,
-    items: pageRows.map((row) => {
-      const offeringStatus = computeOfferingStatus(row.is_open, row.available_units);
-      const marketStatus = computeMarketStatus(offeringStatus, row.has_exit, isReconciliationHalted);
-      return {
-      id: row.id,
-      listingId: row.listing_id,
-      issuerId: row.issuer_id,
-      title: row.title,
-      imageUrl: row.image_url,
-      totalUnits: row.total_units,
-      availableUnits: row.available_units,
-      unitPriceGbp: Number(row.unit_price_gbp),
-      unitPriceStable: Number(row.unit_price_stable),
-      settlementMode: row.settlement_mode,
-      issuerJurisdiction: row.issuer_jurisdiction,
-      marketMovePct24h: row.market_move_pct_24h == null ? null : Number(row.market_move_pct_24h),
-      holders: row.holders,
-      volume24hGbp: row.volume_24h_gbp == null ? null : Number(row.volume_24h_gbp),
-      bestBidGbp: row.best_bid_gbp == null ? null : Number(row.best_bid_gbp),
-      bestAskGbp: row.best_ask_gbp == null ? null : Number(row.best_ask_gbp),
-      bidDepthUnits: Number(row.bid_depth_units),
-      askDepthUnits: Number(row.ask_depth_units),
-      isOpen: row.is_open,
-      offeringStatus,
-      marketStatus,
-      capabilities: resolveCoOwnCapabilities(marketStatus),
-      lastTradePriceGbp: row.last_trade_price_gbp == null ? null : Number(row.last_trade_price_gbp),
-      createdAt: row.created_at,
-      updatedAt: row.updated_at,
-      };
-    }),
+    items: pageRows.map((row) => toCoOwnAssetListItem(row, isReconciliationHalted)),
+  };
+});
+
+// ── Watchlist — the coown_watchlist table (migration 104) backs the star
+// toggles both clients already render. Rows are idempotent by primary key
+// (user_id, asset_id): a repeat add is a no-op, a delete of an unwatched
+// asset is too. ──────────────────────────────────────────────────────────────
+
+app.get('/co-own/watchlist', async (request) => {
+  const userId = resolveAuthenticatedUserId(request);
+  const { limit } = z
+    .object({ limit: z.coerce.number().int().min(1).max(200).default(50) })
+    .parse(request.query);
+
+  const haltState = await getOnezeMintBurnHaltState();
+
+  const result = await db.query<CoOwnAssetListRow>(
+    `
+      SELECT
+        sa.id,
+        sa.listing_id,
+        sa.issuer_id,
+        sa.title,
+        sa.image_url,
+        sa.total_units,
+        sa.available_units,
+        sa.unit_price_gbp,
+        sa.unit_price_stable,
+        sa.settlement_mode,
+        sa.issuer_jurisdiction,
+        sa.market_move_pct_24h,
+        sa.holders,
+        sa.volume_24h_gbp,
+        book.best_bid_gbp,
+        book.best_ask_gbp,
+        book.bid_depth_units,
+        book.ask_depth_units,
+        sa.is_open,
+        sa.created_at,
+        sa.updated_at,
+        sa.listing_tier,
+        EXISTS (
+          SELECT 1 FROM coown_corporate_actions ca
+          WHERE ca.asset_id = sa.id AND ca.action_type = 'exit'
+            AND ca.status IN ('announced', 'executing')
+        ) AS has_exit,
+        (
+          SELECT t.unit_price_gbp
+          FROM coOwn_trades t
+          WHERE t.asset_id = sa.id AND t.settlement_status = 'settled'
+          ORDER BY t.created_at DESC, t.id DESC
+          LIMIT 1
+        ) AS last_trade_price_gbp,
+        l.category,
+        u.username AS issuer_username,
+        u.display_name AS issuer_display_name,
+        u.avatar AS issuer_avatar,
+        u.location AS issuer_location,
+        ivp.verification_tier AS issuer_verification_tier
+      FROM coown_watchlist w
+      JOIN coOwn_assets sa ON sa.id = w.asset_id
+      LEFT JOIN listings l ON l.id = sa.listing_id
+      LEFT JOIN users u ON u.id = sa.issuer_id
+      LEFT JOIN coown_issuer_verification_profile ivp ON ivp.user_id = sa.issuer_id
+      LEFT JOIN LATERAL (
+        SELECT
+          MAX(o.unit_price_gbp) FILTER (WHERE o.side = 'buy') AS best_bid_gbp,
+          MIN(o.unit_price_gbp) FILTER (WHERE o.side = 'sell') AS best_ask_gbp,
+          COALESCE(SUM(o.remaining_units) FILTER (WHERE o.side = 'buy'), 0)::int AS bid_depth_units,
+          COALESCE(SUM(o.remaining_units) FILTER (WHERE o.side = 'sell'), 0)::int AS ask_depth_units
+        FROM coOwn_orders o
+        WHERE o.asset_id = sa.id
+          AND o.status IN ('open', 'partially_filled')
+          AND o.remaining_units > 0
+          AND (o.expires_at IS NULL OR o.expires_at > NOW())
+      ) book ON TRUE
+      WHERE w.user_id = $1
+      ORDER BY w.created_at DESC
+      LIMIT $2
+    `,
+    [userId, limit]
+  );
+
+  return {
+    ok: true,
+    items: result.rows.map((row) => toCoOwnAssetListItem(row, haltState.halted)),
+  };
+});
+
+app.post('/co-own/watchlist', async (request, reply) => {
+  const userId = resolveAuthenticatedUserId(request);
+  const { assetId } = z
+    .object({ assetId: z.string().min(2).max(128) })
+    .parse(request.body);
+
+  const exists = await db.query('SELECT id FROM coOwn_assets WHERE id = $1 LIMIT 1', [assetId]);
+  if (!exists.rowCount) {
+    reply.code(404);
+    return { ok: false, error: 'Co-Own asset not found' };
+  }
+
+  await db.query(
+    'INSERT INTO coown_watchlist (user_id, asset_id) VALUES ($1, $2) ON CONFLICT DO NOTHING',
+    [userId, assetId]
+  );
+  return { ok: true };
+});
+
+app.delete('/co-own/watchlist/:assetId', async (request) => {
+  const userId = resolveAuthenticatedUserId(request);
+  const { assetId } = z
+    .object({ assetId: z.string().min(2).max(128) })
+    .parse(request.params);
+
+  await db.query('DELETE FROM coown_watchlist WHERE user_id = $1 AND asset_id = $2', [
+    userId,
+    assetId,
+  ]);
+  return { ok: true };
+});
+
+// GET /co-own/issuer-verification/:userId — the issuance preflight. Native's
+// create flow gates on this read before showing the studio; it reads the same
+// coown_issuer_verification_profile row POST /co-own/assets enforces against
+// (the write remains the authoritative gate — this is advisory UI state).
+// Self-or-admin only: a user's verification tier is their own business.
+app.get('/co-own/issuer-verification/:userId', async (request) => {
+  const { userId: requestedUserId } = z
+    .object({ userId: z.string().min(2).max(128) })
+    .parse(request.params);
+  // Throws UNAUTHORIZED when signed out, FORBIDDEN_USER_CONTEXT on a
+  // non-admin user asking about someone else.
+  resolveAuthenticatedUserId(request, requestedUserId);
+
+  const result = await db.query<{
+    verification_tier: 'email' | 'id' | 'seller';
+    verification_tier_set_at: string;
+    kyc_case_id: string | null;
+    seller_standards_met: boolean;
+  }>(
+    `SELECT verification_tier, verification_tier_set_at::text, kyc_case_id, seller_standards_met
+     FROM coown_issuer_verification_profile
+     WHERE user_id = $1`,
+    [requestedUserId]
+  );
+
+  const row = result.rows[0];
+  if (!row) {
+    return { ok: true, verification: null };
+  }
+  return {
+    ok: true,
+    verification: {
+      tier: row.verification_tier,
+      tierSetAt: row.verification_tier_set_at,
+      kycVerified: row.verification_tier !== 'email' || row.kyc_case_id != null,
+      sellerStandardsMet: row.seller_standards_met,
+    },
   };
 });
 
@@ -2332,11 +2561,13 @@ app.post('/co-own/assets', async (request, reply) => {
           appraisal_valued_at,
           appraisal_valuer,
           buyer_protection,
-          buyer_protection_terms_url
+          buyer_protection_terms_url,
+          listing_tier
         )
         VALUES (
           $1, $2, $3, $4, $5, $6, $6, $7, $8, $9, $10, 0, 0, 0, TRUE,
-          $11, $12, $13, $14, $15, $16, $17, $18, $19, $20, $21, $22, $23, $24, $25, $26, $27, $28
+          $11, $12, $13, $14, $15, $16, $17, $18, $19, $20, $21, $22, $23, $24, $25, $26, $27, $28,
+          'preview'
         )
         RETURNING
           id,
@@ -2463,6 +2694,10 @@ app.post('/co-own/assets', async (request, reply) => {
 // ── Settlement status ──
 
 app.get('/co-own/settlements', async (request, reply) => {
+  if (!request.authUser) {
+    reply.code(401);
+    return { ok: false, error: 'Authentication required' };
+  }
   const querySchema = z.object({
     userId: z.string().min(2),
     status: z.enum(['pending', 'settled', 'failed', 'reversed']).optional(),
@@ -2471,6 +2706,12 @@ app.get('/co-own/settlements', async (request, reply) => {
   });
 
   const query = querySchema.parse(request.query);
+  // A settlement ledger is private financial history — the caller may
+  // only ever read their own (admins keep the operator view).
+  if (query.userId !== request.authUser.userId && request.authUser.role !== 'admin') {
+    reply.code(403);
+    return { ok: false, error: 'You can only read your own settlements' };
+  }
   const cursorDate = query.cursor ? new Date(query.cursor) : new Date(0);
 
   const result = await db.query<{
@@ -2657,6 +2898,7 @@ app.get('/co-own/assets/:assetId/my-orders', async (request, reply) => {
     updated_at: string;
     expires_at: string | null;
     cancel_reason: string | null;
+    time_in_force: 'GFD' | 'GTC90' | null;
   }>(
     `
       SELECT
@@ -2675,7 +2917,8 @@ app.get('/co-own/assets/:assetId/my-orders', async (request, reply) => {
         created_at::text,
         updated_at::text,
         expires_at::text,
-        cancel_reason
+        cancel_reason,
+        time_in_force
       FROM coOwn_orders
       WHERE asset_id = $1
         AND user_id = $2
@@ -2707,6 +2950,108 @@ app.get('/co-own/assets/:assetId/my-orders', async (request, reply) => {
       updatedAt: row.updated_at,
       expiresAt: row.expires_at,
       cancelReason: row.cancel_reason,
+      // Nullable on rows placed before the column existed — the client
+      // renders "unknown duration", never a guessed one.
+      timeInForce: row.time_in_force,
+    })),
+  };
+});
+
+// ---------------------------------------------------------------------------
+// GET /co-own/my-orders — the aggregate counterpart of the per-asset
+// my-orders: every open/partially_filled order the caller has across all
+// markets, owner-scoped. Clients used to fan out per asset and silently
+// missed resting orders on unheld/unwatched/unlisted markets — this is
+// the complete read. `assetTitle` rides along so rows render without a
+// second asset lookup.
+// ---------------------------------------------------------------------------
+
+app.get('/co-own/my-orders', async (request, reply) => {
+  if (!request.authUser) {
+    reply.code(401);
+    return { ok: false, error: 'Authentication required' };
+  }
+  const querySchema = z.object({
+    limit: z.coerce.number().int().min(1).max(200).default(100),
+  });
+  const { limit } = querySchema.parse(request.query);
+  const userId = request.authUser.userId;
+
+  const result = await db.query<{
+    id: number;
+    asset_id: string;
+    asset_title: string;
+    side: 'buy' | 'sell';
+    order_type: CoOwnOrderType;
+    limit_price_gbp: number | string | null;
+    protection_price_gbp: number | string | null;
+    units: number;
+    remaining_units: number;
+    filled_units: number;
+    unit_price_gbp: number | string;
+    fee_gbp: number | string;
+    total_gbp: number | string;
+    status: CoOwnOrderStatus;
+    created_at: string;
+    updated_at: string;
+    expires_at: string | null;
+    cancel_reason: string | null;
+    time_in_force: 'GFD' | 'GTC90' | null;
+  }>(
+    `
+      SELECT
+        o.id,
+        o.asset_id,
+        a.title AS asset_title,
+        o.side,
+        o.order_type,
+        o.limit_price_gbp,
+        o.protection_price_gbp,
+        o.units,
+        o.remaining_units,
+        o.filled_units,
+        o.unit_price_gbp,
+        o.fee_gbp,
+        o.total_gbp,
+        o.status,
+        o.created_at::text,
+        o.updated_at::text,
+        o.expires_at::text,
+        o.cancel_reason,
+        o.time_in_force
+      FROM coOwn_orders o
+      JOIN coOwn_assets a ON a.id = o.asset_id
+      WHERE o.user_id = $1
+        AND o.status IN ('open', 'partially_filled')
+        AND (o.expires_at IS NULL OR o.expires_at > NOW())
+      ORDER BY o.created_at DESC, o.id DESC
+      LIMIT $2
+    `,
+    [userId, limit]
+  );
+
+  return {
+    ok: true,
+    items: result.rows.map((row) => ({
+      id: row.id,
+      assetId: row.asset_id,
+      assetTitle: row.asset_title,
+      side: row.side,
+      orderType: row.order_type,
+      limitPriceGbp: row.limit_price_gbp === null ? null : Number(row.limit_price_gbp),
+      protectionPriceGbp: row.protection_price_gbp === null ? null : Number(row.protection_price_gbp),
+      units: row.units,
+      remainingUnits: row.remaining_units,
+      filledUnits: row.filled_units,
+      unitPriceGbp: Number(row.unit_price_gbp),
+      feeGbp: Number(row.fee_gbp),
+      totalGbp: Number(row.total_gbp),
+      status: row.status,
+      createdAt: row.created_at,
+      updatedAt: row.updated_at,
+      expiresAt: row.expires_at,
+      cancelReason: row.cancel_reason,
+      timeInForce: row.time_in_force,
     })),
   };
 });
@@ -3044,9 +3389,10 @@ app.post('/co-own/assets/:assetId/orders/preview', async (request, reply) => {
     available_units: number;
     total_units: number;
     is_open: boolean;
+    listing_tier: string;
   }>(
     `
-      SELECT id, unit_price_gbp, unit_price_stable, available_units, total_units, is_open
+      SELECT id, unit_price_gbp, unit_price_stable, available_units, total_units, is_open, listing_tier
       FROM coOwn_assets
       WHERE id = $1
     `,
@@ -3062,6 +3408,10 @@ app.post('/co-own/assets/:assetId/orders/preview', async (request, reply) => {
   if (!asset.is_open) {
     reply.code(409);
     return { ok: false, error: 'Co-Own asset is closed for trading' };
+  }
+  if (asset.listing_tier !== 'listed' && asset.listing_tier !== 'badged') {
+    reply.code(409);
+    return { ok: false, error: 'Co-Own asset is not live for trading yet', code: 'ASSET_NOT_LIVE' };
   }
 
   // B10: Apply the unified capability policy. The preview endpoint must reject
@@ -3356,8 +3706,9 @@ app.post('/co-own/assets/:assetId/orders/reserve', async (request, reply) => {
       unit_price_gbp: number | string;
       available_units: number;
       is_open: boolean;
+      listing_tier: string;
     }>(
-      `SELECT id, unit_price_gbp, available_units, is_open FROM coOwn_assets WHERE id = $1 FOR UPDATE`,
+      `SELECT id, unit_price_gbp, available_units, is_open, listing_tier FROM coOwn_assets WHERE id = $1 FOR UPDATE`,
       [assetId]
     );
     const asset = assetResult.rows[0];
@@ -3370,6 +3721,11 @@ app.post('/co-own/assets/:assetId/orders/reserve', async (request, reply) => {
       await client.query('ROLLBACK');
       reply.code(409);
       return { ok: false, error: 'Co-Own asset is closed for trading' };
+    }
+    if (asset.listing_tier !== 'listed' && asset.listing_tier !== 'badged') {
+      await client.query('ROLLBACK');
+      reply.code(409);
+      return { ok: false, error: 'Co-Own asset is not live for trading yet', code: 'ASSET_NOT_LIVE' };
     }
 
     // Buy side locks the wallet BEFORE the reservation rows below. Sell
@@ -3762,6 +4118,7 @@ app.post('/co-own/assets/:assetId/orders', async (request, reply) => {
       holders: number;
       volume_24h_gbp: number | string;
       is_open: boolean;
+      listing_tier: string;
     }>(
       `
         SELECT
@@ -3773,7 +4130,8 @@ app.post('/co-own/assets/:assetId/orders', async (request, reply) => {
           unit_price_stable,
           holders,
           volume_24h_gbp,
-          is_open
+          is_open,
+          listing_tier
         FROM coOwn_assets
         WHERE id = $1
         FOR UPDATE
@@ -3792,6 +4150,11 @@ app.post('/co-own/assets/:assetId/orders', async (request, reply) => {
       await client.query('ROLLBACK');
       reply.code(409);
       return { ok: false, error: 'Co-Own asset is closed for trading' };
+    }
+    if (asset.listing_tier !== 'listed' && asset.listing_tier !== 'badged') {
+      await client.query('ROLLBACK');
+      reply.code(409);
+      return { ok: false, error: 'Co-Own asset is not live for trading yet', code: 'ASSET_NOT_LIVE' };
     }
 
     // B10: Apply the unified capability policy. The place endpoint uses the
@@ -4143,9 +4506,10 @@ app.post('/co-own/assets/:assetId/orders', async (request, reply) => {
           expires_at,
           updated_at,
           status,
-          market_sequence
+          market_sequence,
+          time_in_force
         )
-        VALUES ($1, $2, $3, $4, $5, $6, $7, $7, 0, $8, 0, 0, $9, NOW(), 'open', $10)
+        VALUES ($1, $2, $3, $4, $5, $6, $7, $7, 0, $8, 0, 0, $9, NOW(), 'open', $10, $11)
         RETURNING id, side, units, remaining_units, filled_units, unit_price_gbp::text, fee_gbp::text, total_gbp::text, created_at
       `,
       [
@@ -4159,6 +4523,7 @@ app.post('/co-own/assets/:assetId/orders', async (request, reply) => {
         orderPriceGbp,
         orderExpiresAt,
         orderMarketSeq,
+        payload.timeInForce,
       ]
     );
 
@@ -5171,9 +5536,10 @@ app.post('/co-own/assets/:assetId/buyout-offers', {
       id: string;
       total_units: number;
       is_open: boolean;
+      listing_tier: string;
     }>(
       `
-        SELECT id, total_units, is_open
+        SELECT id, total_units, is_open, listing_tier
         FROM coOwn_assets
         WHERE id = $1
         FOR UPDATE
@@ -5192,6 +5558,11 @@ app.post('/co-own/assets/:assetId/buyout-offers', {
       await client.query('ROLLBACK');
       reply.code(409);
       return { ok: false, error: 'Co-Own asset is closed for buyout offers' };
+    }
+    if (asset.listing_tier !== 'listed' && asset.listing_tier !== 'badged') {
+      await client.query('ROLLBACK');
+      reply.code(409);
+      return { ok: false, error: 'Co-Own asset is not live for trading yet', code: 'ASSET_NOT_LIVE' };
     }
 
     if (await hasActiveExitAction(assetId)) {
@@ -6636,6 +7007,562 @@ app.get('/co-own/assets/:assetId/recourse', async (request, reply) => {
       triggeredBy: row.triggered_by,
       createdAt: new Date(row.created_at).toISOString(),
     })),
+  };
+});
+
+// ── Issuer pipeline (migration 101 schema) — recourse signing, listing
+// promotion, appraisal refresh and holder-initiated verification demands.
+// These complete the consignment-with-recourse model the native client
+// already calls: an asset is issued at 'preview' tier and only becomes
+// tradeable once the issuer signs the personal-liability agreement. ────
+
+interface CoOwnRecourseAgreementRow {
+  id: string;
+  seller_id: string;
+  agreement_version: number;
+  agreement_url: string | null;
+  signed_at: Date | string;
+  max_liability_gbp: number | string;
+  personal_guarantee: boolean;
+  status: string;
+  triggered_at: Date | string | null;
+  triggered_reason: string | null;
+  settled_at: Date | string | null;
+  settled_amount_gbp: number | string | null;
+}
+
+function serializeRecourseAgreement(row: CoOwnRecourseAgreementRow) {
+  return {
+    id: row.id,
+    sellerId: row.seller_id,
+    version: row.agreement_version,
+    agreementUrl: row.agreement_url,
+    signedAt: new Date(row.signed_at).toISOString(),
+    maxLiabilityGbp: Number(row.max_liability_gbp),
+    personalGuarantee: row.personal_guarantee,
+    status: row.status,
+    triggeredAt: row.triggered_at ? new Date(row.triggered_at).toISOString() : null,
+    triggeredReason: row.triggered_reason,
+    settledAt: row.settled_at ? new Date(row.settled_at).toISOString() : null,
+    settledAmountGbp:
+      row.settled_amount_gbp == null ? null : Number(row.settled_amount_gbp),
+  };
+}
+
+const RECOURSE_AGREEMENT_COLS =
+  'id, seller_id, agreement_version, agreement_url, signed_at, ' +
+  'max_liability_gbp, personal_guarantee, status, triggered_at, ' +
+  'triggered_reason, settled_at, settled_amount_gbp';
+
+// POST /co-own/assets/:assetId/recourse-agreement — the issuer signs the
+// personal-liability agreement. Signing is the act that makes the asset
+// tradeable: on success the agreement row is written, the seller's
+// liability profile is credited, and a 'preview' asset promotes to
+// 'listed' in the same transaction (native treats signature as the last
+// issuance step — it never calls promote explicitly). One agreement per
+// asset (UNIQUE asset_id): a repeat sign replays the existing row.
+app.post('/co-own/assets/:assetId/recourse-agreement', async (request, reply) => {
+  if (!request.authUser) {
+    reply.code(401);
+    return { ok: false, error: 'Authentication required' };
+  }
+  const { assetId } = z.object({ assetId: z.string().min(2).max(128) }).parse(request.params);
+  const body = z
+    .object({
+      agreementUrl: z.string().url().max(2048).optional(),
+      personalGuarantee: z.boolean().default(true),
+    })
+    .parse(request.body ?? {});
+
+  const assetResult = await db.query<{
+    issuer_id: string;
+    listing_tier: string;
+    total_units: number;
+    unit_price_gbp: number | string;
+    title: string;
+  }>(
+    `SELECT issuer_id, listing_tier, total_units, unit_price_gbp, title
+     FROM coOwn_assets WHERE id = $1 LIMIT 1`,
+    [assetId]
+  );
+  const asset = assetResult.rows[0];
+  if (!asset) {
+    reply.code(404);
+    return { ok: false, error: 'Asset not found' };
+  }
+  if (asset.issuer_id !== request.authUser.userId) {
+    reply.code(403);
+    return { ok: false, error: 'Only the issuer can sign the recourse agreement' };
+  }
+
+  // Replay path — a prior sign (or a crashed retry) already wrote the row.
+  const existing = await db.query<CoOwnRecourseAgreementRow>(
+    `SELECT ${RECOURSE_AGREEMENT_COLS} FROM coown_recourse_agreements
+     WHERE asset_id = $1 AND status = 'active' LIMIT 1`,
+    [assetId]
+  );
+  if (existing.rows[0]) {
+    // A 'preview' asset with a signed agreement should never stay preview —
+    // reconcile the tier here so a failed promote can never strand it.
+    if (asset.listing_tier === 'preview') {
+      await db.query(
+        `UPDATE coOwn_assets SET listing_tier = 'listed', updated_at = NOW() WHERE id = $1`,
+        [assetId]
+      );
+    }
+    return { ok: true, agreement: serializeRecourseAgreement(existing.rows[0]) };
+  }
+
+  const maxLiability = roundTo(asset.total_units * Number(asset.unit_price_gbp), 2);
+  const agreementId = `ra_${Date.now().toString(36)}_${Math.random().toString(36).slice(2, 10)}`;
+  const signatureIp = request.ip ?? null;
+  const signatureUa =
+    typeof request.headers['user-agent'] === 'string'
+      ? request.headers['user-agent'].slice(0, 512)
+      : null;
+
+  const client = await db.connect();
+  let agreement: CoOwnRecourseAgreementRow;
+  try {
+    await client.query('BEGIN');
+
+    const inserted = await client.query<CoOwnRecourseAgreementRow>(
+      `
+        INSERT INTO coown_recourse_agreements (
+          id, asset_id, seller_id, agreement_url,
+          signature_ip, signature_user_agent,
+          total_units_at_signing, unit_price_at_signing, max_liability_gbp,
+          personal_guarantee
+        ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10)
+        ON CONFLICT (asset_id) DO NOTHING
+        RETURNING ${RECOURSE_AGREEMENT_COLS}
+      `,
+      [
+        agreementId,
+        assetId,
+        asset.issuer_id,
+        body.agreementUrl ?? null,
+        signatureIp,
+        signatureUa,
+        asset.total_units,
+        Number(asset.unit_price_gbp),
+        maxLiability,
+        body.personalGuarantee,
+      ]
+    );
+
+    const row = inserted.rows[0];
+    if (!row) {
+      // Lost the race — the concurrent signer owns the row; replay it.
+      await client.query('ROLLBACK');
+      const replayed = await db.query<CoOwnRecourseAgreementRow>(
+        `SELECT ${RECOURSE_AGREEMENT_COLS} FROM coown_recourse_agreements
+         WHERE asset_id = $1 LIMIT 1`,
+        [assetId]
+      );
+      return { ok: true, agreement: serializeRecourseAgreement(replayed.rows[0]!) };
+    }
+    agreement = row;
+
+    await client.query(
+      `
+        UPDATE coOwn_assets
+        SET recourse_agreement_signed = TRUE,
+            recourse_status = 'active',
+            listing_tier = CASE WHEN listing_tier = 'preview' THEN 'listed' ELSE listing_tier END,
+            updated_at = NOW()
+        WHERE id = $1
+      `,
+      [assetId]
+    );
+
+    // Seller liability profile — one row per seller, upserted.
+    await client.query(
+      `
+        INSERT INTO coown_seller_liability_profile (
+          user_id, total_active_liability_gbp, active_agreement_count,
+          total_agreements_signed
+        ) VALUES ($1, $2, 1, 1)
+        ON CONFLICT (user_id) DO UPDATE SET
+          total_active_liability_gbp = coown_seller_liability_profile.total_active_liability_gbp + EXCLUDED.total_active_liability_gbp,
+          active_agreement_count = coown_seller_liability_profile.active_agreement_count + 1,
+          total_agreements_signed = coown_seller_liability_profile.total_agreements_signed + 1,
+          updated_at = NOW()
+      `,
+      [asset.issuer_id, maxLiability]
+    );
+
+    await client.query(
+      `
+        INSERT INTO coown_recourse_events (
+          asset_id, agreement_id, event_type, event_payload, amount_gbp,
+          triggered_by, visibility
+        ) VALUES ($1, $2, 'agreement_signed', $3::jsonb, $4, $5, 'public')
+      `,
+      [
+        assetId,
+        agreement.id,
+        toJsonString({
+          agreementVersion: agreement.agreement_version,
+          personalGuarantee: body.personalGuarantee,
+          totalUnits: asset.total_units,
+        }),
+        maxLiability,
+        asset.issuer_id,
+      ]
+    );
+
+    // Market audit — a tier transition is a public market fact.
+    if (asset.listing_tier === 'preview') {
+      await client.query(
+        `
+          INSERT INTO coown_market_audit_events (
+            asset_id, event_type, event_payload, visibility, created_by
+          ) VALUES ($1, 'listing_tier_transition', $2::jsonb, 'public', $3)
+        `,
+        [assetId, toJsonString({ from: 'preview', to: 'listed' }), asset.issuer_id]
+      );
+    }
+
+    await client.query('COMMIT');
+  } catch (err) {
+    await client.query('ROLLBACK').catch(() => {});
+    app.log.error({ err, assetId }, 'POST /co-own recourse-agreement failed');
+    reply.code(500);
+    return { ok: false, error: 'Failed to sign recourse agreement' };
+  } finally {
+    client.release();
+  }
+
+  return { ok: true, agreement: serializeRecourseAgreement(agreement) };
+});
+
+// POST /co-own/assets/:assetId/promote — explicit preview→listed flip for
+// assets that signed recourse but never got promoted (crash recovery, or
+// assets created before signing auto-promoted). Idempotent: already-listed
+// or worse tiers replay their current tier instead of erroring.
+app.post('/co-own/assets/:assetId/promote', async (request, reply) => {
+  if (!request.authUser) {
+    reply.code(401);
+    return { ok: false, error: 'Authentication required' };
+  }
+  const { assetId } = z.object({ assetId: z.string().min(2).max(128) }).parse(request.params);
+
+  const assetResult = await db.query<{ issuer_id: string; listing_tier: string }>(
+    `SELECT issuer_id, listing_tier FROM coOwn_assets WHERE id = $1 LIMIT 1`,
+    [assetId]
+  );
+  const asset = assetResult.rows[0];
+  if (!asset) {
+    reply.code(404);
+    return { ok: false, error: 'Asset not found' };
+  }
+  if (asset.issuer_id !== request.authUser.userId && request.authUser.role !== 'admin') {
+    reply.code(403);
+    return { ok: false, error: 'Only the issuer can promote this asset' };
+  }
+  if (asset.listing_tier !== 'preview') {
+    return { ok: true, listingTier: asset.listing_tier };
+  }
+
+  const agreement = await db.query(
+    `SELECT id FROM coown_recourse_agreements
+     WHERE asset_id = $1 AND status = 'active' LIMIT 1`,
+    [assetId]
+  );
+  if (!agreement.rowCount) {
+    reply.code(409);
+    return {
+      ok: false,
+      error: 'A signed recourse agreement is required before the asset can go live',
+      code: 'RECOURSE_REQUIRED',
+    };
+  }
+
+  const client = await db.connect();
+  try {
+    await client.query('BEGIN');
+    await client.query(
+      `UPDATE coOwn_assets SET listing_tier = 'listed', updated_at = NOW()
+       WHERE id = $1 AND listing_tier = 'preview'`,
+      [assetId]
+    );
+    await client.query(
+      `
+        INSERT INTO coown_market_audit_events (
+          asset_id, event_type, event_payload, visibility, created_by
+        ) VALUES ($1, 'listing_tier_transition', $2::jsonb, 'public', $3)
+      `,
+      [assetId, toJsonString({ from: 'preview', to: 'listed' }), request.authUser.userId]
+    );
+    await client.query('COMMIT');
+  } catch (err) {
+    await client.query('ROLLBACK').catch(() => {});
+    app.log.error({ err, assetId }, 'POST /co-own promote failed');
+    reply.code(500);
+    return { ok: false, error: 'Failed to promote asset' };
+  } finally {
+    client.release();
+  }
+
+  return { ok: true, listingTier: 'listed' };
+});
+
+// POST /co-own/assets/:assetId/trust/refresh-appraisal — the issuer records
+// a fresh third-party appraisal. The new valuation replaces the dossier
+// figures; the change is trust-audited verbatim.
+app.post('/co-own/assets/:assetId/trust/refresh-appraisal', async (request, reply) => {
+  if (!request.authUser) {
+    reply.code(401);
+    return { ok: false, error: 'Authentication required' };
+  }
+  const { assetId } = z.object({ assetId: z.string().min(2).max(128) }).parse(request.params);
+  const body = z
+    .object({
+      appraisalValueGbp: z.number().nonnegative().max(100_000_000),
+      appraisalValuer: z.string().min(2).max(180),
+      appraisalNotes: z.string().max(4000).optional(),
+    })
+    .parse(request.body);
+
+  const assetResult = await db.query<{ issuer_id: string }>(
+    `SELECT issuer_id FROM coOwn_assets WHERE id = $1 LIMIT 1`,
+    [assetId]
+  );
+  const asset = assetResult.rows[0];
+  if (!asset) {
+    reply.code(404);
+    return { ok: false, error: 'Asset not found' };
+  }
+  if (asset.issuer_id !== request.authUser.userId && request.authUser.role !== 'admin') {
+    reply.code(403);
+    return { ok: false, error: 'Only the issuer can refresh the appraisal' };
+  }
+
+  const refreshedAt = new Date().toISOString();
+  const client = await db.connect();
+  try {
+    await client.query('BEGIN');
+    await client.query(
+      `
+        UPDATE coOwn_assets
+        SET appraisal_value_gbp = $2,
+            appraisal_valued_at = NOW(),
+            appraisal_valuer = $3,
+            updated_at = NOW()
+        WHERE id = $1
+      `,
+      [assetId, roundTo(body.appraisalValueGbp, 2), body.appraisalValuer]
+    );
+    await client.query(
+      `
+        INSERT INTO coown_asset_trust_events (asset_id, event_type, changed_by, new_payload)
+        VALUES ($1, 'appraisal_refreshed', $2, $3::jsonb)
+      `,
+      [
+        assetId,
+        request.authUser.userId,
+        toJsonString({
+          appraisalValueGbp: roundTo(body.appraisalValueGbp, 2),
+          appraisalValuer: body.appraisalValuer,
+          appraisalNotes: body.appraisalNotes ?? null,
+        }),
+      ]
+    );
+    await client.query(
+      `
+        INSERT INTO coown_market_audit_events (
+          asset_id, event_type, event_payload, visibility, created_by
+        ) VALUES ($1, 'appraisal_refreshed', $2::jsonb, 'public', $3)
+      `,
+      [
+        assetId,
+        toJsonString({ appraisalValueGbp: roundTo(body.appraisalValueGbp, 2) }),
+        request.authUser.userId,
+      ]
+    );
+    await client.query('COMMIT');
+  } catch (err) {
+    await client.query('ROLLBACK').catch(() => {});
+    app.log.error({ err, assetId }, 'POST /co-own refresh-appraisal failed');
+    reply.code(500);
+    return { ok: false, error: 'Failed to refresh appraisal' };
+  } finally {
+    client.release();
+  }
+
+  return { ok: true, refreshedAt };
+});
+
+// POST /co-own/assets/:assetId/verification-demand — a unit holder demands
+// the custodian prove authenticity, possession or condition. Requesters
+// must hold units (the demand is a holder right, not a public action);
+// the seller is notified and the deadline starts now.
+app.post('/co-own/assets/:assetId/verification-demand', async (request, reply) => {
+  if (!request.authUser) {
+    reply.code(401);
+    return { ok: false, error: 'Authentication required' };
+  }
+  const { assetId } = z.object({ assetId: z.string().min(2).max(128) }).parse(request.params);
+  const body = z
+    .object({
+      demandType: z.enum(['authenticity', 'possession', 'condition', 'inspection']),
+      deadlineDays: z.number().int().min(1).max(60).default(14),
+      notes: z.string().max(4000).optional(),
+    })
+    .parse(request.body);
+
+  const assetResult = await db.query<{ issuer_id: string; title: string }>(
+    `SELECT issuer_id, title FROM coOwn_assets WHERE id = $1 LIMIT 1`,
+    [assetId]
+  );
+  const asset = assetResult.rows[0];
+  if (!asset) {
+    reply.code(404);
+    return { ok: false, error: 'Asset not found' };
+  }
+
+  const requesterId = request.authUser.userId;
+  if (requesterId === asset.issuer_id) {
+    reply.code(400);
+    return { ok: false, error: 'The issuer cannot demand verification of their own asset' };
+  }
+  const holding = await db.query<{ units_owned: number }>(
+    `SELECT units_owned FROM coOwn_holdings WHERE asset_id = $1 AND user_id = $2`,
+    [assetId, requesterId]
+  );
+  if (Number(holding.rows[0]?.units_owned ?? 0) <= 0 && request.authUser.role !== 'admin') {
+    reply.code(403);
+    return { ok: false, error: 'Only unit holders can demand verification', code: 'HOLDER_ONLY' };
+  }
+
+  const client = await db.connect();
+  let demand: CoOwnVerificationDemandRow;
+  try {
+    await client.query('BEGIN');
+    const inserted = await client.query<CoOwnVerificationDemandRow>(
+      `
+        INSERT INTO coown_verification_demands (
+          asset_id, requested_by, demand_type, deadline
+        ) VALUES ($1, $2, $3, NOW() + ($4 || ' days')::interval)
+        RETURNING
+          id, requested_by, demand_type, deadline, status,
+          responded_at, evidence_url, evidence_notes,
+          inspector_verdict, created_at
+      `,
+      [assetId, requesterId, body.demandType, body.deadlineDays]
+    );
+    demand = inserted.rows[0]!;
+
+    await client.query(
+      `
+        UPDATE coOwn_assets
+        SET active_verification_demands = active_verification_demands + 1,
+            updated_at = NOW()
+        WHERE id = $1
+      `,
+      [assetId]
+    );
+
+    await client.query(
+      `
+        INSERT INTO coown_recourse_events (
+          asset_id, agreement_id, event_type, event_payload, triggered_by, visibility
+        ) VALUES (
+          $1,
+          (SELECT id FROM coown_recourse_agreements WHERE asset_id = $1 LIMIT 1),
+          'verification_demand_sent',
+          $2::jsonb,
+          $3,
+          'issuer'
+        )
+      `,
+      [
+        assetId,
+        toJsonString({
+          demandId: demand.id,
+          demandType: body.demandType,
+          deadlineDays: body.deadlineDays,
+          notes: body.notes ?? null,
+        }),
+        requesterId,
+      ]
+    );
+
+    await client.query('COMMIT');
+  } catch (err) {
+    await client.query('ROLLBACK').catch(() => {});
+    app.log.error({ err, assetId }, 'POST /co-own verification-demand failed');
+    reply.code(500);
+    return { ok: false, error: 'Failed to create verification demand' };
+  } finally {
+    client.release();
+  }
+
+  // Notify the liable seller — a demand without delivery is silent failure.
+  try {
+    await queueUserNotification({
+      userId: asset.issuer_id,
+      title: 'Verification demanded',
+      body: `A unit holder requested ${body.demandType} verification for ${asset.title}. Respond by the deadline to avoid recourse.`,
+      eventType: 'coown_verification_demanded',
+      payload: { assetId, demandId: demand.id, demandType: body.demandType },
+      route: { screen: 'AssetDetail', params: { assetId } },
+      metadata: { source: 'verification_demand_create_route' },
+    });
+  } catch (error) {
+    request.log.error({ err: error, assetId }, 'Failed to queue verification demand notification');
+  }
+
+  return { ok: true, demand: serializeVerificationDemand(demand) };
+});
+
+// GET /co-own/seller/:userId/liability — the seller's aggregated active
+// recourse exposure. Buyer-facing (due-diligence surfaces render the
+// custodian's risk posture), so any authenticated user may read it; a
+// seller with no agreements returns liability: null, not a synthetic zero.
+app.get('/co-own/seller/:userId/liability', async (request, reply) => {
+  if (!request.authUser) {
+    reply.code(401);
+    return { ok: false, error: 'Authentication required' };
+  }
+  const { userId } = z.object({ userId: z.string().min(1).max(128) }).parse(request.params);
+
+  const result = await db.query<{
+    total_active_liability_gbp: number | string;
+    active_agreement_count: number;
+    total_agreements_signed: number;
+    total_recourse_triggered: number;
+    total_debt_recovered_gbp: number | string;
+    risk_tier: string;
+    background_check_status: string;
+  }>(
+    `
+      SELECT
+        total_active_liability_gbp, active_agreement_count,
+        total_agreements_signed, total_recourse_triggered,
+        total_debt_recovered_gbp, risk_tier, background_check_status
+      FROM coown_seller_liability_profile
+      WHERE user_id = $1
+      LIMIT 1
+    `,
+    [userId]
+  );
+  const row = result.rows[0];
+  if (!row) {
+    return { ok: true, liability: null };
+  }
+  return {
+    ok: true,
+    liability: {
+      totalActiveLiabilityGbp: Number(row.total_active_liability_gbp),
+      activeAgreementCount: row.active_agreement_count,
+      totalAgreementsSigned: row.total_agreements_signed,
+      totalRecourseTriggered: row.total_recourse_triggered,
+      totalDebtRecoveredGbp: Number(row.total_debt_recovered_gbp),
+      riskTier: row.risk_tier,
+      backgroundCheckStatus: row.background_check_status,
+    },
   };
 });
 

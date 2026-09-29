@@ -34,6 +34,7 @@ import { boardHref } from '@/components/profile/profileViewModel';
 import { useOwnerBoards, type OwnerBoard } from '@/components/profile/useOwnerBoards';
 import { ProfileHero, type ProfileStatKey } from '@/components/profile/ProfileHero';
 import { ShopRail } from '@/components/profile/ShopRail';
+import { HighlightsRail } from '@/components/profile/HighlightsRail';
 import { ProfileTabs } from '@/components/profile/ProfileTabs';
 import { ClosetGridSkeleton } from '@/components/profile/ClosetGrid';
 import {
@@ -374,6 +375,10 @@ export function ProfileClient() {
           ) : null}
         </div>
       ) : null}
+
+      {/* Story highlights — public per-member list, independent of the
+          closet's visibility/depth. */}
+      <HighlightsRail ownerId={user.id} />
 
       {closetVisible ? <ShopRail ownerId={user.id} /> : null}
 
