@@ -639,3 +639,61 @@ export async function submitConversationFeedback(
     }),
   });
 }
+
+// ── Reports filed by the viewer ──────────────────────────────────────────────
+// GET /users/me/reports — reporter-scoped read joining the three report
+// tables (user/listing/conversation) to their safety notice and case
+// outcome. Live-only; fixtures seed no report history.
+
+export interface MyReport {
+  reportId: string;
+  kind: 'user' | 'listing' | 'conversation';
+  reason: string;
+  subjectId: string;
+  /** submitted | reviewing | actioned | dismissed */
+  status: string;
+  noticeId: string | null;
+  noticeAcknowledgement: string | null;
+  caseId: string | null;
+  /** open | under_review | decision_pending | enforcement_pending |
+   *  closed | appealed | reopened */
+  caseStatus: string | null;
+  /** no_violation | restrict | escalate | emergency_hold */
+  outcome: string | null;
+  createdAt: string;
+}
+
+interface ApiMyReport {
+  reportId: string;
+  kind: 'user' | 'listing' | 'conversation';
+  reason: string;
+  subjectId: string;
+  status: string;
+  noticeId: string | null;
+  noticeAcknowledgement: string | null;
+  caseId: string | null;
+  caseStatus: string | null;
+  outcome: string | null;
+  createdAt: string;
+}
+
+export async function fetchMyReports(signal?: AbortSignal): Promise<MyReport[]> {
+  const payload = await fetchJson<{ ok?: boolean; reports?: ApiMyReport[] }>(
+    '/users/me/reports',
+    undefined,
+    { signal },
+  );
+  return (payload.reports ?? []).map((r) => ({
+    reportId: r.reportId,
+    kind: r.kind,
+    reason: r.reason,
+    subjectId: r.subjectId,
+    status: r.status,
+    noticeId: r.noticeId,
+    noticeAcknowledgement: r.noticeAcknowledgement,
+    caseId: r.caseId,
+    caseStatus: r.caseStatus,
+    outcome: r.outcome,
+    createdAt: r.createdAt,
+  }));
+}

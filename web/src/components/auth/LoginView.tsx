@@ -12,8 +12,8 @@
  */
 
 import Link from 'next/link';
-import { useRouter } from 'next/navigation';
-import { useState } from 'react';
+import { useRouter, useSearchParams } from 'next/navigation';
+import { Suspense, useState } from 'react';
 import { AuthShell } from '@/components/auth/AuthShell';
 import { AuthField } from '@/components/auth/AuthField';
 import { Button } from '@/components/ui/Button';
@@ -21,6 +21,7 @@ import { Icon } from '@/components/ui/Icon';
 import { useSession } from '@/lib/session/SessionProvider';
 import * as authService from '@/lib/api/services/auth';
 import { MIN_PASSWORD_LENGTH, PASSWORD_LENGTH_ERROR } from './passwordPolicy';
+import { sanitizeReturnTo, withReturnTo } from './returnTo';
 
 const EMAIL_RE = /^\S+@\S+\.\S+$/;
 const TOTP_LENGTH = 6;
@@ -33,9 +34,12 @@ interface LoginErrors {
   password?: string;
 }
 
-export function LoginView() {
+function LoginViewInner() {
   const router = useRouter();
   const { login, refreshSession } = useSession();
+  // `?next=` resumes the gated destination after credentials (or the 2FA
+  // challenge) succeed — sanitized to internal paths only.
+  const returnTo = sanitizeReturnTo(useSearchParams().get('next'));
 
   const [step, setStep] = useState<LoginStep>('credentials');
   const [challengeMode, setChallengeMode] = useState<ChallengeMode>('totp');
@@ -60,7 +64,7 @@ export function LoginView() {
     setSubmitting(true);
     setFormError(null);
     void login(email.trim(), password)
-      .then(() => router.push('/'))
+      .then(() => router.push(returnTo ?? '/'))
       .catch((err: unknown) => {
         if (authService.isTwoFactorChallengeError(err)) {
           // Credentials passed — the account demands a second factor.
@@ -102,7 +106,7 @@ export function LoginView() {
           : { twoFactorCode: trimmed }),
       })
       .then(() => refreshSession())
-      .then(() => router.push('/'))
+      .then(() => router.push(returnTo ?? '/'))
       .catch((err: unknown) => {
         // A wrong code also returns a TWO_FACTOR_* challenge error — stay
         // on this step and show the server's reason verbatim.
@@ -121,7 +125,7 @@ export function LoginView() {
   const inChallenge = step === 'challenge';
 
   return (
-    <AuthShell>
+    <AuthShell destination={returnTo ?? '/'}>
       {inChallenge ? (
         <button
           type="button"
@@ -133,7 +137,7 @@ export function LoginView() {
         </button>
       ) : (
         <Link
-          href="/auth"
+          href={withReturnTo('/auth', returnTo)}
           className="pressable mb-10 inline-flex w-fit items-center gap-1.5 text-body text-text-secondary transition-colors hover:text-text-primary"
         >
           <Icon name="back" size={16} />
@@ -264,7 +268,10 @@ export function LoginView() {
 
           <p className="mt-8 text-body text-text-secondary">
             New to ThryftVerse?{' '}
-            <Link href="/auth/signup" className="font-semibold text-text-primary hover:underline">
+            <Link
+              href={withReturnTo('/auth/signup', returnTo)}
+              className="font-semibold text-text-primary hover:underline"
+            >
               Sign up
             </Link>
           </p>
@@ -278,5 +285,14 @@ export function LoginView() {
         </>
       )}
     </AuthShell>
+  );
+}
+
+export function LoginView() {
+  // useSearchParams requires a Suspense boundary under static rendering.
+  return (
+    <Suspense fallback={null}>
+      <LoginViewInner />
+    </Suspense>
   );
 }

@@ -1422,8 +1422,8 @@ const GROUP_CONVERSATIONS: Conversation[] = [
       { id: 'u2', username: 'scott_art', avatar: USERS[1].avatar, identityVerified: true },
       { id: 'u6', username: 'ellawears', avatar: USERS[5].avatar, identityVerified: true },
     ],
-    lastMessage: 'Photo',
-    lastMessageTime: '34m',
+    lastMessage: 'Poll: First dibs — which piece drops first?',
+    lastMessageTime: '30m',
     unread: true,
     unreadCount: 3,
     messages: [
@@ -1433,6 +1433,21 @@ const GROUP_CONVERSATIONS: Conversation[] = [
       { id: 'g1-m4', senderId: 'me', sender: 'me', text: 'Saving the Helmut for me, hands off', timestamp: '2026-09-25T08:05:00Z', readStatus: 'read' },
       { id: 'g1-m5', senderId: 'u1', sender: 'other', text: 'The knitwear edit is unfair this week', timestamp: '2026-09-25T08:31:00Z' },
       { id: 'g1-m6', senderId: 'u5', sender: 'other', type: 'media', mediaType: 'image', mediaUri: img('photo-1469334031218-e382a71b716b', 640), text: '', timestamp: '2026-09-25T08:44:00Z' },
+      {
+        id: 'g1-m7',
+        senderId: 'u5',
+        sender: 'other',
+        timestamp: '2026-09-25T08:52:00Z',
+        poll: {
+          id: 'poll-g1-1',
+          question: 'First dibs — which piece drops first?',
+          options: ['Margiela tabi boots', 'Helmut Lang denim', 'Raf knits'],
+          allowMultiple: false,
+          isAnonymous: true,
+          voteCounts: [2, 1, 0],
+          myVotes: [],
+        },
+      },
     ],
   },
   {

@@ -70,6 +70,10 @@ function JoinGroupView({ token }: { token: string }) {
   }
 
   if (isGuest) {
+    // `?next=` carries this invite through sign-in (and signup →
+    // onboarding) so the member lands back here and the join fires —
+    // no re-clicking the original link.
+    const back = `/inbox/join?token=${encodeURIComponent(token)}`;
     return (
       <div className="mx-auto flex h-[calc(100dvh-4rem)] w-full max-w-[520px] items-center justify-center px-6">
         <EmptyState
@@ -77,7 +81,7 @@ function JoinGroupView({ token }: { token: string }) {
           title="Sign in to join this group"
           subtitle="This invite link opens a group chat — you'll need an account."
           actionLabel="Sign in"
-          onAction={() => router.push('/auth')}
+          onAction={() => router.push(`/auth?next=${encodeURIComponent(back)}`)}
         />
       </div>
     );

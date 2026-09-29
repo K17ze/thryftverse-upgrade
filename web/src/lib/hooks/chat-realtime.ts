@@ -573,9 +573,51 @@ export function useConversationRealtime({
         return;
       }
       case 'chat.poll.voted': {
-        // No poll surface on web yet — invalidate so the message row
-        // re-syncs (the REST serializer embeds the poll snapshot).
-        if (forThisThread) invalidateThread();
+        if (!forThisThread) return;
+        const messageId = typeof payload.messageId === 'string' ? payload.messageId : '';
+        const voteCounts = Array.isArray(payload.voteCounts)
+          ? payload.voteCounts.filter((n): n is number => typeof n === 'number')
+          : null;
+        if (!messageId || !voteCounts) {
+          invalidateThread();
+          return;
+        }
+        // Patch counts in place — every member converges without a
+        // refetch. `myVotes` moves only when the broadcast identifies
+        // the voter as the viewer (non-anonymous polls carry
+        // voterVotes; anonymous broadcasts strip identity, and the
+        // voter's own HTTP response already rewrote their myVotes).
+        const voterIsViewer =
+          typeof payload.userId === 'string' && payload.userId === viewerId;
+        const voterVotes = Array.isArray(payload.voterVotes)
+          ? payload.voterVotes.filter((n): n is number => typeof n === 'number')
+          : null;
+        const applyPoll = (m: Message): Message =>
+          m.poll
+            ? {
+                ...m,
+                poll: {
+                  ...m.poll,
+                  voteCounts,
+                  ...(voterIsViewer && voterVotes ? { myVotes: voterVotes } : {}),
+                },
+              }
+            : m;
+        qc.setQueryData<Conversation | null>(
+          CONVERSATION_KEY(conversationId, userKey),
+          (old) =>
+            old
+              ? {
+                  ...old,
+                  messages: old.messages.map((m) =>
+                    m.id === messageId ? applyPoll(m) : m,
+                  ),
+                }
+              : old,
+        );
+        // The paged history window isn't reachable by targeted patch —
+        // if the message isn't in the current cache it converges on the
+        // next invalidation/refetch anyway.
         return;
       }
       case 'chat.group.identity.updated': {

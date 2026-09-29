@@ -6,22 +6,25 @@
  */
 
 import Link from 'next/link';
-import { useRouter } from 'next/navigation';
-import { useState } from 'react';
+import { useRouter, useSearchParams } from 'next/navigation';
+import { Suspense, useState } from 'react';
 import { AuthShell } from '@/components/auth/AuthShell';
 import { AuthField } from '@/components/auth/AuthField';
 import { SocialButtons } from '@/components/auth/SocialButtons';
 import { Button } from '@/components/ui/Button';
 import { useSession } from '@/lib/session/SessionProvider';
 import { DATA_MODE } from '@/lib/api/client';
+import { sanitizeReturnTo, withReturnTo } from './returnTo';
 
-export function AuthLanding() {
+function AuthLandingInner() {
   const router = useRouter();
   const { signIn } = useSession();
   const [email, setEmail] = useState('');
   const [emailError, setEmailError] = useState<string | null>(null);
   const [socialLoading, setSocialLoading] = useState<'google' | 'apple' | null>(null);
   const isLive = DATA_MODE === 'live';
+  // `?next=` carries the gated destination through the whole auth flow.
+  const next = sanitizeReturnTo(useSearchParams().get('next'));
 
   const continueWithEmail = (e: React.FormEvent) => {
     e.preventDefault();
@@ -32,7 +35,12 @@ export function AuthLanding() {
       setEmailError('Enter a valid email address');
       return;
     }
-    router.push(`/auth/signup${normalized ? `?email=${encodeURIComponent(normalized)}` : ''}`);
+    router.push(
+      withReturnTo(
+        `/auth/signup${normalized ? `?email=${encodeURIComponent(normalized)}` : ''}`,
+        next,
+      ),
+    );
   };
 
   // Fixture mode only — there is no OAuth handshake, so this signs into
@@ -42,12 +50,12 @@ export function AuthLanding() {
     setSocialLoading(provider);
     window.setTimeout(() => {
       signIn();
-      router.push('/');
+      router.push(next ?? '/');
     }, 700);
   };
 
   return (
-    <AuthShell>
+    <AuthShell destination={next ?? '/'}>
       <nav aria-label="Account" className="flex gap-8 border-b border-border-subtle">
         <span
           aria-current="page"
@@ -56,7 +64,7 @@ export function AuthLanding() {
           Sign up
         </span>
         <Link
-          href="/auth/login"
+          href={withReturnTo('/auth/login', next)}
           className="pressable -mb-px border-b-2 border-transparent pb-3 text-body-emphasis text-text-secondary transition-colors hover:text-text-primary"
         >
           Log in
@@ -132,10 +140,22 @@ export function AuthLanding() {
 
       <p className="mt-6 text-body text-text-secondary">
         Already a member?{' '}
-        <Link href="/auth/login" className="font-semibold text-text-primary hover:underline">
+        <Link
+          href={withReturnTo('/auth/login', next)}
+          className="font-semibold text-text-primary hover:underline"
+        >
           Log in
         </Link>
       </p>
     </AuthShell>
+  );
+}
+
+export function AuthLanding() {
+  // useSearchParams requires a Suspense boundary under static rendering.
+  return (
+    <Suspense fallback={null}>
+      <AuthLandingInner />
+    </Suspense>
   );
 }

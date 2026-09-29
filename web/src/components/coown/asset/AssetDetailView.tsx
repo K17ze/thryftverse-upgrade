@@ -53,7 +53,7 @@ import { OwnershipTab } from './OwnershipTab';
 import { PricePanel } from './PricePanel';
 import { RelatedAssets } from './RelatedAssets';
 import { RiskDisclosure } from './RiskDisclosure';
-import { PausedNotice, PreviewPanel, TradePanel, type TradePrefill } from './TradePanel';
+import { DelistedPanel, PausedNotice, PreviewPanel, TradePanel, type TradePrefill } from './TradePanel';
 import { useSession } from '@/lib/session/SessionProvider';
 
 type Tab = 'overview' | 'ownership' | 'activity';
@@ -170,12 +170,18 @@ export function AssetDetailView({ id }: { id: string }) {
   // until the issuer signs the recourse agreement, so the composer swaps
   // to the sign/not-live rail instead of pretending orders can rest.
   const preview = asset.listingTier === 'preview';
+  // 'delisted' = pulled from the public market; the tier gate rejects
+  // orders server-side, so the panel must not pretend otherwise even
+  // when the market-status column still reads 'trading'.
+  const delisted = asset.listingTier === 'delisted';
   const isIssuer = !!user && user.id === asset.issuer.id;
 
   const tradePanel = halted ? (
     <PausedNotice exitUnderway={asset.marketStatus === 'closed'} />
   ) : preview ? (
     <PreviewPanel asset={asset} isIssuer={isIssuer} />
+  ) : delisted ? (
+    <DelistedPanel />
   ) : (
     <TradePanel
       asset={asset}
@@ -418,6 +424,10 @@ export function AssetDetailView({ id }: { id: string }) {
                 Not live
               </span>
             )
+          ) : delisted ? (
+            <span className="text-meta font-semibold text-text-muted">
+              Delisted
+            </span>
           ) : (
             <Button onClick={() => setComposerOpen(true)}>Trade</Button>
           )}
@@ -434,7 +444,9 @@ export function AssetDetailView({ id }: { id: string }) {
               ? isIssuer
                 ? 'Take your market live'
                 : 'Not live yet'
-              : `Trade ${asset.title}`
+              : delisted
+                ? 'Delisted'
+                : `Trade ${asset.title}`
         }
         maxWidth={520}
       >

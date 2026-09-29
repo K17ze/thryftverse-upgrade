@@ -16,7 +16,9 @@ import { Button } from '@/components/ui/Button';
 import { Icon } from '@/components/ui/Icon';
 import { useSession } from '@/lib/session/SessionProvider';
 import { clearReferralCode, peekReferralCode } from '@/lib/referralAttribution';
+import { ONBOARDING_RETURN_KEY } from '@/components/layout/AppShell';
 import { MIN_PASSWORD_LENGTH, PASSWORD_LENGTH_ERROR } from './passwordPolicy';
+import { sanitizeReturnTo, withReturnTo } from './returnTo';
 
 const EMAIL_RE = /^\S+@\S+\.\S+$/;
 
@@ -34,6 +36,10 @@ function SignupForm() {
 
   const [username, setUsername] = useState('');
   const [email, setEmail] = useState(() => params.get('email') ?? '');
+  // `?next=` resumes the gated destination once onboarding completes —
+  // stashed via ONBOARDING_RETURN_KEY because onboarding's returnTo()
+  // already validates and consumes it (single-use, internal paths only).
+  const returnTo = sanitizeReturnTo(params.get('next'));
   const [password, setPassword] = useState('');
   const [showPassword, setShowPassword] = useState(false);
   const [terms, setTerms] = useState(false);
@@ -66,6 +72,13 @@ function SignupForm() {
     void signup(email.trim(), password, username.trim(), referralCode ?? undefined)
       .then(() => {
         if (referralCode) clearReferralCode();
+        if (returnTo) {
+          try {
+            sessionStorage.setItem(ONBOARDING_RETURN_KEY, returnTo);
+          } catch {
+            // Storage unavailable — onboarding falls back to home.
+          }
+        }
         router.push('/onboarding');
       })
       .catch((err: unknown) => {
@@ -75,9 +88,9 @@ function SignupForm() {
   };
 
   return (
-    <AuthShell>
+    <AuthShell destination={returnTo ?? '/'}>
       <Link
-        href="/auth"
+        href={withReturnTo('/auth', returnTo)}
         className="pressable mb-10 inline-flex w-fit items-center gap-1.5 text-body text-text-secondary transition-colors hover:text-text-primary"
       >
         <Icon name="back" size={16} />
@@ -215,7 +228,10 @@ function SignupForm() {
 
       <p className="mt-8 text-body text-text-secondary">
         Already a member?{' '}
-        <Link href="/auth/login" className="font-semibold text-text-primary hover:underline">
+        <Link
+          href={withReturnTo('/auth/login', returnTo)}
+          className="font-semibold text-text-primary hover:underline"
+        >
           Log in
         </Link>
       </p>

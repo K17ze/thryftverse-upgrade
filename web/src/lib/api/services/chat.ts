@@ -5,7 +5,7 @@
  * `{ sender, text }`.
  */
 
-import { fetchJson } from '../http';
+import { ApiRequestError, fetchJson } from '../http';
 import {
   mapApiConversationToWeb,
   mapApiMessageToWebMessage,
@@ -544,6 +544,234 @@ export async function removeMessageReaction(
     `/chat/conversations/${encodeURIComponent(conversationId)}/messages/${encodeURIComponent(messageId)}/reactions?emoji=${encodeURIComponent(emoji)}`,
     { method: 'DELETE' },
   );
+}
+
+/** Poll vote tallies — the vote endpoints return the authoritative
+ *  post-change counts plus the caller's own selections, so a voter can
+ *  converge without waiting for the broadcast (which strips voter
+ *  identity for anonymous polls). */
+export interface PollVoteResult {
+  voteCounts: number[];
+  myVotes: number[];
+}
+
+/** Vote on a poll option — POST .../poll/vote. For single-choice polls
+ *  the server replaces the voter's whole selection; for multi-choice it
+ *  adds. Server-side: closed polls and bad option indexes 400. */
+export async function voteOnPoll(
+  conversationId: string,
+  messageId: string,
+  optionIndex: number,
+): Promise<PollVoteResult> {
+  const payload = await fetchJson<{
+    ok: boolean;
+    voteCounts?: number[];
+    myVotes?: number[];
+    error?: string;
+  }>(
+    `/chat/conversations/${encodeURIComponent(conversationId)}/messages/${encodeURIComponent(messageId)}/poll/vote`,
+    {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ optionIndex }),
+    },
+  );
+  if (!payload.ok) throw new Error(payload.error || 'Vote failed');
+  return { voteCounts: payload.voteCounts ?? [], myVotes: payload.myVotes ?? [] };
+}
+
+/** Retract one of the caller's votes — POST .../poll/unvote. */
+export async function unvoteOnPoll(
+  conversationId: string,
+  messageId: string,
+  optionIndex: number,
+): Promise<PollVoteResult> {
+  const payload = await fetchJson<{
+    ok: boolean;
+    voteCounts?: number[];
+    myVotes?: number[];
+    error?: string;
+  }>(
+    `/chat/conversations/${encodeURIComponent(conversationId)}/messages/${encodeURIComponent(messageId)}/poll/unvote`,
+    {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ optionIndex }),
+    },
+  );
+  if (!payload.ok) throw new Error(payload.error || 'Vote failed');
+  return { voteCounts: payload.voteCounts ?? [], myVotes: payload.myVotes ?? [] };
+}
+
+/**
+ * Voice playback — voice media sits in a private bucket; the wire's
+ * mediaUri is an identifier, not a playable URL. Playback goes through
+ * the membership-bound signed grant (TTL'd, revocable — matches
+ * mobile useVoicePlayer). The caller caches it until `expiresAt`.
+ */
+export async function fetchVoicePlaybackUrl(
+  conversationId: string,
+  messageId: string,
+): Promise<{ playbackUrl: string; expiresAt: string }> {
+  const payload = await fetchJson<{
+    ok: boolean;
+    playbackUrl?: string;
+    expiresAt?: string;
+    error?: string;
+  }>(
+    `/chat/conversations/${encodeURIComponent(conversationId)}/messages/${encodeURIComponent(messageId)}/voice/playback-url`,
+    { method: 'POST' },
+  );
+  if (!payload.ok || typeof payload.playbackUrl !== 'string') {
+    throw new Error(payload.error || 'Voice playback unavailable');
+  }
+  return { playbackUrl: payload.playbackUrl, expiresAt: payload.expiresAt ?? '' };
+}
+
+export type VoiceTranscriptionState =
+  | 'queued'
+  | 'processing'
+  | 'complete'
+  | 'failed_retryable'
+  | 'failed_final'
+  | 'unsupported';
+
+export interface VoiceTranscriptionReceipt {
+  id: string;
+  state: VoiceTranscriptionState;
+  text: string | null;
+  language: string | null;
+  rating: 'good' | 'bad' | null;
+  failureReason: string | null;
+}
+
+function mapTranscription(t: {
+  id: string;
+  state: string;
+  text?: string | null;
+  language?: string | null;
+  rating?: string | null;
+  failureReason?: string | null;
+}): VoiceTranscriptionReceipt {
+  return {
+    id: t.id,
+    state: t.state as VoiceTranscriptionState,
+    text: t.text ?? null,
+    language: t.language ?? null,
+    rating: t.rating === 'good' || t.rating === 'bad' ? t.rating : null,
+    failureReason: t.failureReason ?? null,
+  };
+}
+
+/** Read the caller's transcription state — 404 means never requested
+ *  (returns null so the caller offers the opt-in). */
+export async function fetchVoiceTranscription(
+  conversationId: string,
+  messageId: string,
+  signal?: AbortSignal,
+): Promise<VoiceTranscriptionReceipt | null> {
+  try {
+    const payload = await fetchJson<{
+      ok: boolean;
+      transcription?: Parameters<typeof mapTranscription>[0];
+    }>(
+      `/chat/conversations/${encodeURIComponent(conversationId)}/messages/${encodeURIComponent(messageId)}/voice/transcription`,
+      undefined,
+      { signal, maxRetries: 0 },
+    );
+    if (!payload.ok || !payload.transcription) throw new Error('Could not load transcript');
+    return mapTranscription(payload.transcription);
+  } catch (err) {
+    if (err instanceof ApiRequestError && err.status === 404) return null;
+    throw err;
+  }
+}
+
+/** Opt-in transcription request — idempotent on
+ *  (voice_message_id, requested_by); replays return the existing row's
+ *  state instead of queueing a second job. */
+export async function requestVoiceTranscription(
+  conversationId: string,
+  messageId: string,
+  language?: string,
+): Promise<VoiceTranscriptionReceipt> {
+  const payload = await fetchJson<{
+    ok: boolean;
+    transcription?: Parameters<typeof mapTranscription>[0];
+    error?: string;
+  }>(
+    `/chat/conversations/${encodeURIComponent(conversationId)}/messages/${encodeURIComponent(messageId)}/voice/transcribe`,
+    {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(language ? { language } : {}),
+    },
+  );
+  if (!payload.ok || !payload.transcription) {
+    throw new Error(payload.error || 'Could not request transcription');
+  }
+  return mapTranscription(payload.transcription);
+}
+
+/** Rate a completed transcription — the binary quality signal, never
+ *  shown to the sender. */
+export async function rateVoiceTranscription(
+  conversationId: string,
+  messageId: string,
+  rating: 'good' | 'bad',
+): Promise<void> {
+  const payload = await fetchJson<{ ok: boolean; error?: string }>(
+    `/chat/conversations/${encodeURIComponent(conversationId)}/messages/${encodeURIComponent(messageId)}/voice/transcription/rating`,
+    {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ rating }),
+    },
+  );
+  if (!payload.ok) throw new Error(payload.error || 'Rating failed');
+}
+
+export interface TranslationResult {
+  translatedText: string;
+  /** ISO 639-1 code of the detected source language. */
+  sourceLanguage: string;
+  targetLanguage: string;
+  model?: string;
+  /** Server-side PII-masked cache hit — no LLM call was billed. */
+  cached?: boolean;
+}
+
+/** POST /chat/translate — the AI translation edge (WhatsApp/Instagram
+ *  inline-translate parity). 429 rate-limit and 503 unconfigured
+ *  responses throw with the server's message. */
+export async function translateChatMessage(
+  messageId: string,
+  text: string,
+  targetLocale: string,
+): Promise<TranslationResult> {
+  const payload = await fetchJson<{
+    ok: boolean;
+    translatedText?: string;
+    sourceLanguage?: string;
+    targetLanguage?: string;
+    model?: string;
+    cached?: boolean;
+    message?: string;
+  }>('/chat/translate', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ messageId, text, targetLocale }),
+  });
+  if (!payload.ok || typeof payload.translatedText !== 'string') {
+    throw new Error(payload.message || 'Translation failed');
+  }
+  return {
+    translatedText: payload.translatedText,
+    sourceLanguage: payload.sourceLanguage ?? '',
+    targetLanguage: payload.targetLanguage ?? targetLocale,
+    model: payload.model,
+    cached: payload.cached,
+  };
 }
 
 /**

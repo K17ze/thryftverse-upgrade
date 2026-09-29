@@ -241,6 +241,9 @@ export interface ThreadActions {
   editMessage: (messageId: string, text: string) => void;
   /** scope 'everyone' tombstones for all; 'me' removes the local copy. */
   deleteMessage: (messageId: string, scope: 'me' | 'everyone') => void;
+  /** Toggle the viewer's vote on a poll option — voted → unvote, else
+   *  vote (single-choice polls swap the selection server-side). */
+  togglePollVote: (message: Message, optionIndex: number) => void;
   /** Save / unsave a message in chat — the negotiated-persistence edge
    *  (mobile saveMessageInChatOnApi); the savedBy set is shared state. */
   toggleSave: (message: Message) => void;
@@ -396,6 +399,65 @@ export function useThreadActions(
     [viewerId, applyMessageUpdate, conversationId, qc, invalidateInbox, toast],
   );
 
+  const togglePollVote = useCallback(
+    (message: Message, optionIndex: number) => {
+      const poll = message.poll;
+      if (!viewerId || !poll || message.id.startsWith('opt-')) return;
+      // Server closes the poll at closesAt — the bubble gates too, but
+      // the action must not write past the deadline either.
+      if (poll.closesAt && Date.parse(poll.closesAt) < Date.now()) return;
+      const removing = poll.myVotes.includes(optionIndex);
+      const optionCount = poll.options.length;
+
+      // Optimistic projection — single-choice votes REPLACE the old
+      // selection; multi-choice toggles the option. The server's
+      // response rewrites both arrays authoritatively below.
+      const revert = applyMessageUpdate(message.id, (m) => {
+        if (!m.poll) return m;
+        const counts = m.poll.voteCounts.slice(0, optionCount);
+        while (counts.length < optionCount) counts.push(0);
+        let myVotes: number[];
+        if (m.poll.allowMultiple) {
+          myVotes = removing
+            ? m.poll.myVotes.filter((i) => i !== optionIndex)
+            : [...m.poll.myVotes, optionIndex];
+        } else {
+          myVotes = removing ? [] : [optionIndex];
+        }
+        if (removing) {
+          counts[optionIndex] = Math.max(0, (counts[optionIndex] ?? 0) - 1);
+        } else {
+          if (!m.poll.allowMultiple) {
+            for (const prev of m.poll.myVotes) {
+              counts[prev] = Math.max(0, (counts[prev] ?? 0) - 1);
+            }
+          }
+          counts[optionIndex] = (counts[optionIndex] ?? 0) + 1;
+        }
+        return { ...m, poll: { ...m.poll, voteCounts: counts, myVotes } };
+      });
+
+      if (DATA_MODE === 'live') {
+        const call = removing
+          ? chatService.unvoteOnPoll(conversationId, message.id, optionIndex)
+          : chatService.voteOnPoll(conversationId, message.id, optionIndex);
+        call
+          .then(({ voteCounts, myVotes }) => {
+            // Authoritative convergence — the optimistic projection is a
+            // guess (another member's concurrent vote isn't in it).
+            applyMessageUpdate(message.id, (m) =>
+              m.poll ? { ...m, poll: { ...m.poll, voteCounts, myVotes } } : m,
+            );
+          })
+          .catch(() => {
+            revert();
+            toast.show("Couldn't update your vote — try again", 'error');
+          });
+      }
+    },
+    [viewerId, applyMessageUpdate, conversationId, toast],
+  );
+
   const isSaved = useCallback(
     (message: Message) => (chatService.messageSaveState(message).savedBy ?? []).length > 0,
     [],
@@ -472,7 +534,7 @@ export function useThreadActions(
     [viewerId, applyMessageUpdate, conversationId, invalidateInbox, toast],
   );
 
-  return { toggleReaction, hasReacted, editMessage, deleteMessage, toggleSave, isSaved, isSavedByMe };
+  return { toggleReaction, hasReacted, editMessage, deleteMessage, togglePollVote, toggleSave, isSaved, isSavedByMe };
 }
 
 // ── Forwarding ───────────────────────────────────────────────────────────

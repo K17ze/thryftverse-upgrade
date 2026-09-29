@@ -128,6 +128,21 @@ export function useSupportCaseDetail(caseId: string) {
   return query;
 }
 
+/**
+ * Reports the viewer has filed — GET /users/me/reports joins the three
+ * report tables to their safety notice and case outcome. Live-mode only:
+ * fixtures seed no report history and guests have none.
+ */
+export function useMyReports() {
+  const { user } = useSession();
+  return useQuery({
+    queryKey: ['my-reports', user?.id ?? 'guest'],
+    queryFn: ({ signal }) => supportService.fetchMyReports(signal),
+    enabled: DATA_MODE === 'live' && !!user,
+    staleTime: 30_000,
+  });
+}
+
 export interface NewTicketInput {
   topicId: SupportTopicId;
   /**

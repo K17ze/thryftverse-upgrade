@@ -34,15 +34,23 @@ const TRUST_POINTS: { icon: AppIconName; label: string }[] = [
   { icon: 'lock', label: 'Secure payments' },
 ];
 
-export function AuthShell({ children }: { children: ReactNode }) {
+export function AuthShell({
+  children,
+  destination = '/',
+}: {
+  children: ReactNode;
+  /** Where an already-signed-in session bounces — the sanitized `?next=`
+   *  return destination, or home. */
+  destination?: string;
+}) {
   const router = useRouter();
   const { isGuest } = useSession();
 
   // The auth stack is guest-only, like mobile — a signed-in session
-  // that lands here goes straight back home.
+  // that lands here resumes its intended destination (or home).
   useEffect(() => {
-    if (!isGuest) router.replace('/');
-  }, [isGuest, router]);
+    if (!isGuest) router.replace(destination);
+  }, [isGuest, router, destination]);
 
   if (!isGuest) return null;
 

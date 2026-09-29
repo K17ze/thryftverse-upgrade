@@ -805,6 +805,10 @@ export function ChatPanel({ conversationId }: { conversationId: string }) {
     (m: Message, emoji: string) => toggleReaction(m, emoji),
     [toggleReaction],
   );
+  const togglePollVoteFor = useCallback(
+    (m: Message, optionIndex: number) => threadActions.togglePollVote(m, optionIndex),
+    [threadActions],
+  );
 
   const copyMessageText = async (text: string) => {
     try {
@@ -1668,6 +1672,7 @@ export function ChatPanel({ conversationId }: { conversationId: string }) {
                       <MessageBubble
                         message={m}
                         mine={mine}
+                        conversationId={conversationId}
                         failed={failed}
                         showSeen={m.id === lastMineReadId}
                         senderLabel={senderLabel}
@@ -1680,6 +1685,7 @@ export function ChatPanel({ conversationId }: { conversationId: string }) {
                         onReact={reactAt}
                         onMediaPress={openMediaFor}
                         onToggleReaction={toggleReactionFor}
+                        onTogglePollVote={togglePollVoteFor}
                         cluster={cluster}
                       />
                     )}

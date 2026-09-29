@@ -20,6 +20,7 @@ import { SUPPORT_TOPICS, type SupportTopicId } from '@/lib/contracts/support';
 import { DATA_MODE } from '@/lib/api/client';
 import { useSession } from '@/lib/session/SessionProvider';
 import { ArticleAccordion } from './ArticleAccordion';
+import { MyReportsSection } from './MyReportsSection';
 import { NewTicketForm } from './NewTicketForm';
 import { TicketListRow } from './TicketListRow';
 import { useSupportTickets } from './useSupportTickets';
@@ -162,6 +163,12 @@ export function SupportHub() {
           )}
         </div>
       </section>
+
+      {/* Reports the viewer has filed — self-omits for guests, fixture
+          mode, and empty histories. Lives in the main column under the
+          resolution centre; the safety cases it references have no
+          customer thread, so rows are read-only. */}
+      <MyReportsSection />
 
       {/* Right rail on desktop — articles and contact compose beside
           the case list; on mobile the aside is a plain block so the

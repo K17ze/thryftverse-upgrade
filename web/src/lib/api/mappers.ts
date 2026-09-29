@@ -767,6 +767,18 @@ export interface ApiMessagePayload {
   readBy?: string[];
   isReadByMe?: boolean;
   offer?: Record<string, unknown>;
+  /** Embedded poll — `chat_polls` joined at serialize time; votes are
+   *  already the viewer's (`myVotes`) and public (`voteCounts`). */
+  poll?: {
+    id: string;
+    question: string;
+    options: string[];
+    allowMultiple: boolean;
+    isAnonymous: boolean;
+    closesAt?: string;
+    voteCounts: number[];
+    myVotes: number[];
+  };
   /** Canonical voice receipt — duration/waveform stamped server-side;
    *  the metadata mediaUri stays the playback source. */
   voice?: {
@@ -903,6 +915,18 @@ export function mapApiMessageToWebMessage(
         : undefined,
     replyToMessageId: payload.replyToMessageId,
     reactions,
+    poll: payload.poll
+      ? {
+          id: payload.poll.id,
+          question: payload.poll.question,
+          options: payload.poll.options,
+          allowMultiple: payload.poll.allowMultiple,
+          isAnonymous: payload.poll.isAnonymous,
+          closesAt: payload.poll.closesAt,
+          voteCounts: payload.poll.voteCounts,
+          myVotes: payload.poll.myVotes,
+        }
+      : undefined,
   };
 }
 

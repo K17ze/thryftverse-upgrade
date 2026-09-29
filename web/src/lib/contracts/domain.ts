@@ -333,6 +333,22 @@ export interface MessageReaction {
   reactedByMe?: boolean;
 }
 
+/** A poll attached to a chat message — the backend embeds it on the
+ *  message row (`chat_polls` joined at serialize time). `voteCounts` is
+ *  the per-option tally; `myVotes` is the viewer's own option indexes.
+ *  Anonymous polls never carry voter identity past this projection —
+ *  the realtime broadcast strips it. */
+export interface ChatPoll {
+  id: string;
+  question: string;
+  options: string[];
+  allowMultiple: boolean;
+  isAnonymous: boolean;
+  closesAt?: string;
+  voteCounts: number[];
+  myVotes: number[];
+}
+
 export interface Message {
   id: string;
   senderId: string;
@@ -387,6 +403,8 @@ export interface Message {
    *  participantProfiles (displayName ?? username). */
   senderLabel?: string;
   reactions?: MessageReaction[];
+  /** Embedded poll — renders the poll block in place of the text body. */
+  poll?: ChatPoll;
   replyToMessageId?: string;
   isEdited?: boolean;
   isDeleted?: boolean;

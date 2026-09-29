@@ -1331,6 +1331,28 @@ export function PausedNotice({ exitUnderway }: { exitUnderway: boolean }) {
  *  signature rail here (the same terms the wizard showed); everyone else
  *  gets the honest not-live read. A successful signature refetches the
  *  asset at 'listed' and this panel swaps to the live composer. */
+/** Delisted tier — removed from the public market. Positions and
+ *  resting claims still exist and the recourse obligation stands; the
+ *  composer must not offer a book the server will reject. Distinct from
+ *  PausedNotice: paused can resume, delisted is terminal. */
+export function DelistedPanel() {
+  return (
+    <div
+      role="status"
+      className="rounded-lg border border-border-subtle p-4"
+    >
+      <p className="text-body-emphasis font-semibold text-text-primary">
+        Delisted
+      </p>
+      <p className="mt-2 text-body text-text-secondary">
+        This market has been removed from public listing. Existing
+        positions and the issuer&rsquo;s recourse obligation still stand
+        — the holding ledger below keeps the record.
+      </p>
+    </div>
+  );
+}
+
 export function PreviewPanel({
   asset,
   isIssuer,
