@@ -1380,7 +1380,10 @@ function TranslationRow({ message }: { message: Message }) {
   const [state, setState] = useState<'idle' | 'loading' | 'done' | 'error'>(() =>
     getCachedTranslation(message.id, locale) ? 'done' : 'idle',
   );
-  const foreign = isForeignLanguageMessage(message.text ?? '', locale);
+  // Fixture mode has no translate backend — an affordance that can only
+  // ever fail is worse than none.
+  const foreign =
+    DATA_MODE === 'live' && isForeignLanguageMessage(message.text ?? '', locale);
   if (!foreign) return null;
 
   const run = () => {

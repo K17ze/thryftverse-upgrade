@@ -1473,6 +1473,25 @@ const GROUP_CONVERSATIONS: Conversation[] = [
       { id: 'g2-m2', senderId: 'u6', sender: 'other', text: 'Kilo sale this Saturday — who is in?', timestamp: '2026-09-24T10:14:00Z' },
       { id: 'g2-m3', senderId: 'me', sender: 'me', text: 'In. Bringing a tote and a vague plan', timestamp: '2026-09-24T10:20:00Z', readStatus: 'read' },
       { id: 'g2-m4', senderId: 'u2', sender: 'other', text: 'Meet outside the east entrance at 10?', timestamp: '2026-09-24T10:26:00Z' },
+      {
+        id: 'g2-m5',
+        senderId: 'u6',
+        sender: 'other',
+        timestamp: '2026-09-24T10:32:00Z',
+        // Closed poll — closesAt sits in the past so the renderer's
+        // closed branch (inert rows + "Closed" meta) stays exercisable
+        // in fixture mode.
+        poll: {
+          id: 'poll-g2-1',
+          question: 'Saturday meet point?',
+          options: ['East entrance', 'Café opposite', 'Car park'],
+          allowMultiple: false,
+          isAnonymous: false,
+          closesAt: '2026-09-24T18:00:00Z',
+          voteCounts: [3, 1, 0],
+          myVotes: [0],
+        },
+      },
     ],
   },
 ];
