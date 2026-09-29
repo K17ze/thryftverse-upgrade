@@ -26,14 +26,39 @@ import { useHydrated } from '@/lib/store/useStore';
 import { useCollectionEdits } from '@/lib/store/collectionEdits';
 import { BoardSortControl } from '@/components/profile/BoardSortControl';
 import { sortBoards, useBoardPrefs } from '@/components/profile/boardPrefs';
-import { listingCoverThumbs } from '@/components/profile/boardMedia';
+import { useBoardCoverThumbs } from '@/components/profile/boardMedia';
 import { getListingCoverUri } from '@/lib/utils/media';
 import type { UserCollection } from '@/lib/data/fixtures-collections';
+
+/** One grid row — the session collection plus the owner's cover pick. */
+type BoardRow = UserCollection & { coverItemId: string | null; archived: boolean };
+
+/** Board card — the collage resolves through the live-aware hook so a
+ *  live board never renders catalogue ghosts (fixture keeps the same
+ *  derivation). */
+function CollectionBoardCard({ collection }: { collection: BoardRow }) {
+  const thumbs = useBoardCoverThumbs(
+    collection.itemIds,
+    4,
+    undefined,
+    collection.coverItemId,
+  );
+  return (
+    <UserCollectionCard
+      href={`/collection/${collection.id}`}
+      name={collection.name}
+      thumbs={thumbs}
+      count={collection.itemIds.length}
+      isPrivate={collection.isPrivate}
+      updatedAt={collection.updatedAt}
+    />
+  );
+}
 
 export default function CollectionsPage() {
   const router = useRouter();
   const { show } = useToast();
-  const { user, isGuest } = useSession();
+  const { user, isGuest, sessionLoading } = useSession();
   const { requireAuth, wall } = useSignupWall();
   const [createOpen, setCreateOpen] = useState(false);
 
@@ -42,13 +67,15 @@ export default function CollectionsPage() {
     if (requireAuth('save_item')) setCreateOpen(true);
   };
 
+  // Both reads are owner-scoped in live mode — guests get the sign-in
+  // wall below, so the queries stay parked instead of firing a 401.
   const {
     data: collections,
     isLoading,
     isError,
     refetch,
-  } = useUserCollections();
-  const { data: myListings } = useMyListings();
+  } = useUserCollections({ enabled: !!user });
+  const { data: myListings } = useMyListings({ enabled: !!user });
   const hydrated = useHydrated();
   const overlays = useCollectionEdits((s) => s.boards);
   const boardPrefs = useBoardPrefs((s) => s.boards);
@@ -66,7 +93,7 @@ export default function CollectionsPage() {
   // Owner edits made on /collection/[id] persist in the overlay stores —
   // apply them post-hydration so the hub's counts, privacy and collages
   // agree. Archived boards leave the grid; the detail route still resolves.
-  const boards = useMemo(
+  const boards = useMemo<BoardRow[]>(
     () =>
       sortBoards(
         (collections ?? [])
@@ -92,9 +119,11 @@ export default function CollectionsPage() {
     router.push(`/collection/${collection.id}`);
   };
 
-  if (isLoading) {
+  // Session load is still a pending truth — the wall and the query gate
+  // both need the resolved member before either renders honestly.
+  if (sessionLoading || (user && isLoading)) {
     return (
-      <div className="mx-auto max-w-[1200px] pb-16">
+      <div className="mx-auto max-w-[1440px] pb-16">
         <CollectionsPageSkeleton />
       </div>
     );
@@ -102,7 +131,7 @@ export default function CollectionsPage() {
 
   if (isError) {
     return (
-      <div className="mx-auto max-w-[1200px]">
+      <div className="mx-auto max-w-[1440px]">
         <EmptyState
           icon="warning"
           title="Couldn't load collections"
@@ -118,7 +147,7 @@ export default function CollectionsPage() {
   // the fixture demo account's collections.
   if (isGuest || !user) {
     return (
-      <div className="mx-auto max-w-[1200px]">
+      <div className="mx-auto max-w-[1440px]">
         <EmptyState
           icon="folder"
           title="Your collections live here"
@@ -134,9 +163,9 @@ export default function CollectionsPage() {
   const nothingToShow = boards.length === 0 && closetCount === 0;
 
   return (
-    <div className="mx-auto max-w-[1200px] pb-16">
+    <div className="mx-auto max-w-[1440px] pb-16">
       <div className="flex flex-wrap items-center justify-between gap-3 px-4 pt-5 sm:px-6">
-        <h1 className="text-screen-title font-bold text-text-primary">Collections</h1>
+        <h1 className="text-screen-title text-text-primary">Collections</h1>
         <div className="flex items-center gap-1">
           <Link
             href="/poster/archive"
@@ -179,7 +208,7 @@ export default function CollectionsPage() {
             compact
           />
         ) : (
-          <div className="mt-5 grid grid-cols-2 gap-3 px-4 sm:grid-cols-3 sm:px-6 lg:grid-cols-4">
+          <div className="mt-5 grid grid-cols-2 gap-3 px-4 sm:grid-cols-3 sm:px-6 lg:grid-cols-4 xl:grid-cols-5">
             {/* Your closet — the shopfront board, always first (closet-<id>). */}
             <UserCollectionCard
               href={`/collection/closet-${user.id}`}
@@ -188,15 +217,7 @@ export default function CollectionsPage() {
               count={closetCount}
             />
             {boards.map((c) => (
-              <UserCollectionCard
-                key={c.id}
-                href={`/collection/${c.id}`}
-                name={c.name}
-                thumbs={listingCoverThumbs(c.itemIds, 4, undefined, c.coverItemId)}
-                count={c.itemIds.length}
-                isPrivate={c.isPrivate}
-                updatedAt={c.updatedAt}
-              />
+              <CollectionBoardCard key={c.id} collection={c} />
             ))}
           </div>
         )}

@@ -13,7 +13,9 @@ import { Chip } from '@/components/ui/Chip';
 import { EmptyState } from '@/components/ui/EmptyState';
 import { IconButton } from '@/components/ui/IconButton';
 import { Skeleton } from '@/components/ui/Skeleton';
+import { parseApiError } from '@/lib/api/http';
 import { useAgentBots, useAgentLedger } from '@/lib/hooks/agents-queries';
+import { AgentsSignInWall, useAgentsAccess } from './AgentsGate';
 import { AgentRunRow } from './AgentRunRow';
 
 function LedgerSkeleton() {
@@ -39,29 +41,34 @@ export function AgentLedgerView() {
   const filterBotId = searchParams.get('bot') ?? 'all';
 
   const { data: bots, isLoading: botsLoading } = useAgentBots();
-  const { data: runs, isLoading: runsLoading, isError, refetch } = useAgentLedger();
+  // Unscoped feed drives the filter chips; the scoped feed (a real ?botId=
+  // query on the wire) drives the rows.
+  const { data: allRuns } = useAgentLedger();
+  const scopedBotId = filterBotId === 'all' ? undefined : filterBotId;
+  const {
+    data: runs,
+    isLoading: runsLoading,
+    isError,
+    error,
+    refetch,
+  } = useAgentLedger(scopedBotId);
+  const access = useAgentsAccess(error);
 
   const botById = useMemo(() => new Map((bots ?? []).map((b) => [b.id, b])), [bots]);
 
   // Filter chips: every bot that has at least one ledger row.
   const filterableBots = useMemo(() => {
-    const ids = new Set((runs ?? []).map((r) => r.botId));
+    const ids = new Set((allRuns ?? []).map((r) => r.botId));
     return (bots ?? []).filter((b) => ids.has(b.id));
-  }, [bots, runs]);
+  }, [bots, allRuns]);
 
-  const visible = useMemo(
-    () =>
-      (runs ?? []).filter(
-        (r) => filterBotId === 'all' || r.botId === filterBotId,
-      ),
-    [runs, filterBotId],
-  );
+  const visible = useMemo(() => runs ?? [], [runs]);
 
   const setFilter = (id: string) => {
     router.replace(id === 'all' ? '/agents/ledger' : `/agents/ledger?bot=${id}`);
   };
 
-  const isLoading = botsLoading || runsLoading;
+  const isLoading = botsLoading || runsLoading || access === 'loading';
   const filterName =
     filterBotId === 'all' ? null : botById.get(filterBotId)?.name ?? 'This agent';
 
@@ -69,7 +76,7 @@ export function AgentLedgerView() {
     <div className="pb-16">
       <div className="flex items-center gap-1 px-2 pt-1 sm:px-4">
         <IconButton name="back" aria-label="Back to agents" onClick={() => router.push('/agents')} />
-        <h1 className="flex-1 text-screen-title font-semibold text-text-primary">
+        <h1 className="flex-1 text-screen-title text-text-primary">
           Agent ledger
         </h1>
       </div>
@@ -79,7 +86,11 @@ export function AgentLedgerView() {
       </p>
 
       {/* Bot filter */}
-      {!isLoading && filterableBots.length > 0 ? (
+      {access === 'blocked' ? (
+        <div className="mt-8">
+          <AgentsSignInWall title="Sign in to see the ledger" />
+        </div>
+      ) : !isLoading && filterableBots.length > 0 ? (
         <div className="no-scrollbar mt-5 flex gap-2 overflow-x-auto px-4 sm:px-6">
           <Chip selected={filterBotId === 'all'} onClick={() => setFilter('all')}>
             All agents
@@ -97,13 +108,13 @@ export function AgentLedgerView() {
       ) : null}
 
       <div className="mt-5">
-        {isLoading ? (
+        {access === 'blocked' ? null : isLoading ? (
           <LedgerSkeleton />
         ) : isError || !runs ? (
           <EmptyState
             icon="receipt"
             title="Couldn't load the ledger"
-            subtitle="Check your connection and try again."
+            subtitle={parseApiError(error, 'Check your connection and try again.').message}
             actionLabel="Try again"
             onAction={() => void refetch()}
           />
@@ -115,7 +126,7 @@ export function AgentLedgerView() {
             subtitle={
               filterName
                 ? 'It hasn\u2019t acted yet — runs land here the first time it does.'
-                : 'Install an agent and every action it takes is recorded here.'
+                : 'When one of your agents acts in a conversation, the run is recorded here.'
             }
             actionLabel="Browse agents"
             onAction={() => router.push('/agents')}

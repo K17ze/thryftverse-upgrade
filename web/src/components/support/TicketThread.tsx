@@ -23,9 +23,11 @@ import { Skeleton } from '@/components/ui/Skeleton';
 import { useToast } from '@/components/ui/Toast';
 import {
   canRequestHandoff,
+  caseRefLabel,
   contextLinkHref,
   contextLinkLabel,
   contextLinksFor,
+  operationalStateLabel,
   ownershipLabel,
   statusMeta,
   type SupportContextKind,
@@ -33,7 +35,11 @@ import {
 import { DATA_MODE } from '@/lib/api/client';
 import { useSession } from '@/lib/session/SessionProvider';
 import { formatDate } from '@/lib/utils/format';
-import { useSupportActions, useSupportTickets } from './useSupportTickets';
+import {
+  useSupportActions,
+  useSupportCaseDetail,
+  useSupportTickets,
+} from './useSupportTickets';
 import { SupportMessageRow } from './SupportMessageRow';
 import { TicketTimeline } from './TicketTimeline';
 import { CsatPrompt } from './CsatPrompt';
@@ -50,7 +56,7 @@ const CONTEXT_ICONS: Record<SupportContextKind, AppIconName> = {
 
 function ThreadSkeleton() {
   return (
-    <div className="mx-auto max-w-[720px] px-4 py-8 sm:px-6" aria-busy aria-label="Loading case">
+    <div className="mx-auto max-w-[720px] px-4 py-8 sm:px-6 lg:max-w-[1440px]" aria-busy aria-label="Loading case">
       <Skeleton className="h-6 w-44" />
       <Skeleton className="mt-2 h-8 w-56" />
       <div className="mt-6 flex flex-col gap-4 border-y border-border-subtle py-5">
@@ -76,6 +82,10 @@ export function TicketThread({ ticketId }: { ticketId: string }) {
   const { show } = useToast();
   const { isGuest, sessionLoading } = useSession();
   const { data: tickets, isLoading, isError, refetch } = useSupportTickets();
+  // Case detail — the thread/events live on GET /support/cases/:id, not
+  // the list read. Disabled for ticket_ rows (no detail route) and in
+  // fixture mode; the fetched record merges into the list cache.
+  const detail = useSupportCaseDetail(ticketId);
   const {
     appendMessage,
     retryMessage,
@@ -95,7 +105,9 @@ export function TicketThread({ ticketId }: { ticketId: string }) {
     [tickets, ticketId],
   );
 
-  if (sessionLoading || isLoading) return <ThreadSkeleton />;
+  // The detail read also covers deep links to cases outside the first
+  // list page — while it's in flight the ticket may not be cached yet.
+  if (sessionLoading || isLoading || detail.isLoading) return <ThreadSkeleton />;
 
   // Live mode: a guest can't have fetched this case — sign-in wall rather
   // than a misleading "not found".
@@ -111,14 +123,17 @@ export function TicketThread({ ticketId }: { ticketId: string }) {
     );
   }
 
-  if (isError) {
+  if (isError || (!ticket && detail.isError)) {
     return (
       <EmptyState
         icon="alert"
         title="Could not load the case"
         subtitle="Check your connection and try again."
         actionLabel="Retry"
-        onAction={() => void refetch()}
+        onAction={() => {
+          void refetch();
+          void detail.refetch();
+        }}
       />
     );
   }
@@ -136,11 +151,25 @@ export function TicketThread({ ticketId }: { ticketId: string }) {
   }
 
   const meta = statusMeta(ticket.status);
+  // Truthful state label — the raw operationalState where the backend
+  // carries one ('Awaiting your response' is actionable), else the
+  // folded status label. The badge tone still comes from the 4-state map.
+  const stateLabel = ticket.operationalState
+    ? operationalStateLabel(ticket.operationalState)
+    : meta.label;
   const closed = ticket.status === 'closed';
-  const canReply = !closed;
+  // Replies/handoff POST to /support/cases/:id/* — order-bound ticket rows
+  // (`ticket_` ids) have no message or appeal route; never offer a dead
+  // composer in live mode.
+  const hasCaseApi = DATA_MODE !== 'live' || !ticket.id.startsWith('ticket_');
+  const canReply = !closed && hasCaseApi;
   const resolutionOpen = ticket.status === 'resolved' && ticket.resolution !== null;
   const owner = ownershipLabel(ticket);
-  const handoffOffered = canRequestHandoff(ticket);
+  const handoffOffered = canRequestHandoff(ticket) && hasCaseApi;
+  // CSAT posts to the conversation — cases without a conversationId have
+  // nowhere to send feedback, so the prompt hides rather than 404s.
+  const csatAvailable =
+    DATA_MODE !== 'live' || (hasCaseApi && !!ticket.conversationId);
   const contextLinks = contextLinksFor(ticket);
   const evidence = ticket.evidence ?? [];
   const activityEvents = ticket.events.filter(
@@ -173,20 +202,20 @@ export function TicketThread({ ticketId }: { ticketId: string }) {
   };
 
   return (
-    <div className="mx-auto max-w-[720px] px-4 py-8 sm:px-6">
+    <div className="mx-auto max-w-[720px] px-4 py-8 sm:px-6 lg:max-w-[1440px]">
       {/* Case identity */}
       <div className="flex items-center gap-2">
         <IconButton name="back" aria-label="Back to support" onClick={() => router.push('/support')} className="-ml-2" />
         <p className="text-caption text-text-muted">
-          Case <span className="tnum font-semibold text-text-secondary">{ticket.ref}</span>
+          Case <span className="tnum font-semibold text-text-secondary">{caseRefLabel(ticket.ref)}</span>
         </p>
         <span className="ml-auto">
           <Badge variant={meta.badge} icon={meta.icon}>
-            {meta.label}
+            {stateLabel}
           </Badge>
         </span>
       </div>
-      <h1 className="mt-3 text-screen-title font-bold text-text-primary">{ticket.topicLabel}</h1>
+      <h1 className="mt-3 text-screen-title text-text-primary">{ticket.topicLabel}</h1>
       <p className="mt-1 text-caption text-text-secondary">
         Opened {formatDate(ticket.createdAt)}
         {owner ? (
@@ -197,6 +226,11 @@ export function TicketThread({ ticketId }: { ticketId: string }) {
         ) : null}
       </p>
 
+      {/* Desktop split — the case metadata (context, handoff, evidence,
+          lifecycle, activity) rides a sticky right rail beside the
+          conversation; mobile keeps the authored vertical order. */}
+      <div className="lg:grid lg:grid-cols-[minmax(0,1fr)_360px] lg:items-start lg:gap-x-10 xl:grid-cols-[minmax(0,1fr)_400px] xl:gap-x-14">
+      <aside className="lg:order-2 lg:sticky lg:top-20 lg:self-start">
       {/* Linked context — the order/listing/payout this case is about,
           1:1 with mobile's contextLinksFor extraction. */}
       {contextLinks.length > 0 ? (
@@ -268,7 +302,7 @@ export function TicketThread({ ticketId }: { ticketId: string }) {
           stamp lives in the activity log, not here. */}
       {evidence.length > 0 ? (
         <section aria-label="Evidence" className="mt-4">
-          <p className="text-label font-medium uppercase tracking-wide text-text-muted">
+          <p className="text-label text-text-muted">
             Evidence · {evidence.length}
           </p>
           <ul className="mt-2 flex flex-wrap gap-2">
@@ -319,6 +353,12 @@ export function TicketThread({ ticketId }: { ticketId: string }) {
         </section>
       ) : null}
 
+      </aside>
+
+      {/* Main column — the conversation plus its resolution composer.
+          Renders after the rail in DOM order so mobile is unchanged. */}
+      <div className="min-w-0 lg:order-1">
+
       {/* Thread — paginated: the tail renders first, earlier pages load
           on demand so long cases stay responsive. */}
       <section aria-label="Messages" className="mt-2">
@@ -361,7 +401,7 @@ export function TicketThread({ ticketId }: { ticketId: string }) {
               Resolution proposed
             </h2>
           </div>
-          <p className="mt-1 text-label font-semibold uppercase tracking-wider text-text-muted">
+          <p className="mt-1 text-label text-text-muted">
             {ticket.resolution.disposition}
           </p>
           <p className="mt-2 text-body leading-relaxed text-text-secondary">{ticket.resolution.note}</p>
@@ -434,8 +474,9 @@ export function TicketThread({ ticketId }: { ticketId: string }) {
         </section>
       ) : null}
 
-      {/* CSAT — after resolve */}
-      {closed ? (
+      {/* CSAT — after resolve; only where a conversation exists to take
+          the feedback (live mode joins on case.conversationId). */}
+      {closed && csatAvailable ? (
         <section aria-label="Feedback" className="mt-6 border-t border-border-subtle pt-5">
           <h2 className="text-body-emphasis font-semibold text-text-primary">
             {ticket.csat ? 'Your feedback' : 'How did we do?'}
@@ -493,7 +534,11 @@ export function TicketThread({ ticketId }: { ticketId: string }) {
         ) : (
           <p className="flex items-center gap-1.5 text-caption text-text-muted">
             <Icon name="check" size={14} className="shrink-0 text-text-muted" />
-            This case is closed. Open a new case if you still need help.
+            {closed
+              ? 'This case is closed. Open a new case if you still need help.'
+              : // Order-bound ticket rows have no reply route — say so
+                // rather than offering a composer that 404s.
+                'Replies aren’t available on this request yet — our team will update you here.'}
           </p>
         )}
       </section>
@@ -504,6 +549,8 @@ export function TicketThread({ ticketId }: { ticketId: string }) {
           Fixture mode — replies are stored for this session only.
         </p>
       ) : null}
+      </div>
+      </div>
     </div>
   );
 }

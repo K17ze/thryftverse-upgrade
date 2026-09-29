@@ -14,6 +14,7 @@ import type {
   CommerceOrder,
   DispatchExtension,
   Order,
+  OrderTrackingEvent,
   ReturnCase,
   ReturnRemedy,
 } from '@/lib/contracts/domain';
@@ -113,13 +114,20 @@ export async function fetchOrderById(
   id: string,
   signal?: AbortSignal,
 ): Promise<CommerceOrder | null> {
-  const payload = await fetchJson<{ ok: boolean; order?: CommerceUserOrderApi }>(
-    `/orders/${encodeURIComponent(id)}`,
-    undefined,
-    { signal },
-  );
-  if (!payload.ok || !payload.order) return null;
-  return mapCommerceUserOrder(payload.order);
+  try {
+    const payload = await fetchJson<{ ok: boolean; order?: CommerceUserOrderApi }>(
+      `/orders/${encodeURIComponent(id)}`,
+      undefined,
+      { signal },
+    );
+    if (!payload.ok || !payload.order) return null;
+    return mapCommerceUserOrder(payload.order);
+  } catch (error) {
+    // 404 is a verdict, not a failure — the detail surfaces render their
+    // not-found state on null; every other error propagates to retry.
+    if (error instanceof ApiRequestError && error.status === 404) return null;
+    throw error;
+  }
 }
 
 /** POST /orders — mirrors mobile createOrder. The server derives charges
@@ -258,14 +266,108 @@ async function postOrderAction(orderId: string, action: string, body?: unknown):
 export function cancelOrder(orderId: string) {
   return postOrderAction(orderId, 'cancel');
 }
+
+export interface OrderCheckoutConfirmation {
+  addressId: number;
+  paymentMethodId: number | null;
+  shippingCarrierId: string;
+  shippingQuoteId: string;
+  verificationRequested: boolean;
+  subtotalGbp: number;
+  platformChargeGbp: number;
+  postageFeeGbp: number;
+  totalGbp: number;
+  quoteVersion: string;
+  quoteHash: string;
+}
+
+/**
+ * PATCH /orders/:orderId/checkout — order-bound checkout re-bind, the web
+ * port of native completeOrderCheckout. Re-attaches the buyer's current
+ * address, payment method and shipping quote to a 'created' order; the
+ * server re-prices every charge line and returns the authoritative
+ * breakdown. Re-binding releases a parked payment intent, so it 409s
+ * (ORDER_PAYMENT_IN_PROGRESS) while a provider-side attempt is genuinely
+ * in flight and 410s (CHECKOUT_RESERVATION_EXPIRED) once the hold lapses.
+ */
+export async function completeOrderCheckout(
+  orderId: string,
+  input: {
+    addressId: number;
+    paymentMethodId?: number;
+    shippingQuoteId: string;
+    shippingCarrierId: string;
+    /** Item verification add-on flag; omitted preserves the stored value. */
+    verificationRequested?: boolean;
+  },
+): Promise<{ orderId: string; checkout: OrderCheckoutConfirmation }> {
+  const payload = await fetchJson<{
+    ok: true;
+    orderId: string;
+    checkout: OrderCheckoutConfirmation;
+  }>(`/orders/${encodeURIComponent(orderId)}/checkout`, {
+    method: 'PATCH',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(input),
+  });
+  return { orderId: payload.orderId, checkout: payload.checkout };
+}
 export function shipOrder(orderId: string, input: { trackingNumber?: string; shippingProvider?: string }) {
   return postOrderAction(orderId, 'ship', input);
 }
 export function confirmDelivery(orderId: string) {
   return postOrderAction(orderId, 'deliver');
 }
-export function reviewOrder(orderId: string, input: { rating: number; text?: string }) {
-  return postOrderAction(orderId, 'review', input);
+/** POST /orders/:orderId/review — the schema takes `comment`/`photoUrls`
+ *  (supportReviews.ts orderReviewBodySchema); photoUrls must be finalized
+ *  uploads owned by the requester. Sends the Idempotency-Key header like
+ *  native (reviewApi.ts createOrderReview): the stable per-order key lets
+ *  a retry after a dropped response return the already-created review
+ *  instead of colliding on the unique order_id constraint. */
+export function reviewOrder(
+  orderId: string,
+  input: { rating: number; comment?: string; photoUrls?: string[] },
+) {
+  return fetchJson(`/orders/${encodeURIComponent(orderId)}/review`, {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+      'Idempotency-Key': `review_${orderId}`,
+    },
+    body: JSON.stringify({
+      rating: input.rating,
+      comment: input.comment,
+      photoUrls: input.photoUrls,
+    }),
+  });
+}
+
+/** GET /orders/:orderId/review — the persisted review row incl. the
+ *  platform auto-feedback flag (isAuto), media and seller response.
+ *  404/no row resolves to null — the composer opens fresh. */
+export interface OrderReviewRow {
+  id: string;
+  orderId: string;
+  rating: number;
+  comment: string | null;
+  photoUrls?: string[];
+  sellerResponse?: { text: string; createdAt: string };
+  isAuto: boolean;
+  autoReason: string | null;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export async function fetchOrderReview(
+  orderId: string,
+  signal?: AbortSignal,
+): Promise<OrderReviewRow | null> {
+  const payload = await fetchJson<{ ok: boolean; review?: OrderReviewRow | null }>(
+    `/orders/${encodeURIComponent(orderId)}/review`,
+    undefined,
+    { signal },
+  );
+  return payload.ok ? (payload.review ?? null) : null;
 }
 
 // ── Offers (listingOffersApi.ts) ─────────────────────────────────────────────
@@ -485,13 +587,36 @@ export async function sendOfferToLikers(
 
 // ── Dispatch extensions (commerceApi.ts) ─────────────────────────────────────
 
-interface DispatchExtensionResultApi {
+export interface DispatchExtensionResultApi {
   id: string;
   orderId: string;
   days: number;
   proposedShipBy: string;
   status: 'pending' | 'accepted' | 'declined';
   createdAt: string;
+}
+
+/**
+ * Seller proposes a dispatch extension (1–30 days) — mirrors mobile
+ * proposeDispatchExtension. Buyer approval only: the new ship-by takes
+ * effect only if the buyer accepts. The backend 409s when an extension is
+ * already pending (code EXTENSION_PENDING), when the order isn't 'paid',
+ * or when the cumulative accepted-days cap is hit (EXTENSION_LIMIT_EXCEEDED).
+ */
+export async function proposeDispatchExtension(
+  orderId: string,
+  days: number,
+  note?: string,
+): Promise<DispatchExtensionResultApi> {
+  const payload = await fetchJson<{ ok: boolean; extension: DispatchExtensionResultApi }>(
+    `/orders/${encodeURIComponent(orderId)}/dispatch-extension`,
+    {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(note ? { days, note } : { days }),
+    },
+  );
+  return payload.extension;
 }
 
 /** Buyer accepts or declines a pending dispatch extension — mirrors mobile
@@ -736,6 +861,154 @@ export async function generateShippingLabel(orderId: string): Promise<{
 
 export type { DispatchExtension };
 
+// ── Parcel events (commerceApi.ts — GET /orders/:orderId/parcel/events) ──────
+//
+// The carrier's scan trail. The endpoint projects raw order_parcel_events
+// rows (provider/eventType/occurredAt/payload); this mapper translates the
+// wire vocabulary onto the OrderTrackingEvent the tracking section renders.
+// `source: 'orders_status_only'` means the parcel table isn't provisioned —
+// an empty trail, never an error.
+
+export interface ParcelEventsResult {
+  source: 'orders_with_parcel_events' | 'orders_status_only';
+  order: {
+    status: string;
+    trackingNumber: string | null;
+    shippingProvider: string | null;
+    shippedAt: string | null;
+    deliveredAt: string | null;
+  } | null;
+  events: OrderTrackingEvent[];
+}
+
+interface ParcelEventApi {
+  id: number;
+  provider: string;
+  eventType: string;
+  providerEventId: string | null;
+  trackingId: string | null;
+  occurredAt: string | null;
+  receivedAt: string;
+  payload?: Record<string, unknown> | null;
+}
+
+const PARCEL_EVENT_LABEL: Record<string, string> = {
+  picked_up: 'Picked up by the carrier',
+  collection_confirmed: 'Collection confirmed',
+  in_transit: 'In transit',
+  out_for_delivery: 'Out for delivery',
+  delivered: 'Delivered',
+  delivery_failed: 'Delivery failed',
+  lost: 'Parcel reported lost',
+  damaged: 'Parcel reported damaged',
+  returned: 'Returned to sender',
+};
+
+const PARCEL_EVENT_TONE: Record<string, OrderTrackingEvent['tone']> = {
+  delivery_failed: 'warning',
+  lost: 'danger',
+  damaged: 'danger',
+  returned: 'warning',
+};
+
+function humaniseEventType(eventType: string): string {
+  return eventType
+    .replace(/[_-]+/g, ' ')
+    .replace(/^./, (c) => c.toUpperCase());
+}
+
+function mapParcelEvent(e: ParcelEventApi): OrderTrackingEvent {
+  const payload = e.payload ?? null;
+  const location =
+    payload && typeof payload.location === 'string' ? payload.location : null;
+  const detail =
+    payload && typeof payload.description === 'string'
+      ? payload.description
+      : payload && typeof payload.detail === 'string'
+        ? payload.detail
+        : null;
+  return {
+    id: String(e.id),
+    at: e.occurredAt ?? e.receivedAt,
+    label: PARCEL_EVENT_LABEL[e.eventType] ?? humaniseEventType(e.eventType),
+    detail,
+    location,
+    tone: PARCEL_EVENT_TONE[e.eventType] ?? 'normal',
+  };
+}
+
+/** GET /orders/:orderId/parcel/events — participant-gated carrier scans. */
+export async function fetchParcelEvents(
+  orderId: string,
+  signal?: AbortSignal,
+): Promise<ParcelEventsResult> {
+  const payload = await fetchJson<{
+    ok: boolean;
+    source?: ParcelEventsResult['source'];
+    order?: ParcelEventsResult['order'];
+    items?: ParcelEventApi[];
+  }>(`/orders/${encodeURIComponent(orderId)}/parcel/events`, undefined, { signal });
+  return {
+    source: payload.source ?? 'orders_status_only',
+    order: payload.order ?? null,
+    events: (payload.items ?? []).map(mapParcelEvent),
+  };
+}
+
+// ── Buyer protection (commerceApi.ts fetchBuyerProtection/createClaim) ───────
+//
+// GET /orders/:orderId/protection is buyer-gated; claim amounts travel in
+// minor units (pence) on the wire.
+
+export interface BuyerProtectionClaim {
+  ticketId: string;
+  topicId: string;
+  /** Server-rendered human label — display it directly. */
+  topicLabel: string;
+  status: string;
+  createdAt: string;
+}
+
+export interface BuyerProtectionInfo {
+  orderId: string;
+  /** Protection fee the buyer paid, in pence. */
+  feeGbpMinor: number;
+  status: 'covered' | 'not_covered';
+  /** Coverage cap in pence — the server caps at £500. */
+  coverageAmountGbpMinor: number;
+  eligibleUntil: string;
+  claims: BuyerProtectionClaim[];
+}
+
+export async function fetchOrderProtection(
+  orderId: string,
+  signal?: AbortSignal,
+): Promise<BuyerProtectionInfo | null> {
+  const payload = await fetchJson<{ ok: boolean; protection?: BuyerProtectionInfo }>(
+    `/orders/${encodeURIComponent(orderId)}/protection`,
+    undefined,
+    { signal },
+  );
+  return payload.ok ? (payload.protection ?? null) : null;
+}
+
+/** POST /orders/:orderId/protection/claim — opens a buyer-protection case.
+ *  Idempotent server-side per open claim; the replayed ticket returns. */
+export async function createProtectionClaim(
+  orderId: string,
+  input: { reason: string; description: string; evidenceUrls?: string[] },
+): Promise<{ ticketId: string; status: string; createdAt: string }> {
+  const payload = await fetchJson<{
+    ok: boolean;
+    claim: { ticketId: string; status: string; createdAt: string };
+  }>(`/orders/${encodeURIComponent(orderId)}/protection/claim`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(input),
+  });
+  return payload.claim;
+}
+
 // ── Wallet (walletsApi.ts snapshot shape) ────────────────────────────────────
 
 interface WalletSnapshotApi {
@@ -774,4 +1047,104 @@ export async function fetchWalletSnapshot(
     cumulativeWithdrawnGbp: payload.payoutSummary?.cumulativeWithdrawnGbp ?? 0,
     currency: s.currency ?? 'GBP',
   };
+}
+
+// ── Ledger-backed wallet balances (walletApi.ts getSellerWalletBalances) ─────
+//
+// GET /users/:id/wallet/balances is the canonical money read: available,
+// escrow-pending and rolling-reserve figures are computed server-side from
+// ledger_entries — unlike /wallets/:id/snapshot, whose balanceGbp blob is
+// client-asserted. A failed read must surface as an error to the caller,
+// never collapse to £0.
+
+export interface WalletPendingBalanceItem {
+  orderId: string;
+  listingTitle: string | null;
+  amountGbp: number;
+  orderStatus: string;
+  deliveredAt: string | null;
+  releaseScheduledAt: string | null;
+}
+
+export interface WalletLedgerBalances {
+  availableGbp: number;
+  pendingGbp: number;
+  heldInReserveGbp: number;
+  pendingBreakdown: WalletPendingBalanceItem[];
+}
+
+interface WalletBalancesApi {
+  ok?: boolean;
+  balances?: {
+    availableGbp?: number;
+    pendingGbp?: number;
+    heldInReserveGbp?: number;
+  };
+  pendingBreakdown?: Array<{
+    orderId?: string;
+    listingTitle?: string | null;
+    amountGbp?: number;
+    orderStatus?: string;
+    deliveredAt?: string | null;
+    releaseScheduledAt?: string | null;
+  }>;
+}
+
+/** Ledger-backed seller balances — throws on failure; callers must carry a
+ *  balance-error state rather than render £0.00. */
+export async function fetchWalletBalances(
+  userId: string,
+  signal?: AbortSignal,
+): Promise<WalletLedgerBalances> {
+  const payload = await fetchJson<WalletBalancesApi>(
+    `/users/${encodeURIComponent(userId)}/wallet/balances`,
+    undefined,
+    { signal },
+  );
+  return {
+    availableGbp: payload.balances?.availableGbp ?? 0,
+    pendingGbp: payload.balances?.pendingGbp ?? 0,
+    heldInReserveGbp: payload.balances?.heldInReserveGbp ?? 0,
+    pendingBreakdown: (payload.pendingBreakdown ?? []).map((row) => ({
+      orderId: row.orderId ?? '',
+      listingTitle: row.listingTitle ?? null,
+      amountGbp: row.amountGbp ?? 0,
+      orderStatus: row.orderStatus ?? '',
+      deliveredAt: row.deliveredAt ?? null,
+      releaseScheduledAt: row.releaseScheduledAt ?? null,
+    })),
+  };
+}
+
+export interface WalletPayoutSummary {
+  currentPendingWithdrawalGbp: number;
+  cumulativeWithdrawnGbp: number;
+}
+
+/**
+ * Server-computed payout summary (the `withdrawal_pending` ledger account +
+ * cumulative withdrawals). It rides on the snapshot endpoint — the
+ * client-asserted `snapshot` blob is deliberately ignored here. Returns null
+ * on any failure or when no snapshot row exists: an in-flight payout is
+ * surfaced only on positive knowledge, never guessed.
+ */
+export async function fetchWalletPayoutSummary(
+  userId: string,
+  signal?: AbortSignal,
+): Promise<WalletPayoutSummary | null> {
+  try {
+    const payload = await fetchJson<WalletSnapshotApi>(
+      `/wallets/${encodeURIComponent(userId)}/snapshot`,
+      undefined,
+      { signal },
+    );
+    const s = payload.payoutSummary;
+    if (!s) return null;
+    return {
+      currentPendingWithdrawalGbp: s.currentPendingWithdrawalGbp ?? 0,
+      cumulativeWithdrawnGbp: s.cumulativeWithdrawnGbp ?? 0,
+    };
+  } catch {
+    return null;
+  }
 }

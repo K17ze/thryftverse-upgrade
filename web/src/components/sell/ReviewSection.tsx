@@ -6,10 +6,11 @@
  * preview, not here — the seller sees the listing as buyers will first.
  */
 
-import { CATEGORIES } from '@/lib/data/fixtures';
 import { Button } from '@/components/ui/Button';
 import { Icon } from '@/components/ui/Icon';
 import { formatPrice } from '@/lib/utils/format';
+import { useTaxonomy } from '@/lib/hooks/sell/useTaxonomy';
+import { categoryNodeName } from './taxonomy';
 import {
   missingPublishFields,
   parsePriceInput,
@@ -31,12 +32,15 @@ export function ReviewSection({ draft, editing, onPreview }: ReviewSectionProps)
   const price = parsePriceInput(draft.price);
   const originalPrice = parsePriceInput(draft.originalPrice);
   const buyerPays = price != null ? price + protectionFeeGbp(price) : null;
-  const categoryName = CATEGORIES.find((c) => c.slug === draft.category)?.name;
+  const { taxonomy } = useTaxonomy();
+  // Draft carries canonical taxonomy ids — resolve display names here.
+  const categoryName = categoryNodeName(taxonomy.categories, draft.category);
+  const subcategoryName = categoryNodeName(taxonomy.categories, draft.subcategory);
   const postage = postageSummary(draft.shippingMethod, draft.shippingPayer);
   const missing = missingPublishFields(draft);
 
   const specs: [string, string][] = [];
-  if (categoryName) specs.push(['Category', draft.subcategory ? `${categoryName} — ${draft.subcategory}` : categoryName]);
+  if (categoryName) specs.push(['Category', subcategoryName ? `${categoryName} — ${subcategoryName}` : categoryName]);
   if (draft.size) specs.push(['Size', draft.size]);
   if (draft.condition) specs.push(['Condition', draft.condition]);
   if (price != null) specs.push(['Price', formatPrice(price)]);

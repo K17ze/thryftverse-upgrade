@@ -8,13 +8,14 @@
 
 import Link from 'next/link';
 import { useRouter, useSearchParams } from 'next/navigation';
-import { Suspense, useState } from 'react';
+import { Suspense, useEffect, useState } from 'react';
 import { AuthShell } from '@/components/auth/AuthShell';
 import { AuthField } from '@/components/auth/AuthField';
 import { PasswordStrength } from '@/components/auth/PasswordStrength';
 import { Button } from '@/components/ui/Button';
 import { Icon } from '@/components/ui/Icon';
 import { useSession } from '@/lib/session/SessionProvider';
+import { clearReferralCode, peekReferralCode } from '@/lib/referralAttribution';
 import { MIN_PASSWORD_LENGTH, PASSWORD_LENGTH_ERROR } from './passwordPolicy';
 
 const EMAIL_RE = /^\S+@\S+\.\S+$/;
@@ -39,6 +40,13 @@ function SignupForm() {
   const [errors, setErrors] = useState<SignupErrors>({});
   const [formError, setFormError] = useState<string | null>(null);
   const [submitting, setSubmitting] = useState(false);
+  // Code captured from an /invite/[code] link — forwarded on the signup
+  // payload for server-side attribution. Read post-hydration: the store
+  // is localStorage, which SSR cannot see.
+  const [referralCode, setReferralCode] = useState<string | null>(null);
+  useEffect(() => {
+    setReferralCode(peekReferralCode());
+  }, []);
 
   const submit = (e: React.FormEvent) => {
     e.preventDefault();
@@ -53,9 +61,13 @@ function SignupForm() {
     setSubmitting(true);
     setFormError(null);
     // New accounts get the welcome + notification-permission step, like the
-    // mobile app does on first launch.
-    void signup(email.trim(), password, username.trim())
-      .then(() => router.push('/onboarding'))
+    // mobile app does on first launch. The captured referral code rides the
+    // payload — attribution is one-shot, so it clears once signup lands.
+    void signup(email.trim(), password, username.trim(), referralCode ?? undefined)
+      .then(() => {
+        if (referralCode) clearReferralCode();
+        router.push('/onboarding');
+      })
       .catch((err: unknown) => {
         setFormError(err instanceof Error ? err.message : 'Sign up failed. Try again.');
         setSubmitting(false);
@@ -72,10 +84,18 @@ function SignupForm() {
         Back
       </Link>
 
-      <h1 className="text-screen-title font-bold text-text-primary">Create your account</h1>
+      <h1 className="text-screen-title text-text-primary">Create your account</h1>
       <p className="mt-1.5 text-body text-text-secondary">
         Buy and sell pre-loved fashion with protection on every order.
       </p>
+      {referralCode ? (
+        <p className="mt-3 flex items-center gap-2 text-caption text-text-secondary">
+          <Icon name="people" size={14} className="shrink-0 text-brand" />
+          Invited — referral code{' '}
+          <code className="font-semibold tracking-[0.1em] text-text-primary">{referralCode}</code>{' '}
+          applies automatically.
+        </p>
+      ) : null}
 
       <form onSubmit={submit} className="mt-8 flex flex-col gap-4" noValidate>
         <AuthField

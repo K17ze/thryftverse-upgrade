@@ -24,6 +24,7 @@ import {
   OFFERS,
   allCommerceOrders,
   markOrderDispatched,
+  proposeDispatchExtension as proposeOrderDispatchExtension,
   protectionFeeFor,
 } from '@/lib/data/fixtures-commerce';
 import { DISPATCH_SLA_DAYS } from '@/lib/commerce/dispatch';
@@ -88,6 +89,15 @@ export interface FulfilmentJob {
   postedAt?: string;
   trackingNumber?: string;
   deliveredAt?: string;
+  /**
+   * A dispatch extension the seller proposed that is still awaiting the
+   * buyer. Only ever set from a server-confirmed proposal (live overlay)
+   * or the fixture mutation — the orders-list wire doesn't project
+   * pending extensions, so the queue never invents this state.
+   * `proposedShipBy` is null when the proposal was confirmed only via a
+   * 409 EXTENSION_PENDING (the server withholds the date on a conflict).
+   */
+  pendingExtension?: { days: number; proposedShipBy: string | null } | null;
 }
 
 export interface PayoutEntry {
@@ -220,6 +230,8 @@ interface ArchiveSale {
   size: string | null;
   price: number;
   image: string;
+  /** Closet category the sold piece belonged to — feeds the Listing row. */
+  category: Listing['category'];
   likes: number;
   views: number;
   createdAt: string;
@@ -229,11 +241,12 @@ interface ArchiveSale {
 const ARCHIVE_SALES: ArchiveSale[] = [
   {
     id: 'ml4',
-    title: 'Cropped Wool Blazer',
+    title: 'Field Jacket',
     brand: 'Cos',
-    size: 'UK10',
+    size: 'M',
     price: 48,
     image: img('photo-1591047139829-d91aecb6caea'),
+    category: 'men',
     likes: 31,
     views: 214,
     createdAt: '2026-08-02T10:00:00Z',
@@ -246,6 +259,7 @@ const ARCHIVE_SALES: ArchiveSale[] = [
     size: 'W30 L32',
     price: 58,
     image: img('photo-1541099649105-f69ad21f3246'),
+    category: 'men',
     likes: 44,
     views: 342,
     createdAt: '2026-07-18T10:00:00Z',
@@ -258,6 +272,7 @@ const ARCHIVE_SALES: ArchiveSale[] = [
     size: null,
     price: 42,
     image: img('photo-1601924994987-69e26d50dc26'),
+    category: 'women',
     likes: 19,
     views: 168,
     createdAt: '2026-08-12T10:00:00Z',
@@ -270,6 +285,7 @@ const ARCHIVE_SALES: ArchiveSale[] = [
     size: 'S',
     price: 26,
     image: img('photo-1576871337622-98d48d1cf531'),
+    category: 'women',
     likes: 9,
     views: 121,
     createdAt: '2026-08-24T10:00:00Z',
@@ -316,7 +332,7 @@ export function sellerPerformanceRows(period: SellerPeriod): ListingPerformanceR
       isSold: true,
       status: 'sold',
       sellerId: 'me',
-      category: 'women',
+      category: s.category,
       description: 'Sold piece from seller history.',
       createdAt: s.createdAt,
     } satisfies Listing,
@@ -366,7 +382,7 @@ export const FULFILMENT_QUEUE: FulfilmentJob[] = [
   {
     id: 'fq-1',
     listingId: 'ml1',
-    title: 'Oversized Denim Shirt',
+    title: 'Oversized Cotton Shirt',
     thumb: coverFor('ml1'),
     buyer: { name: 'lucygibson94', avatar: USERS[3]!.avatar },
     paid: 28,
@@ -378,7 +394,7 @@ export const FULFILMENT_QUEUE: FulfilmentJob[] = [
   {
     id: 'fq-2',
     listingId: 'ml2',
-    title: 'Pleated Trousers',
+    title: 'Straight Leg Jeans',
     thumb: coverFor('ml2'),
     buyer: { name: 'scott_art', avatar: USERS[1]!.avatar },
     paid: 35,
@@ -390,7 +406,7 @@ export const FULFILMENT_QUEUE: FulfilmentJob[] = [
   {
     id: 'fq-3',
     listingId: 'ml4',
-    title: 'Cropped Wool Blazer',
+    title: 'Field Jacket',
     thumb: coverFor('ml4'),
     buyer: { name: 'archive.thread', avatar: USERS[4]!.avatar },
     paid: 48,
@@ -420,7 +436,7 @@ export const FULFILMENT_QUEUE: FulfilmentJob[] = [
     id: 'fq-5',
     listingId: 'ml3',
     // Mirrors ord-1021 in the shared ORDERS fixture — one truth per order.
-    title: 'Graphic Print Tee',
+    title: 'Organic Cotton Tee — White',
     thumb: coverFor('ml3'),
     buyer: { name: 'lucygibson94', avatar: USERS[3]!.avatar },
     paid: 32,
@@ -479,13 +495,17 @@ export function shippingLabelFor(jobId: string): ShippingLabel | null {
 
 /** Fixture-mode dispatch — flips a job to posted with a generated tracking
  *  number, the same session-local truth pattern as recordOrder(). A
- *  number already minted by "Print label" is kept, not regenerated. */
-export function markJobPosted(jobId: string): FulfilmentJob | null {
+ *  seller-entered reference (DispatchSheet) or a number already minted by
+ *  "Print label" is kept, not regenerated. */
+export function markJobPosted(jobId: string, trackingNumber?: string): FulfilmentJob | null {
   const job = FULFILMENT_QUEUE.find((j) => j.id === jobId);
   if (!job || job.stage !== 'to-post') return null;
   job.stage = 'posted';
   job.postedAt = new Date().toISOString();
-  job.trackingNumber = job.trackingNumber ?? generateTrackingNumber(job.service);
+  job.trackingNumber = trackingNumber ?? job.trackingNumber ?? generateTrackingNumber(job.service);
+  // Dispatch ends the SLA window — a pending extension is stale from here.
+  job.pendingExtension = null;
+  dropPendingExtension(jobId);
   // The fulfilment queue and the buyer-visible order are one truth — a paid
   // commerce order for the same listing flips to shipped with the same
   // tracking reference.
@@ -496,6 +516,60 @@ export function markJobPosted(jobId: string): FulfilmentJob | null {
       ['created', 'pending', 'paid'].includes(o.status),
   );
   if (order) markOrderDispatched(order.id, job.trackingNumber);
+  return job;
+}
+
+// ── Dispatch extensions ───────────────────────────────────────────────────
+//
+// The orders-list wire doesn't project a pending extension (only the
+// detail read carries `dispatchExtension`), so live mode keeps the
+// proposals the server confirmed — a 201, or a 409 EXTENSION_PENDING that
+// proved one already exists — in this session overlay. The queue merges it
+// so the row shows the awaiting-buyer state instead of offering a second
+// proposal that could only 409. Cleared when the job leaves 'to-post'
+// (pending extensions are only legal while the order is paid); the order
+// detail read stays authoritative for the seller's buyer-facing view.
+const PENDING_EXTENSIONS = new Map<
+  string,
+  { days: number; proposedShipBy: string | null }
+>();
+
+/** Pin a server-confirmed pending extension onto a queue job (live mode). */
+export function recordPendingExtension(
+  orderId: string,
+  ext: { days: number; proposedShipBy: string | null },
+): void {
+  PENDING_EXTENSIONS.set(orderId, ext);
+}
+
+export function pendingExtensionFor(
+  orderId: string,
+): { days: number; proposedShipBy: string | null } | null {
+  return PENDING_EXTENSIONS.get(orderId) ?? null;
+}
+
+export function dropPendingExtension(orderId: string): void {
+  PENDING_EXTENSIONS.delete(orderId);
+}
+
+/**
+ * Fixture-mode extension proposal — mirrors the server gate (to-post only,
+ * one pending at a time) and writes the job's pendingExtension. The paired
+ * commerce order takes the same pending extension so the order detail
+ * surface stays one truth, the same pairing markJobPosted uses.
+ */
+export function proposeJobExtension(jobId: string, days: number): FulfilmentJob | null {
+  const job = FULFILMENT_QUEUE.find((j) => j.id === jobId);
+  if (!job || job.stage !== 'to-post' || job.pendingExtension) return null;
+  const base = Number.isNaN(Date.parse(job.shipBy)) ? Date.now() : Date.parse(job.shipBy);
+  job.pendingExtension = {
+    days,
+    proposedShipBy: new Date(base + days * DAY_MS).toISOString(),
+  };
+  const order = allCommerceOrders().find(
+    (o) => o.sellerId === 'me' && o.listingId === job.listingId && o.status === 'paid',
+  );
+  if (order) proposeOrderDispatchExtension(order.id, days);
   return job;
 }
 
@@ -794,6 +868,77 @@ export function applyAwayStateToFixtures(state: SellerAwayState): void {
     if (l.sellerId === 'me' && l.seller) {
       l.seller.holidayMode = away ? true : undefined;
     }
+  }
+}
+
+// ============================================================================
+// STOREFRONT — the seller-authored shop front (demo-local draft)
+// ============================================================================
+
+/**
+ * The member's storefront editor state. Mirrors the live /storefronts/me
+ * contract (status + announcement + the three-policy bag). Featured pins
+ * are NOT stored here — they ride the shopRailPins overlay
+ * (components/profile/shopRailData) so the editor and the profile rail
+ * read the same truth. Persisted on-device only; the fixture profile
+ * aggregate carries no storefront block, so demo edits never pretend to
+ * be published anywhere else.
+ */
+export interface SellerStorefrontFixture {
+  status: 'draft' | 'published' | 'paused';
+  announcement: string | null;
+  policies: {
+    shipping: string | null;
+    returns: string | null;
+    additional: string | null;
+  };
+  /** Demo publication instant — shown in the editor's status line. */
+  publishedAt: string | null;
+}
+
+const STOREFRONT_STORAGE_KEY = 'thryftverse.web.seller-storefront';
+
+const EMPTY_STOREFRONT_FIXTURE: SellerStorefrontFixture = {
+  status: 'draft',
+  announcement: null,
+  policies: { shipping: null, returns: null, additional: null },
+  publishedAt: null,
+};
+
+export function loadSellerStorefront(): SellerStorefrontFixture {
+  if (typeof window === 'undefined') return EMPTY_STOREFRONT_FIXTURE;
+  try {
+    const raw = window.localStorage.getItem(STOREFRONT_STORAGE_KEY);
+    if (!raw) return EMPTY_STOREFRONT_FIXTURE;
+    const parsed = JSON.parse(raw) as Partial<SellerStorefrontFixture>;
+    const policies: Partial<SellerStorefrontFixture['policies']> =
+      parsed.policies && typeof parsed.policies === 'object' ? parsed.policies : {};
+    const pick = (v: unknown) => (typeof v === 'string' && v.trim() ? v : null);
+    return {
+      status:
+        parsed.status === 'published' || parsed.status === 'paused'
+          ? parsed.status
+          : 'draft',
+      announcement: pick(parsed.announcement),
+      policies: {
+        shipping: pick(policies.shipping),
+        returns: pick(policies.returns),
+        additional: pick(policies.additional),
+      },
+      publishedAt:
+        typeof parsed.publishedAt === 'string' ? parsed.publishedAt : null,
+    };
+  } catch {
+    return EMPTY_STOREFRONT_FIXTURE;
+  }
+}
+
+export function saveSellerStorefront(next: SellerStorefrontFixture): void {
+  if (typeof window === 'undefined') return;
+  try {
+    window.localStorage.setItem(STOREFRONT_STORAGE_KEY, JSON.stringify(next));
+  } catch {
+    /* storage unavailable — the session copy still applies */
   }
 }
 

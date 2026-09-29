@@ -18,7 +18,7 @@ export function HostGate() {
       <span className="flex h-16 w-16 items-center justify-center rounded-full bg-surface-alt text-text-muted">
         <Icon name="videocam" size={28} />
       </span>
-      <h1 className="mt-5 text-screen-title font-bold text-text-primary">
+      <h1 className="mt-5 text-screen-title text-text-primary">
         Join ThryftVerse to go live
       </h1>
       <p className="mt-2 text-body text-text-secondary">

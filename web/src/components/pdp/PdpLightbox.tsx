@@ -285,14 +285,14 @@ export function PdpLightbox({
           if (zoomed) resetZoom();
           else zoomInAt();
         }}
-        className="absolute right-14 top-2 z-10 sm:right-16 sm:top-4"
+        className="absolute right-14 top-2 z-elevated sm:right-16 sm:top-4"
       />
       <IconButton
         name="close"
         aria-label="Close photo viewer"
         onMedia
         onClick={onClose}
-        className="absolute right-2 top-2 z-10 sm:right-4 sm:top-4"
+        className="absolute right-2 top-2 z-elevated sm:right-4 sm:top-4"
       />
 
       {/* Stage — box matches the media ratio so the photo is never
@@ -308,7 +308,7 @@ export function PdpLightbox({
           style={{
             width: `min(92vw, max(240px, calc((100dvh - 12rem) * ${aspectRatio})))`,
             transform: !zoomed && dragX ? `translateX(${dragX}px)` : undefined,
-            transition: dragging ? 'none' : 'transform 180ms ease-out',
+            transition: dragging ? 'none' : 'transform 180ms var(--ease-standard)',
           }}
           onPointerDown={onPointerDown}
           onPointerMove={onPointerMove}
@@ -325,7 +325,7 @@ export function PdpLightbox({
                 ? `translate(${pan.x}px, ${pan.y}px) scale(${ZOOM_SCALE})`
                 : undefined,
               transformOrigin: `${zoomOrigin.x}px ${zoomOrigin.y}px`,
-              transition: dragging ? 'none' : 'transform 200ms ease-out',
+              transition: dragging ? 'none' : 'transform 200ms var(--ease-standard)',
             }}
           >
             <AppImage

@@ -9,6 +9,7 @@
 import Link from 'next/link';
 import type { Review } from '@/lib/contracts/domain';
 import { Avatar } from '@/components/ui/Avatar';
+import { AppImage } from '@/components/ui/AppImage';
 import { Icon } from '@/components/ui/Icon';
 import { Skeleton } from '@/components/ui/Skeleton';
 import { formatDate } from '@/lib/utils/format';
@@ -100,6 +101,47 @@ function ReviewRow({ review }: { review: Review }) {
         >
           {review.text}
         </p>
+        {/* Buyer photo evidence — moderated URLs from review_media. */}
+        {review.photoUrls && review.photoUrls.length > 0 ? (
+          <div className="mt-2 flex gap-2">
+            {review.photoUrls.slice(0, 4).map((src, i) => (
+              <span
+                key={i}
+                className="relative h-14 w-14 overflow-hidden rounded-md bg-surface-alt"
+              >
+                <AppImage src={src} alt="" fill sizes="56px" className="h-full w-full" />
+              </span>
+            ))}
+          </div>
+        ) : null}
+        {/* Listing context — the order this review was for. */}
+        {review.listing ? (
+          <Link
+            href={`/item/${review.listing.id}`}
+            className="pressable mt-2 inline-flex max-w-full items-center gap-2 text-meta text-text-muted hover:text-text-secondary"
+          >
+            {review.listing.imageUrl ? (
+              <span className="relative h-6 w-6 shrink-0 overflow-hidden rounded bg-surface-alt">
+                <AppImage src={review.listing.imageUrl} alt="" fill sizes="24px" className="h-full w-full" />
+              </span>
+            ) : null}
+            <span className="clamp-1">{review.listing.title}</span>
+          </Link>
+        ) : null}
+        {/* Seller's public response — separated, quieter, clearly a reply. */}
+        {review.sellerResponse ? (
+          <div className="mt-2.5 border-l-2 border-border-subtle pl-3">
+            <p className="text-meta font-semibold text-text-primary">
+              Seller response
+              <span className="ml-1.5 font-normal text-text-muted">
+                {formatDate(review.sellerResponse.createdAt)}
+              </span>
+            </p>
+            <p className="mt-0.5 text-body text-text-secondary">
+              {review.sellerResponse.text}
+            </p>
+          </div>
+        ) : null}
       </div>
     </article>
   );

@@ -37,6 +37,8 @@ type UploadRouteDependencies = {
     expectedContentType: string,
     expectedSizeBytes: number,
   ) => Promise<void>;
+  /** Durable-queue dispatch — injectable so tests stay off Redis. */
+  enqueueMediaIngest?: (input: { assetId: string; reason: string }) => Promise<void>;
 };
 
 const uploadRequestSchema = z.object({
@@ -142,6 +144,7 @@ export const registerUploadRoutes = ({
   createApiError,
   resolveAuthenticatedUserId,
   verifyUploadedObject = assertObjectMatchesUploadPolicy,
+  enqueueMediaIngest = enqueueMediaIngestJob,
 }: UploadRouteDependencies) => {
   app.post('/uploads/presign', {
     config: {
@@ -542,7 +545,7 @@ export const registerUploadRoutes = ({
       // asset never stays in an intermediate state if the API process crashes.
       if (mediaAsset) {
         try {
-          await enqueueMediaIngestJob({
+          await enqueueMediaIngest({
             assetId: mediaAsset.id,
             reason: 'finalize',
           });
@@ -1230,7 +1233,7 @@ export const registerUploadRoutes = ({
     // moderation behaviour as the single-PUT finalize path.
     if (mediaAsset) {
       try {
-        await enqueueMediaIngestJob({
+        await enqueueMediaIngest({
           assetId: mediaAsset.id,
           reason: 'multipart_complete',
         });

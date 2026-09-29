@@ -12,7 +12,6 @@
 
 import { useEffect, useRef, useState } from 'react';
 import type { LiveSession } from '@/lib/data/fixtures-media';
-import { userById } from '@/lib/data/fixtures';
 import { AppImage } from '@/components/ui/AppImage';
 import { Avatar } from '@/components/ui/Avatar';
 import { Icon } from '@/components/ui/Icon';
@@ -24,10 +23,13 @@ import { useHydrated } from '@/lib/store/useStore';
 import { LiveBadge } from './LiveBadge';
 import { LiveChatRail } from './LiveChatRail';
 import { LiveLotDock } from './LiveLotDock';
+import { LivePlayer } from './LivePlayer';
 import { LiveProductRail } from './LiveProductRail';
 import { LiveReactions } from './LiveReactions';
 import { useLiveChat } from './useLiveChat';
 import { useLivePresence } from './useLivePresence';
+import { useLiveRoom } from './useLiveRoom';
+import { liveSellerOf } from './useLiveSessions';
 import { usePinnedChatNote } from './livePins';
 import { lockBodyScroll } from '@/lib/a11y/scrollLock';
 import { formatCount } from '@/lib/utils/format';
@@ -40,8 +42,14 @@ interface LiveViewerOverlayProps {
 export function LiveViewerOverlay({ session, onClose }: LiveViewerOverlayProps) {
   const { show } = useToast();
   const { requireAuth, wall } = useSignupWall();
-  const viewers = useLivePresence(session);
-  const { messages, send } = useLiveChat(session);
+  // Live-mode realtime: LiveKit playback, session-topic SSE (chat,
+  // presence, moderation, end), REST chat history. Inert in fixture mode.
+  const room = useLiveRoom(session);
+  const presenceViewers = useLivePresence(session);
+  const fixtureChat = useLiveChat(session);
+  const viewers = room.viewerCount ?? presenceViewers;
+  const messages = room.active ? room.messages : fixtureChat.messages;
+  const send = room.active ? room.send : fixtureChat.send;
   // Host-pinned chat note — the shared store the host console writes to,
   // so a line pinned mid-show lands here while the overlay is open.
   const pinnedNote = usePinnedChatNote(session?.id ?? '');
@@ -94,7 +102,7 @@ export function LiveViewerOverlay({ session, onClose }: LiveViewerOverlayProps) 
   }, [session, onClose]);
 
   if (!session) return null;
-  const seller = userById(session.sellerId);
+  const seller = liveSellerOf(session);
   const following = hydrated && session.sellerId !== '' && followingIds.includes(session.sellerId);
   const live = session.status === 'live';
 
@@ -107,7 +115,8 @@ export function LiveViewerOverlay({ session, onClose }: LiveViewerOverlayProps) 
     : null;
 
   const share = async () => {
-    const url = `${window.location.origin}/live`;
+    // Deep link — the hub honours ?watch=<id> and opens this same overlay.
+    const url = `${window.location.origin}/live?watch=${encodeURIComponent(session.id)}`;
     if (typeof navigator !== 'undefined' && navigator.share) {
       try {
         await navigator.share({ title: session.title, url });
@@ -133,15 +142,29 @@ export function LiveViewerOverlay({ session, onClose }: LiveViewerOverlayProps) 
       aria-modal="true"
       aria-label={`${live ? 'Live' : 'Replay'} — ${session.title}`}
     >
-      <AppImage
-        src={session.coverUri}
-        alt={session.title}
-        fill
-        priority
-        className="h-full w-full"
-        imgClassName="object-cover"
-        sizes="100vw"
-      />
+      {/* The stage — real media on live backend sessions (LiveKit track,
+          replay video, or an honest state line); fixture sessions keep the
+          authored cover, which reads as a preview, not a fake feed. */}
+      {room.active ? (
+        <LivePlayer
+          session={session}
+          state={room.playback}
+          endSummary={room.endSummary}
+          attachVideo={room.attachVideo}
+          attachAudio={room.attachAudio}
+          onRetry={room.retry}
+        />
+      ) : (
+        <AppImage
+          src={session.coverUri}
+          alt={session.title}
+          fill
+          priority
+          className="h-full w-full"
+          imgClassName="object-cover"
+          sizes="100vw"
+        />
+      )}
 
       {/* Top chrome — seller identity + follow left; badge, viewers, share,
           close right. Mobile's LiveStreamTopChrome grammar. */}
@@ -155,9 +178,11 @@ export function LiveViewerOverlay({ session, onClose }: LiveViewerOverlayProps) 
                 <Icon name="verified" size={14} className="shrink-0 text-scrim-text-primary" filled />
               ) : null}
             </p>
-            <p className="hidden text-meta text-scrim-text-secondary sm:block">
-              {formatCount(seller?.followers)} followers
-            </p>
+            {seller?.followers != null ? (
+              <p className="hidden text-meta text-scrim-text-secondary sm:block">
+                {formatCount(seller.followers)} followers
+              </p>
+            ) : null}
           </div>
           <button
             type="button"
@@ -188,9 +213,11 @@ export function LiveViewerOverlay({ session, onClose }: LiveViewerOverlayProps) 
               ) : null}
             </>
           ) : (
-            <span className="inline-flex items-center gap-1.5 rounded-md bg-overlay px-2 py-1 text-meta font-semibold uppercase tracking-[0.08em] text-scrim-text-primary">
+            <span className="inline-flex items-center gap-1.5 rounded-md bg-overlay px-2 py-1 text-meta font-semibold uppercase tracking-wide text-scrim-text-primary">
               <Icon name="play" size={12} filled />
-              Replay · {session.durationMinutes} min
+              {session.durationMinutes != null
+                ? `Replay · ${session.durationMinutes} min`
+                : 'Replay'}
             </span>
           )}
           <IconButton name="share" aria-label="Share show" onMedia onClick={() => void share()} />
@@ -243,9 +270,9 @@ export function LiveViewerOverlay({ session, onClose }: LiveViewerOverlayProps) 
       {/* Mobile chat — on-canvas panel over the stage, same scrim grammar.
           Desktop keeps the always-on column above. */}
       {chatOpen ? (
-        <div className="absolute inset-x-0 bottom-0 z-10 flex max-h-[58dvh] flex-col border-t border-white/10 bg-black/85 backdrop-blur-md md:hidden">
+        <div className="absolute inset-x-0 bottom-0 z-elevated flex max-h-[58dvh] flex-col border-t border-white/10 bg-black/85 backdrop-blur-md md:hidden">
           <div className="flex items-center justify-between pb-1 pl-4 pr-1 pt-1.5">
-            <span className="text-meta font-semibold uppercase tracking-[0.08em] text-scrim-text-secondary">
+            <span className="text-meta font-semibold uppercase tracking-wide text-scrim-text-secondary">
               {live ? 'Live chat' : 'Chat replay'}
             </span>
             <IconButton
@@ -253,7 +280,8 @@ export function LiveViewerOverlay({ session, onClose }: LiveViewerOverlayProps) 
               aria-label="Hide chat"
               onMedia
               onClick={() => setChatOpen(false)}
-              className="h-9 w-9"
+              // 36px chrome, 44px hit area via the ::after pad-out.
+              className="relative h-9 w-9 after:absolute after:-inset-1 after:content-['']"
               size={18}
             />
           </div>

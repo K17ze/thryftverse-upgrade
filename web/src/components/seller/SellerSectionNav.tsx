@@ -2,12 +2,13 @@
 
 /**
  * SellerSectionNav — the hub's one navigation grammar: Overview /
- * Fulfilment / Earnings as hairline tabs with a 2px active underline.
- * Counts badge the working surfaces so the radar is legible from anywhere.
+ * Fulfilment / Earnings as route tabs on the shared ui/Tabs primitive
+ * (hairline baseline, 2px ink underline, quiet tnum counts). Counts badge
+ * the working surfaces so the radar is legible from anywhere.
  */
 
-import Link from 'next/link';
 import { usePathname } from 'next/navigation';
+import { Tabs } from '@/components/ui/Tabs';
 
 export function SellerSectionNav({
   toPost = 0,
@@ -17,7 +18,7 @@ export function SellerSectionNav({
   posted?: number;
 }) {
   const pathname = usePathname();
-  const sections = [
+  const sections: { href: string; label: string; count?: number }[] = [
     { href: '/seller-hub', label: 'Overview' },
     { href: '/seller-hub/listings', label: 'Listings' },
     { href: '/seller-hub/auctions', label: 'Auctions' },
@@ -29,39 +30,31 @@ export function SellerSectionNav({
     { href: '/seller-hub/earnings', label: 'Earnings' },
     { href: '/seller-hub/promotions', label: 'Promoted' },
     { href: '/seller-hub/analytics', label: 'Analytics' },
+    { href: '/seller-hub/storefront', label: 'Storefront' },
     { href: '/seller-hub/settings', label: 'Settings' },
   ];
+  // Prefix-match only the section that owns child routes — the
+  // per-listing manage surface keeps Listings lit.
+  const active =
+    sections.find(
+      (s) =>
+        pathname === s.href ||
+        (s.href === '/seller-hub/listings' &&
+          pathname.startsWith('/seller-hub/listings/')),
+    )?.href ?? '';
+
   return (
-    <nav
-      aria-label="Seller hub sections"
-      className="mt-5 flex gap-6 overflow-x-auto border-b border-border-subtle"
-    >
-      {sections.map((s) => {
-        // Prefix-match only the section that owns child routes — the
-        // per-listing manage surface keeps Listings lit.
-        const active =
-          pathname === s.href ||
-          (s.href === '/seller-hub/listings' && pathname.startsWith('/seller-hub/listings/'));
-        return (
-          <Link
-            key={s.href}
-            href={s.href}
-            aria-current={active ? 'page' : undefined}
-            className={`-mb-px inline-flex items-center gap-1.5 border-b-2 pb-2.5 text-body-emphasis transition-colors ${
-              active
-                ? 'border-text-primary font-semibold text-text-primary'
-                : 'border-transparent text-text-secondary hover:text-text-primary'
-            }`}
-          >
-            {s.label}
-            {s.count ? (
-              <span className="tnum rounded-full bg-surface-alt px-1.5 py-0.5 text-micro font-semibold text-text-secondary">
-                {s.count}
-              </span>
-            ) : null}
-          </Link>
-        );
-      })}
-    </nav>
+    <Tabs
+      className="-mx-4 mt-5 sm:-mx-6"
+      railClassName="px-1 sm:px-3"
+      tabs={sections.map((s) => ({
+        key: s.href,
+        label: s.label,
+        href: s.href,
+        count: s.count,
+      }))}
+      active={active}
+      ariaLabel="Seller hub sections"
+    />
   );
 }

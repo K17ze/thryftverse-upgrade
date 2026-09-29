@@ -17,7 +17,6 @@ import { Button } from '@/components/ui/Button';
 import { EmptyState } from '@/components/ui/EmptyState';
 import { IconButton } from '@/components/ui/IconButton';
 import { Skeleton } from '@/components/ui/Skeleton';
-import type { CorporateAction } from '@/lib/contracts/coown';
 import { DATA_MODE } from '@/lib/api/client';
 import {
   useCoOwnAsset,
@@ -28,29 +27,13 @@ import {
 import { useSession } from '@/lib/session/SessionProvider';
 import { formatCount } from '@/lib/utils/format';
 import { AssetThumb } from '../AssetThumb';
-import { gbp } from '../format';
+import {
+  corporateActionKindLabel,
+  corporateActionStatusLabel,
+  corporateActionStatusVariant,
+  gbp,
+} from '../format';
 import { GovernanceMeter } from './GovernanceMeter';
-
-const KIND_LABEL: Record<CorporateAction['kind'], string> = {
-  sale_vote: 'Sale offer',
-  insurance_renewal: 'Insurance renewal',
-  authentication: 'Authentication',
-  exit: 'Exit vote',
-};
-
-const STATUS_LABEL: Record<CorporateAction['status'], string> = {
-  open: 'Voting open',
-  passed: 'Passed',
-  rejected: 'Rejected',
-  pending_tally: 'Tally pending',
-};
-
-const STATUS_VARIANT: Record<CorporateAction['status'], 'success' | 'neutral' | 'warning'> = {
-  open: 'success',
-  passed: 'neutral',
-  rejected: 'neutral',
-  pending_tally: 'warning',
-};
 
 function deadlineLabel(iso: string): string {
   const d = new Date(iso);
@@ -71,15 +54,25 @@ const VOTE_WORD = { for: 'for', against: 'against', abstain: 'abstain' } as cons
 
 function DetailSkeleton() {
   return (
-    <div className="mx-auto w-full max-w-2xl px-4 pb-20 pt-6 sm:px-6" aria-busy="true" aria-label="Loading corporate action">
+    <div className="mx-auto w-full max-w-2xl px-4 pb-20 pt-6 sm:px-6 lg:max-w-[1440px]" aria-busy="true" aria-label="Loading corporate action">
       <Skeleton className="h-11 w-11 rounded-full" />
-      <Skeleton className="mt-6 h-4 w-40" />
-      <Skeleton className="mt-3 h-8 w-72" />
-      <Skeleton className="mt-4 h-16 w-full" />
-      <div className="mt-8 space-y-3" aria-hidden="true">
-        {Array.from({ length: 4 }).map((_, i) => (
-          <Skeleton key={i} className="h-4 w-full" />
-        ))}
+      <div className="lg:grid lg:grid-cols-[minmax(0,1fr)_360px] lg:gap-x-16">
+        <div className="min-w-0">
+          <Skeleton className="mt-6 h-4 w-40" />
+          <Skeleton className="mt-3 h-8 w-72" />
+          <Skeleton className="mt-4 h-16 w-full" />
+          <div className="mt-8 space-y-3" aria-hidden="true">
+            {Array.from({ length: 4 }).map((_, i) => (
+              <Skeleton key={i} className="h-4 w-full" />
+            ))}
+          </div>
+        </div>
+        <div className="mt-8 space-y-3 lg:mt-6" aria-hidden="true">
+          <Skeleton className="h-4 w-24" />
+          <Skeleton className="h-3 w-full" />
+          <Skeleton className="h-3 w-full" />
+          <Skeleton className="mt-6 h-[52px] w-full rounded-md" />
+        </div>
       </div>
     </div>
   );
@@ -150,7 +143,7 @@ export function CorporateActionDetailView({
       : null;
 
   return (
-    <div className="mx-auto w-full max-w-2xl px-4 pb-20 pt-6 sm:px-6">
+    <div className="mx-auto w-full max-w-2xl px-4 pb-20 pt-6 sm:px-6 lg:max-w-[1440px]">
       <div className="flex items-center gap-1">
         <IconButton
           name="back"
@@ -158,15 +151,22 @@ export function CorporateActionDetailView({
           onClick={() => router.push(`/co-own/${assetId}`)}
           className="-ml-2"
         />
-        <span className="text-meta font-semibold uppercase tracking-[0.08em] text-text-muted">
+        <span className="text-meta font-semibold uppercase tracking-wide text-text-muted">
           Corporate action
         </span>
       </div>
 
+      {/* Desktop grammar: the resolution reads in the main column; the
+          tally + ballot rail sits to its right like a brokerage proxy
+          card. Mobile keeps the single stacked flow. */}
+      <div className="lg:grid lg:grid-cols-[minmax(0,1fr)_360px] lg:gap-x-16">
+        <div className="min-w-0">
       <header className="mt-6">
         <div className="flex flex-wrap items-center gap-2">
-          <Badge variant={STATUS_VARIANT[action.status]}>{STATUS_LABEL[action.status]}</Badge>
-          <span className="text-meta text-text-muted">{KIND_LABEL[action.kind]}</span>
+          <Badge variant={corporateActionStatusVariant(action.status)}>
+            {corporateActionStatusLabel(action.status)}
+          </Badge>
+          <span className="text-meta text-text-muted">{corporateActionKindLabel(action)}</span>
         </div>
         <h1 className="mt-3 text-editorial-title text-text-primary">{action.title}</h1>
         {asset ? (
@@ -229,8 +229,10 @@ export function CorporateActionDetailView({
           if the resolution passes.
         </p>
       ) : null}
+        </div>
 
-      <section aria-labelledby="tally-heading" className="mt-8">
+        <aside className="min-w-0 lg:pt-6">
+      <section aria-labelledby="tally-heading" className="mt-8 lg:mt-0">
         <h2
           id="tally-heading"
           className="text-micro font-semibold uppercase tracking-[0.08em] text-text-muted"
@@ -272,6 +274,8 @@ export function CorporateActionDetailView({
             </Button>
           )
         ) : null}
+      </div>
+        </aside>
       </div>
     </div>
   );

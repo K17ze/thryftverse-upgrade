@@ -16,12 +16,12 @@ import { Icon } from '@/components/ui/Icon';
 import { ClosetGrid, ClosetGridSkeleton } from '@/components/profile/ClosetGrid';
 import { SaveToBoardSheet } from '@/components/saved/SaveToBoardSheet';
 import { BoardCard, BoardGrid } from '@/components/profile/BoardGrid';
-import { listingsForIds } from '@/components/profile/fixtures';
 import { boardHref } from '@/components/profile/profileViewModel';
-import { useOwnerBoards } from '@/components/profile/useOwnerBoards';
+import { useOwnerBoards, type OwnerBoard } from '@/components/profile/useOwnerBoards';
 import { BoardSortControl } from '@/components/profile/BoardSortControl';
 import { sortBoards, useBoardPrefs } from '@/components/profile/boardPrefs';
-import { listingCoverThumbs } from '@/components/profile/boardMedia';
+import { useBoardCoverThumbs } from '@/components/profile/boardMedia';
+import { useListingIds } from '@/lib/hooks/listing-resolution';
 import { useStore, useHydrated } from '@/lib/store/useStore';
 import {
   useSavedSearches,
@@ -32,6 +32,36 @@ import { Switch } from '@/components/settings/Switch';
 import { useSession } from '@/lib/session/SessionProvider';
 
 type Segment = 'favourites' | 'saved' | 'boards' | 'searches';
+
+/** Quiet unavailability line — live ids the server couldn't resolve
+ *  (deleted listings, failed reads) are dropped from the grid; the count
+ *  is disclosed instead of silently shrinking the list. */
+function UnavailableNote({ count }: { count: number }) {
+  if (count <= 0) return null;
+  return (
+    <p className="px-4 pb-2 text-meta text-text-muted sm:px-6">
+      {count} {count === 1 ? 'item' : 'items'} unavailable
+    </p>
+  );
+}
+
+/** Board card — the collage resolves through the live-aware hook so a
+ *  live board never renders catalogue ghosts (fixture keeps the same
+ *  derivation). Live moodboards carry wire thumbs + itemCount (membership
+ *  isn't on the list wire) — those win over the empty itemIds collage. */
+function SavedBoardCard({ board }: { board: OwnerBoard }) {
+  const resolved = useBoardCoverThumbs(board.itemIds, 4, board.coverUri, board.coverItemId);
+  const thumbs = board.thumbs && board.thumbs.length > 0 ? board.thumbs : resolved;
+  return (
+    <BoardCard
+      href={boardHref(board)}
+      title={board.title}
+      thumbs={thumbs}
+      count={board.itemCount ?? board.itemIds.length}
+      isPrivate={board.isPrivate}
+    />
+  );
+}
 
 export default function SavedPage() {
   const router = useRouter();
@@ -44,12 +74,31 @@ export default function SavedPage() {
 
   const wishlist = useStore((s) => s.wishlist);
   const saved = useStore((s) => s.saved);
+  // Sync-honesty channels — a failed live write or hydrate is disclosed,
+  // never silently absorbed (item 10).
+  const savedSyncError = useStore((s) => s.savedSyncError);
+  const savedListsStale = useStore((s) => s.savedListsStale);
   const searches = useSavedSearches((s) => s.searches);
+  const searchesSyncError = useSavedSearches((s) => s.syncError);
+  const searchesStale = useSavedSearches((s) => s.stale);
   const toggleAlert = useSavedSearches((s) => s.toggleAlert);
   const removeSearch = useSavedSearches((s) => s.removeSearch);
 
-  const favouriteListings = useMemo(() => listingsForIds(wishlist), [wishlist]);
-  const savedListings = useMemo(() => listingsForIds(saved), [saved]);
+  // Id lists resolve through the shared live/fixture hook — one batched
+  // read for both lists (live: GET /listings/:id per id, misses dropped
+  // and counted; fixture: the catalogue). Each tab filters the merged
+  // resolution by list membership, so tab content is exactly its list.
+  const resolved = useListingIds(
+    useMemo(() => [...new Set([...wishlist, ...saved])], [wishlist, saved]),
+  );
+  const favouriteListings = useMemo(
+    () => resolved.items.filter((l) => wishlist.includes(l.id)),
+    [resolved.items, wishlist],
+  );
+  const savedListings = useMemo(
+    () => resolved.items.filter((l) => saved.includes(l.id)),
+    [resolved.items, saved],
+  );
   // Same derivation as the profile Boards tab — one source of truth:
   // fixture boards plus persisted owner edits, private boards included.
   // Guests are never the fixture 'me' — no id, no boards.
@@ -68,7 +117,7 @@ export default function SavedPage() {
   return (
     <div className="mx-auto max-w-[1200px]">
       <div className="px-4 pt-5 sm:px-6">
-        <h1 className="text-screen-title font-bold text-text-primary">Saved</h1>
+        <h1 className="text-screen-title text-text-primary">Saved</h1>
       </div>
 
       <div className="mt-4">
@@ -76,31 +125,52 @@ export default function SavedPage() {
       </div>
 
       <div className="py-4">
+        {(savedSyncError || savedListsStale) && (seg === 'favourites' || seg === 'saved') ? (
+          <p className="px-4 pb-2 text-meta text-warning-text sm:px-6">
+            {savedSyncError
+              ? "Some changes couldn't sync — check your connection and try again."
+              : "Couldn't refresh your saved items — this list may be outdated."}
+          </p>
+        ) : null}
         {!mounted ? (
           <ClosetGridSkeleton />
         ) : seg === 'favourites' ? (
-          <ClosetGrid
-            items={favouriteListings}
-            unsave="favourites"
-            emptyIcon="heart"
-            emptyTitle="No favourites yet"
-            emptySubtitle="Tap the heart on any item and it'll wait for you here."
-            actionLabel="Explore"
-            onAction={() => router.push('/explore')}
-          />
+          resolved.isLoading ? (
+            <ClosetGridSkeleton />
+          ) : (
+            <>
+              <UnavailableNote count={resolved.unresolvedCount} />
+              <ClosetGrid
+                items={favouriteListings}
+                unsave="favourites"
+                emptyIcon="heart"
+                emptyTitle="No favourites yet"
+                emptySubtitle="Tap the heart on any item and it'll wait for you here."
+                actionLabel="Explore"
+                onAction={() => router.push('/explore')}
+              />
+            </>
+          )
         ) : seg === 'saved' ? (
-          <ClosetGrid
-            items={savedListings}
-            unsave="saved"
-            onFileItem={
-              isGuest ? undefined : (item) => setFiling({ id: item.id, title: item.title })
-            }
-            emptyIcon="bookmark"
-            emptyTitle="No saved items"
-            emptySubtitle="Bookmark items to compare them here later."
-            actionLabel="Explore"
-            onAction={() => router.push('/explore')}
-          />
+          resolved.isLoading ? (
+            <ClosetGridSkeleton />
+          ) : (
+            <>
+              <UnavailableNote count={resolved.unresolvedCount} />
+              <ClosetGrid
+                items={savedListings}
+                unsave="saved"
+                onFileItem={
+                  isGuest ? undefined : (item) => setFiling({ id: item.id, title: item.title })
+                }
+                emptyIcon="bookmark"
+                emptyTitle="No saved items"
+                emptySubtitle="Bookmark items to compare them here later."
+                actionLabel="Explore"
+                onAction={() => router.push('/explore')}
+              />
+            </>
+          )
         ) : seg === 'searches' ? (
           searches.length === 0 ? (
             <EmptyState
@@ -112,8 +182,16 @@ export default function SavedPage() {
               compact
             />
           ) : (
-            <ul className="px-4 sm:px-6">
-              {searches.map((s) => {
+            <>
+              {searchesSyncError || searchesStale ? (
+                <p className="px-4 pb-2 text-meta text-warning-text sm:px-6">
+                  {searchesSyncError
+                    ? "Some changes couldn't sync — check your connection and try again."
+                    : "Couldn't refresh your saved searches — this list may be outdated."}
+                </p>
+              ) : null}
+              <ul className="px-4 sm:px-6">
+                {searches.map((s) => {
                 const filterText = describeFilters(s.filters);
                 const isVisual = s.kind === 'visual';
                 return (
@@ -168,6 +246,7 @@ export default function SavedPage() {
                 );
               })}
             </ul>
+            </>
           )
         ) : isGuest ? (
           <EmptyState
@@ -201,14 +280,7 @@ export default function SavedPage() {
             </div>
             <BoardGrid>
               {boards.map((b) => (
-                <BoardCard
-                  key={b.id}
-                  href={boardHref(b)}
-                  title={b.title}
-                  thumbs={listingCoverThumbs(b.itemIds, 4, b.coverUri, b.coverItemId)}
-                  count={b.itemIds.length}
-                  isPrivate={b.isPrivate}
-                />
+                <SavedBoardCard key={b.id} board={b} />
               ))}
             </BoardGrid>
           </>

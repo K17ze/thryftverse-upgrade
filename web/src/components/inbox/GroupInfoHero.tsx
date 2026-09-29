@@ -102,7 +102,7 @@ export function GroupInfoHero({
 
       <div className="flex flex-col items-center gap-1 px-4">
         <div className="flex max-w-full items-center gap-2">
-          <h1 className="clamp-1 max-w-full text-center text-screen-title font-bold text-text-primary">
+          <h1 className="clamp-1 max-w-full text-center text-screen-title text-text-primary">
             {title}
           </h1>
           {canEdit ? (

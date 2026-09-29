@@ -41,6 +41,10 @@ export interface ReviewSubmission {
   text: string;
   tags: string[];
   photoUrls: string[];
+  /** Source files for photoUrls — live mode uploads them through
+   *  /uploads/presign → finalize before the review POST, since the
+   *  backend only accepts URLs owned by the requester. */
+  files?: File[];
 }
 
 export function ratingLabelFor(rating: number): string | null {

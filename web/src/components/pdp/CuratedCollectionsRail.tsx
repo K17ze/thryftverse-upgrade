@@ -9,25 +9,69 @@
  */
 
 import Link from 'next/link';
+import { useQuery } from '@tanstack/react-query';
 import type { Listing } from '@/lib/contracts/domain';
 import { CURATED_COLLECTION_META } from '@/lib/data/fixtures';
 import { COLLECTIONS } from '@/components/profile/fixtures';
+import { DATA_MODE } from '@/lib/api/client';
+import { fetchGalleriaCollection, fetchGalleriaCollections } from '@/lib/api/services/galleria';
+import { useSession } from '@/lib/session/SessionProvider';
 import { AppImage } from '@/components/ui/AppImage';
 import { Icon } from '@/components/ui/Icon';
+
+const LIVE = DATA_MODE === 'live';
 
 interface CuratedCollectionsRailProps {
   listing: Listing;
 }
 
+interface FeaturedCollectionCard {
+  id: string;
+  title: string;
+  itemCount: number;
+  coverImageUri?: string;
+  subtitle?: string;
+}
+
 export function CuratedCollectionsRail({ listing }: CuratedCollectionsRailProps) {
-  const featured = COLLECTIONS.filter((c) => c.itemIds.includes(listing.id)).map(
-    (c) => ({
-      id: c.id,
-      title: c.title,
-      itemCount: c.itemIds.length,
-      meta: CURATED_COLLECTION_META.find((m) => m.id === c.id),
-    }),
-  );
+  const { isGuest } = useSession();
+
+  // Live: galleria collection itemIds are collection-item row ids — the
+  // detail's items carry the real listingId, so membership is resolved
+  // by fanning out over the newest published collections.
+  const liveQuery = useQuery({
+    queryKey: ['pdp', 'featured-collections', listing.id],
+    queryFn: async ({ signal }) => {
+      const collections = await fetchGalleriaCollections(signal);
+      const details = await Promise.all(
+        collections.slice(0, 8).map((c) =>
+          fetchGalleriaCollection(c.id, signal).catch(() => null),
+        ),
+      );
+      return details
+        .filter((d): d is NonNullable<typeof d> => d !== null)
+        .filter((d) => d.items.some((i) => i.listingId === listing.id))
+        .map((d) => ({
+          id: d.collection.id,
+          title: d.collection.title,
+          itemCount: d.collection.listingIds.length,
+          coverImageUri: d.collection.coverUri,
+          subtitle: d.collection.dek,
+        }));
+    },
+    enabled: LIVE && !isGuest,
+    staleTime: 10 * 60_000,
+  });
+
+  const featured: FeaturedCollectionCard[] = LIVE
+    ? (liveQuery.data ?? [])
+    : COLLECTIONS.filter((c) => c.itemIds.includes(listing.id)).map((c) => ({
+        id: c.id,
+        title: c.title,
+        itemCount: c.itemIds.length,
+        coverImageUri: CURATED_COLLECTION_META.find((m) => m.id === c.id)?.coverImageUri,
+        subtitle: CURATED_COLLECTION_META.find((m) => m.id === c.id)?.subtitle,
+      }));
   if (featured.length === 0) return null;
 
   return (
@@ -54,7 +98,7 @@ export function CuratedCollectionsRail({ listing }: CuratedCollectionsRailProps)
         {featured.map((c) => (
           <Link
             key={c.id}
-            href={`/collection/${c.id}`}
+            href={LIVE ? `/galleria/collection/${c.id}` : `/collection/${c.id}`}
             role="listitem"
             aria-label={`${c.title}. ${c.itemCount} pieces`}
             className="pressable flex min-h-[118px] w-[300px] shrink-0 snap-start overflow-hidden rounded-lg border border-border-subtle bg-surface-alt sm:w-[320px]"
@@ -62,7 +106,7 @@ export function CuratedCollectionsRail({ listing }: CuratedCollectionsRailProps)
             {/* Media — cover with a quiet pieces-count badge */}
             <div className="relative w-[104px] shrink-0">
               <AppImage
-                src={c.meta?.coverImageUri}
+                src={c.coverImageUri}
                 alt={c.title}
                 fill
                 className="h-full w-full"
@@ -82,9 +126,9 @@ export function CuratedCollectionsRail({ listing }: CuratedCollectionsRailProps)
                 <p className="clamp-1 mt-0.5 text-body-emphasis font-semibold text-text-primary">
                   {c.title}
                 </p>
-                {c.meta?.subtitle ? (
+                {c.subtitle ? (
                   <p className="clamp-2 mt-0.5 text-meta text-text-muted">
-                    {c.meta.subtitle}
+                    {c.subtitle}
                   </p>
                 ) : null}
               </div>

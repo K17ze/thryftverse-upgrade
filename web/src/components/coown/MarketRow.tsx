@@ -4,6 +4,7 @@ import Link from 'next/link';
 import { Icon } from '@/components/ui/Icon';
 import { usePriceHistory } from '@/lib/hooks/coown-queries';
 import type { CoOwnAsset } from '@/lib/contracts/coown';
+import { coOwnMarkGbp } from '@/lib/contracts/coown';
 import { formatCount } from '@/lib/utils/format';
 import { AssetThumb } from './AssetThumb';
 import { gbp, gbpCompact, pctAllocated } from './format';
@@ -50,7 +51,7 @@ function WatchStar({
         e.stopPropagation();
         onToggle();
       }}
-      className={`pressable pointer-events-auto relative z-10 flex h-11 w-11 items-center justify-center rounded-full hover:text-text-primary ${
+      className={`pressable pointer-events-auto relative z-elevated flex h-11 w-11 items-center justify-center rounded-full hover:text-text-primary ${
         watched ? 'text-rating-star hover:text-rating-star' : 'text-text-muted'
       } ${className}`}
     >
@@ -132,7 +133,7 @@ export function MarketRow({
         </div>
         <div className="mt-3 flex items-end justify-between gap-3">
           <div>
-            <p className="text-body-emphasis text-text-primary tnum">{gbp(asset.unitPriceGbp)}</p>
+            <p className="text-body-emphasis text-text-primary tnum">{gbp(coOwnMarkGbp(asset))}</p>
             <MovePill pct={asset.marketMovePct24h} className="mt-1" />
           </div>
           <MarketSparkline assetId={asset.id} title={asset.title} width={96} height={28} />
@@ -163,7 +164,7 @@ export function MarketRow({
           </div>
         </div>
         <div className="text-right">
-          <p className="text-body-emphasis text-text-primary tnum">{gbp(asset.unitPriceGbp)}</p>
+          <p className="text-body-emphasis text-text-primary tnum">{gbp(coOwnMarkGbp(asset))}</p>
           <MovePill pct={asset.marketMovePct24h} className="mt-1" />
         </div>
         <MarketSparkline assetId={asset.id} title={asset.title} width={76} height={26} />

@@ -78,7 +78,7 @@ export function CreateCollectionSheet({
       <div className="px-5 py-5">
         <label
           htmlFor="collection-name"
-          className="text-label font-semibold uppercase tracking-wider text-text-muted"
+          className="text-label text-text-muted"
         >
           Name
         </label>
@@ -96,7 +96,7 @@ export function CreateCollectionSheet({
           className="mt-2 h-11 w-full rounded-md border border-border bg-input px-3.5 text-body text-input-text placeholder:text-text-muted transition-colors focus:border-text-muted focus:outline-none"
         />
 
-        <p className="mt-5 text-label font-semibold uppercase tracking-wider text-text-muted">
+        <p className="mt-5 text-label text-text-muted">
           Privacy
         </p>
         <div role="radiogroup" aria-label="Collection privacy">

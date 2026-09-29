@@ -14,8 +14,11 @@ import { MY_LISTING_STATS } from '@/lib/data/fixtures';
 import { LISTING_BUMP_COOLDOWN_MS } from '@/lib/data/fixtures-commerce';
 import { DESCRIPTION_MIN } from '@/components/sell/constants';
 
-export type ListingStatus = 'active' | 'paused' | 'sold' | 'draft';
-export type ListingStatusFilter = 'all' | ListingStatus;
+export type ListingStatus = 'active' | 'paused' | 'sold' | 'draft' | 'held';
+// 'held' rows (risk review, reserved, unknown backend states) surface under
+// All but get no filter chip — they aren't a working bucket, they're an
+// exception state the seller can only view.
+export type ListingStatusFilter = 'all' | Exclude<ListingStatus, 'held'>;
 export type ListingSortKey = 'newest' | 'views' | 'likes';
 export type BulkCommand = 'pause' | 'resume' | 'delete';
 
@@ -37,6 +40,10 @@ export function listingStatusOf(listing: Listing): ListingStatus {
   // Paused is a real Listing.status — the row keeps its own badge and
   // eligibility rules instead of masquerading as active.
   if (listing.status === 'paused') return 'paused';
+  // Non-owner-actionable backend states (risk_pending holds, reserved,
+  // deleted, removed, unrecognised) must not render as "active" — every
+  // lifecycle transition out of them is rejected server-side.
+  if (listing.status && listing.status !== 'active') return 'held';
   return 'active';
 }
 
@@ -163,10 +170,11 @@ export function bulkEligible(row: ManagedListingRow, command: BulkCommand): bool
     case 'resume':
       return row.status === 'paused';
     case 'delete':
-      // The batch endpoint only manages live listings — sold rows carry
-      // order history and drafts live in their own stores (the page
-      // splits drafts out before the command runs).
-      return row.status === 'active' || row.status === 'paused';
+      // Sold rows carry order history; everything else can leave the
+      // shelf. Drafts and held rows are handled downstream — the page
+      // routes fixture drafts to their store and sends backend rows
+      // (drafts included) through the canonical command.
+      return bulkDeletable(row);
   }
 }
 

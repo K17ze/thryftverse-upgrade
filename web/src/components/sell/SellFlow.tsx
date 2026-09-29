@@ -23,14 +23,23 @@
 
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import Link from 'next/link';
+import dynamic from 'next/dynamic';
 import { useRouter, useSearchParams } from 'next/navigation';
-import type { Listing, ListingCondition } from '@/lib/contracts/domain';
+import { useQuery } from '@tanstack/react-query';
+import type { Listing, ListingCondition, ListingMediaRecord } from '@/lib/contracts/domain';
 import { CURRENT_USER, MY_LISTINGS } from '@/lib/data/fixtures';
 import { recordListing, updateListing } from '@/lib/data/fixtures-commerce';
 import { removeSellerDraft, sellerDraftById, upsertSellerDraft } from '@/lib/data/fixtures-seller';
 import { DATA_MODE } from '@/lib/api/client';
-import { fetchJson } from '@/lib/api/http';
+import { parseApiError } from '@/lib/api/http';
+import * as listingsService from '@/lib/api/services/listings';
 import * as uploadsService from '@/lib/api/services/uploads';
+import {
+  captureVideoPoster,
+  isLocalMediaUri,
+  probeImageDimensions,
+} from '@/lib/utils/media';
+import { useMyListings } from '@/lib/hooks/queries';
 import { useHydrated } from '@/lib/store/useStore';
 import { useSession } from '@/lib/session/SessionProvider';
 import { useSignupWall } from '@/components/auth/SignupWall';
@@ -44,6 +53,7 @@ import {
   useImportDraftActions,
   useImportDrafts,
 } from '@/components/catalogimport/useImportDrafts';
+import { Button } from '@/components/ui/Button';
 import { Icon } from '@/components/ui/Icon';
 import { IconButton } from '@/components/ui/IconButton';
 import { Skeleton } from '@/components/ui/Skeleton';
@@ -59,16 +69,28 @@ import {
 } from './constants';
 import { SellProgress, type SellStep } from './SellProgress';
 import { PhotosSection, type PhotoMediaState } from './PhotosSection';
-import { CameraSheet, isCameraCaptureSupported } from '@/components/media/CameraSheet';
-import { PhotoEditSheet } from '@/components/media/PhotoEditSheet';
+import { isCameraCaptureSupported } from '@/lib/media/cameraSupport';
 import { DetailsSection } from './DetailsSection';
 import { PriceSection } from './PriceSection';
 import { PostageSection } from './PostageSection';
 import { ReviewSection } from './ReviewSection';
 import { SellPreview } from './SellPreview';
+import { SellPreviewCard } from './SellPreviewCard';
 import { SellSuccess } from './SellSuccess';
 import { DraftResumeBanner } from './DraftResumeBanner';
 import { EditListingPicker } from './EditListingPicker';
+
+// Media studio surfaces — camera capture and the per-photo editor are
+// action-gated (each renders only behind its open flag), so their chunks
+// fetch on first use instead of riding the sell flow's entry bundle.
+const CameraSheet = dynamic(
+  () => import('@/components/media/CameraSheet').then((m) => m.CameraSheet),
+  { ssr: false },
+);
+const PhotoEditSheet = dynamic(
+  () => import('@/components/media/PhotoEditSheet').then((m) => m.PhotoEditSheet),
+  { ssr: false },
+);
 
 /** Error key → the field to focus when validation fails. Order is the
  *  composer order so the first blocker scrolls first. */
@@ -88,23 +110,51 @@ export function SellFlow() {
   const searchParams = useSearchParams();
   const editId = searchParams.get('edit');
   const draftParam = searchParams.get('draft');
-  const { user } = useSession();
+  const { user, sessionLoading } = useSession();
   const seller = user ?? CURRENT_USER;
   const { requireAuth, wall } = useSignupWall();
   const importDrafts = useImportDrafts();
   const { updateDraft: updateImportDraft, removeDraft: removeImportDraft } =
     useImportDraftActions();
+  const myListings = useMyListings();
 
-  // Only the seller's own listings are editable — MY_LISTINGS is the own
-  // closet slice; anything else resolves to a quiet not-found state.
-  const editing = useMemo(
-    () =>
-      editId
-        ? MY_LISTINGS.find((l) => l.id === editId && !l.isSold && l.status !== 'sold') ?? null
-        : null,
-    [editId],
+  /** Live edit target — resolves through GET /listings/:id so a real
+   *  backend listing hydrates the composer (the fixture shelf only knows
+   *  the demo closet). */
+  const editQuery = useQuery({
+    queryKey: ['sell-edit-listing', editId],
+    queryFn: ({ signal }) => listingsService.fetchListingById(editId ?? '', signal),
+    enabled: DATA_MODE === 'live' && Boolean(editId),
+  });
+  const liveEditing = useMemo(() => {
+    const listing = editQuery.data;
+    if (!listing) return null;
+    // Only the seller's own listings are editable, and terminal rows
+    // (sold/deleted) never re-enter the composer.
+    const terminal =
+      listing.status === 'sold' ||
+      listing.status === 'deleted' ||
+      listing.status === 'removed' ||
+      listing.isSold === true;
+    if (terminal) return null;
+    return user && listing.sellerId === user.id ? listing : null;
+  }, [editQuery.data, user]);
+
+  // Only the seller's own listings are editable — fixture mode reads the
+  // own-closet slice; live mode resolves the row against the backend.
+  const editing = useMemo(() => {
+    if (!editId) return null;
+    if (DATA_MODE === 'live') return liveEditing;
+    return (
+      MY_LISTINGS.find((l) => l.id === editId && !l.isSold && l.status !== 'sold') ?? null
+    );
+  }, [editId, liveEditing]);
+  // While the live fetch (or the session the ownership check needs) is in
+  // flight, show the loading posture — never a premature not-found.
+  const editLoading = Boolean(
+    editId && DATA_MODE === 'live' && (editQuery.isLoading || sessionLoading),
   );
-  const editNotFound = Boolean(editId && !editing);
+  const editNotFound = Boolean(editId && !editing && !editLoading);
 
   /**
    * ?draft=<id> — resume a draft from whichever store owns it: the hub
@@ -123,9 +173,15 @@ export function SellFlow() {
   const draftLoading = Boolean(draftParam && !draftListing && importDrafts.isLoading);
   const draftNotFound = Boolean(draftParam && !draftListing && !importDrafts.isLoading);
 
+  // The edit picker — the seller's real inventory in live mode (the
+  // query's fixture fallback is MY_LISTINGS, so the demo surface keeps
+  // working untouched).
   const ownListings = useMemo(
-    () => MY_LISTINGS.filter((l) => !l.isSold && l.status !== 'sold'),
-    [],
+    () =>
+      (myListings.data ?? MY_LISTINGS).filter(
+        (l) => !l.isSold && l.status !== 'sold' && l.status !== 'deleted',
+      ),
+    [myListings.data],
   );
 
   const [draft, setDraft] = useState<SellDraft>(() =>
@@ -135,6 +191,8 @@ export function SellFlow() {
   const [dirty, setDirty] = useState(false);
   const [previewOpen, setPreviewOpen] = useState(false);
   const [publishing, setPublishing] = useState(false);
+  /** The backend's real publish failure — surfaced on the preview surface. */
+  const [publishError, setPublishError] = useState<string | null>(null);
   const [publishedListing, setPublishedListing] = useState<Listing | null>(null);
   /** The shelf/import draft this composer is bound to (?draft= or a
    *  resumed record). Null for free-standing composer drafts — the
@@ -163,10 +221,38 @@ export function SellFlow() {
    * strip shows real progress; publish awaits whatever is still in flight.
    * Fixture mode never touches the network — entries stay absent and the
    * strip renders plain tiles. */
+  /** A staged URI fully resolved for the publish contract — verified
+   *  upload receipt for fresh media, pass-through for rows already
+   *  attached to the listing under edit. */
+  interface ResolvedMedia {
+    sourceUrl: string;
+    /** The verified object URL — the same publicUrl finalize returned. */
+    publicUrl: string;
+    /** Finalization receipt id — required by create cover + attach. */
+    finalizationId?: string;
+    kind: 'image' | 'video';
+    width?: number | null;
+    height?: number | null;
+    blurhash?: string | null;
+    /** Uploaded poster still for video media. */
+    posterUrl?: string | null;
+    /** True when the URI is a media row already attached to the listing
+     *  being edited — publish must not re-upload or re-attach it. */
+    alreadyAttached?: boolean;
+  }
+
   interface PhotoMediaEntry extends PhotoMediaState {
     publicUrl?: string;
+    finalizationId?: string;
+    /** Media already attached to the listing under edit — never re-uploaded. */
+    existingRemote?: boolean;
+    /** The fully resolved publish record once the upload lands. */
+    resolved?: ResolvedMedia;
     /** In-flight upload — publish dedupes onto it rather than re-PUTting. */
-    promise?: Promise<string>;
+    promise?: Promise<ResolvedMedia>;
+    /** The backend's real failure text — the tile retry affordance and
+     *  publish error surface read it, never a paraphrase. */
+    failure?: string;
   }
   const [mediaByUrl, setMediaByUrl] = useState<Record<string, PhotoMediaEntry>>({});
   // Mirror for async readers (publish runs outside render scope).
@@ -178,6 +264,16 @@ export function SellFlow() {
     mediaRef.current = next;
     setMediaByUrl(next);
   }, []);
+  /** Staged-media lookup the preview surfaces read (kind + poster). */
+  const mediaOf = useCallback(
+    (src: string) => mediaRef.current[src],
+    [],
+  );
+
+  /** The listing id minted for this publish attempt — stable across
+   *  retries so a replayed create is a byte-identical idempotent upsert,
+   *  never a duplicate listing. Re-armed on every fresh compose. */
+  const publishIdRef = useRef<string | null>(null);
 
   const [editIndex, setEditIndex] = useState<number | null>(null);
   const [cameraOpen, setCameraOpen] = useState(false);
@@ -187,33 +283,120 @@ export function SellFlow() {
   const cameraSupported = hydrated && isCameraCaptureSupported();
 
   /**
-   * Upload one staged photo, or return the URL as-is for remote refs.
-   * Dedupes onto the publicUrl / in-flight promise already recorded for
-   * the URL — staging, retry and publish all funnel through here.
+   * Resolve one staged URI for publish:
+   *  - media already attached to the listing under edit passes through
+   *    untouched (re-uploading it would mint a second asset),
+   *  - fixture mode resolves the local URI as-is,
+   *  - everything else (blob:/data: picks, imported remote stills) fetches
+   *    the bytes and runs the verified presign→PUT→finalize pipeline.
+   *
+   * Dedupes onto the resolved record / in-flight promise already recorded
+   * for the URL — staging, retry and publish all funnel through here.
    */
-  const ensurePhotoUpload = useCallback(
-    (url: string): Promise<string> => {
-      if (!url.startsWith('blob:')) return Promise.resolve(url);
-      if (DATA_MODE !== 'live') return Promise.resolve(url);
+  const ensureMediaUpload = useCallback(
+    (url: string): Promise<ResolvedMedia> => {
       const existing = mediaRef.current[url];
-      if (existing?.publicUrl) return Promise.resolve(existing.publicUrl);
+      if (existing?.resolved) return Promise.resolve(existing.resolved);
       if (existing?.promise) return existing.promise;
-      const promise = (async () => {
+      // Remote URI already attached to the listing under edit — the row
+      // stays, it just contributes ordering.
+      if (!isLocalMediaUri(url) && existing?.existingRemote) {
+        const resolved: ResolvedMedia = {
+          sourceUrl: url,
+          publicUrl: url,
+          kind: existing.kind ?? 'image',
+          posterUrl: existing.poster ?? null,
+          alreadyAttached: true,
+        };
+        updateMedia(url, { resolved });
+        return Promise.resolve(resolved);
+      }
+      if (DATA_MODE !== 'live') {
+        const resolved: ResolvedMedia = {
+          sourceUrl: url,
+          publicUrl: url,
+          kind: existing?.kind ?? 'image',
+          posterUrl: existing?.poster ?? null,
+        };
+        return Promise.resolve(resolved);
+      }
+      const promise = (async (): Promise<ResolvedMedia> => {
         const blob = await (await fetch(url)).blob();
-        const file = new File([blob], 'listing-photo.jpg', {
-          type: blob.type === 'image/png' ? 'image/png' : 'image/jpeg',
-        });
-        return uploadsService.uploadImageFile(file, 'listing', (ratio) => {
+        const contentType = blob.type || 'image/jpeg';
+        const kind: 'image' | 'video' = contentType.startsWith('video/')
+          ? 'video'
+          : 'image';
+        const ext =
+          contentType === 'image/png'
+            ? 'png'
+            : contentType === 'image/webp'
+              ? 'webp'
+              : kind === 'video'
+                ? (contentType.split('/')[1] ?? 'mp4')
+                : 'jpg';
+        const file = new File([blob], `listing-media.${ext}`, { type: contentType });
+        const uploaded = await uploadsService.uploadMediaFile(file, 'listing', (ratio) => {
           updateMedia(url, { status: 'uploading', progress: ratio });
         });
+        // Verified receipt — the finalize response may already carry
+        // pipeline dims/blurhash; the probe backfills what it doesn't.
+        let width = uploaded.width ?? null;
+        let height = uploaded.height ?? null;
+        let posterUrl: string | null = null;
+        if (kind === 'video') {
+          const poster = await captureVideoPoster(blob);
+          if (poster) {
+            width = width ?? poster.width;
+            height = height ?? poster.height;
+            updateMedia(url, { poster: URL.createObjectURL(poster.blob) });
+            try {
+              const posterUpload = await uploadsService.uploadMediaFile(
+                new File([poster.blob], 'listing-poster.jpg', { type: 'image/jpeg' }),
+                'poster',
+              );
+              posterUrl = posterUpload.publicUrl;
+            } catch {
+              // Poster is a best-effort affordance — the media pipeline
+              // generates one during processing; a failed still must not
+              // sink the whole publish.
+              posterUrl = null;
+            }
+          }
+        } else if (width == null || height == null) {
+          const dims = await probeImageDimensions(blob);
+          width = width ?? dims?.width ?? null;
+          height = height ?? dims?.height ?? null;
+        }
+        return {
+          sourceUrl: url,
+          publicUrl: uploaded.publicUrl,
+          finalizationId: uploaded.finalizationId,
+          kind,
+          width,
+          height,
+          blurhash: uploaded.blurhash ?? null,
+          posterUrl,
+        };
       })();
       updateMedia(url, { status: 'uploading', progress: 0, promise });
       promise
-        .then((publicUrl) =>
-          updateMedia(url, { status: 'uploaded', progress: 1, publicUrl }),
+        .then((resolved) =>
+          updateMedia(url, {
+            status: 'uploaded',
+            progress: 1,
+            publicUrl: resolved.publicUrl,
+            finalizationId: resolved.finalizationId,
+            kind: resolved.kind,
+            resolved,
+          }),
         )
-        .catch(() =>
-          updateMedia(url, { status: 'failed', progress: null, promise: undefined }),
+        .catch((err) =>
+          updateMedia(url, {
+            status: 'failed',
+            progress: null,
+            promise: undefined,
+            failure: parseApiError(err, 'Upload failed').message,
+          }),
         );
       return promise;
     },
@@ -281,10 +464,22 @@ export function SellFlow() {
       if (!committedRef.current.has(url)) URL.revokeObjectURL(url);
     });
     setDraft(editing ? draftFromListing(editing) : EMPTY_DRAFT);
+    // Existing attached media is server-owned — mark it so publish never
+    // re-uploads/re-attaches it and video slots render as video.
+    editing?.media?.forEach((m: ListingMediaRecord) => {
+      if (m.uri) {
+        updateMedia(m.uri, {
+          kind: m.kind === 'video' ? 'video' : 'image',
+          poster: m.poster ?? null,
+          existingRemote: true,
+        });
+      }
+    });
     setErrors({});
     setDirty(false);
+    publishIdRef.current = null;
     window.scrollTo({ top: 0 });
-  }, [editing]);
+  }, [editing, updateMedia]);
 
   /* Hydrate a ?draft=<id> target once it resolves — the hub shelf hits
    * synchronously, imported drafts arrive after the session-store tick.
@@ -303,6 +498,7 @@ export function SellFlow() {
     setDraftSourceId(current);
     setErrors({});
     setDirty(false);
+    publishIdRef.current = null;
     window.scrollTo({ top: 0 });
   }, [draftListing]);
 
@@ -315,16 +511,26 @@ export function SellFlow() {
 
   const addPhotos = (files: File[] | null) => {
     if (!files?.length) return;
-    const imageFiles = files.filter((f) => f.type.startsWith('image/'));
-    if (!imageFiles.length) return;
+    const mediaFiles = files.filter(
+      (f) => f.type.startsWith('image/') || f.type.startsWith('video/'),
+    );
+    if (!mediaFiles.length) return;
     const room = Math.max(0, MAX_PHOTOS - draft.photos.length);
     // Overflow past the cap never stages — only `room` files get refs.
-    const kept = imageFiles.slice(0, room).map((f) => URL.createObjectURL(f));
+    const staged = mediaFiles.slice(0, room);
+    const kept = staged.map((f) => URL.createObjectURL(f));
     if (!kept.length) return;
+    // Stamp each slot's kind before it renders — kind drives the tile,
+    // the cover rule and the attach contract's mediaType.
+    kept.forEach((url, i) => {
+      updateMedia(url, {
+        kind: staged[i].type.startsWith('video/') ? 'video' : 'image',
+      });
+    });
     update({ photos: [...draft.photos, ...kept] });
     // Live mode stages the upload immediately — real progress rings on the
     // tiles, publish just awaits them (mobile's queue-on-stage model).
-    kept.forEach((url) => void ensurePhotoUpload(url));
+    kept.forEach((url) => void ensureMediaUpload(url));
     clearError('photos');
   };
 
@@ -351,8 +557,10 @@ export function SellFlow() {
     const nextUrl = URL.createObjectURL(file);
     if (old && !committedRef.current.has(old)) URL.revokeObjectURL(old);
     if (old) updateMedia(old, null);
+    // A canvas export is always a still — the slot's kind resets to image.
+    updateMedia(nextUrl, { kind: 'image' });
     update({ photos: draft.photos.map((p, i) => (i === index ? nextUrl : p)) });
-    void ensurePhotoUpload(nextUrl);
+    void ensureMediaUpload(nextUrl);
     setEditIndex(null);
   };
 
@@ -360,7 +568,7 @@ export function SellFlow() {
     const url = draft.photos[index];
     if (!url) return;
     updateMedia(url, null);
-    void ensurePhotoUpload(url);
+    void ensureMediaUpload(url);
   };
 
   const reorderPhotos = (from: number, to: number) => {
@@ -435,9 +643,10 @@ export function SellFlow() {
     if (!draft.category) e.category = 'Choose a category';
     // Condition is an explicit seller claim — never silently defaulted.
     if (!draft.condition) e.condition = 'Choose a condition';
-    // Size is required only where the category policy says so (sneakers =
-    // mobile's shoes policy); elsewhere it stays recommended, not blocking.
-    if (isSizeRequiredCategory(draft.category) && !draft.size) {
+    // Size is required only where the category policy says so (the shoes
+    // policy — resolved from the canonical category/subcategory ids);
+    // elsewhere it stays recommended, not blocking.
+    if (isSizeRequiredCategory(draft.category, draft.subcategory) && !draft.size) {
       e.size = 'Choose a size';
     }
     // Description is a hard requirement on the mobile completeness model —
@@ -495,18 +704,37 @@ export function SellFlow() {
     // condition is never silently defaulted to 'Good'.
     const condition = draft.condition as ListingCondition;
     setPublishing(true);
+    setPublishError(null);
     if (DATA_MODE === 'live') {
-      // Live publish — upload blob:// photos through the presign flow, then
-      // POST/PATCH /listings on the shared backend.
+      /* Live publish — the native staged contract
+       * (frontend/src/services/listingPublication.ts):
+       *   1. resolve every staged URI through the verified
+       *      presign→PUT→finalize pipeline,
+       *   2. cover = the first image-kind slot (a video can lead the
+       *      order but never serves as the still cover),
+       *   3. POST /listings with the client-minted stable id — a retry
+       *      replays a byte-identical idempotent upsert,
+       *   4. attach every verified item through POST /listing-images
+       *      (deterministic per-slot ids, so retries upsert).
+       * Edit mode keeps the same media stage then PATCHes the
+       * whitelisted fields with the optimistic expectedUpdatedAt token. */
       void (async () => {
         try {
-          // Staged uploads already ran (or are in flight) — ensurePhotoUpload
-          // dedupes onto their publicUrl/promise and retries failures, so a
-          // photo that failed to stage gets one more honest attempt here.
-          const imageUrls = await Promise.all(draft.photos.map(ensurePhotoUpload));
+          const resolved = await Promise.all(draft.photos.map(ensureMediaUpload));
+          const missingVerification = resolved.find(
+            (m) => !m.alreadyAttached && !m.finalizationId,
+          );
+          if (missingVerification) {
+            throw new Error(
+              'One media item could not be verified — remove it and try again.',
+            );
+          }
 
           const originalPrice = parsePriceInput(draft.originalPrice);
-          const body = {
+          // Fields shared by create + PATCH — only the whitelisted keys
+          // the backend schemas accept. `subcategory` is create-only (the
+          // patch schema strips it, so it never rides the edit body).
+          const fields = {
             title: draft.title.trim(),
             description: draft.description.trim(),
             priceGbp: parsePriceInput(draft.price) ?? 0,
@@ -515,58 +743,143 @@ export function SellFlow() {
             // explicit clear, so an emptied field simply isn't sent.
             originalPriceGbp: originalPrice != null && originalPrice > 0 ? originalPrice : undefined,
             category: draft.category,
-            subcategory: draft.subcategory || undefined,
             brand: draft.brand.trim() || undefined,
             size: draft.size || undefined,
             condition,
-            images: imageUrls,
             shippingMethod: draft.shippingMethod || undefined,
             shippingPayer: draft.shippingPayer || undefined,
           };
 
-          const res = editing
-            ? await fetchJson<{ ok: boolean; listing?: { id: string }; id?: string }>(
-                `/listings/${encodeURIComponent(editing.id)}`,
-                {
-                  method: 'PATCH',
-                  headers: { 'Content-Type': 'application/json' },
-                  body: JSON.stringify(body),
-                },
-              )
-            : await fetchJson<{ ok: boolean; listing?: { id: string }; id?: string }>(
-                '/listings',
-                {
-                  method: 'POST',
-                  headers: { 'Content-Type': 'application/json' },
-                  body: JSON.stringify(body),
-                },
-              );
+          /** Attach one resolved media item — deterministic slot id keeps
+           *  a retried publish an upsert rather than a duplicate row. */
+          const attachMedia = async (listingId: string) => {
+            for (let i = 0; i < resolved.length; i++) {
+              const m = resolved[i];
+              if (!m.finalizationId || m.alreadyAttached) continue;
+              await listingsService.attachListingImage({
+                id: `${listingId}_att_${i}`,
+                listingId,
+                imageUrl: m.publicUrl,
+                sortOrder: i,
+                mediaType: m.kind,
+                finalizationId: m.finalizationId,
+                mediaWidth: m.width ?? undefined,
+                mediaHeight: m.height ?? undefined,
+                posterUrl: m.posterUrl ?? null,
+                blurhash: m.blurhash ?? null,
+              });
+            }
+          };
 
-          const id = editing?.id ?? res.listing?.id ?? res.id;
-          if (!id) throw new Error('No listing id returned');
+          let publishedId: string;
+          let publishedStatus: string | undefined;
+          let publishedUpdatedAt: string | undefined;
+
+          if (editing) {
+            // Attach fresh media first (native order) — /listing-images is
+            // owner-verified and only accepts rows on draft/active
+            // listings; a paused or held row reports that honestly.
+            await attachMedia(editing.id);
+            // The cover only travels with a fresh verified upload — an
+            // already-attached image's finalization isn't re-derivable, so
+            // reordering to an existing photo leaves image_url untouched
+            // (the single-PATCH schema has no attachment-order channel).
+            const cover = resolved.find(
+              (m) => m.kind === 'image' && m.finalizationId && !m.alreadyAttached,
+            );
+            const patch: listingsService.ListingPatchInput = {
+              ...fields,
+              ...(cover
+                ? { imageUrl: cover.publicUrl, coverFinalizationId: cover.finalizationId }
+                : {}),
+              // Publishing a draft edit activates it — any other status
+              // stays whatever it is (a transition we didn't mean is never
+              // sent, and a held row answers LISTING_STATUS_HELD).
+              ...(editing.status === 'draft' ? { status: 'active' } : {}),
+              expectedUpdatedAt: editing.updatedAt,
+            };
+            const res = await listingsService.patchListing(editing.id, patch);
+            publishedId = res.listingId;
+            publishedStatus = res.status;
+            publishedUpdatedAt = res.updatedAt;
+          } else {
+            const sellerId = user?.id;
+            if (!sellerId) throw new Error('Sign in to publish this listing.');
+            const cover = resolved.find((m) => m.kind === 'image');
+            if (!cover?.publicUrl || !cover.finalizationId) {
+              throw new Error(
+                'Add a photo for the cover — a video can’t be the listing cover.',
+              );
+            }
+            publishIdRef.current ??= crypto.randomUUID();
+            const { listingId, status } = await listingsService.createListing({
+              id: publishIdRef.current,
+              sellerId,
+              ...fields,
+              subcategory: draft.subcategory || undefined,
+              imageUrl: cover.publicUrl,
+              coverFinalizationId: cover.finalizationId,
+              status: 'active',
+            });
+            publishedId = listingId;
+            publishedStatus = status;
+            // The publish gate may hold the row at risk_pending — media
+            // writes are rejected outside draft/active, so a held listing
+            // keeps its cover (already set on create) and the status is
+            // reported truthfully rather than failing the whole publish.
+            if (status !== 'risk_pending') {
+              await attachMedia(listingId);
+            }
+          }
 
           draft.photos.forEach((url) => committedRef.current.add(url));
           clearPersistedDraft();
-          // Success view renders a Listing — project the server response
-          // onto the contract the success card reads.
-          const published: Listing = editing ?? {
-            id,
-            title: body.title,
-            brand: body.brand ?? null,
-            size: body.size ?? null,
-            condition: body.condition as Listing['condition'],
-            price: body.priceGbp,
-            originalPrice: body.originalPriceGbp,
-            images: imageUrls,
-            likes: 0,
-            sellerId: seller.id,
-            category: body.category,
-            subcategory: body.subcategory ?? null,
-            description: body.description,
-            createdAt: new Date().toISOString(),
-            shippingMethod: body.shippingMethod ?? null,
-            shippingPayer: body.shippingPayer ?? null,
-          };
+          // Success view renders a Listing — project the server outcome
+          // onto the contract the success card reads, status included
+          // (never claim 'active' when the gate held the row).
+          const published: Listing = editing
+            ? {
+                ...editing,
+                title: fields.title,
+                brand: fields.brand ?? null,
+                size: fields.size ?? null,
+                condition: fields.condition as Listing['condition'],
+                price: fields.priceGbp,
+                originalPrice: fields.originalPriceGbp,
+                description: fields.description,
+                category: fields.category,
+                status: (publishedStatus as Listing['status']) ?? editing.status,
+                updatedAt: publishedUpdatedAt ?? editing.updatedAt,
+              }
+            : {
+                id: publishedId,
+                title: fields.title,
+                brand: fields.brand ?? null,
+                size: fields.size ?? null,
+                condition: fields.condition as Listing['condition'],
+                price: fields.priceGbp,
+                originalPrice: fields.originalPriceGbp,
+                images: resolved.map((m) =>
+                  m.kind === 'video' ? (m.posterUrl ?? m.publicUrl) : m.publicUrl,
+                ),
+                media: resolved.map((m) => ({
+                  kind: m.kind,
+                  uri: m.publicUrl,
+                  poster: m.posterUrl ?? null,
+                  width: m.width ?? null,
+                  height: m.height ?? null,
+                  blurhash: m.blurhash ?? null,
+                })),
+                likes: 0,
+                sellerId: seller.id,
+                category: fields.category,
+                subcategory: draft.subcategory || null,
+                description: fields.description,
+                createdAt: new Date().toISOString(),
+                status: (publishedStatus as Listing['status']) ?? 'active',
+                shippingMethod: fields.shippingMethod ?? null,
+                shippingPayer: fields.shippingPayer ?? null,
+              };
           // Seller-asserted sustainability claims — no live write path
           // exists for them, so they stay on the success/preview
           // projection honestly marked as seller-provided.
@@ -575,16 +888,23 @@ export function SellFlow() {
               ...draft.sustainabilityTags,
             ];
           }
+          publishIdRef.current = null;
           setPublishedListing(published);
           setPreviewOpen(false);
           window.scrollTo({ top: 0 });
-        } catch {
-          // Honest failure — the publish button is re-enabled with the
-          // field-level error so the seller can retry without losing state.
-          setErrors((e) => ({
-            ...e,
-            title: e.title ?? 'Could not publish — check your connection and try again.',
-          }));
+        } catch (error) {
+          // Honest failure — the backend's own message (validation, stale
+          // edit, media still processing, moderation) reaches the seller;
+          // only a genuine transport failure says "connection".
+          const parsed = parseApiError(
+            error,
+            'Could not publish — try again.',
+          );
+          setPublishError(
+            parsed.isNetworkError
+              ? 'Could not publish — check your connection and try again.'
+              : parsed.message,
+          );
         } finally {
           setPublishing(false);
         }
@@ -632,13 +952,30 @@ export function SellFlow() {
     }, 700);
   };
 
+  if (editLoading) {
+    return (
+      <div
+        className="mx-auto w-full max-w-[720px] px-4 pb-24 sm:px-6"
+        aria-busy
+        aria-label="Loading listing"
+      >
+        <Skeleton className="mt-8 h-9 w-56" />
+        <Skeleton className="mt-8 h-44 w-full rounded-lg" />
+        <div className="mt-10 space-y-4">
+          <Skeleton className="h-11 w-full rounded-md" />
+          <Skeleton className="h-11 w-full rounded-md" />
+        </div>
+      </div>
+    );
+  }
+
   if (editNotFound) {
     return (
       <div className="mx-auto flex w-full max-w-[720px] flex-col items-center px-4 py-24 text-center sm:px-6">
         <span className="flex h-14 w-14 items-center justify-center rounded-full border border-border text-text-muted">
           <Icon name="edit" size={22} />
         </span>
-        <h1 className="mt-5 text-screen-title font-bold text-text-primary">
+        <h1 className="mt-5 text-screen-title text-text-primary">
           That listing isn&apos;t editable
         </h1>
         <p className="mt-2 max-w-sm text-body text-text-secondary">
@@ -667,6 +1004,8 @@ export function SellFlow() {
           setErrors({});
           setDirty(false);
           setDraftSourceId(null);
+          setPublishError(null);
+          publishIdRef.current = null;
           setPublishedListing(null);
           window.scrollTo({ top: 0 });
           if (editing || draftParam) router.push('/sell');
@@ -698,7 +1037,7 @@ export function SellFlow() {
         <span className="flex h-14 w-14 items-center justify-center rounded-full border border-border text-text-muted">
           <Icon name="edit" size={22} />
         </span>
-        <h1 className="mt-5 text-screen-title font-bold text-text-primary">
+        <h1 className="mt-5 text-screen-title text-text-primary">
           That draft isn&apos;t here anymore
         </h1>
         <p className="mt-2 max-w-sm text-body text-text-secondary">
@@ -722,6 +1061,8 @@ export function SellFlow() {
           seller={seller}
           publishing={publishing}
           editing={editing != null}
+          error={publishError}
+          mediaOf={mediaOf}
           onBack={() => {
             setPreviewOpen(false);
             window.scrollTo({ top: 0 });
@@ -743,7 +1084,7 @@ export function SellFlow() {
         draft.title.trim().length >= 3 &&
         !!draft.category &&
         !!draft.condition &&
-        !(isSizeRequiredCategory(draft.category) && !draft.size) &&
+        !(isSizeRequiredCategory(draft.category, draft.subcategory) && !draft.size) &&
         draft.description.trim().length >= DESCRIPTION_MIN,
     },
     { id: 'sell-price', label: 'Price', done: price != null },
@@ -756,10 +1097,10 @@ export function SellFlow() {
   ];
 
   return (
-    <div className="mx-auto w-full max-w-[720px] px-4 pb-24 sm:px-6">
+    <div className="mx-auto w-full max-w-[720px] px-4 pb-24 sm:px-6 lg:max-w-[1200px]">
       <header className="flex items-start justify-between gap-4 pb-2 pt-8">
         <div className="min-w-0">
-          <h1 className="text-screen-title font-bold text-text-primary">
+          <h1 className="text-screen-title text-text-primary">
             {editing ? 'Edit listing' : 'Sell an item'}
           </h1>
           {editing ? (
@@ -829,32 +1170,59 @@ export function SellFlow() {
 
       {!editing ? <EditListingPicker listings={ownListings} /> : null}
 
-      <SellProgress steps={steps} />
+      {/* Form column + live-preview rail at lg — the Vinted/eBay sell
+          grammar: the draft rendered as its real feed tile stays pinned
+          while the sections scroll. */}
+      <div className="lg:grid lg:grid-cols-[minmax(0,1fr)_340px] lg:items-start lg:gap-12">
+        <div className="min-w-0">
+          <SellProgress steps={steps} />
 
-      <form
-        onSubmit={(e) => {
-          e.preventDefault();
-          openPreview();
-        }}
-        noValidate
-      >
-        <PhotosSection
-          photos={draft.photos}
-          media={mediaByUrl}
-          error={errors.photos}
-          cameraSupported={cameraSupported}
-          onAdd={addPhotos}
-          onRemove={removePhoto}
-          onReorder={reorderPhotos}
-          onEdit={setEditIndex}
-          onRetryUpload={retryPhotoUpload}
-          onTakePhoto={() => setCameraOpen(true)}
-        />
-        <DetailsSection draft={draft} errors={errors} update={update} clearError={clearError} />
-        <PriceSection draft={draft} errors={errors} update={update} clearError={clearError} />
-        <PostageSection draft={draft} update={update} />
-        <ReviewSection draft={draft} editing={editing != null} onPreview={openPreview} />
-      </form>
+          <form
+            onSubmit={(e) => {
+              e.preventDefault();
+              openPreview();
+            }}
+            noValidate
+          >
+            <PhotosSection
+              photos={draft.photos}
+              media={mediaByUrl}
+              error={errors.photos}
+              cameraSupported={cameraSupported}
+              onAdd={addPhotos}
+              onRemove={removePhoto}
+              onReorder={reorderPhotos}
+              onEdit={setEditIndex}
+              onRetryUpload={retryPhotoUpload}
+              onTakePhoto={() => setCameraOpen(true)}
+            />
+            <DetailsSection draft={draft} errors={errors} update={update} clearError={clearError} />
+            <PriceSection draft={draft} errors={errors} update={update} clearError={clearError} />
+            <PostageSection draft={draft} update={update} />
+            <ReviewSection draft={draft} editing={editing != null} onPreview={openPreview} />
+          </form>
+        </div>
+
+        <aside className="sticky top-20 hidden lg:block" aria-label="Listing preview">
+          <p className="text-label text-text-muted">
+            In the feed
+          </p>
+          <div className="mt-3">
+            <SellPreviewCard draft={draft} seller={seller} mediaOf={mediaOf} />
+          </div>
+          <p className="mt-3 max-w-[300px] text-caption leading-relaxed text-text-muted">
+            Updates as you edit — this is the tile buyers see in discovery.
+          </p>
+          <Button
+            variant="secondary"
+            size="md"
+            className="mt-4 w-full max-w-[300px]"
+            onClick={openPreview}
+          >
+            Preview the full listing
+          </Button>
+        </aside>
+      </div>
 
       {/* Media studio surfaces — camera capture + per-photo edit, both
           writing real pixels back into the staged set. */}

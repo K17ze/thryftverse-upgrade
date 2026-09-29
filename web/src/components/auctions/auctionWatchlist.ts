@@ -7,8 +7,9 @@
  * is local-only; live mode writes through to the auctions service
  * (`/auctions/:id/watch`) and read-seeds the set once per session from
  * `/auctions/watchlist` (union merge — server-known ids land, local flags
- * are never deleted). The backend doesn't echo a per-viewer flag on
- * auction rows, so the local set stays the render truth in both modes —
+ * are never deleted). Board and detail rows also echo a per-viewer
+ * `isWatched` when authed; the fetchers union that flag in through the
+ * same merge, so the local set stays the render truth in both modes —
  * the same merge the mobile app runs for reminders.
  */
 
@@ -68,7 +69,10 @@ const getServerSnapshot = (): ReadonlySet<string> => EMPTY;
 
 let seedStarted = false;
 
-function mergeServerWatches(ids: string[]): void {
+/** Union server-known watched ids into the local set — the seed path
+ *  both /auctions/watchlist and per-row `isWatched` echoes funnel
+ *  through. Local flags are never deleted by a stale read. */
+export function mergeServerWatches(ids: string[]): void {
   if (ids.length === 0) return;
   const next = readSet();
   let changed = false;
@@ -124,4 +128,10 @@ export function useAuctionWatchlist(): {
   }, []);
 
   return { watched, toggle };
+}
+
+/** Account-switch reset — clears the persisted watch set (the session's
+ *  server seed re-arms on the next mount). */
+export function resetAuctionWatchlist(): void {
+  writeSet(new Set());
 }

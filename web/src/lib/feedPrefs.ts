@@ -51,6 +51,35 @@ export interface PriceCeiling {
   maxPrice: number;
 }
 
+// ── Module fatigue (Pinterest Module Relevance parity) ──────────────────
+// Home-feed module bands (entry band, rails, editorial banner) carry a
+// stable id. Two suppression channels, both honest:
+//  - explicit: the user dismissed the band → it never re-appears (Undo on
+//    the confirmation toast restores it);
+//  - implicit: the band has rendered into view this many times without a
+//    single engagement (a click on its content) → it fatigues out. An
+//    impression only counts when the band actually intersects the
+//    viewport — a module below the fold the user never reached is not a
+//    view.
+export const MODULE_FATIGUE_IMPRESSIONS = 8;
+
+/** Suppression check for one module id — explicit dismiss wins, then the
+ *  never-engaged fatigue threshold. */
+export function moduleSuppressed(
+  state: {
+    dismissedModuleIds: readonly string[];
+    moduleImpressions: Record<string, number>;
+    moduleEngagements: Record<string, number>;
+  },
+  id: string,
+): boolean {
+  if (state.dismissedModuleIds.includes(id)) return true;
+  return (
+    (state.moduleImpressions[id] ?? 0) >= MODULE_FATIGUE_IMPRESSIONS &&
+    (state.moduleEngagements[id] ?? 0) === 0
+  );
+}
+
 interface FeedPrefsState {
   /** Listing ids hidden by "Not interested". */
   hiddenListingIds: string[];
@@ -63,6 +92,12 @@ interface FeedPrefsState {
   downweightedSizes: SizeDownweight[];
   /** Per-category price ceilings from "Too expensive" feedback. */
   priceCeilings: PriceCeiling[];
+  /** Home module bands the user dismissed — the module never re-appears. */
+  dismissedModuleIds: string[];
+  /** In-viewport impressions per module id — feeds the fatigue check. */
+  moduleImpressions: Record<string, number>;
+  /** Real content engagements per module id — one resets fatigue. */
+  moduleEngagements: Record<string, number>;
   hideListing: (id: string) => void;
   unhideListing: (id: string) => void;
   downweightKey: (key: string) => void;
@@ -77,6 +112,13 @@ interface FeedPrefsState {
     listing: DiscoveryListingSummary,
     reason: NotInterestedReason,
   ) => void;
+  /** Explicit module dismissal — the band stops rendering (undo restores). */
+  dismissModule: (id: string) => void;
+  undismissModule: (id: string) => void;
+  /** The module actually scrolled into view — one count per mount. */
+  noteModuleImpression: (id: string) => void;
+  /** The user engaged with module content — keeps the band alive. */
+  noteModuleEngagement: (id: string) => void;
 }
 
 const cleanSizes = (raw: unknown): SizeDownweight[] =>
@@ -108,6 +150,21 @@ const cleanReasons = (raw: unknown): Record<string, NotInterestedReason> => {
   return out;
 };
 
+const cleanStringArray = (raw: unknown): string[] =>
+  (Array.isArray(raw) ? raw : []).filter(
+    (x): x is string => typeof x === 'string' && x.length > 0,
+  );
+
+const cleanCountMap = (raw: unknown): Record<string, number> => {
+  const out: Record<string, number> = {};
+  if (raw && typeof raw === 'object') {
+    for (const [k, v] of Object.entries(raw as Record<string, unknown>)) {
+      if (typeof v === 'number' && Number.isFinite(v) && v > 0) out[k] = Math.floor(v);
+    }
+  }
+  return out;
+};
+
 export const useFeedPrefs = create<FeedPrefsState>()(
   persist(
     (set, get) => ({
@@ -116,6 +173,9 @@ export const useFeedPrefs = create<FeedPrefsState>()(
       notInterestedReasons: {},
       downweightedSizes: [],
       priceCeilings: [],
+      dismissedModuleIds: [],
+      moduleImpressions: {},
+      moduleEngagements: {},
       hideListing: (id) =>
         set((s) =>
           s.hiddenListingIds.includes(id)
@@ -190,6 +250,42 @@ export const useFeedPrefs = create<FeedPrefsState>()(
             break;
         }
       },
+      dismissModule: (id) => {
+        const normalized = id.trim();
+        if (!normalized) return;
+        set((s) =>
+          s.dismissedModuleIds.includes(normalized)
+            ? s
+            : { dismissedModuleIds: [...s.dismissedModuleIds, normalized] },
+        );
+      },
+      undismissModule: (id) =>
+        set((s) => ({
+          dismissedModuleIds: s.dismissedModuleIds.filter((x) => x !== id),
+          // Undo also re-arms the fatigue channel — a restored module
+          // that immediately re-fatigued would make Undo feel broken.
+          moduleImpressions: { ...s.moduleImpressions, [id]: 0 },
+        })),
+      noteModuleImpression: (id) => {
+        const normalized = id.trim();
+        if (!normalized) return;
+        set((s) => ({
+          moduleImpressions: {
+            ...s.moduleImpressions,
+            [normalized]: (s.moduleImpressions[normalized] ?? 0) + 1,
+          },
+        }));
+      },
+      noteModuleEngagement: (id) => {
+        const normalized = id.trim();
+        if (!normalized) return;
+        set((s) => ({
+          moduleEngagements: {
+            ...s.moduleEngagements,
+            [normalized]: (s.moduleEngagements[normalized] ?? 0) + 1,
+          },
+        }));
+      },
     }),
     {
       name: 'thryftverse.web.feedprefs.v1',
@@ -200,12 +296,16 @@ export const useFeedPrefs = create<FeedPrefsState>()(
         notInterestedReasons: s.notInterestedReasons,
         downweightedSizes: s.downweightedSizes,
         priceCeilings: s.priceCeilings,
+        dismissedModuleIds: s.dismissedModuleIds,
+        moduleImpressions: s.moduleImpressions,
+        moduleEngagements: s.moduleEngagements,
       }),
-      // v2 adds the reason record + derived facet dampens. The migrate is
-      // defensive: each new field passes through only when its shape is
-      // provably right, so a corrupted or v1 payload can never wedge the
-      // store — v1 payloads simply yield empty reason/dampen state.
-      version: 2,
+      // v2 added the reason record + derived facet dampens; v3 adds module
+      // dismissal/fatigue. The migrate is defensive: each field passes
+      // through only when its shape is provably right, so a corrupted or
+      // older payload can never wedge the store — they simply yield empty
+      // module/fatigue state.
+      version: 3,
       migrate: (persisted): FeedPrefsState => {
         const old = persisted as Partial<FeedPrefsState> | undefined;
         const base = old && typeof old === 'object' ? old : {};
@@ -219,6 +319,9 @@ export const useFeedPrefs = create<FeedPrefsState>()(
           notInterestedReasons: cleanReasons(base.notInterestedReasons),
           downweightedSizes: cleanSizes(base.downweightedSizes),
           priceCeilings: cleanCeilings(base.priceCeilings),
+          dismissedModuleIds: cleanStringArray(base.dismissedModuleIds),
+          moduleImpressions: cleanCountMap(base.moduleImpressions),
+          moduleEngagements: cleanCountMap(base.moduleEngagements),
         } as FeedPrefsState;
       },
     },

@@ -32,11 +32,15 @@ export function ReminderToggle({ session, className = '' }: ReminderToggleProps)
       onClick={() => {
         const willRemind = toggle(session);
         // Mode-honest copy — live mode posts a real reminder through the
-        // service; fixture mode only keeps the flag on this surface.
+        // service; fixture mode only keeps the flag on this surface. The
+        // host name resolves from the room's own projection first (live
+        // rows carry no fixture user to look up).
+        const host =
+          session.sellerName || userById(session.sellerId)?.username || 'the show';
         show(
           willRemind
             ? DATA_MODE === 'live'
-              ? `We'll remind you when ${userById(session.sellerId)?.username ?? 'the show'} goes live`
+              ? `We'll remind you when ${host} goes live`
               : 'Reminder saved — it stays marked here until the show starts'
             : 'Reminder removed',
           'info',

@@ -6,33 +6,32 @@
  * Delete uses the same confirm-sheet grammar as the /outfits grid.
  */
 
-import { useMemo, useRef, useState } from 'react';
-import { useParams, useRouter } from 'next/navigation';
+import { useRef, useState } from 'react';
+import { notFound, useParams, useRouter } from 'next/navigation';
 import { Button } from '@/components/ui/Button';
-import { EmptyState } from '@/components/ui/EmptyState';
 import { IconButton } from '@/components/ui/IconButton';
 import { Sheet } from '@/components/ui/Sheet';
 import { Skeleton } from '@/components/ui/Skeleton';
 import { useToast } from '@/components/ui/Toast';
 import { INPUT_CLASS } from '@/components/sell/SellField';
 import { BackBar } from '@/components/profile/BackBar';
-import { useShare } from '@/components/profile/useShare';
 import { ProductTile } from '@/components/cards/ProductTile';
 import { OutfitCanvas } from '@/components/outfits/OutfitCanvas';
-import { outfitItemsList, outfitListings } from '@/components/outfits/outfitItems';
+import { outfitItemsList, useOutfitListings } from '@/components/outfits/outfitItems';
 import { mapListingToDiscoverySummary } from '@/lib/contracts/domain';
 import { useOutfits } from '@/lib/store/outfits';
 import { useHydrated } from '@/lib/store/useStore';
 import { timeAgo } from '@/lib/utils/format';
+import type { SavedOutfit } from '@/lib/store/outfits';
 
-export default function OutfitDetailPage() {
-  const params = useParams();
+/**
+ * Outfit detail body — owns the slot resolution (live-aware hook) and the
+ * read/edit surface. Split from the route component so the resolution hook
+ * runs after the hydration + existence guards.
+ */
+function OutfitDetailBody({ outfit }: { outfit: SavedOutfit }) {
   const router = useRouter();
   const { show } = useToast();
-  const share = useShare();
-  const hydrated = useHydrated();
-  const id = String(params.id ?? '');
-  const outfit = useOutfits((s) => s.outfits.find((o) => o.id === id));
   const removeOutfit = useOutfits((s) => s.removeOutfit);
   const renameOutfit = useOutfits((s) => s.renameOutfit);
   const [confirming, setConfirming] = useState(false);
@@ -40,42 +39,15 @@ export default function OutfitDetailPage() {
   const [nameDraft, setNameDraft] = useState('');
   const nameInputRef = useRef<HTMLInputElement>(null);
 
-  const items = useMemo(
-    () => (outfit ? outfitListings(outfit) : {}),
-    [outfit],
-  );
+  // Slot resolution through the live-aware hook — live ids fetch the real
+  // listings (misses dropped, the count stays honest); fixture keeps the
+  // catalogue.
+  const items = useOutfitListings(outfit);
   const list = outfitItemsList(items);
 
-  if (!hydrated) {
-    return (
-      <div className="mx-auto max-w-[1200px]" aria-busy aria-label="Loading outfit">
-        <BackBar />
-        <div className="px-4 pt-2 sm:px-6">
-          <Skeleton className="h-8 w-48" />
-          <Skeleton className="mt-2 h-4 w-32" />
-          <Skeleton className="mt-5 aspect-[4/5] w-full max-w-[520px] rounded-xl" />
-        </div>
-      </div>
-    );
-  }
-
-  if (!outfit) {
-    return (
-      <div className="mx-auto max-w-[1200px]">
-        <BackBar />
-        <EmptyState
-          icon="layers"
-          title="Outfit not found"
-          subtitle="This outfit may have been deleted."
-          actionLabel="Your outfits"
-          onAction={() => router.push('/outfits')}
-        />
-      </div>
-    );
-  }
-
-  const shareOutfit = () =>
-    share({ title: outfit.name, copiedLabel: 'Outfit link copied' });
+  // Outfits are device-local (localStorage, matching mobile's local-only
+  // persistence) — a shared URL can never resolve for a recipient, so no
+  // share affordance is offered.
 
   const deleteOutfit = () => {
     removeOutfit(outfit.id);
@@ -97,7 +69,6 @@ export default function OutfitDetailPage() {
       <BackBar
         actions={
           <>
-            <IconButton name="share" aria-label="Share outfit" onClick={shareOutfit} />
             <IconButton
               name="edit"
               aria-label="Rename outfit"
@@ -117,7 +88,7 @@ export default function OutfitDetailPage() {
       />
 
       <div className="px-4 pt-1 sm:px-6">
-        <h1 className="text-screen-title font-bold text-text-primary">
+        <h1 className="text-screen-title text-text-primary">
           {outfit.name}
         </h1>
         <p className="mt-1 text-meta text-text-muted">
@@ -128,32 +99,37 @@ export default function OutfitDetailPage() {
         </p>
       </div>
 
-      {/* Canvas — each placed item links to its PDP */}
-      <div className="mx-auto mt-5 w-full max-w-[520px] px-4 sm:px-6">
-        <OutfitCanvas items={items} linkToItems />
-      </div>
+      {/* Desktop two-pane — the slot canvas anchors left (sticky) and the
+          shoppable item grid fills beside it; on mobile this stays the
+          stacked canvas-then-items column. */}
+      <div className="lg:grid lg:grid-cols-[minmax(0,480px)_minmax(0,1fr)] lg:gap-10 lg:px-6">
+        <div className="mx-auto mt-5 w-full max-w-[520px] px-4 sm:px-6 lg:sticky lg:top-20 lg:mx-0 lg:mt-8 lg:max-w-none lg:self-start lg:px-0">
+          {/* Canvas — each placed item links to its PDP */}
+          <OutfitCanvas items={items} linkToItems />
+        </div>
 
-      {/* Items — every piece links to /item/[id] */}
-      {list.length > 0 ? (
-        <section aria-label="Items in this outfit" className="mt-8">
-          <div className="mb-4 flex items-baseline justify-between px-4 sm:px-6">
-            <h2 className="text-section-title font-semibold text-text-primary">
-              Items
-            </h2>
-            <span className="tnum text-meta text-text-muted">
-              {list.length} {list.length === 1 ? 'item' : 'items'}
-            </span>
-          </div>
-          <div className="grid grid-cols-2 gap-x-4 gap-y-6 px-4 sm:grid-cols-3 sm:px-6 lg:grid-cols-4">
-            {list.map((listing) => (
-              <ProductTile
-                key={listing.id}
-                item={mapListingToDiscoverySummary(listing)}
-              />
-            ))}
-          </div>
-        </section>
-      ) : null}
+        {/* Items — every piece links to /item/[id] */}
+        {list.length > 0 ? (
+          <section aria-label="Items in this outfit" className="mt-8">
+            <div className="mb-4 flex items-baseline justify-between px-4 sm:px-6 lg:px-0">
+              <h2 className="text-section-title font-semibold text-text-primary">
+                Items
+              </h2>
+              <span className="tnum text-meta text-text-muted">
+                {list.length} {list.length === 1 ? 'item' : 'items'}
+              </span>
+            </div>
+            <div className="grid grid-cols-2 gap-x-4 gap-y-6 px-4 sm:grid-cols-3 sm:px-6 lg:grid-cols-2 lg:px-0 xl:grid-cols-3">
+              {list.map((listing) => (
+                <ProductTile
+                  key={listing.id}
+                  item={mapListingToDiscoverySummary(listing)}
+                />
+              ))}
+            </div>
+          </section>
+        ) : null}
+      </div>
 
       {/* Rename — the persisted overlay writes through renameOutfit. */}
       <Sheet
@@ -219,4 +195,41 @@ export default function OutfitDetailPage() {
       </Sheet>
     </div>
   );
+}
+
+export default function OutfitDetailPage() {
+  const params = useParams();
+  const hydrated = useHydrated();
+  const id = String(params.id ?? '');
+  const outfit = useOutfits((s) => s.outfits.find((o) => o.id === id));
+
+  if (!hydrated) {
+    return (
+      <div className="mx-auto max-w-[1200px]" aria-busy aria-label="Loading outfit">
+        <BackBar />
+        <div className="px-4 pt-2 sm:px-6">
+          <Skeleton className="h-8 w-48" />
+          <Skeleton className="mt-2 h-4 w-32" />
+          <div className="lg:grid lg:grid-cols-[minmax(0,480px)_minmax(0,1fr)] lg:gap-10">
+            <Skeleton className="mt-5 aspect-[4/5] w-full max-w-[520px] rounded-xl lg:mt-8 lg:max-w-none" />
+            <div className="hidden lg:mt-8 lg:grid lg:grid-cols-2 lg:content-start lg:gap-4 xl:grid-cols-3">
+              {Array.from({ length: 3 }).map((_, i) => (
+                <Skeleton key={i} className="aspect-[3/4] rounded-lg" />
+              ))}
+            </div>
+          </div>
+        </div>
+      </div>
+    );
+  }
+
+  // Definitive miss after hydration — the not-found boundary owns it.
+  // Outfits are session-owned records the server can never resolve, so
+  // this is the only 404 the route can give (deep links to deleted
+  // outfits land on the designed not-found, not a soft EmptyState).
+  if (!outfit) {
+    notFound();
+  }
+
+  return <OutfitDetailBody outfit={outfit} />;
 }

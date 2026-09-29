@@ -14,6 +14,7 @@
  */
 
 import type { Listing } from '@/lib/contracts/domain';
+import type { VisualSearchRetrievalMeta } from '@/lib/api/services/visualSearch';
 import { LISTINGS } from '@/lib/data/fixtures';
 import {
   COLOR_VOCAB,
@@ -383,4 +384,27 @@ export function honestMatchNote(regionApplied: boolean): string {
   return regionApplied
     ? 'Matched by colour similarity within the framed area — deterministic heuristic, not AI.'
     : 'Matched by colour similarity — deterministic heuristic, not AI. Fixture catalogue.';
+}
+
+/** Live-serve disclosure — translates POST /visual-search's retrievalMeta
+ *  into the same honest grammar as mobile's honestNoteText. The heuristic
+ *  method is named a heuristic (never AI); 'filter_only' means no usable
+ *  image scored, so the line says what matched instead — preferring the
+ *  backend's own `note` when it supplied one. */
+export function liveMatchNote(
+  meta: VisualSearchRetrievalMeta | null,
+  note: string | null,
+): string {
+  if (meta?.method === 'heuristic_color_features') {
+    // queryScope is server-confirmed — the framed area is only claimed
+    // when the crop actually ran (a degenerate region falls back to
+    // whole-image scoring).
+    return meta.queryScope === 'region'
+      ? 'Results matched by colour similarity within the framed area — heuristic, not AI.'
+      : 'Results matched by colour similarity — heuristic, not AI.';
+  }
+  if (meta?.method === 'filter_only') {
+    return note ?? 'Results matched by category, brand & description.';
+  }
+  return note ?? 'Results matched by category, brand & description.';
 }

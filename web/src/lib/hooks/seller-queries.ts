@@ -6,7 +6,7 @@
  * posture; live mode will target /api/seller/* when that surface lands.
  */
 
-import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
+import { useMutation, useQuery, useQueryClient, type QueryClient } from '@tanstack/react-query';
 import type { SellerPeriod } from '@/lib/data/fixtures-seller';
 import {
   FULFILMENT_QUEUE,
@@ -23,12 +23,18 @@ import {
   sellerStandardsFixture,
   sellerTodos,
   markJobPosted,
+  proposeJobExtension,
+  recordPendingExtension,
+  pendingExtensionFor,
+  dropPendingExtension,
   pauseFixtureListing,
   resumeFixtureListing,
   deleteFixtureListing,
   applyAwayStateToFixtures,
   loadSellerAwayState,
   saveSellerAwayState,
+  loadSellerStorefront,
+  saveSellerStorefront,
   type FulfilmentJob,
   type ListingPerformanceRow,
   type MonthlyTotal,
@@ -42,12 +48,22 @@ import {
   type SellerTodo,
 } from '@/lib/data/fixtures-seller';
 import { DATA_MODE } from '@/lib/api/client';
+import { ApiRequestError, isRecord } from '@/lib/api/http';
 import * as sellerHubService from '@/lib/api/services/sellerHub';
 import * as commerceService from '@/lib/api/services/commerce';
 import * as listingsService from '@/lib/api/services/listings';
 import { MY_LISTINGS } from '@/lib/data/fixtures';
 import { MY_LISTING_STATS, OFFERS, setListingStatus } from '@/lib/data/fixtures-commerce';
+import { getListingCoverUri } from '@/lib/utils/media';
 import { useSession } from '@/lib/session/SessionProvider';
+import * as storefrontService from '@/lib/api/services/storefront';
+import { PROFILE_AGGREGATE_ROOT } from '@/lib/hooks/profile-queries';
+import {
+  MAX_FEATURED,
+  featuredIdsFor,
+  useShopRailPins,
+} from '@/components/profile/shopRailData';
+import { useHydrated } from '@/lib/store/useStore';
 import {
   applyFixtureListingEdit,
   fixtureSeriesBounds,
@@ -83,6 +99,19 @@ export interface SellerOverview {
    *  Offers are real OFFERS rows / fetched offers in both modes; null
    *  only if a live fetch fails (the UI renders "—", never a guess). */
   funnel: { views: number; watchers: number; offers: number | null; orders: number };
+  /** Near-winners — active listings with real 30-day view volume and no
+   *  30-day sale (the overview's opportunities projection). Null when the
+   *  source is unavailable; empty when none qualify — both render nothing. */
+  opportunities: SellerOpportunity[] | null;
+}
+
+/** The web view-model for the overview's near-winner rows. */
+export interface SellerOpportunity {
+  listingId: string;
+  title: string;
+  imageUrl: string | null;
+  priceGbp: number | null;
+  views30d: number;
 }
 
 function pctDelta(current: number, previous: number): number | null {
@@ -163,6 +192,9 @@ function buildLiveOverview(
     metrics,
     // Same numbers the metric cells show — one funnel, one truth.
     funnel: { views, watchers: likes, offers: offersReceived, orders },
+    // Verbatim from the overview aggregate — null stays null (source
+    // unavailable → the rail renders nothing, not an empty state).
+    opportunities: overview.opportunities ?? null,
   };
 }
 
@@ -247,6 +279,19 @@ function buildOverview(period: SellerPeriod): SellerOverview {
       offers: sellerOffersReceived(period),
       orders,
     },
+    // Fixture parity with the server's near-winner rule — active fixture
+    // listings with view volume and no sale, highest views first, max 4.
+    opportunities: sellerPerformanceRows('30d')
+      .filter((r) => !r.listing.isSold && r.listing.status !== 'sold' && r.views >= 10)
+      .sort((a, b) => b.views - a.views)
+      .slice(0, 4)
+      .map((r) => ({
+        listingId: r.listing.id,
+        title: r.listing.title,
+        imageUrl: getListingCoverUri(r.listing.images) || null,
+        priceGbp: r.listing.price,
+        views30d: r.views,
+      })),
   };
 }
 
@@ -373,7 +418,10 @@ export function useFulfilmentQueue() {
       if (DATA_MODE === 'live' && user?.id) {
         const page = await commerceService.fetchOrders({
           role: 'seller',
-          status: 'paid,shipped,in transit,out for delivery',
+          // 'delivered' must ride the query — excluding it left the
+          // Delivered tab permanently empty (a dispatched order vanished
+          // on delivery instead of landing in its tab).
+          status: 'paid,shipped,in transit,out for delivery,delivered',
           limit: 50,
         });
         return page.raw
@@ -394,6 +442,18 @@ export function useFulfilmentQueue() {
               shippingProvider: o.shippingProvider,
             }),
           )
+          .map((j) => {
+            // The list wire projects only accepted extensions (folded into
+            // shipByDate). A pending one survives here only via the
+            // session overlay of server-confirmed proposals — and only
+            // while 'paid', the status the server gates it on.
+            if (j.stage !== 'to-post') {
+              dropPendingExtension(j.id);
+              return j;
+            }
+            const pending = pendingExtensionFor(j.id);
+            return pending ? { ...j, pendingExtension: pending } : j;
+          })
           .sort((a, b) => Date.parse(b.orderedAt) - Date.parse(a.orderedAt));
       }
       await tick();
@@ -403,20 +463,47 @@ export function useFulfilmentQueue() {
   });
 }
 
+/** The dispatch input — tracking is seller-collected (DispatchSheet) or
+ *  already on the job (carrier-label path minted it). `carrier` is the
+ *  issuer the sheet recorded, falling back to the job's booked service. */
+export interface MarkPostedInput {
+  jobId: string;
+  trackingNumber?: string;
+  carrier?: string;
+}
+
 /** Optimistic dispatch — the row moves to Posted before the "network" answers.
- *  Live mode posts /orders/:id/ship; fixture mode mutates the queue overlay. */
+ *  Live mode posts /orders/:id/ship — which rejects a bare call
+ *  (TRACKING_REQUIRED, 422) — so a job with no reference anywhere throws
+ *  before the wire rather than firing a doomed write; the caller collects
+ *  tracking first. Fixture mode mutates the queue overlay. */
 export function useMarkPosted() {
   const qc = useQueryClient();
   return useMutation({
-    mutationFn: async (jobId: string) => {
+    mutationFn: async (input: MarkPostedInput) => {
+      const { jobId } = input;
       if (DATA_MODE === 'live') {
-        await commerceService.shipOrder(jobId, {});
+        const job = qc
+          .getQueriesData<FulfilmentJob[]>({ queryKey: ['seller', 'fulfilment'] })
+          .flatMap(([, rows]) => rows ?? [])
+          .find((j) => j.id === jobId);
+        const trackingNumber = input.trackingNumber ?? job?.trackingNumber;
+        if (!trackingNumber) {
+          // Never fire shipOrder without a reference — the server can
+          // only 422 it and the optimistic write would flash a lie.
+          throw new Error('TRACKING_REQUIRED');
+        }
+        await commerceService.shipOrder(jobId, {
+          trackingNumber,
+          shippingProvider: input.carrier ?? (job?.service || undefined),
+        });
         return null;
       }
       await tick(420);
-      return markJobPosted(jobId);
+      return markJobPosted(jobId, input.trackingNumber);
     },
-    onMutate: async (jobId) => {
+    onMutate: async (input) => {
+      const { jobId } = input;
       await qc.cancelQueries({ queryKey: ['seller', 'fulfilment'] });
       const previous = qc.getQueryData<FulfilmentJob[]>(['seller', 'fulfilment']);
       qc.setQueryData<FulfilmentJob[]>(['seller', 'fulfilment'], (old) =>
@@ -426,9 +513,10 @@ export function useMarkPosted() {
                 ...j,
                 stage: 'posted' as const,
                 postedAt: new Date().toISOString(),
-                // No optimistic tracking number — a minted reference would
-                // display as real before the server confirms it. The
-                // settled refetch brings the authoritative value.
+                // A seller-entered reference is the seller's own truth —
+                // echo it optimistically; a minted one is never invented
+                // here (the settled refetch brings the server's value).
+                trackingNumber: input.trackingNumber ?? j.trackingNumber,
               }
             : j,
         ),
@@ -448,6 +536,75 @@ export function useMarkPosted() {
   });
 }
 
+/** The extension proposal input — days + the optional buyer-facing note. */
+export interface ProposeExtensionInput {
+  jobId: string;
+  days: number;
+  /** Optional reason (≤500 chars) — the contract's `note`. */
+  note?: string;
+}
+
+/**
+ * POST /orders/:id/dispatch-extension — the seller proposes extra days;
+ * the buyer must accept before the new ship-by applies. Never optimistic:
+ * the pending state lands only on a server-confirmed proposal, or on a
+ * 409 EXTENSION_PENDING that proves one already exists (a stale row can
+ * still offer the affordance — the list wire doesn't project pending
+ * extensions, so the conflict response is the freshest truth available).
+ */
+export function useProposeDispatchExtension() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: async (input: ProposeExtensionInput) => {
+      if (DATA_MODE === 'live') {
+        try {
+          const ext = await commerceService.proposeDispatchExtension(
+            input.jobId,
+            input.days,
+            input.note,
+          );
+          recordPendingExtension(input.jobId, {
+            days: ext.days,
+            proposedShipBy: ext.proposedShipBy,
+          });
+          return ext;
+        } catch (error) {
+          if (isExtensionPendingConflict(error)) {
+            // Server-confirmed pending — pin it so the row stops offering
+            // the affordance. The 409 carries no proposedShipBy, so the
+            // date stays unknown rather than invented.
+            recordPendingExtension(input.jobId, {
+              days: input.days,
+              proposedShipBy: null,
+            });
+          }
+          throw error;
+        }
+      }
+      await tick(420);
+      const job = proposeJobExtension(input.jobId, input.days);
+      if (!job?.pendingExtension) throw new Error('EXTENSION_UNAVAILABLE');
+      return job.pendingExtension;
+    },
+    onSettled: () => {
+      void qc.invalidateQueries({ queryKey: ['seller', 'fulfilment'] });
+      // The order detail carries the pending extension for both roles.
+      void qc.invalidateQueries({ queryKey: ['orders'] });
+    },
+  });
+}
+
+/** True when the server rejected a proposal because one is already
+ *  awaiting the buyer (409 + code EXTENSION_PENDING). */
+function isExtensionPendingConflict(error: unknown): boolean {
+  return (
+    error instanceof ApiRequestError &&
+    error.status === 409 &&
+    isRecord(error.details) &&
+    error.details.code === 'EXTENSION_PENDING'
+  );
+}
+
 /** Statuses whose proceeds are still inside the clearance window. */
 const CLEARING_STATUSES = new Set([
   'paid', 'processing', 'preparing', 'shipped', 'in transit', 'out for delivery',
@@ -455,10 +612,25 @@ const CLEARING_STATUSES = new Set([
 const SETTLED_STATUSES = new Set(['delivered', 'completed']);
 
 /**
+ * A clearance row on the earnings page. `releaseAt` and `soldAt` widen to
+ * null vs the fixture PayoutEntry: the live wire doesn't always carry a
+ * scheduled release (or the order join for a reserve-era row), and the
+ * renderer must say "—" rather than print the sold date as if it were a
+ * release date.
+ */
+export interface SellerEarningsEntry extends Omit<PayoutEntry, 'releaseAt' | 'soldAt'> {
+  soldAt: string | null;
+  releaseAt: string | null;
+}
+
+/**
  * Seller earnings — fixture mode reads the escrow ledger fixtures; live
  * mode derives the same view-model from real server data:
- *  - pending/available come from /seller-hub/overview money,
- *  - clearance entries are the seller's in-flight orders,
+ *  - available/pending/reserve come from /seller-hub/overview money —
+ *    "Pending clearance" is processingGbp only; heldGbp (rolling reserve)
+ *    is its own figure because reserve holds have no order row to list,
+ *  - clearance entries are the seller's in-flight orders, enriched with
+ *    the ledger-backed releaseScheduledAt from /users/:id/wallet/balances,
  *  - monthly totals group settled seller orders by month.
  * Fields the live contract doesn't expose stay null — the UI renders an
  * honest unavailable state instead of invented figures.
@@ -469,29 +641,62 @@ export function useSellerEarnings() {
     queryKey: ['seller', 'earnings', DATA_MODE, user?.id],
     queryFn: async (): Promise<{
       schedule: PayoutSchedule;
-      entries: PayoutEntry[];
+      entries: SellerEarningsEntry[];
       monthly: MonthlyTotal[];
+      /** Rolling reserve (heldGbp) — null when the money read was
+       *  unavailable; the page renders '—', never a fabricated £0. */
+      heldInReserve: number | null;
     }> => {
       if (DATA_MODE === 'live' && user?.id) {
-        const [overview, orders] = await Promise.all([
+        const [overview, orders, balances] = await Promise.all([
           sellerHubService.fetchSellerHubOverview(),
           commerceService.fetchOrders({ role: 'seller', limit: 50 }),
+          // Ledger-backed balances — pendingBreakdown is the server's own
+          // pending set (escrow unreleased, no release ledger entry) with
+          // releaseScheduledAt per order, and its rows sum exactly to
+          // pendingGbp. Soft-fail: without it the entries fall back to
+          // status-derived order rows and release dates to '—'.
+          commerceService.fetchWalletBalances(user.id).catch(() => null),
         ]);
-        const entries: PayoutEntry[] = orders.raw
-          .filter((o) => CLEARING_STATUSES.has(o.status.toLowerCase()))
-          .map((o) => ({
-            id: `po-${o.id}`,
-            orderId: o.id,
-            title: o.listingTitle ?? 'Listing',
-            soldAt: o.createdAt,
-            itemPrice: o.subtotalGbp,
-            // The order row doesn't carry the fee split — null reads as
-            // "not broken out" rather than a fabricated zero deduction.
-            protectionFee: null,
-            net: null,
-            releaseAt: o.estimatedReleaseAt ?? o.deliveredAt ?? o.createdAt,
-          }))
-          .sort((a, b) => Date.parse(a.releaseAt) - Date.parse(b.releaseAt));
+        const orderById = new Map(orders.raw.map((o) => [o.id, o]));
+        // Unknown release dates sort last — a row with no scheduled
+        // release is never ordered as if it settles first.
+        const byRelease = (a: SellerEarningsEntry, b: SellerEarningsEntry) => {
+          const ta = a.releaseAt ? Date.parse(a.releaseAt) : Number.POSITIVE_INFINITY;
+          const tb = b.releaseAt ? Date.parse(b.releaseAt) : Number.POSITIVE_INFINITY;
+          return ta - tb;
+        };
+        const entries: SellerEarningsEntry[] = balances
+          ? balances.pendingBreakdown
+              .map((p) => {
+                const o = orderById.get(p.orderId);
+                return {
+                  id: `po-${p.orderId}`,
+                  orderId: p.orderId,
+                  title: p.listingTitle ?? o?.listingTitle ?? 'Listing',
+                  soldAt: o?.createdAt ?? null,
+                  itemPrice: o?.subtotalGbp ?? p.amountGbp,
+                  // The order row doesn't carry the fee split — null reads as
+                  // "not broken out" rather than a fabricated zero deduction.
+                  protectionFee: null,
+                  net: null,
+                  releaseAt: p.releaseScheduledAt ?? o?.estimatedReleaseAt ?? null,
+                };
+              })
+              .sort(byRelease)
+          : orders.raw
+              .filter((o) => CLEARING_STATUSES.has(o.status.toLowerCase()))
+              .map((o) => ({
+                id: `po-${o.id}`,
+                orderId: o.id,
+                title: o.listingTitle ?? 'Listing',
+                soldAt: o.createdAt,
+                itemPrice: o.subtotalGbp,
+                protectionFee: null,
+                net: null,
+                releaseAt: o.estimatedReleaseAt ?? null,
+              }))
+              .sort(byRelease);
         const monthBuckets = new Map<string, { revenue: number; orders: number }>();
         for (const o of [...orders.raw].sort(
           (a, b) => Date.parse(a.createdAt) - Date.parse(b.createdAt),
@@ -510,9 +715,12 @@ export function useSellerEarnings() {
             nextDate: overview.money?.nextPayoutAt ?? null,
             nextAmount: null,
             method: null,
-            pendingTotal: round2(
-              (overview.money?.processingGbp ?? 0) + (overview.money?.heldGbp ?? 0),
-            ),
+            // When the ledger read landed, pendingGbp is the exact sum of
+            // the breakdown rows above — the list reconciles to the penny.
+            // Otherwise the overview's processing figure stands in.
+            // heldGbp is rolling reserve, not per-order clearance; it gets
+            // its own row so the breakdown still reconciles.
+            pendingTotal: round2(balances?.pendingGbp ?? overview.money?.processingGbp ?? 0),
             lifetimeSales: overview.trust?.totalSales ?? null,
             available: round2(overview.money?.availableGbp ?? 0),
           },
@@ -522,14 +730,41 @@ export function useSellerEarnings() {
             revenue: round2(b.revenue),
             orders: b.orders,
           })),
+          heldInReserve: balances
+            ? round2(balances.heldInReserveGbp)
+            : overview.money != null
+              ? round2(overview.money.heldGbp ?? 0)
+              : null,
         };
       }
       await tick(280);
-      return { schedule: payoutSchedule(), entries: payoutEntries(), monthly: monthlyTotals() };
+      // Fixture money has no reserve-hold concept — 0 is the true figure.
+      return {
+        schedule: payoutSchedule(),
+        entries: payoutEntries(),
+        monthly: monthlyTotals(),
+        heldInReserve: 0,
+      };
     },
     enabled: DATA_MODE !== 'live' || Boolean(user?.id),
   });
 }
+
+/**
+ * actionRoute arrives as a native screen name (sellerHub.ts) — a bare
+ * href would 404. Map each onto the web surface that owns the work;
+ * unknown names degrade to the hub, never a broken link.
+ */
+const TODO_ROUTE_TO_WEB: Record<string, string> = {
+  // The task is seller-side order work — the fulfilment queue is the
+  // web surface for it (orders page is the buyer's list).
+  MyOrders: '/seller-hub/fulfilment',
+  Offers: '/offers',
+  InventoryManagement: '/seller-hub/listings',
+  Wallet: '/wallet',
+  CatalogImportProgress: '/seller-hub/import',
+  SellerVerification: '/seller-hub/verification',
+};
 
 export function useSellerTodos() {
   const { user } = useSession();
@@ -556,7 +791,9 @@ export function useSellerTodos() {
             meta: t.dueAt
               ? `Due ${new Date(t.dueAt).toLocaleDateString('en-GB', { day: 'numeric', month: 'short' })}`
               : '',
-            href: t.actionRoute || '/seller-hub',
+            href:
+              (t.actionRoute ? TODO_ROUTE_TO_WEB[t.actionRoute] : undefined) ??
+              '/seller-hub',
             count: t.count,
             tone: priority === 'urgent' || priority === 'high' ? 'danger' : priority === 'medium' ? 'warning' : 'neutral',
           };
@@ -846,6 +1083,32 @@ export function useSellerStandards() {
       return { kind: 'demo', standards: sellerStandardsFixture() };
     },
     enabled: DATA_MODE !== 'live' || Boolean(user?.id),
+  });
+}
+
+/**
+ * Appeal a standards defect — POST /sellers/:id/standards/appeal (mobile
+ * SellerStandardsModule parity). Server-only: the appeal affordance is
+ * gated on the live payload's appealsAvailable, so demo mode never calls
+ * this — reaching it outside live is a caller bug, not a silent no-op.
+ * The backend dedupes open appeals per (seller, metric); `alreadyOpen`
+ * rides the result so a double-submit reads as success, not a failure.
+ */
+export function useSubmitStandardsAppeal() {
+  const qc = useQueryClient();
+  const { user } = useSession();
+  return useMutation({
+    mutationFn: async (
+      input: sellerHubService.SubmitStandardsAppealInput,
+    ): Promise<{ appealId: string; alreadyOpen: boolean }> => {
+      if (DATA_MODE !== 'live' || !user?.id) {
+        throw new Error('appeals_unavailable');
+      }
+      return sellerHubService.submitStandardsAppeal(user.id, input);
+    },
+    onSettled: () => {
+      void qc.invalidateQueries({ queryKey: ['seller', 'standards'] });
+    },
   });
 }
 
@@ -1269,6 +1532,299 @@ export function useSellerAnalytics(range: SellerAnalyticsRange | null) {
       }
       await tick(300);
       return buildFixtureAnalytics(range);
+    },
+    enabled: Boolean(range) && (DATA_MODE !== 'live' || Boolean(user?.id)),
+  });
+}
+
+// ============================================================================
+// STOREFRONT — the seller-authored shop front
+// ============================================================================
+// Web counterpart of the mobile storefront editor (EditProfileScreen's
+// "Shop" fields + storefrontApi's publish/pause/rollback lifecycle). Live
+// mode hits /storefronts/me verbatim; fixture mode keeps a device-local
+// draft (loadSellerStorefront) with the featured pins riding the existing
+// shopRailPins overlay so the editor and the profile rail share one truth.
+
+/** The editor's working copy — the /storefronts/me fields the surface
+ *  manages, flattened to the form's vocabulary. */
+export interface StorefrontEditorState {
+  status: storefrontService.StorefrontStatus;
+  /** Optimistic-locking token — update and publish send it as If-Match. */
+  revision: number;
+  announcement: string | null;
+  policies: storefrontService.StorefrontPolicies;
+  /** Sections exist on the contract but this editor doesn't manage them —
+   *  the count still gates publish (the backend's EMPTY_STOREFRONT rule
+   *  requires a section or a featured listing). */
+  sectionCount: number;
+  publishedAt: string | null;
+}
+
+function editorStateFromApi(
+  sf: storefrontService.StorefrontResponse,
+): StorefrontEditorState {
+  return {
+    status: sf.status,
+    revision: sf.revision,
+    announcement: sf.announcement,
+    policies: sf.policies,
+    sectionCount: sf.sections.length,
+    publishedAt: sf.publishedAt,
+  };
+}
+
+function editorStateFromFixture(s: {
+  status: 'draft' | 'published' | 'paused';
+  announcement: string | null;
+  policies: storefrontService.StorefrontPolicies;
+  publishedAt: string | null;
+}): StorefrontEditorState {
+  return {
+    status: s.status,
+    revision: 0,
+    announcement: s.announcement,
+    policies: s.policies,
+    sectionCount: 0,
+    publishedAt: s.publishedAt,
+  };
+}
+
+const storefrontKey = (userId: string | undefined) =>
+  ['seller', 'storefront', DATA_MODE, userId] as const;
+
+/** Invalidate every surface that renders storefront truth — the editor,
+ *  the /u/[username] shop rail and the profile aggregate (announcement,
+ *  policies and featured ids all ride the aggregate payload). */
+function invalidateStorefrontReads(qc: QueryClient, ownerId?: string) {
+  void qc.invalidateQueries({ queryKey: ['seller', 'storefront'] });
+  void qc.invalidateQueries({ queryKey: ['shop-rail', ownerId] });
+  void qc.invalidateQueries({ queryKey: [...PROFILE_AGGREGATE_ROOT] });
+}
+
+/** GET /storefronts/me (live) / the device-local draft (fixture). */
+export function useMyStorefront() {
+  const { user } = useSession();
+  return useQuery({
+    queryKey: storefrontKey(user?.id),
+    queryFn: async (): Promise<StorefrontEditorState> => {
+      if (DATA_MODE === 'live' && user?.id) {
+        return editorStateFromApi(await storefrontService.fetchMyStorefront());
+      }
+      await tick(180);
+      return editorStateFromFixture(loadSellerStorefront());
+    },
+    // Guests have no storefront — render the signed-out state, not a
+    // fabricated draft.
+    enabled: DATA_MODE !== 'live' || Boolean(user?.id),
+  });
+}
+
+/**
+ * The owner's effective featured-pin order. Live mode reads the published
+ * rail (GET /storefronts/:id is the only contract that returns ids); the
+ * owner's local pin overlay wins when present — the same edit-over-
+ * published semantics useShopRail established. Draft/paused storefronts
+ * 404 the public route, so the overlay (or empty) is the draft truth.
+ */
+export function useStorefrontFeatured(ownerId: string | null | undefined) {
+  const override = useShopRailPins((s) => s.pinnedIds);
+  const hydrated = useHydrated();
+  return useQuery({
+    queryKey: [
+      'seller',
+      'storefront',
+      'featured',
+      DATA_MODE,
+      ownerId,
+      hydrated ? (override?.join(',') ?? '') : 'pending',
+    ],
+    enabled: Boolean(ownerId),
+    queryFn: async (): Promise<string[]> => {
+      if (DATA_MODE === 'live' && ownerId) {
+        const published = await storefrontService
+          .fetchPublicStorefront(ownerId)
+          .then((r) => r.featuredListings.map((f) => f.id))
+          .catch(() => [] as string[]);
+        return override ?? published;
+      }
+      await tick(160);
+      return featuredIdsFor(ownerId ?? 'me', override);
+    },
+  });
+}
+
+export interface SaveStorefrontInput {
+  announcement: string | null;
+  policies: storefrontService.StorefrontPolicies;
+  /** The full pinned order — the write replaces the rail wholesale. */
+  featuredIds: string[];
+}
+
+/** Save announcement + policies + featured pins. Live mode issues the two
+ *  real writes (PUT /storefronts/me with the loaded revision as If-Match,
+ *  then PUT /storefronts/me/featured-listings); fixture mode persists the
+ *  same state on-device. */
+export function useSaveStorefront() {
+  const qc = useQueryClient();
+  const { user } = useSession();
+  const setPinnedIds = useShopRailPins((s) => s.setPinnedIds);
+  return useMutation({
+    mutationFn: async (input: SaveStorefrontInput): Promise<StorefrontEditorState> => {
+      const featured = input.featuredIds.slice(0, MAX_FEATURED);
+      if (DATA_MODE === 'live' && user?.id) {
+        const current = qc.getQueryData<StorefrontEditorState>(storefrontKey(user.id));
+        const sf = await storefrontService.updateMyStorefront(
+          { announcement: input.announcement, policies: input.policies },
+          { ifMatchRevision: current?.revision },
+        );
+        const next = editorStateFromApi(sf);
+        try {
+          await storefrontService.setFeaturedListings(featured);
+        } catch (err) {
+          // The copy write already landed — park it so the error toast can
+          // say exactly which half failed instead of implying a full loss.
+          qc.setQueryData(storefrontKey(user.id), next);
+          throw err;
+        }
+        setPinnedIds(featured);
+        return next;
+      }
+      await tick(260);
+      const s = loadSellerStorefront();
+      const next = {
+        ...s,
+        announcement: input.announcement,
+        policies: input.policies,
+      };
+      saveSellerStorefront(next);
+      setPinnedIds(featured);
+      return editorStateFromFixture(next);
+    },
+    onSuccess: (next) => {
+      qc.setQueryData(storefrontKey(user?.id), next);
+      invalidateStorefrontReads(qc, user?.id);
+    },
+  });
+}
+
+export type StorefrontStatusAction = 'publish' | 'pause' | 'rollback';
+
+/** Publish / pause / rollback — the lifecycle posts against
+ *  /storefronts/me/*. Publish requires the loaded revision (If-Match) and
+ *  at least one section or featured listing (422 EMPTY_STOREFRONT); pause
+ *  and rollback only apply to a published storefront (409 NOT_PUBLISHED).
+ *  Fixture mode runs the same gates against the local draft so the state
+ *  machine stays honest in demo. */
+export function useStorefrontStatusAction() {
+  const qc = useQueryClient();
+  const { user } = useSession();
+  return useMutation({
+    mutationFn: async (action: StorefrontStatusAction): Promise<StorefrontEditorState> => {
+      if (DATA_MODE === 'live' && user?.id) {
+        const revision =
+          qc.getQueryData<StorefrontEditorState>(storefrontKey(user.id))?.revision ?? 0;
+        const sf =
+          action === 'publish'
+            ? await storefrontService.publishMyStorefront(revision)
+            : action === 'pause'
+              ? await storefrontService.pauseMyStorefront()
+              : await storefrontService.rollbackMyStorefront();
+        return editorStateFromApi(sf);
+      }
+      await tick(240);
+      const s = loadSellerStorefront();
+      if (action === 'publish') {
+        const featured = featuredIdsFor('me', useShopRailPins.getState().pinnedIds);
+        if (featured.length === 0) {
+          throw new Error('EMPTY_STOREFRONT');
+        }
+        s.status = 'published';
+        s.publishedAt = new Date().toISOString();
+      } else if (action === 'pause') {
+        if (s.status !== 'published') throw new Error('NOT_PUBLISHED');
+        s.status = 'paused';
+      } else {
+        if (s.status !== 'published') throw new Error('NOT_PUBLISHED');
+        s.status = 'draft';
+        s.publishedAt = null;
+      }
+      saveSellerStorefront(s);
+      return editorStateFromFixture(s);
+    },
+    onSuccess: (next) => {
+      qc.setQueryData(storefrontKey(user?.id), next);
+      invalidateStorefrontReads(qc, user?.id);
+    },
+  });
+}
+
+// ============================================================================
+// LISTING ATTENTION — GET /sellers/:id/analytics/attention
+// ============================================================================
+
+/** The web view-model for the attention list — the server's under-reach
+ *  verdict, verbatim (priority included; the client never re-derives it). */
+export interface NeedsAttentionRow {
+  listingId: string;
+  title: string;
+  imageUrl: string | null;
+  views: number;
+  likes: number;
+  offers: number;
+  priority: 'high' | 'medium';
+}
+
+/**
+ * Listings needing attention — live mode reads
+ * GET /sellers/:id/analytics/attention against the exact analytics range
+ * (the endpoint takes startDate+endDate, so a custom range is a real
+ * window, not the nearest preset). Fixture mode applies the same rule to
+ * the demo closet: active listings under the view floor, lowest first.
+ */
+export function useNeedsAttention(range: SellerAnalyticsRange | null) {
+  const { user } = useSession();
+  return useQuery({
+    queryKey: ['seller', 'attention', range?.from, range?.to, DATA_MODE, user?.id],
+    queryFn: async (): Promise<NeedsAttentionRow[]> => {
+      if (!range) return [];
+      if (DATA_MODE === 'live' && user?.id) {
+        const items = await sellerHubService.fetchNeedsAttention(user.id, {
+          limit: 5,
+          startDate: range.from,
+          endDate: range.to,
+        });
+        return items.map((i) => ({
+          listingId: i.listingId,
+          title: i.title,
+          imageUrl: i.coverImageUrl,
+          views: i.views,
+          likes: i.likes,
+          offers: i.offerCount,
+          priority: i.priority,
+        }));
+      }
+      await tick(240);
+      const days = Math.max(
+        1,
+        Math.round((Date.parse(range.to) - Date.parse(range.from)) / 86_400_000) + 1,
+      );
+      const period: SellerPeriod = days <= 7 ? '7d' : days <= 30 ? '30d' : '90d';
+      return sellerPerformanceRows(period)
+        .filter((r) => !r.listing.isSold && r.listing.status !== 'sold' && r.views < 10)
+        .sort((a, b) => a.views - b.views)
+        .slice(0, 5)
+        .map((r) => ({
+          listingId: r.listing.id,
+          title: r.listing.title,
+          imageUrl: getListingCoverUri(r.listing.images) || null,
+          views: r.views,
+          likes: r.likes,
+          offers: OFFERS.filter(
+            (o) => o.sellerId === 'me' && o.listingId === r.listing.id,
+          ).length,
+          priority: (r.views < 3 ? 'high' : 'medium') as NeedsAttentionRow['priority'],
+        }));
     },
     enabled: Boolean(range) && (DATA_MODE !== 'live' || Boolean(user?.id)),
   });

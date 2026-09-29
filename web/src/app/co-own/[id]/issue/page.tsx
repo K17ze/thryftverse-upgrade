@@ -1,5 +1,6 @@
 import type { Metadata } from 'next';
 import { coOwnAssetById } from '@/lib/data/fixtures-coown';
+import { DATA_MODE } from '@/lib/api/client';
 import { ReportIssueView } from '@/components/coown/issue/ReportIssueView';
 
 export async function generateMetadata({
@@ -8,7 +9,8 @@ export async function generateMetadata({
   params: Promise<{ id: string }>;
 }): Promise<Metadata> {
   const { id } = await params;
-  const asset = coOwnAssetById(id);
+  // Live mode must not label a real issue page with a demo asset title.
+  const asset = DATA_MODE === 'live' ? undefined : coOwnAssetById(id);
   return {
     title: asset ? `Report an issue — ${asset.title}` : 'Report an issue',
     description: 'Flag a dispute, technical problem or fraud on a Co-Own asset.',

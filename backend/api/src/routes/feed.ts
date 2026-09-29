@@ -351,13 +351,14 @@ export const registerFeedRoutes = ({ app, db, readDb }: FeedRouteDependencies): 
 
     const postersResult = await readDb.query<{
       id: string;
+      story_id: string | null;
       creator_id: string;
       media_url: string;
       caption: string;
       created_at: string;
     }>(
       `
-        SELECT id, creator_id,
+        SELECT id, story_id, creator_id,
                COALESCE(poster_url, media_url) AS media_url,
                caption, created_at
         FROM posters
@@ -423,6 +424,11 @@ export const registerFeedRoutes = ({ app, db, readDb }: FeedRouteDependencies): 
         createdAt: row.created_at,
         data: {
           id: row.id,
+          // `posters` is the FRAMES table — `story_id` (migration 040,
+          // backfilled so legacy rows group under their own id) is the
+          // id /poster-stories/:storyId resolves. Emitting the frame id
+          // alone left every feed poster tap unroutable.
+          storyId: row.story_id ?? row.id,
           creatorId: row.creator_id,
           mediaUrl: row.media_url,
           caption: row.caption,
@@ -499,6 +505,49 @@ export const registerFeedRoutes = ({ app, db, readDb }: FeedRouteDependencies): 
     } catch (promotionErr) {
       // Paid placements are additive — never break the organic feed.
       request.log.warn({ err: promotionErr }, 'promoted slot blending failed for /feed/home');
+    }
+
+    // ── Creator/seller identity ───────────────────────────────────────
+    // One batched lookup decorates the emitted page: listings get a
+    // `seller` block (the tile's seller row), posters/looks get
+    // `creatorUsername`/`creatorAvatarUrl`. Discovery is people-led —
+    // an anonymous tile can't carry "shop this person". Fail-open: a
+    // lookup error leaves identity null rather than failing the feed.
+    try {
+      const identityIds = new Set<string>();
+      for (const unit of responseItems) {
+        const data = unit.data as Record<string, unknown>;
+        if (typeof data.sellerId === 'string') identityIds.add(data.sellerId);
+        if (typeof data.creatorId === 'string') identityIds.add(data.creatorId);
+      }
+      if (identityIds.size > 0) {
+        const usersResult = await readDb.query<{
+          id: string;
+          username: string | null;
+          avatar_url: string | null;
+        }>(
+          `SELECT id, username, avatar_url FROM users WHERE id = ANY($1)`,
+          [Array.from(identityIds)]
+        );
+        const byId = new Map(usersResult.rows.map((u) => [u.id, u]));
+        for (const unit of responseItems) {
+          const data = unit.data as Record<string, unknown>;
+          if (unit.type === 'listing' && typeof data.sellerId === 'string') {
+            const u = byId.get(data.sellerId);
+            if (u) {
+              data.seller = { id: u.id, username: u.username, avatar: u.avatar_url };
+            }
+          } else if (typeof data.creatorId === 'string') {
+            const u = byId.get(data.creatorId);
+            if (u) {
+              data.creatorUsername = u.username;
+              data.creatorAvatarUrl = u.avatar_url;
+            }
+          }
+        }
+      }
+    } catch (identityErr) {
+      request.log.warn({ err: identityErr }, 'feed identity decoration failed');
     }
 
     return { items: responseItems, nextCursor };
@@ -702,6 +751,158 @@ export const registerFeedRoutes = ({ app, db, readDb }: FeedRouteDependencies): 
     const nextCursor = items.length > limit ? sliced[sliced.length - 1]?.createdAt ?? null : null;
 
     return { ok: true, items: sliced, nextCursor };
+  });
+
+  // GET /feed/following/listings — the renderable Following surface.
+  // Auth required. One SQL join replaces the mobile N+1 (fetch follows,
+  // then each seller's listings): active listings from every followed
+  // seller, newest first, in the same row shape GET /listings returns so
+  // the web display mapper consumes it unchanged. Keyset cursor on
+  // (created_at, id) — created_at alone collides on same-second posts.
+  app.get('/feed/following/listings', async (request: FastifyRequest, reply: FastifyReply) => {
+    if (!request.authUser) {
+      reply.code(401);
+      return { ok: false, error: 'Unauthorized' };
+    }
+
+    const { limit, cursor } = followingQuerySchema.parse(request.query);
+
+    let cursorCreatedAt: string | null = null;
+    let cursorId: string | null = null;
+    if (cursor) {
+      try {
+        const decoded = JSON.parse(Buffer.from(cursor, 'base64').toString('utf-8'));
+        if (typeof decoded.createdAt === 'string' && typeof decoded.id === 'string') {
+          cursorCreatedAt = decoded.createdAt;
+          cursorId = decoded.id;
+        }
+      } catch {
+        // Invalid cursor — treat as first page
+      }
+    }
+
+    const args: unknown[] = [request.authUser.userId];
+    let cursorClause = '';
+    if (cursorCreatedAt && cursorId) {
+      args.push(cursorCreatedAt, cursorId);
+      cursorClause = `AND (l.created_at, l.id) < ($2::timestamptz, $3)`;
+    }
+    args.push(limit + 1);
+    const limitSlot = `$${args.length}`;
+
+    const result = await readDb.query<{
+      id: string;
+      seller_id: string;
+      title: string;
+      description: string;
+      price_gbp: number | string;
+      image_url: string | null;
+      status: string;
+      category: string | null;
+      subcategory: string | null;
+      brand: string | null;
+      size: string | null;
+      condition: string | null;
+      original_price_gbp: number | string | null;
+      created_at: string;
+      seller_username: string | null;
+      like_count: number;
+      auction_ends_at: string | null;
+    }>(
+      `
+        SELECT l.id, l.seller_id, l.title, l.description, l.price_gbp,
+               l.image_url, l.status, l.category, l.subcategory, l.brand,
+               l.size, l.condition, l.original_price_gbp, l.created_at,
+               u.username AS seller_username,
+               COALESCE(li.like_count, 0) AS like_count,
+               a.ends_at AS auction_ends_at
+        FROM listings l
+        JOIN user_follows uf ON uf.following_id = l.seller_id
+        LEFT JOIN users u ON u.id = l.seller_id
+        ${reachJoinSql('reach_u', 'l.seller_id')}
+        LEFT JOIN (
+          SELECT listing_id, COUNT(*)::int AS like_count
+          FROM interactions
+          WHERE action = 'wishlist'
+          GROUP BY listing_id
+        ) li ON li.listing_id = l.id
+        LEFT JOIN auctions a ON a.listing_id = l.id AND a.status = 'live'
+        WHERE uf.follower_id = $1
+          AND l.status = 'active'
+          ${reachExcludedSql('reach_u')}
+          ${cursorClause}
+        ORDER BY l.created_at DESC, l.id DESC
+        LIMIT ${limitSlot}
+      `,
+      args
+    );
+
+    const hasMore = result.rows.length > limit;
+    const pageRows = hasMore ? result.rows.slice(0, limit) : result.rows;
+
+    const mediaByListing = await loadListingMedia(
+      readDb,
+      pageRows.map((r) => r.id),
+    );
+    const imagesByListing = new Map<string, string[]>();
+    const primaryGeometryByListing = new Map<string, { width: number; height: number } | null>();
+    for (const [listingRowId, mediaItems] of mediaByListing) {
+      imagesByListing.set(listingRowId, mediaItems.map(listingMediaImageUrl));
+      const primary = mediaItems[0];
+      primaryGeometryByListing.set(
+        listingRowId,
+        primary && primary.width !== null && primary.height !== null
+          ? { width: primary.width, height: primary.height }
+          : null,
+      );
+    }
+
+    const lastRow = pageRows[pageRows.length - 1];
+    const nextCursor = hasMore && lastRow
+      ? Buffer.from(JSON.stringify({ createdAt: lastRow.created_at, id: lastRow.id })).toString('base64')
+      : null;
+
+    return {
+      ok: true,
+      items: pageRows.map((row) => {
+        const primaryGeometry = primaryGeometryByListing.get(row.id);
+        return {
+          id: row.id,
+          sellerId: row.seller_id,
+          title: row.title,
+          description: row.description,
+          priceGbp: Number(row.price_gbp),
+          imageUrl: listingImageUrls(mediaByListing.get(row.id), row.image_url)[0] ?? row.image_url,
+          images: imagesByListing.get(row.id) ?? (row.image_url ? [row.image_url] : []),
+          media: mediaByListing.get(row.id) ?? [],
+          mediaWidth: primaryGeometry?.width ?? null,
+          mediaHeight: primaryGeometry?.height ?? null,
+          mediaAspectRatio: primaryGeometry
+            ? primaryGeometry.width / primaryGeometry.height
+            : null,
+          status: row.status,
+          category: row.category,
+          subcategory: row.subcategory,
+          brand: row.brand,
+          size: row.size,
+          condition: row.condition,
+          originalPriceGbp: row.original_price_gbp === null ? null : Number(row.original_price_gbp),
+          createdAt: row.created_at,
+          auctionEndsAt: row.auction_ends_at,
+          seller: row.seller_username
+            ? {
+                id: row.seller_id,
+                username: row.seller_username,
+                avatar: null,
+                rating: null,
+                reviewCount: null,
+                location: null,
+              }
+            : null,
+        };
+      }),
+      nextCursor,
+    };
   });
 
   // ────────────────────────────────────────────────────────────────────────

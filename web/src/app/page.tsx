@@ -14,10 +14,10 @@
  * baseline only where it matches feed content.
  */
 
-import { useEffect, useMemo, useRef, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { StoryRail } from '@/components/feed/StoryRail';
-import { SegmentedControl } from '@/components/feed/SegmentedControl';
+import { Tabs } from '@/components/ui/Tabs';
 import { useMasonryColumns } from '@/components/feed/MasonryGrid';
 import { FeedControlsProvider } from '@/components/feed/FeedControls';
 import { HomeFeed } from '@/components/home/HomeFeed';
@@ -29,15 +29,19 @@ import {
 } from '@/components/home/homeSignals';
 import { rankFeedUnits } from '@/components/home/rankFeed';
 import { Chip } from '@/components/ui/Chip';
+import { Icon } from '@/components/ui/Icon';
 import { IconButton } from '@/components/ui/IconButton';
 import { DATA_MODE } from '@/lib/api/client';
 import {
+  useFollowingFeed,
   useHomeFeed,
   useIntentTopics,
   type FeedSource,
   type ServeItemMeta,
 } from '@/lib/hooks/feed-queries';
+import { useSession } from '@/lib/session/SessionProvider';
 import { useFeedPrefs } from '@/lib/feedPrefs';
+import { prefersReducedMotion } from '@/lib/motion';
 import { useHydrated, useStore } from '@/lib/store/useStore';
 import { useFollows } from '@/lib/store/follows';
 import { useRecentlyViewed } from '@/lib/store/recentlyViewed';
@@ -49,6 +53,7 @@ export default function HomePage() {
   const router = useRouter();
   const columns = useMasonryColumns();
   const feed = useHomeFeed();
+  const { user } = useSession();
   const { data: intentTopics } = useIntentTopics();
   const [mode, setMode] = useState<FeedMode>('foryou');
   const [signal, setSignal] = useState<HomeSignal>({ label: 'All', key: 'all' });
@@ -89,10 +94,43 @@ export default function HomePage() {
     [hydrated, viewedListingIds],
   );
 
+  // Following — live + signed-in reads the authoritative endpoint
+  // (GET /feed/following/listings): followed sellers' active inventory,
+  // not a slice of the recommendation serve. Guests/fixture keep the
+  // local-follows filter below.
+  const followingFeed = useFollowingFeed(mode === 'following');
+  const followingLive = mode === 'following' && DATA_MODE === 'live' && user != null;
+  const followingUnits = useMemo<DiscoveryFeedUnit[]>(
+    () =>
+      (followingFeed.data?.pages ?? []).flatMap((p) =>
+        p.items.map((listing) => ({
+          type: 'listing' as const,
+          id: `listing-${listing.id}`,
+          listing,
+        })),
+      ),
+    [followingFeed.data],
+  );
+
   const pages = useMemo(() => feed.data?.pages ?? [], [feed.data]);
   const firstPage = pages[0];
-  const feedSource: FeedSource = firstPage?.source ?? (DATA_MODE === 'live' ? 'feed' : 'fixture');
-  const allUnits = useMemo(() => pages.flatMap((p) => p.units), [pages]);
+  const feedSource: FeedSource = followingLive
+    ? 'feed'
+    : (firstPage?.source ?? (DATA_MODE === 'live' ? 'feed' : 'fixture'));
+  // Dedupe across pages — a refetch overlapping a pagination append can
+  // re-serve a unit; the second copy renders as a duplicate tile.
+  const allUnits = useMemo(() => {
+    const seen = new Set<string>();
+    const out: DiscoveryFeedUnit[] = [];
+    for (const p of pages) {
+      for (const u of p.units) {
+        if (seen.has(u.id)) continue;
+        seen.add(u.id);
+        out.push(u);
+      }
+    }
+    return out;
+  }, [pages]);
   const metaByListing = useMemo<Record<string, ServeItemMeta>>(
     () => Object.assign({}, ...pages.map((p) => p.metaByListing)),
     [pages],
@@ -137,21 +175,40 @@ export default function HomePage() {
     return signals;
   }, [signals, signal]);
 
-  // Count shown on the Following tab — listing units from followed sellers.
-  const followingCount = useMemo(
-    () =>
-      allUnits.filter(
-        (u) => u.type === 'listing' && followedSellers.has(u.listing.sellerId),
-      ).length,
-    [allUnits, followedSellers],
-  );
+  // Count on the Following tab — only when the number is real. Fixture
+  // mode counts the loaded authored feed; live omits it rather than
+  // badge a first-page sample as the true total.
+  const followingCount = useMemo(() => {
+    if (DATA_MODE === 'live') return undefined;
+    return allUnits.filter(
+      (u) => u.type === 'listing' && followedSellers.has(u.listing.sellerId),
+    ).length;
+  }, [allUnits, followedSellers]);
 
   const units = useMemo<DiscoveryFeedUnit[]>(() => {
     // Hidden listings are suppressed in every mode — the "Not interested"
     // control is authoritative for the current feed.
-    let source = allUnits.filter(
-      (u) => u.type !== 'listing' || !hiddenSet.has(u.listing.id),
-    );
+    const hide = (list: DiscoveryFeedUnit[]) =>
+      list.filter((u) => u.type !== 'listing' || !hiddenSet.has(u.listing.id));
+    if (followingLive) {
+      let source = hide(followingUnits);
+      if (signal.key !== 'all') {
+        const key = signal.key;
+        source = source.filter(
+          (u) => u.type === 'listing' && matchesHomeSignal(u.listing, key),
+        );
+      }
+      // Server order is the truth — newest first; only down-weights
+      // adjust locally (same rule as the recommendations branch).
+      return rankFeedUnits(source, {
+        likedIds: [],
+        followingIds: [],
+        downweightedKeys: downKeys,
+        downweightedSizes: downSizes,
+        priceCeilings: ceilings,
+      });
+    }
+    let source = hide(allUnits);
     if (mode === 'following') {
       // Following is followed sellers' listings only — authored for-you
       // units (looks, posters, breaks) carry no seller id, so keeping
@@ -190,30 +247,40 @@ export default function HomePage() {
       downweightedSizes: downSizes,
       priceCeilings: ceilings,
     });
-  }, [allUnits, mode, signal, likedIds, followingIds, followedSellers, hiddenSet, downKeys, downSizes, ceilings, viewedIds, firstPage]);
+  }, [allUnits, mode, signal, likedIds, followingIds, followedSellers, hiddenSet, downKeys, downSizes, ceilings, viewedIds, firstPage, followingLive, followingUnits]);
 
-  const hasContent = allUnits.length > 0;
-  const isInitialLoad = feed.isPending;
-  const fatalError = feed.isError && !hasContent;
+  // Channel state follows the active source — in Following-live mode the
+  // dedicated feed's pending/error/pagination flags own the surface.
+  const activeFeed = followingLive ? followingFeed : feed;
+  // Stable sentinel target — an inline arrow re-registers the
+  // IntersectionObserver every render.
+  const loadMore = useCallback(() => {
+    void activeFeed.fetchNextPage();
+  }, [activeFeed]);
+  const hasContent = followingLive ? followingUnits.length > 0 : allUnits.length > 0;
+  const isInitialLoad = activeFeed.isPending;
+  const fatalError = activeFeed.isError && !hasContent;
   // Split isError into its channels: initial-load failure swaps in the
   // error panel; a failed refresh/page-append keeps last-good content and
   // surfaces inline instead (mobile FRESH-02).
-  const refreshFailed = feed.isRefetchError;
-  const loadMoreError = feed.isFetchNextPageError;
-  const isRefreshing = feed.isRefetching && !feed.isFetchingNextPage;
+  const refreshFailed = activeFeed.isRefetchError;
+  const loadMoreError = activeFeed.isFetchNextPageError;
+  const isRefreshing = activeFeed.isRefetching && !activeFeed.isFetchingNextPage;
 
   return (
     <div className="mx-auto max-w-[1440px]">
       {/* Control bar first — tabs + signal rail pin on scroll (mobile
           HomeFeedHeader order: tabs → signal chips → stories → feed). */}
-      <div className="sticky top-16 z-elevated flex items-center gap-3 border-b border-border-subtle bg-background px-4 py-2 sm:px-6">
-        <SegmentedControl
-          options={[
-            { value: 'foryou', label: 'For you' },
-            { value: 'following', label: 'Following', count: followingCount },
+      <div className="sticky top-14 z-elevated flex items-center gap-3 border-b border-border-subtle bg-background px-4 py-2 sm:px-6 md:top-16">
+        <Tabs
+          tabs={[
+            { key: 'foryou', label: 'For you' },
+            { key: 'following', label: 'Following', count: followingCount },
           ]}
-          value={mode}
+          active={mode}
           onChange={setMode}
+          ariaLabel="Feed mode"
+          hairline={false}
           className="shrink-0"
         />
         <div className="no-scrollbar -mx-1 flex flex-1 gap-1.5 overflow-x-auto px-1">
@@ -238,7 +305,7 @@ export default function HomePage() {
           aria-label="Refresh feed"
           onClick={() => {
             setNewDrops(0);
-            void feed.refetch();
+            void activeFeed.refetch();
           }}
           disabled={isRefreshing}
           className={isRefreshing ? 'motion-safe:animate-spin' : ''}
@@ -269,10 +336,10 @@ export default function HomePage() {
 
       <FeedControlsProvider
         source={feedSource}
-        metaByListing={metaByListing}
-        requestId={firstPage?.requestId ?? null}
-        policyVersion={firstPage?.policyVersion ?? null}
-        serveMode={firstPage?.serveMode ?? null}
+        metaByListing={followingLive ? {} : metaByListing}
+        requestId={followingLive ? null : (firstPage?.requestId ?? null)}
+        policyVersion={followingLive ? null : (firstPage?.policyVersion ?? null)}
+        serveMode={followingLive ? null : (firstPage?.serveMode ?? null)}
         surface="home_feed"
       >
         <HomeFeed
@@ -280,16 +347,26 @@ export default function HomePage() {
           columns={columns}
           isLoading={isInitialLoad}
           isError={fatalError}
-          onRetry={() => void feed.refetch()}
+          onRetry={() => void activeFeed.refetch()}
           refreshError={refreshFailed}
-          onRefreshRetry={() => void feed.refetch()}
-          hasMore={feed.hasNextPage === true}
-          isLoadingMore={feed.isFetchingNextPage}
+          onRefreshRetry={() => void activeFeed.refetch()}
+          hasMore={activeFeed.hasNextPage === true}
+          isLoadingMore={activeFeed.isFetchingNextPage}
           loadMoreError={loadMoreError}
-          onLoadMore={() => void feed.fetchNextPage()}
+          onLoadMore={loadMore}
           empty={
             mode === 'following'
-              ? followingIds.length === 0
+              ? DATA_MODE === 'live' && user == null
+                ? {
+                    // Live Following is an authenticated surface — the
+                    // local follows store can't enumerate real sellers.
+                    title: 'Sign in to see your Following feed',
+                    subtitle:
+                      'New listings from members you follow land here.',
+                    actionLabel: 'Sign in',
+                    onAction: () => router.push('/auth/login'),
+                  }
+              : followingIds.length === 0 && !followingLive
                 ? {
                     title: 'You\u2019re not following anyone yet',
                     subtitle:
@@ -321,6 +398,43 @@ export default function HomePage() {
           }
         />
       </FeedControlsProvider>
+
+      {/* Deep-scroll recovery — surfaces once the feed is two viewports
+          down; below the mobile tab bar's reach and above content. */}
+      <BackToTop />
     </div>
+  );
+}
+
+/**
+ * BackToTop — quiet floating control that appears after ~2 viewports of
+ * scroll (Pinterest/Vinted deep-feed grammar). Reduced-motion sessions
+ * jump instead of smooth-scrolling; the button mounts only when useful,
+ * so it never sits in the tab order at the top of the feed.
+ */
+function BackToTop() {
+  const [visible, setVisible] = useState(false);
+  useEffect(() => {
+    const update = () => setVisible(window.scrollY > window.innerHeight * 2);
+    update();
+    window.addEventListener('scroll', update, { passive: true });
+    window.addEventListener('resize', update);
+    return () => {
+      window.removeEventListener('scroll', update);
+      window.removeEventListener('resize', update);
+    };
+  }, []);
+  if (!visible) return null;
+  return (
+    <button
+      type="button"
+      aria-label="Back to top"
+      onClick={() =>
+        window.scrollTo({ top: 0, behavior: prefersReducedMotion() ? 'auto' : 'smooth' })
+      }
+      className="fade-in pressable fixed bottom-[88px] right-4 z-sticky flex h-11 w-11 items-center justify-center rounded-full border border-border bg-surface-elevated text-text-primary shadow-floating md:bottom-6 md:right-6"
+    >
+      <Icon name="arrowUp" size={20} />
+    </button>
   );
 }

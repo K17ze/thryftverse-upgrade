@@ -93,6 +93,57 @@ export const SUPPORTED_MODELS: Array<{
 export const DEFAULT_MODEL: AgentModelId = 'gpt-5.6-terra';
 
 // ---------------------------------------------------------------------------
+// Live-wire vocabulary — the values chat_bots actually carries.
+// ---------------------------------------------------------------------------
+
+/** chat_bots.status — PATCH-able by the owner only, on custom bots. */
+export type AgentBotStatus =
+  | 'available'
+  | 'local-only'
+  | 'backend-required'
+  | 'disabled';
+
+export const AGENT_BOT_STATUS_LABELS: Record<AgentBotStatus, string> = {
+  available: 'Available',
+  'local-only': 'Local only',
+  'backend-required': 'Needs backend',
+  disabled: 'Disabled',
+};
+
+/** agentConfig.triggerMode — when a deployed chat agent replies. */
+export type AgentTriggerMode = 'mention' | 'command' | 'always';
+
+export const AGENT_TRIGGER_MODES: Array<{
+  value: AgentTriggerMode;
+  label: string;
+  detail: string;
+}> = [
+  {
+    value: 'mention',
+    label: 'When mentioned',
+    detail: 'Replies when someone mentions it by name in a conversation',
+  },
+  {
+    value: 'command',
+    label: 'On command',
+    detail: 'Replies when its command hint is used in a conversation',
+  },
+  {
+    value: 'always',
+    label: 'Every message',
+    detail: 'Replies to every message in the conversations it joins',
+  },
+];
+
+export function triggerModeById(id: AgentTriggerMode): {
+  value: AgentTriggerMode;
+  label: string;
+  detail: string;
+} {
+  return AGENT_TRIGGER_MODES.find((t) => t.value === id) ?? AGENT_TRIGGER_MODES[0];
+}
+
+// ---------------------------------------------------------------------------
 // Capability taxonomy (ported verbatim from mobile capabilityBroker.ts)
 // ---------------------------------------------------------------------------
 
@@ -210,6 +261,12 @@ export const RISK_GROUPS: Array<{
   },
 ];
 
+/** Type guard — the wire ships permission strings outside this taxonomy
+ *  ('reply_in_chat' etc.); only known keys carry a risk label. */
+export function isAgentCapability(value: string): value is AgentCapability {
+  return value in CAPABILITY_RISK_LABELS;
+}
+
 /** One-line honest risk word for a permission row. */
 export function riskWord(risk: RiskLevel): string {
   switch (risk) {
@@ -242,17 +299,55 @@ export interface AgentBot {
   category: AgentCategory;
   /** Purpose template the bot was built from; null for bespoke directory bots. */
   purposeId: AgentPurposeId | null;
-  model: AgentModelId;
+  /**
+   * Runtime model — present only when the row's agentConfig carries one.
+   * Fixture rows ship an authored model; live rows that don't carry
+   * agentConfig simply omit it.
+   */
+  model?: AgentModelId;
+  /**
+   * Chat trigger grammar — the live wire's agentConfig.triggerMode.
+   * Mutually exclusive with triggerId (the fixture automation grammar).
+   */
+  triggerMode?: AgentTriggerMode;
   /** Display creator — 'ThryftVerse' for stock, a handle for community, 'You' for own. */
   creator: string;
   origin: AgentBotOrigin;
-  /** Granted capabilities — the permission list on the detail surface. */
+  /** Granted capabilities — the permission list on the detail surface.
+   *  Only permissions the web taxonomy knows land here; the raw wire
+   *  strings are on `permissions`. */
   capabilities: AgentCapability[];
-  triggerId: AgentTriggerId;
-  installs: number;
-  installed: boolean;
-  /** Whether the installed bot is currently allowed to run. */
+  /** Raw permission strings from the wire (e.g. 'reply_in_chat') — rendered
+   *  verbatim when they don't map to the capability taxonomy. */
+  permissions?: string[];
+  /**
+   * Automation trigger — fixture-authored only. No live wire field exists,
+   * so live rows omit it.
+   */
+  triggerId?: AgentTriggerId;
+  /**
+   * Install count — fixture-authored only. The server carries no install
+   * count, so live rows omit it.
+   */
+  installs?: number;
+  /**
+   * Session install state — fixture-authored only. There is no user-level
+   * install on the wire: live bots deploy into conversations via
+   * POST /chat/conversations/:id/bots/:botId/deploy.
+   */
+  installed?: boolean;
+  /** Live wire status (chat_bots.status). Undefined on fixture rows, which
+   *  express state through `installed`/`enabled` alone. */
+  status?: AgentBotStatus;
+  /** Whether the bot can currently act — status 'available' on the wire,
+   *  or the authored flag in fixture data. */
   enabled: boolean;
+  /** True when the caller owns this custom bot and may PATCH its status
+   *  (the server 403s the write on anything else). */
+  canToggle?: boolean;
+  isDraft?: boolean;
+  runtimeReady?: boolean;
+  runtimeReadinessReason?: string | null;
   createdAt: string;
 }
 
@@ -261,21 +356,35 @@ export interface AgentBot {
 // AgentRunInfo surface grammar: bot, action, target, outcome, time.
 // ---------------------------------------------------------------------------
 
+/**
+ * The wire status vocabulary (agent_runs.status, migration 224) plus the
+ * fixture-authored 'skipped'. Every live status maps 1:1 — nothing
+ * collapses into a generic bucket.
+ */
 export type AgentRunOutcome =
+  | 'queued'
+  | 'running'
+  | 'awaiting_approval'
+  | 'waiting_for_input'
   | 'succeeded'
-  | 'skipped'
   | 'failed'
-  | 'awaiting_approval';
+  | 'timed_out'
+  | 'cancelled'
+  | 'unknown_outcome'
+  | 'skipped';
 
 export interface AgentRunEntry {
   id: string;
   botId: string;
+  /** The conversation the run happened in — the live wire field. */
+  conversationId?: string;
   /** What the bot did — 'Relisted stale listing', 'Drafted reply'. */
   action: string;
-  /** What it acted on — 'Vintage Carhartt jacket', 'Saved: Doc Martens'. */
-  target: string;
+  /** What it acted on — 'Vintage Carhartt jacket', 'Saved: Doc Martens'.
+   *  Fixture-authored; live rows carry conversationId instead. */
+  target?: string;
   outcome: AgentRunOutcome;
-  /** Optional detail for failed/awaiting rows. */
+  /** Optional detail — the wire's errorMessage, or fixture detail. */
   detail?: string;
   at: string; // ISO
 }
@@ -284,10 +393,16 @@ export const OUTCOME_META: Record<
   AgentRunOutcome,
   { label: string; tone: 'success' | 'muted' | 'danger' | 'warning' }
 > = {
-  succeeded: { label: 'Done', tone: 'success' },
-  skipped: { label: 'Skipped', tone: 'muted' },
-  failed: { label: 'Failed', tone: 'danger' },
+  queued: { label: 'Queued', tone: 'muted' },
+  running: { label: 'Running', tone: 'muted' },
   awaiting_approval: { label: 'Needs you', tone: 'warning' },
+  waiting_for_input: { label: 'Waiting', tone: 'warning' },
+  succeeded: { label: 'Done', tone: 'success' },
+  failed: { label: 'Failed', tone: 'danger' },
+  timed_out: { label: 'Timed out', tone: 'danger' },
+  cancelled: { label: 'Cancelled', tone: 'muted' },
+  unknown_outcome: { label: 'Unknown', tone: 'muted' },
+  skipped: { label: 'Skipped', tone: 'muted' },
 };
 
 // ---------------------------------------------------------------------------

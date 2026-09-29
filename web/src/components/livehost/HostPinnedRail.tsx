@@ -9,7 +9,7 @@
 
 import { useState } from 'react';
 import type { Listing } from '@/lib/contracts/domain';
-import { listingById } from '@/lib/data/fixtures';
+import { useResolvedListings } from '@/lib/hooks/home-modules';
 import { AppImage } from '@/components/ui/AppImage';
 import { Icon } from '@/components/ui/Icon';
 import { Sheet } from '@/components/ui/Sheet';
@@ -26,10 +26,17 @@ interface HostPinnedRailProps {
 
 export function HostPinnedRail({ pinIds, candidates, max, onChange }: HostPinnedRailProps) {
   const [picking, setPicking] = useState(false);
-  // Pinned rows resolve against the fixture listing index — a pin keeps
-  // rendering even while the active pool is still loading.
+  // Pinned rows resolve from the active pool first, then the shared id
+  // resolver (live ids fetch, misses drop) — a pin keeps rendering even
+  // while the pool is still loading.
+  const missingIds = pinIds.filter((id) => !candidates.some((l) => l.id === id));
+  const { items: resolvedMissing } = useResolvedListings(missingIds);
   const pinned = pinIds
-    .map((id) => listingById(id))
+    .map(
+      (id) =>
+        candidates.find((l) => l.id === id) ??
+        resolvedMissing.find((l) => l.id === id),
+    )
     .filter((l): l is Listing => l != null);
   const unpinned = candidates.filter((l) => !pinIds.includes(l.id));
   const atCap = pinIds.length >= max;
@@ -59,7 +66,7 @@ export function HostPinnedRail({ pinIds, candidates, max, onChange }: HostPinned
                 className="h-full w-full"
               />
               <span
-                className={`absolute left-0.5 top-0.5 flex h-4 w-4 items-center justify-center rounded-sm text-[10px] font-bold ${
+                className={`absolute left-0.5 top-0.5 flex h-4 w-4 items-center justify-center rounded-sm text-micro font-bold ${
                   i === 0 ? 'bg-scrim-text-primary text-black' : 'bg-black/60 text-scrim-text-primary'
                 }`}
                 title={i === 0 ? 'On the table' : `Lot ${i + 1}`}
@@ -114,7 +121,7 @@ export function HostPinnedRail({ pinIds, candidates, max, onChange }: HostPinned
                   onChange([...pinIds, listing.id]);
                   setPicking(false);
                 }}
-                className="pressable flex w-full items-center gap-3 rounded-md px-2 py-2.5 text-left hover:bg-surface-alt disabled:opacity-40"
+                className="pressable flex w-full items-center gap-3 rounded-md px-2 py-2.5 text-left hover:bg-row disabled:opacity-40"
               >
                 <span className="relative h-12 w-12 shrink-0 overflow-hidden rounded-md bg-surface-alt">
                   <AppImage

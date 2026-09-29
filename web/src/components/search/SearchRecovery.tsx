@@ -35,7 +35,7 @@ export function SearchRecovery({
   const suggestions = CATEGORY_DIRECTORY_BY_COUNT.filter((c) => c.count > 0).slice(0, 3);
 
   return (
-    <div className="px-4 pb-20 pt-14 sm:px-6">
+    <div className="px-4 pb-20 pt-14 sm:px-6 lg:pt-20">
       <h1 className="text-section-title font-semibold text-text-primary">
         No results for “{query}”
       </h1>
@@ -67,7 +67,7 @@ export function SearchRecovery({
 
       {suggestions.length > 0 ? (
         <div className="mt-9">
-          <h2 className="text-label font-semibold uppercase tracking-wide text-text-muted">
+          <h2 className="text-label text-text-muted">
             Shop by category
           </h2>
           <div

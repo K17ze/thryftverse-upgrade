@@ -40,7 +40,7 @@ const FAQS: Faq[] = [
   },
   {
     q: 'How is shipping handled?',
-    a: `The buyer pays shipping at checkout. When you sell, we email a prepaid tracked label — print it, drop the parcel within ${DISPATCH_SLA_DAYS} working days, and tracking updates the order automatically for both sides.`,
+    a: `The buyer pays shipping at checkout. When you sell, we email a prepaid tracked label — print it, drop the parcel within ${DISPATCH_SLA_DAYS} days, and tracking updates the order automatically for both sides.`,
   },
   {
     q: 'What does the sustainability grade mean?',
@@ -89,14 +89,19 @@ export default function HelpPage() {
   }, [query]);
 
   return (
-    <div className="mx-auto w-full max-w-2xl px-4 pb-16 pt-8 sm:px-6 md:pt-12">
-      <h1 className="text-screen-title font-semibold text-text-primary">Help centre</h1>
+    <div className="mx-auto w-full max-w-2xl px-4 pb-16 pt-8 sm:px-6 md:pt-12 lg:max-w-[1440px]">
+      <h1 className="text-screen-title text-text-primary">Help centre</h1>
       <p className="mt-2 text-body-large text-text-secondary">
         Answers to the things people ask most.
       </p>
 
+      {/* Desktop split — the FAQ list is the reading column; Trust &
+          Safety and contact ride a sticky rail beside it. Mobile keeps
+          the authored vertical order. */}
+      <div className="lg:mt-8 lg:grid lg:grid-cols-[minmax(0,1fr)_360px] lg:items-start lg:gap-x-12 xl:grid-cols-[minmax(0,1fr)_400px] xl:gap-x-16">
+      <div className="min-w-0">
       {/* Search */}
-      <label className="relative mt-6 block" role="search">
+      <label className="relative mt-6 block lg:mt-0" role="search">
         <span className="pointer-events-none absolute left-3.5 top-1/2 -translate-y-1/2 text-text-muted">
           <Icon name="search" size={18} />
         </span>
@@ -132,10 +137,12 @@ export default function HelpPage() {
           />
         )}
       </div>
+      </div>
 
       {/* Trust & Safety — the DSA notice entry point, same as mobile's
           "Report illegal content" row in Help & Support. */}
-      <section aria-label="Trust and safety" className="mt-10">
+      <aside className="lg:sticky lg:top-20 lg:self-start">
+      <section aria-label="Trust and safety" className="mt-10 lg:mt-0">
         <h2 className="text-label text-text-muted">Trust &amp; Safety</h2>
         <div className="mt-1 border-y border-border-subtle">
           <button
@@ -172,6 +179,8 @@ export default function HelpPage() {
           <Icon name="chat" size={16} />
           Contact support
         </Link>
+      </div>
+      </aside>
       </div>
 
       <DsaReportSheet open={dsaOpen} onClose={() => setDsaOpen(false)} />

@@ -5,6 +5,13 @@
  * Mirrors the mobile saved_searches contract: a saved search is the render
  * cache; the alert flag is what the backend matcher uses to emit
  * saved_search_match notifications when new listings activate.
+ *
+ * Live mode is honest about where the truth lives: every write is an
+ * optimistic local mirror of `/users/me/saved-searches` (POST upsert /
+ * PATCH alerts / DELETE) with revert-on-failure — a failed write snaps
+ * back and raises `syncError` so a surface can say the sync failed.
+ * `hydrateSavedSearches` replaces the local list with server truth when
+ * the session resolves; fixture mode stays localStorage-only.
  * Separate store from useStore so persisted slices stay composable.
  */
 
@@ -15,6 +22,14 @@ import {
   writeFilterParams,
   type ListingFilters,
 } from '@/components/filters/filterTypes';
+import { DATA_MODE } from '@/lib/api/client';
+import * as savedService from '@/lib/api/services/saved';
+import {
+  persistedSessionUserId,
+  sessionEpoch,
+  sessionIdentityIsCurrent,
+  sessionUserId,
+} from '@/lib/session/identityEpoch';
 
 export type SavedSearchKind = 'text' | 'visual';
 
@@ -57,6 +72,14 @@ interface SavedSearchesState {
   /** Restore persisted storage — call once on mount in surfaces that read
    *  during render (persist's async hydration races the first paint). */
   hydrate: () => void;
+
+  // Live-mode honesty channels (runtime state — never persisted):
+  /** Set when a live write-through failed after rollback; cleared on the
+   *  next successful write or hydrate. */
+  syncError: string | null;
+  /** True until the first live hydrate lands (or after a failed one) —
+   *  the persisted list may be stale relative to the server. */
+  stale: boolean;
 }
 
 let counter = 0;
@@ -97,11 +120,86 @@ export function searchHref(s: SavedSearch): string {
   return `/search${qs ? `?${qs}` : ''}`;
 }
 
+const LIVE = DATA_MODE === 'live';
+
+/**
+ * Identity namespace for the persisted list — saved searches are
+ * account-owned truth, so the storage bucket follows the session
+ * identity: the resolved user id, else the last resolved account across
+ * reloads (the identity marker — written before hydration, so a reload
+ * rehydrates the same account's rows), else 'guest'. A guest bucket
+ * starts empty and can never surface a previous account's searches.
+ */
+function scopedKey(name: string): string {
+  const scope = sessionUserId() ?? persistedSessionUserId() ?? 'guest';
+  return `${name}.${scope}`;
+}
+
+const accountStorage = {
+  getItem: (name: string) =>
+    typeof window === 'undefined'
+      ? null
+      : window.localStorage.getItem(scopedKey(name)),
+  setItem: (name: string, value: string) => {
+    if (typeof window === 'undefined') return;
+    window.localStorage.setItem(scopedKey(name), value);
+  },
+  removeItem: (name: string) => {
+    if (typeof window === 'undefined') return;
+    window.localStorage.removeItem(scopedKey(name));
+  },
+};
+
+/**
+ * Normalized dedupe key — the backend upserts on (user, normalized
+ * query+filters); the client mirrors that so a repeat save of the same
+ * normalized intent returns the existing row instead of inserting a
+ * duplicate optimistic copy.
+ */
+export function savedSearchKey(query: string, filters: ListingFilters): string {
+  const f = coerceFilters(filters);
+  const list = (xs: string[]) => xs.map((x) => x.trim().toLowerCase()).sort();
+  return JSON.stringify([
+    query.trim().toLowerCase(),
+    list(f.categories),
+    list(f.brands),
+    list(f.sizes),
+    list(f.colours),
+    list(f.conditions),
+    f.priceMin,
+    f.priceMax,
+    f.includeSold,
+  ]);
+}
+
+/** Server row → local render cache shape. */
+function mapRemoteSearch(row: savedService.SavedSearch): SavedSearch {
+  return {
+    id: row.id,
+    query: row.query ?? '',
+    filters: coerceFilters(row.filters ?? {}),
+    alertsOn: row.alertsEnabled ?? true,
+    createdAt: row.createdAt ?? new Date().toISOString(),
+    kind: 'text',
+  };
+}
+
 export const useSavedSearches = create<SavedSearchesState>()(
   persist(
-    (set) => ({
+    (set, get) => ({
       searches: [],
+      syncError: null,
+      stale: LIVE,
+
       saveSearch: (query, filters, opts) => {
+        // Same normalized (query + filters) is already saved — return it
+        // rather than inserting a duplicate (the server would upsert to
+        // the same row anyway).
+        const key = savedSearchKey(query, filters);
+        const existing = get().searches.find(
+          (s) => savedSearchKey(s.query, s.filters) === key,
+        );
+        if (existing) return existing;
         const search: SavedSearch = {
           id: nextId(),
           query,
@@ -115,24 +213,125 @@ export const useSavedSearches = create<SavedSearchesState>()(
             : {}),
         };
         set((s) => ({ searches: [search, ...s.searches] }));
+        if (LIVE) {
+          void savedService
+            .createSavedSearch({
+              query,
+              filters: filters as unknown as Record<string, unknown>,
+              alertsEnabled: search.alertsOn,
+            })
+            .then((remote) => {
+              // Adopt the canonical server row — the backend dedupes on
+              // (user, normalized query+filters), so the returned id can
+              // differ from the optimistic local one.
+              set((s) => ({
+                syncError: null,
+                searches: s.searches.map((x) =>
+                  x.id === search.id
+                    ? {
+                        ...mapRemoteSearch(remote),
+                        // Local-only context the server doesn't store.
+                        kind: search.kind,
+                        queryId: search.queryId,
+                        resultCount: search.resultCount,
+                      }
+                    : x,
+                ),
+              }));
+            })
+            .catch(() => {
+              // Rollback — a failed save drops the optimistic row and
+              // flags the failure instead of pretending it persisted.
+              set((s) => ({
+                searches: s.searches.filter((x) => x.id !== search.id),
+                syncError: 'save',
+              }));
+            });
+        }
         return search;
       },
-      removeSearch: (id) =>
-        set((s) => ({ searches: s.searches.filter((x) => x.id !== id) })),
-      toggleAlert: (id) =>
+
+      removeSearch: (id) => {
+        const before = get().searches;
+        const index = before.findIndex((x) => x.id === id);
+        if (index < 0) return;
+        set((s) => ({ searches: s.searches.filter((x) => x.id !== id) }));
+        if (LIVE) {
+          void savedService
+            .deleteSavedSearch(id)
+            .then(() => set({ syncError: null }))
+            .catch(() =>
+              set((s) => ({
+                // Reinsert at the original position — the row was never
+                // actually deleted server-side.
+                searches: [
+                  ...s.searches.slice(0, index),
+                  before[index],
+                  ...s.searches.slice(index),
+                ],
+                syncError: 'remove',
+              })),
+            );
+        }
+      },
+
+      toggleAlert: (id) => {
+        const before = get().searches;
+        const target = before.find((x) => x.id === id);
+        if (!target) return;
+        const next = !target.alertsOn;
         set((s) => ({
           searches: s.searches.map((x) =>
-            x.id === id ? { ...x, alertsOn: !x.alertsOn } : x,
+            x.id === id ? { ...x, alertsOn: next } : x,
           ),
-        })),
+        }));
+        if (LIVE) {
+          void savedService
+            .setSavedSearchAlerts(id, next)
+            .then(() => set({ syncError: null }))
+            .catch(() =>
+              set((s) => ({
+                searches: s.searches.map((x) =>
+                  x.id === id ? { ...x, alertsOn: !next } : x,
+                ),
+                syncError: 'alert',
+              })),
+            );
+        }
+      },
+
       hydrate: () => {
         void useSavedSearches.persist.rehydrate();
       },
     }),
     {
       name: 'thryftverse.web.saved-searches',
-      storage: createJSONStorage(() => localStorage),
+      storage: createJSONStorage(() => accountStorage),
       partialize: (s) => ({ searches: s.searches }),
     },
   ),
 );
+
+/**
+ * Live mode: replace the local list with the server-authoritative saved
+ * searches once the session resolves. Called from the session provider —
+ * no-ops in fixture mode. The write is sequenced by the session epoch so
+ * a late resolution never lands on the next account; a failed read flags
+ * the store stale rather than silently keeping the old list.
+ */
+export async function hydrateSavedSearches(forUserId: string): Promise<void> {
+  if (!LIVE) return;
+  const epoch = sessionEpoch();
+  const stillCurrent = () => sessionIdentityIsCurrent(forUserId, epoch);
+  try {
+    const rows = await savedService.fetchSavedSearches();
+    if (!stillCurrent()) return;
+    useSavedSearches.setState({
+      searches: rows.map(mapRemoteSearch),
+      stale: false,
+      syncError: null,
+    });
+  } catch {
+    if (stillCurrent()) useSavedSearches.setState({ stale: true });
+  }
+}

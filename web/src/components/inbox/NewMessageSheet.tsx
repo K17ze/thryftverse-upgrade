@@ -441,7 +441,7 @@ export function NewMessageSheet({ open, onClose }: NewMessageSheetProps) {
                       name="close"
                       size={16}
                       aria-label={`Remove ${u.username}`}
-                      className="h-8 w-8"
+                      className="relative h-8 w-8 after:absolute after:-inset-1.5 after:content-['']"
                       onClick={() => toggleMember(u)}
                     />
                   </div>

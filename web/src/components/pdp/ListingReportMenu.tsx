@@ -72,7 +72,9 @@ export function ListingReportMenu({ listing }: ListingReportMenuProps) {
     <>
       <IconButton
         name="more"
-        aria-label="More options"
+        aria-label={`More options for ${listing.title}`}
+        aria-haspopup="dialog"
+        aria-expanded={menuOpen}
         onClick={() => setMenuOpen(true)}
       />
       <Sheet

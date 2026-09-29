@@ -27,7 +27,7 @@ export function GalleriaSkeleton() {
           <SectionHeaderSkeleton />
           <div className="no-scrollbar mt-8 flex gap-4 overflow-hidden">
             {[0, 1, 2, 3].map((i) => (
-              <div key={i} className="w-[72vw] min-w-[240px] max-w-[320px] shrink-0 sm:w-[320px]">
+              <div key={i} className="w-[72vw] min-w-[240px] max-w-[320px] shrink-0 sm:w-[320px] lg:w-[380px] lg:max-w-[380px]">
                 <Skeleton className="aspect-[4/5] w-full rounded-lg" />
                 <div className="mt-2.5 flex items-center gap-2 px-0.5">
                   <Skeleton className="h-5 w-5 rounded-full" />
@@ -60,7 +60,7 @@ export function GalleriaSkeleton() {
         {/* Featured assets grid */}
         <div className="mt-14 md:mt-20">
           <SectionHeaderSkeleton />
-          <div className="mt-8 grid grid-cols-2 gap-x-4 gap-y-9 md:grid-cols-3">
+          <div className="mt-8 grid grid-cols-2 gap-x-4 gap-y-9 md:grid-cols-3 lg:grid-cols-4 xl:grid-cols-6">
             {[0, 1, 2, 3, 4, 5].map((i) => (
               <div key={i}>
                 <Skeleton className="aspect-[4/5] w-full rounded-lg" />

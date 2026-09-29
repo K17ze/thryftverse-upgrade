@@ -15,15 +15,20 @@ import {
   SortablePhotoStrip,
   type StripPhoto,
 } from '@/components/media/SortablePhotoStrip';
-import { isLocalMediaUri } from '@/lib/utils/media';
+import { isLocalMediaUri, isVideoUri } from '@/lib/utils/media';
 import { MAX_PHOTOS } from './constants';
 import { SellSection } from './SellSection';
 
 /** Per-photo live-upload state, keyed by the staged preview URL. */
 export interface PhotoMediaState {
-  status: 'uploading' | 'uploaded' | 'failed';
+  status?: 'uploading' | 'uploaded' | 'failed';
   /** Byte progress 0..1; null while the presigned total is unknown. */
-  progress: number | null;
+  progress?: number | null;
+  /** Staged media kind — 'image' when the slot was picked before kind
+   *  tracking existed (or comes from a surface that only stages stills). */
+  kind?: 'image' | 'video';
+  /** Poster still preview for video slots (blob: uri or remote url). */
+  poster?: string | null;
 }
 
 interface PhotosSectionProps {
@@ -74,14 +79,20 @@ export function PhotosSection({
   const hasPhotos = photos.length > 0;
   const canAdd = photos.length < MAX_PHOTOS;
 
-  const items: StripPhoto[] = photos.map((src) => ({
-    src,
-    status: media?.[src]?.status,
-    progress: media?.[src]?.progress,
-    // Canvas edits need readable pixels — blob:/data: only, the same gate
-    // mobile applies to non-manipulable remote media.
-    editable: isLocalMediaUri(src),
-  }));
+  const items: StripPhoto[] = photos.map((src) => {
+    const m = media?.[src];
+    return {
+      src,
+      kind: m?.kind ?? (isVideoUri(src) ? 'video' : 'image'),
+      poster: m?.poster ?? null,
+      status: m?.status,
+      progress: m?.progress,
+      // Canvas edits need readable pixels — blob:/data: images only, the
+      // same gate mobile applies to non-manipulable remote media. A video
+      // slot is never a canvas-edit target.
+      editable: isLocalMediaUri(src) && m?.kind !== 'video',
+    };
+  });
 
   return (
     <SellSection
@@ -90,8 +101,8 @@ export function PhotosSection({
       title="Photos"
       subtitle={
         hasPhotos
-          ? `${photos.length} of ${MAX_PHOTOS} — first photo is your cover. Drag to reorder.`
-          : `Add up to ${MAX_PHOTOS} photos — the first is your cover.`
+          ? `${photos.length} of ${MAX_PHOTOS} — the first photo is your cover. Drag to reorder.`
+          : `Add up to ${MAX_PHOTOS} photos or a video — the first photo is your cover.`
       }
     >
       {/* Shot list — mirrors the mobile photo-tips guidance: the frames
@@ -107,11 +118,11 @@ export function PhotosSection({
       <input
         ref={inputRef}
         type="file"
-        accept="image/*"
+        accept="image/*,video/*"
         multiple
         className="hidden"
         onChange={handleFiles}
-        aria-label="Add listing photos"
+        aria-label="Add listing photos or video"
       />
 
       <div

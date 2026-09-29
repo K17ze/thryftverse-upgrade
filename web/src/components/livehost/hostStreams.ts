@@ -63,6 +63,9 @@ export function createHostStream(input: HostStreamInput): HostStream {
     status: live ? 'live' : 'upcoming',
     viewers: live ? seedBaseViewers(id) : undefined,
     scheduledAt: input.scheduledAt,
+    // Authored this-session shows are simulations — the flag lets any
+    // consumer (lot dock, hubs) treat them as demo rather than real rooms.
+    isDemo: true,
   };
   const stream: HostStream = {
     session,

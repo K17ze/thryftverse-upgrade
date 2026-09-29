@@ -54,7 +54,7 @@ export function ShopRail({ ownerId, isOwner = false, listings = [] }: ShopRailPr
   return (
     <section aria-label="Featured items" className="mt-6">
       <div className="flex items-center justify-between px-4 sm:px-6">
-        <h2 className="text-title text-text-primary">Featured</h2>
+        <h2 className="text-section-title text-text-primary">Featured</h2>
         {isOwner ? (
           <button
             type="button"
@@ -103,7 +103,7 @@ export function ShopRail({ ownerId, isOwner = false, listings = [] }: ShopRailPr
                   )
                 }
                 aria-pressed={pinned}
-                className="pressable flex w-full items-center gap-3 rounded-lg p-2 text-left hover:bg-surface-alt"
+                className="pressable flex w-full items-center gap-3 rounded-lg p-2 text-left hover:bg-row"
               >
                 <span className="relative h-12 w-12 shrink-0 overflow-hidden rounded-md bg-surface-alt">
                   <AppImage
@@ -121,7 +121,7 @@ export function ShopRail({ ownerId, isOwner = false, listings = [] }: ShopRailPr
                 </span>
                 <span
                   className={`flex h-5 w-5 items-center justify-center rounded-full border ${
-                    pinned ? 'border-brand bg-brand text-white' : 'border-border text-transparent'
+                    pinned ? 'border-brand bg-brand text-text-inverse' : 'border-border text-transparent'
                   }`}
                   aria-hidden
                 >
@@ -164,7 +164,7 @@ function ShopRailCard({ item }: { item: ShopRailItem }) {
   return (
     <Link
       href={`/listing/${item.id}`}
-      className="pressable group block w-[132px] shrink-0"
+      className="pressable group block w-[132px] shrink-0 lg:w-[168px]"
       aria-label={`${item.title}, ${formatPrice(item.price)}${item.isSold ? ', sold' : ''}`}
     >
       <span className="relative block aspect-[3/4] overflow-hidden rounded-lg bg-surface-alt">
@@ -172,12 +172,12 @@ function ShopRailCard({ item }: { item: ShopRailItem }) {
           src={item.imageUri}
           alt=""
           fill
-          sizes="132px"
+          sizes="(max-width: 1024px) 132px, 168px"
           className="h-full w-full transition-transform duration-300 group-hover:scale-[1.04]"
           fallbackIcon="heart"
         />
         {item.isSold ? (
-          <span className="absolute inset-0 flex items-center justify-center bg-black/45 text-meta font-semibold uppercase tracking-[0.08em] text-white">
+          <span className="absolute inset-0 flex items-center justify-center bg-black/45 text-meta font-semibold uppercase tracking-wide text-scrim-text-primary">
             Sold
           </span>
         ) : null}

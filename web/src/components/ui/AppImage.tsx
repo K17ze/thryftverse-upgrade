@@ -50,14 +50,14 @@ export function AppImage({
   quality = 80,
 }: AppImageProps) {
   const [failed, setFailed] = useState(false);
-  const [loaded, setLoaded] = useState(false);
+  const [loaded, setLoaded] = useState(Boolean(priority));
 
   // A new src invalidates the previous load/fail state — without this a
   // failed URI sticks the fallback even after a valid src arrives.
   useEffect(() => {
     setFailed(false);
-    setLoaded(false);
-  }, [src]);
+    setLoaded(Boolean(priority));
+  }, [src, priority]);
 
   const usable = isUsableUri(src) && !failed;
   const local = usable && isLocalMediaUri(src);
@@ -77,12 +77,12 @@ export function AppImage({
           <img
             src={src}
             alt={alt}
+            decoding="async"
             onLoad={() => setLoaded(true)}
             onError={() => setFailed(true)}
-            className={`img-fade h-full w-full object-cover ${imgClassName}`}
+            className={`img-fade h-full w-full object-cover transition-opacity duration-200 ${imgClassName}`}
             style={{
               objectPosition,
-              opacity: loaded ? 1 : 0,
             }}
           />
         ) : (
@@ -99,10 +99,9 @@ export function AppImage({
             blurDataURL={blurDataURL ?? undefined}
             onLoad={() => setLoaded(true)}
             onError={() => setFailed(true)}
-            className={`img-fade object-cover ${imgClassName}`}
+            className={`img-fade object-cover transition-opacity duration-200 ${imgClassName}`}
             style={{
               objectPosition,
-              opacity: loaded ? 1 : 0,
             }}
           />
         )

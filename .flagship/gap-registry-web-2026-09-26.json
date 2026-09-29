@@ -22,13 +22,13 @@
       "files": [
         "src/app/page.tsx"
       ],
-      "fix": "filter feed by useFollows() state; empty following → empty state with explore CTA"
+      "fix": "filter feed by useFollows() state; empty following \u00e2\u2020\u2019 empty state with explore CTA"
     },
     {
       "id": "SELL-P0-01",
       "sev": "P0",
       "dept": "sell",
-      "title": "blob:/data: listing photos routed through next/image optimizer which cannot fetch them — local sell photos render fallback icons",
+      "title": "blob:/data: listing photos routed through next/image optimizer which cannot fetch them \u00e2\u20ac\u201d local sell photos render fallback icons",
       "files": [
         "src/components/ui/AppImage.tsx"
       ],
@@ -71,7 +71,7 @@
       "id": "LIVE-P0-01",
       "sev": "P0",
       "dept": "live",
-      "title": "Host-pinned products never reach live viewers — pin state stored host-side only",
+      "title": "Host-pinned products never reach live viewers \u00e2\u20ac\u201d pin state stored host-side only",
       "files": [
         "src/app/live/**",
         "src/components/host/**",
@@ -83,7 +83,7 @@
       "id": "MSG-P0-01",
       "sev": "P0",
       "dept": "messaging",
-      "title": "Opening a conversation never marks it read — unread rows/badges persist forever",
+      "title": "Opening a conversation never marks it read \u00e2\u20ac\u201d unread rows/badges persist forever",
       "files": [
         "src/app/inbox/**",
         "src/components/inbox/**",
@@ -106,7 +106,7 @@
       "id": "WAL-P0-01",
       "sev": "P0",
       "dept": "wallet",
-      "title": "Wallet mutations write ['wallet'] while readers use ['wallet', userId] — balance/ledger stay stale",
+      "title": "Wallet mutations write ['wallet'] while readers use ['wallet', userId] \u00e2\u20ac\u201d balance/ledger stay stale",
       "files": [
         "src/components/wallet/ConvertView.tsx",
         "src/components/wallet/useWalletData.ts"
@@ -143,7 +143,7 @@
       "id": "SEARCH-P1",
       "sev": "P1",
       "dept": "search",
-      "title": "Visual search decode failure → idle not error/retry; privacy copy claims no upload in live mode; desktop renders rail + sheet duplicate; mobile filters hide facet counts; term removal hover-only; search matcher lacks synonym vocab; divergent masonry hooks; landing lacks autocomplete; dead components/filters duplicates",
+      "title": "Visual search decode failure \u00e2\u2020\u2019 idle not error/retry; privacy copy claims no upload in live mode; desktop renders rail + sheet duplicate; mobile filters hide facet counts; term removal hover-only; search matcher lacks synonym vocab; divergent masonry hooks; landing lacks autocomplete; dead components/filters duplicates",
       "files": [
         "src/app/search/**",
         "src/app/browse/**",
@@ -180,7 +180,7 @@
       "id": "SELL-P1",
       "sev": "P1",
       "dept": "sell",
-      "title": "Imported drafts and seller drafts are separate stores w/o hydration into /sell; fulfillment rows reference wrong fixture collection (broken thumbs, £0 payouts); 'Print label' toast-only; metrics/CSV truth issues; publish silently defaults missing condition to Good; resumed drafts lose blob photos; guest sell flow lacks auth wall",
+      "title": "Imported drafts and seller drafts are separate stores w/o hydration into /sell; fulfillment rows reference wrong fixture collection (broken thumbs, \u00c2\u00a30 payouts); 'Print label' toast-only; metrics/CSV truth issues; publish silently defaults missing condition to Good; resumed drafts lose blob photos; guest sell flow lacks auth wall",
       "files": [
         "src/app/sell/**",
         "src/app/seller-hub/**",
@@ -458,12 +458,12 @@
       "parity_low": 6
     },
     "highlights": [
-      "live payment success fabricated (order created, payment never confirmed) — fixed: payment intent + settlement poll + honest pending state",
-      "wallet top-up fake card charge — fixture-gated with demo disclosure, hidden live",
-      "in-chat offers cosmetic — offerId added to contract, real accept/decline/counter wired",
-      "systemic ?? me guest leaks — gated across orders/offers/saved/collections/inbox/wallet/coown/support",
-      "SessionProvider useFollows hydration gap — gated",
-      "auction hooks dropped isError — exposed; retry states added on all auction surfaces",
+      "live payment success fabricated (order created, payment never confirmed) \u00e2\u20ac\u201d fixed: payment intent + settlement poll + honest pending state",
+      "wallet top-up fake card charge \u00e2\u20ac\u201d fixture-gated with demo disclosure, hidden live",
+      "in-chat offers cosmetic \u00e2\u20ac\u201d offerId added to contract, real accept/decline/counter wired",
+      "systemic ?? me guest leaks \u00e2\u20ac\u201d gated across orders/offers/saved/collections/inbox/wallet/coown/support",
+      "SessionProvider useFollows hydration gap \u00e2\u20ac\u201d gated",
+      "auction hooks dropped isError \u00e2\u20ac\u201d exposed; retry states added on all auction surfaces",
       "fixture purchases now mark listing sold; ?item= path filters unavailable",
       "fulfilment dispatch writes through to orders + invalidates both modes",
       "RM-format fake tracking numbers removed",
@@ -473,9 +473,9 @@
       "payment intent flow mirrors native useCheckoutPaymentFlow"
     ],
     "blocked_or_deferred": [
-      "live web card checkout cannot settle — no Stripe.js on web; orders+intents created truthfully, card intents report pending and land on order detail (native parity). Follow-up: Stripe Payment Element if live card checkout is wanted.",
-      "live support accept/escalate/CSAT endpoints absent — actions hidden in live mode, honest in fixture",
-      "load-older pagination / typing indicators — no contract, not fabricated"
+      "live web card checkout cannot settle \u00e2\u20ac\u201d no Stripe.js on web; orders+intents created truthfully, card intents report pending and land on order detail (native parity). Follow-up: Stripe Payment Element if live card checkout is wanted.",
+      "live support accept/escalate/CSAT endpoints absent \u00e2\u20ac\u201d actions hidden in live mode, honest in fixture",
+      "load-older pagination / typing indicators \u00e2\u20ac\u201d no contract, not fabricated"
     ]
   },
   "resolution": {
@@ -509,15 +509,15 @@
       "smoke": "38/38 200",
       "journey": "6/6 PASS"
     },
-    "backend_bug_filed": "auction_bids.idempotency_key stored scoped (bid:/buy_now:) but lookup compares raw key — reconciliation degrades to safe_to_retry; backend fix needed",
+    "backend_bug_filed": "auction_bids.idempotency_key stored scoped (bid:/buy_now:) but lookup compares raw key \u00e2\u20ac\u201d reconciliation degrades to safe_to_retry; backend fix needed",
     "status": "closed pending R5 final audit"
   },
   "r5_final_audit_repair": {
     "date": "2026-09-27",
-    "source": "r5-final-audit.md — fresh-context post-R4 audit",
+    "source": "r5-final-audit.md \u00e2\u20ac\u201d fresh-context post-R4 audit",
     "found": {
       "P0": [
-        "auction winner pay called POST /orders on paused listing (guaranteed 409) — canonical POST /auctions/:id/payment unwired",
+        "auction winner pay called POST /orders on paused listing (guaranteed 409) \u00e2\u20ac\u201d canonical POST /auctions/:id/payment unwired",
         "withdraw fabricated payout state in live mode (fake PAYOUT refs, fixture bank accounts merged into live)"
       ],
       "P1": [
@@ -539,7 +539,7 @@
       "smoke": "33/33 200",
       "journey": "6/6 PASS"
     },
-    "status": "closed — awaiting R6 convergence pass"
+    "status": "closed \u00e2\u20ac\u201d awaiting R6 convergence pass"
   },
   "r6_convergence_repair": {
     "date": "2026-09-27",
@@ -584,7 +584,60 @@
     "wallet transaction history capped at 50; no server pagination",
     "no address PATCH/set-default route (live edit impossible by design)",
     "fulfilmentSnapshot.destinationSummary always null server-side",
-    "no web card-add rail — needs Stripe SetupIntent surface (product decision)",
+    "no web card-add rail \u00e2\u20ac\u201d needs Stripe SetupIntent surface (product decision)",
     "usersService.fetchUserTransactions mapper lossy (drops direction/lineType/currency)"
-  ]
+  ],
+  "r4_production_engineering_round": {
+    "date": "2026-09-28",
+    "source": "DX-4 five-lens production-engineering audit (app-router, a11y, perf, design-system, state-integrity) + six-workstream repair fleet",
+    "audits": [
+      ".flagship/review-r4/approuter-audit.md",
+      ".flagship/review-r4/a11y-interaction-audit.md",
+      ".flagship/review-r4/perf-render-audit.md",
+      ".flagship/review-r4/design-system-audit.md",
+      ".flagship/review-r4/state-integrity-audit.md"
+    ],
+    "repairs": {
+      "app-router": "tri-state route resolvers (resolved/missing/unresolvable); server shells + notFound() + generateMetadata on 15 public detail routes; robots/sitemap/icon/apple-icon/manifest; metadataBase + OG; onboarding deep-link return; useOrder(orderId); orders ?tab=; loading.tsx x3 + error.tsx x4; Suspense skeletons",
+      "perf": "Toast context memo + timer hygiene + focus-pause; one priority image per grid; dynamic imports for heavy sheets/camera/lightbox (cameraSupport gate); SignupWall app-level provider; ClientTime + UTC-pinned formatters (~38 sites); React.memo ProductTile/MessageBubble; AuctionDeadlineChip gate; header count-only badges",
+      "a11y": "focus restoration (menu/dismiss/remove) via focusAdjacentGroupControl; SupportHub + PhotoEditSheet fake tablists fixed; auctions/create radiogroup roving tabindex; 5 pad-outs; Sheet aria-labelledby + type-guard; ForwardSheet role=list; kebab viewport clamp; aria-expanded sweep",
+      "state-integrity": "P0 session-identity reset (epoch + queryClient.clear + resetAccountSlices on every identity change, late-hydration veto); saved-list revert-on-fail + sync channels; look-save domain split; useListingIds/useSellerSummary helper; profile edit -> PATCH /users/me; saved searches -> real CRUD; collections no-swallow; moodboard membership endpoints + syncIssues; agent mutation rollback",
+      "app-wiring": "saved/profile grids live-resolved (P0); look creator/rail; orders detail/receipt live; collection write honesty + board thumbs; moodboard actions routed; profile edit live save; outfits live; poster author-from-wire + live-hidden owner actions; sync-failure surfacing",
+      "design-tokens": "dead text-title class fixed; text-white-on-brand -> text-text-inverse; shadow-lg -> tokens; 98 screen-title sites unified; 14 verified badges -> text-commerce-trust; row hovers -> bg-row; LiveBadge dedupe; z-elevated; scrim ink; caps-label grammar unified (~275 sites)"
+    },
+    "orchestrator_handoffs": [
+      "AbortSignal threading: intent-topics, candles, governance-votes, auction queryFns",
+      "BuyPanel formatEtaDay UTC-pinned",
+      "ListingShareCard/OfferCard times via ClientTime",
+      "priority residue removed (ClosetGrid/LooksGrid/ClosetListingsSection)",
+      "eslint warnings cleared (unused imports, module-const deps)"
+    ],
+    "verification": "tsc clean; eslint clean; next build clean (102 routes); smoke 39/39 with real fixture ids; journey 6/6 PASS; rendered shots verified (PDP/look/saved/profile/notifications/orders)",
+    "accepted_residuals": [
+      "chat unread has no count endpoint (full conversations fetch kept, documented)",
+      "count-pill has no shared primitive (drift documented, not built)",
+      "live white/10-15 overlay fills have no tokens",
+      "SocialButtons logo glyphs bypass icon registry (registry has no logo glyphs)",
+      "meta-caps unification tightened 21 tracking sites (visible-but-intended)",
+      "ListingQA seller label stays text-success-text (answer attribution, distinct element)",
+      "collection/[id] cover hook re-resolves ids the board query already fetched (perf follow-up)"
+    ],
+    "convergence_review": {
+      "date": "2026-09-28",
+      "findings": 9,
+      "fixed": [
+        "P1 offers counter sheet live-dead -> useListingIds + dynamic OfferSheet",
+        "P1 AuctionRunwayCard wire-seller preferred, fixture gated",
+        "P1 resetAccountSlices gaps (feedPrefs/algorithm/watchlist/reminders/postage/sellDraft)",
+        "P2 conversationRole fixture lookup gated",
+        "P2 SellerAuctionRow brand live-resolved",
+        "P2 BidHistory enrichment fixture-gated"
+      ],
+      "rejected_intentional": [
+        "groupAdmin 'A member' copy (fixture-gated caller)",
+        "SignupWall once-per-action session memory (documented nudge grammar)"
+      ],
+      "verified_clean": "epoch veto, notFound double-fire, memo comparators, toast timers, dynamic-import gating, token hierarchy, pulse/member-rail/offer-acceptance seams"
+    }
+  }
 }

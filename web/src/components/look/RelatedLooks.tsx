@@ -18,6 +18,7 @@ import { MasonryGrid } from '@/components/feed/MasonryGrid';
 import { Skeleton } from '@/components/ui/Skeleton';
 import { DATA_MODE } from '@/lib/api/client';
 import * as socialService from '@/lib/api/services/social';
+import { fetchSellerSummary } from '@/lib/api/services/users';
 import type { DiscoveryFeedUnit, Look } from '@/lib/contracts/domain';
 import { listingById, userById } from '@/lib/data/fixtures';
 import { relatedLooksFor } from '@/lib/data/fixtures-content';
@@ -26,13 +27,11 @@ const tick = (ms = 240) => new Promise((r) => setTimeout(r, ms));
 const PAGE = 6;
 
 /** Same ranker as fixtures-content.relatedLooksFor, generalized to take
- *  the candidate pool — live rows share the Look contract. */
-function rankRelated(all: Look[], source: Look): Look[] {
-  const sourceCats = new Set(
-    source.itemIds
-      .map((id) => listingById(id)?.category)
-      .filter((c): c is string => Boolean(c)),
-  );
+ *  the candidate pool — live rows share the Look contract. Category
+ *  affinity only contributes where the catalogue knows the item (fixture
+ *  mode); live ranking falls back to creator affinity + engagement rather
+ *  than inventing category matches. */
+function rankRelated(all: Look[], source: Look, sourceCats: Set<string>): Look[] {
   return all
     .filter((l) => l.id !== source.id)
     .map((l) => {
@@ -58,16 +57,43 @@ function useRelatedLooks(look: Look) {
     queryFn: async () => {
       if (DATA_MODE === 'live') {
         const all = await socialService.fetchLooks();
-        return rankRelated(all, look).slice(0, 12);
+        // Live item ids aren't in the fixture catalogue — the category
+        // signal stays empty instead of matching ghost categories.
+        return rankRelated(all, look, new Set()).slice(0, 12);
       }
       await tick();
+      // The fixture ranker owns the seeded ordering — no re-rank.
       return relatedLooksFor(look.id, 12);
     },
   });
 }
 
-function toUnit(look: Look): DiscoveryFeedUnit {
-  const creator = userById(look.creatorId);
+/** Live creator identities for the rail's cards — GET /sellers/:id per
+ *  unique creator. Fixture mode reads the catalogue instead. */
+function useCreatorProfiles(creatorIds: string[]) {
+  const idsKey = useMemo(() => [...new Set(creatorIds)].join('\n'), [creatorIds]);
+  return useQuery({
+    queryKey: ['look-creators', idsKey],
+    enabled: DATA_MODE === 'live' && idsKey.length > 0,
+    queryFn: async () => {
+      const ids = idsKey.split('\n');
+      const results = await Promise.allSettled(
+        ids.map((id) => fetchSellerSummary(id)),
+      );
+      const map: Record<string, { username: string | null; avatar: string | null }> = {};
+      results.forEach((r, i) => {
+        const s = r.status === 'fulfilled' ? r.value : null;
+        if (s) map[ids[i]] = { username: s.username, avatar: s.avatar };
+      });
+      return map;
+    },
+  });
+}
+
+function toUnit(
+  look: Look,
+  creator?: { username: string | null; avatar: string | null },
+): DiscoveryFeedUnit {
   return {
     type: 'look',
     id: `rel-${look.id}`,
@@ -84,9 +110,23 @@ export function RelatedLooks({ look }: { look: Look }) {
   const { data, isLoading, isError, refetch } = useRelatedLooks(look);
   const [shown, setShown] = useState(PAGE);
 
+  const shownLooks = useMemo(() => (data ?? []).slice(0, shown), [data, shown]);
+  const creators = useCreatorProfiles(shownLooks.map((l) => l.creatorId));
+
   const units = useMemo(
-    () => (data ?? []).slice(0, shown).map(toUnit),
-    [data, shown],
+    () =>
+      shownLooks.map((l) =>
+        toUnit(
+          l,
+          DATA_MODE === 'live'
+            ? creators.data?.[l.creatorId]
+            : (() => {
+                const u = userById(l.creatorId);
+                return u ? { username: u.username, avatar: u.avatar } : undefined;
+              })(),
+        ),
+      ),
+    [shownLooks, creators.data],
   );
   const total = data?.length ?? 0;
 

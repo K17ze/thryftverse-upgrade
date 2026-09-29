@@ -12,6 +12,7 @@ import Link from 'next/link';
 import type { AuctionViewModel, MyBidStatus } from '@/lib/contracts/auction';
 import { AppImage } from '@/components/ui/AppImage';
 import { Icon } from '@/components/ui/Icon';
+import { AuctionWatchButton } from '@/components/auctions/AuctionWatchButton';
 import { formatScheduled } from '@/components/live/UpcomingRail';
 import { auctionOutcome, type AuctionOutcome } from '@/lib/data/fixtures-auctions';
 import { formatPrice } from '@/lib/utils/format';
@@ -31,7 +32,7 @@ export function AuctionScheduleRow({ auction }: { auction: AuctionViewModel }) {
           />
         </div>
         <div className="min-w-0 flex-1">
-          <p className="tnum text-label font-semibold uppercase tracking-wide text-text-secondary">
+          <p className="tnum text-label text-text-secondary">
             {formatScheduled(auction.startsAt)}
           </p>
           <p className="clamp-1 mt-0.5 text-body-emphasis text-text-primary">
@@ -41,6 +42,12 @@ export function AuctionScheduleRow({ auction }: { auction: AuctionViewModel }) {
             Opening bid {formatPrice(auction.startingBid)}
           </p>
         </div>
+        {/* Watch — the pre-open pin; sits above the stretched link. */}
+        <AuctionWatchButton
+          auctionId={auction.id}
+          variant="plain"
+          className="relative z-[2] -mr-2 shrink-0 self-center"
+        />
         <Icon name="forward" size={16} className="shrink-0 text-text-muted" />
       </div>
       <Link

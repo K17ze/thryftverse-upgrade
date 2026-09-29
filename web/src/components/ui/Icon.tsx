@@ -328,6 +328,9 @@ export function Icon({ name, filled = false, size = 22, className, 'aria-label':
       className={className}
       aria-hidden={ariaLabel ? undefined : true}
       aria-label={ariaLabel}
+      // A labelled glyph is an image — without the role, some screen
+      // readers drop the aria-label on a bare <svg>.
+      role={ariaLabel ? 'img' : undefined}
       focusable="false"
     />
   );

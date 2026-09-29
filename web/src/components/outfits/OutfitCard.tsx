@@ -12,7 +12,7 @@ import type { SavedOutfit } from '@/lib/store/outfits';
 import { AppImage } from '@/components/ui/AppImage';
 import { Icon } from '@/components/ui/Icon';
 import { timeAgo } from '@/lib/utils/format';
-import { outfitItemsList, outfitThumbs, outfitListings } from './outfitItems';
+import { outfitItemsList, outfitThumbs, useOutfitListings } from './outfitItems';
 
 interface OutfitCardProps {
   outfit: SavedOutfit;
@@ -20,7 +20,7 @@ interface OutfitCardProps {
 }
 
 export function OutfitCard({ outfit, onDelete }: OutfitCardProps) {
-  const items = outfitListings(outfit);
+  const items = useOutfitListings(outfit);
   const count = outfitItemsList(items).length;
   const cells = outfitThumbs(items, 4);
 
@@ -44,7 +44,7 @@ export function OutfitCard({ outfit, onDelete }: OutfitCardProps) {
                       src={cells[i]}
                       alt=""
                       fill
-                      sizes="(max-width: 640px) 25vw, 15vw"
+                      sizes="(max-width: 640px) 25vw, (max-width: 1280px) 15vw, 118px"
                       className="h-full w-full transition-transform duration-300 group-hover:scale-105"
                     />
                   ) : (
@@ -58,7 +58,7 @@ export function OutfitCard({ outfit, onDelete }: OutfitCardProps) {
               src={cells[0]}
               alt={outfit.name}
               fill
-              sizes="(max-width: 640px) 50vw, 25vw"
+              sizes="(max-width: 640px) 50vw, (max-width: 1280px) 25vw, 236px"
               className="h-full w-full transition-transform duration-300 group-hover:scale-105"
               fallbackIcon="layers"
             />

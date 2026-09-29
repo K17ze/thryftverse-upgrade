@@ -16,7 +16,9 @@ export interface PortfolioSummaryProps {
   returnGbp: number;
   returnPct: number;
   todayMove: number;
-  realized: number;
+  /** Realised P&L across positions — null when the backend projection
+   *  doesn't report one (live read); never a fabricated zero. */
+  realized: number | null;
   /** Paid income in the fixture-anchored income year. */
   incomeYtd: number;
   incomeYear: number;
@@ -71,8 +73,8 @@ export function PortfolioSummary({
         </div>
         <div>
           <dt className="text-micro font-semibold uppercase tracking-[0.08em] text-text-muted">Realized profit</dt>
-          <dd className={`mt-1 text-body-emphasis tnum ${realized > 0 ? 'text-coown-up' : 'text-text-primary'}`}>
-            {signedGbp(realized)}
+          <dd className={`mt-1 text-body-emphasis tnum ${realized != null && realized > 0 ? 'text-coown-up' : 'text-text-primary'}`}>
+            {realized == null ? '—' : signedGbp(realized)}
           </dd>
         </div>
         <div>

@@ -97,7 +97,7 @@ export function Footer() {
           </div>
           {COLUMNS.map((col) => (
             <div key={col.titleKey}>
-              <h3 className="text-label font-semibold uppercase tracking-wider text-text-muted">
+              <h3 className="text-label text-text-muted">
                 {t(`chrome.${col.titleKey}`)}
               </h3>
               <ul className="mt-3 space-y-2.5">

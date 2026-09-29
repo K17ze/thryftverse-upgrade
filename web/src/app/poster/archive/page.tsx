@@ -12,7 +12,9 @@
 
 import { useMemo, useState } from 'react';
 import { useRouter } from 'next/navigation';
-import { useQuery } from '@tanstack/react-query';
+import { useQuery, useQueryClient } from '@tanstack/react-query';
+import { DATA_MODE } from '@/lib/api/client';
+import * as socialService from '@/lib/api/services/social';
 import { Button } from '@/components/ui/Button';
 import { EmptyState } from '@/components/ui/EmptyState';
 import { Icon } from '@/components/ui/Icon';
@@ -43,8 +45,10 @@ const tick = (ms = 280) => new Promise((r) => setTimeout(r, ms));
 export default function PosterArchivePage() {
   const router = useRouter();
   const { show } = useToast();
-  const { user, isGuest } = useSession();
+  const { user, isGuest, sessionLoading } = useSession();
   const hydrated = useHydrated();
+  const queryClient = useQueryClient();
+  const isLive = DATA_MODE === 'live';
 
   const removedStoryIds = usePosterArchive((s) => s.removedStoryIds);
   const archivedStoryIds = usePosterArchive((s) => s.archivedStoryIds);
@@ -56,31 +60,53 @@ export default function PosterArchivePage() {
   const [createOpen, setCreateOpen] = useState(false);
   const [confirm, setConfirm] = useState<ConfirmSheetState | null>(null);
 
-  const { isLoading, isError, refetch } = useQuery({
-    queryKey: ['poster-archive'],
-    queryFn: async () => {
-      await tick();
-      return true;
+  // Live mode reads the owner archive + the member's real highlights off
+  // the wire; fixture mode keeps the bundled set with session-store
+  // mutations overlaid (the query is a no-op there, kept for the loading
+  // affordance parity with live).
+  const { data: liveData, isLoading, isError, refetch } = useQuery({
+    queryKey: ['poster-archive', DATA_MODE, user?.id ?? 'guest'],
+    enabled: !isLive || !!user,
+    queryFn: async (): Promise<{
+      stories: PosterArchiveStory[];
+      highlights: PosterHighlight[];
+    } | null> => {
+      if (!isLive) {
+        await tick();
+        return null;
+      }
+      const [archive, ownerHighlights] = await Promise.all([
+        socialService.fetchPosterStoryArchive({ includeActive: true }),
+        // Highlights are a secondary lane — a failure there must not sink
+        // the story grid, so it degrades to an empty set.
+        socialService
+          .fetchPosterHighlights(user!.id)
+          .catch(() => [] as socialService.ApiPosterHighlight[]),
+      ]);
+      return {
+        stories: archive.map(socialService.mapPosterStoryToArchive),
+        highlights: ownerHighlights,
+      };
     },
   });
 
-  // Effective stories — fixture truth with persisted mutations applied
-  // post-hydration (same gate as the board overlays).
+  // Effective stories — live reads the wire projection; fixture applies
+  // persisted mutations post-hydration (same gate as the board overlays).
   const stories = useMemo<PosterArchiveStory[]>(() => {
+    if (isLive) return liveData?.stories ?? [];
     const removed = hydrated ? new Set(removedStoryIds) : new Set<string>();
     const archived = hydrated ? new Set(archivedStoryIds) : new Set<string>();
     return POSTER_ARCHIVE.filter((s) => !removed.has(s.id)).map((s) =>
       archived.has(s.id) ? { ...s, status: 'archived' as const } : s,
     );
-  }, [hydrated, removedStoryIds, archivedStoryIds]);
+  }, [isLive, liveData, hydrated, removedStoryIds, archivedStoryIds]);
 
-  const highlights = useMemo<PosterHighlight[]>(
-    () =>
-      hydrated
-        ? [...createdHighlights, ...POSTER_HIGHLIGHTS]
-        : POSTER_HIGHLIGHTS,
-    [hydrated, createdHighlights],
-  );
+  const highlights = useMemo<PosterHighlight[]>(() => {
+    if (isLive) return liveData?.highlights ?? [];
+    return hydrated
+      ? [...createdHighlights, ...POSTER_HIGHLIGHTS]
+      : POSTER_HIGHLIGHTS;
+  }, [isLive, liveData, hydrated, createdHighlights]);
 
   const activeCount = stories.filter((s) => s.status === 'active').length;
   const archivedCount = stories.length - activeCount;
@@ -103,13 +129,31 @@ export default function PosterArchivePage() {
       confirmLabel: 'Delete',
       variant: 'destructive',
       onConfirm: () => {
+        if (isLive) {
+          void (async () => {
+            try {
+              await socialService.deletePosterStory(story.id);
+              setConfirm(null);
+              show('Story deleted', 'info');
+              void queryClient.invalidateQueries({ queryKey: ['poster-stories'] });
+              void queryClient.removeQueries({ queryKey: ['poster', story.id] });
+              void refetch();
+            } catch {
+              show('Could not delete the story', 'error');
+            }
+          })();
+          return;
+        }
         removeStory(story.id);
         setConfirm(null);
         show('Story deleted', 'info');
       },
     });
 
-  if (isLoading) {
+  // Live mode: hold the skeleton while the stored session resolves — the
+  // archive is owner-scoped, so isGuest before hydration is undecided, not
+  // truth.
+  if (isLoading || (isLive && sessionLoading)) {
     return (
       <div className="mx-auto max-w-[1200px] pb-16" aria-busy aria-label="Loading archive">
         <BackBar />
@@ -120,7 +164,7 @@ export default function PosterArchivePage() {
         <div className="mt-5 px-4 sm:px-6">
           <Skeleton className="h-9 w-72 rounded-full" />
         </div>
-        <div className="mt-5 grid grid-cols-2 gap-3 px-4 sm:grid-cols-3 sm:px-6 lg:grid-cols-4">
+        <div className="mt-5 grid grid-cols-2 gap-3 px-4 sm:grid-cols-3 sm:px-6 lg:grid-cols-4 xl:grid-cols-5">
           {[0, 1, 2, 3, 4, 5].map((i) => (
             <div key={i}>
               <Skeleton className="aspect-[9/16] w-full rounded-lg" />
@@ -195,7 +239,7 @@ export default function PosterArchivePage() {
       />
 
       <div className="flex flex-wrap items-end justify-between gap-3 px-4 pt-2 sm:px-6">
-        <h1 className="text-screen-title font-bold text-text-primary">
+        <h1 className="text-screen-title text-text-primary">
           Poster archive
         </h1>
         <p className="text-meta text-text-muted">
@@ -219,7 +263,8 @@ export default function PosterArchivePage() {
 
       {filter !== 'highlights' ? (
         <div className="mt-3 px-4 sm:px-6">
-          <div className="flex h-11 items-center gap-2 rounded-lg border border-border bg-input px-3">
+          {/* Search stays a field, not a stretched sheet edge-to-edge. */}
+          <div className="flex h-11 items-center gap-2 rounded-lg border border-border bg-input px-3 lg:max-w-md">
             <Icon name="search" size={18} className="shrink-0 text-text-muted" />
             <input
               value={query}
@@ -253,7 +298,7 @@ export default function PosterArchivePage() {
             compact
           />
         ) : (
-          <div className="mt-5 grid grid-cols-2 gap-3 px-4 sm:grid-cols-3 sm:px-6 lg:grid-cols-4">
+          <div className="mt-5 grid grid-cols-2 gap-3 px-4 sm:grid-cols-3 sm:px-6 lg:grid-cols-4 xl:grid-cols-5">
             {highlights.map((h) => (
               <ArchiveHighlightCard key={h.id} highlight={h} />
             ))}
@@ -267,7 +312,7 @@ export default function PosterArchivePage() {
           compact
         />
       ) : (
-        <div className="mt-5 grid grid-cols-2 gap-3 px-4 sm:grid-cols-3 sm:px-6 lg:grid-cols-4">
+        <div className="mt-5 grid grid-cols-2 gap-3 px-4 sm:grid-cols-3 sm:px-6 lg:grid-cols-4 xl:grid-cols-5">
           {filtered.map((story) => (
             <ArchiveStoryCard key={story.id} story={story} onDelete={askDelete} />
           ))}
@@ -281,6 +326,9 @@ export default function PosterArchivePage() {
         onCreated={() => {
           setCreateOpen(false);
           setFilter('highlights');
+          // Live mode just wrote POST /poster-highlights — re-read so the
+          // lane renders the server row, not a local echo.
+          if (isLive) void refetch();
         }}
       />
 

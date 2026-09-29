@@ -14,16 +14,33 @@ import Link from 'next/link';
 import { AppImage } from '@/components/ui/AppImage';
 import { Avatar } from '@/components/ui/Avatar';
 import { Icon } from '@/components/ui/Icon';
-import type { ProfileBoard } from '@/components/profile/fixtures';
-import { listingById, USERS } from '@/lib/data/fixtures';
-import type { PublicMoodboard } from '@/lib/data/fixtures-content';
 import { timeAgo } from '@/lib/utils/format';
 
-function CollageCells({ itemIds }: { itemIds: string[] }) {
-  const cells = itemIds
-    .slice(0, 4)
-    .map((id) => listingById(id)?.images[0])
-    .filter((s): s is string => Boolean(s));
+/** Resolved board view-model — the caller maps fixture boards and live
+ *  API boards onto the same shape; cards never look up fixtures. */
+export interface OwnedBoardCardData {
+  id: string;
+  title: string;
+  isPrivate: boolean;
+  itemCount: number;
+  createdAt?: string;
+  /** Real item image URIs (up to 4 used) — collaged; empty shows the
+   *  quiet icon state, never grey placeholder cells. */
+  images: string[];
+}
+
+export interface PublicBoardCardData {
+  id: string;
+  title: string;
+  coverUri: string;
+  aspectRatio: number;
+  curator: string | null;
+  curatorAvatar: string | null;
+  itemCount: number;
+}
+
+function CollageCells({ images }: { images: string[] }) {
+  const cells = images.slice(0, 4);
   if (cells.length === 0) {
     return (
       <div className="flex h-full w-full items-center justify-center bg-surface-alt text-text-muted">
@@ -52,15 +69,15 @@ function CollageCells({ itemIds }: { itemIds: string[] }) {
   );
 }
 
-export function OwnedBoardCard({ board }: { board: ProfileBoard }) {
+export function OwnedBoardCard({ board }: { board: OwnedBoardCardData }) {
   return (
     <Link
       href={`/moodboard/${board.id}`}
-      className="pressable group block w-40 shrink-0 sm:w-44"
+      className="pressable group block w-40 shrink-0 sm:w-44 lg:w-48"
       aria-label={`Open moodboard ${board.title}`}
     >
       <div className="relative aspect-square overflow-hidden rounded-lg bg-surface-alt">
-        <CollageCells itemIds={board.itemIds} />
+        <CollageCells images={board.images} />
         {board.isPrivate ? (
           <span className="absolute left-2 top-2 inline-flex items-center gap-1 rounded-full bg-overlay px-2 py-0.5 text-micro font-semibold text-scrim-text-primary">
             <Icon name="lock" size={10} />
@@ -72,20 +89,19 @@ export function OwnedBoardCard({ board }: { board: ProfileBoard }) {
         {board.title}
       </h3>
       <p className="text-meta text-text-muted">
-        <span className="tnum">{board.itemIds.length} items</span>
+        <span className="tnum">{board.itemCount} items</span>
         {board.createdAt ? ` · ${timeAgo(board.createdAt)}` : ''}
       </p>
     </Link>
   );
 }
 
-export function PublicBoardCard({ board }: { board: PublicMoodboard }) {
-  const owner = USERS.find((u) => u.id === board.ownerId);
+export function PublicBoardCard({ board }: { board: PublicBoardCardData }) {
   return (
     <Link
       href={`/moodboard/${board.id}`}
       className="pressable group block"
-      aria-label={`Open moodboard ${board.title} by @${owner?.username ?? 'member'}`}
+      aria-label={`Open moodboard ${board.title} by @${board.curator ?? 'member'}`}
     >
       <div className="relative overflow-hidden rounded-lg bg-surface-alt">
         <AppImage
@@ -98,14 +114,14 @@ export function PublicBoardCard({ board }: { board: PublicMoodboard }) {
         />
       </div>
       <div className="flex items-start gap-2 pt-2">
-        <Avatar src={owner?.avatar} name={owner?.username ?? 'member'} size={28} />
+        <Avatar src={board.curatorAvatar} name={board.curator ?? 'member'} size={28} />
         <div className="min-w-0">
           <h3 className="clamp-1 text-body font-semibold text-text-primary">
             {board.title}
           </h3>
           <p className="clamp-1 text-meta text-text-muted">
-            @{owner?.username ?? 'member'}
-            <span className="tnum"> · {board.itemIds.length} items</span>
+            @{board.curator ?? 'member'}
+            <span className="tnum"> · {board.itemCount} items</span>
           </p>
         </div>
       </div>

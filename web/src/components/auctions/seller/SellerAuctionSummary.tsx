@@ -31,7 +31,7 @@ export function SellerAuctionSummary({ stats }: { stats: SellerAuctionStats }) {
             {active}
           </p>
           <p
-            className={`mt-0.5 text-label font-semibold uppercase tracking-wider ${
+            className={`mt-0.5 text-label ${
               active > 0 ? 'text-danger-text' : 'text-text-muted'
             }`}
           >

@@ -3,7 +3,9 @@
 /**
  * /seller-hub/quick-replies — the mobile ManageQuickRepliesScreen's web
  * counterpart. Sellers keep canned responses here; the inbox composer
- * inserts them from the bolt menu.
+ * inserts them from the bolt menu. Live + signed in, the list reads and
+ * writes /chat/quick-replies; fixture mode and guests keep the
+ * device-local store — the footer says which truth applies.
  */
 
 import { useState } from 'react';
@@ -11,32 +13,31 @@ import { Button } from '@/components/ui/Button';
 import { EmptyState } from '@/components/ui/EmptyState';
 import { IconButton } from '@/components/ui/IconButton';
 import { Sheet } from '@/components/ui/Sheet';
+import { Skeleton } from '@/components/ui/Skeleton';
 import { INPUT_CLASS, SellField } from '@/components/sell/SellField';
 import { BackBar } from '@/components/profile/BackBar';
 import { useToast } from '@/components/ui/Toast';
-import { useHydrated } from '@/lib/store/useStore';
-import { useQuickReplies, type QuickReply } from '@/lib/store/quickReplies';
+import { useQuickRepliesData, useQuickReplyMutations } from '@/lib/hooks/chat-queries';
+import type { QuickReply } from '@/lib/store/quickReplies';
 
 export default function QuickRepliesPage() {
-  const hydrated = useHydrated();
   const toast = useToast();
-  const replies = useQuickReplies((s) => s.replies);
-  const add = useQuickReplies((s) => s.add);
-  const update = useQuickReplies((s) => s.update);
-  const remove = useQuickReplies((s) => s.remove);
+  const { replies, isLoading, isError, refetch, serverBacked } = useQuickRepliesData();
+  const mutations = useQuickReplyMutations();
 
   const [editor, setEditor] = useState<{ id: string | null } | null>(null);
   const [confirmDelete, setConfirmDelete] = useState<QuickReply | null>(null);
+  const [deleteBusy, setDeleteBusy] = useState(false);
 
   const current = editor?.id ? replies.find((r) => r.id === editor.id) : null;
 
   return (
-    <div className="mx-auto w-full max-w-xl">
+    <div className="mx-auto w-full max-w-xl lg:max-w-3xl">
       <BackBar />
       <div className="px-4 pb-24 pt-4 sm:px-0">
         <div className="flex items-baseline justify-between gap-3">
           <div>
-            <h1 className="text-title font-semibold text-text-primary">Quick replies</h1>
+            <h1 className="text-screen-title text-text-primary">Quick replies</h1>
             <p className="mt-1 text-body text-text-secondary">
               Canned responses you can drop into buyer chats from the bolt menu.
             </p>
@@ -46,7 +47,21 @@ export default function QuickRepliesPage() {
           </Button>
         </div>
 
-        {!hydrated ? null : replies.length === 0 ? (
+        {isLoading ? (
+          <div className="mt-6 space-y-3" aria-busy aria-label="Loading quick replies">
+            {[0, 1].map((i) => (
+              <Skeleton key={i} className="h-14 w-full" />
+            ))}
+          </div>
+        ) : isError ? (
+          <EmptyState
+            icon="alert"
+            title="Couldn't load quick replies"
+            subtitle="Your saved replies didn't come through — check your connection and try again."
+            actionLabel="Retry"
+            onAction={refetch}
+          />
+        ) : replies.length === 0 ? (
           <EmptyState
             icon="zap"
             title="No quick replies"
@@ -80,7 +95,9 @@ export default function QuickRepliesPage() {
         )}
 
         <p className="mt-6 text-meta text-text-muted">
-          Saved on this device — a live build syncs these to your account.
+          {serverBacked
+            ? 'Saved to your account — they appear in every chat you open.'
+            : 'Saved on this device — not synced to your account.'}
         </p>
       </div>
 
@@ -88,19 +105,27 @@ export default function QuickRepliesPage() {
         open={editor !== null}
         editing={current}
         onClose={() => setEditor(null)}
-        onSave={(id, r) => {
+        onSave={async (id, r) => {
+          // A failed write throws — the sheet stays open with the draft
+          // intact and the error toast lands (never a silent swallow).
           if (id) {
-            update(id, r);
+            await mutations.update(id, r);
             toast.show('Reply updated', 'success');
           } else {
-            add(r);
+            await mutations.add(r);
             toast.show('Reply saved', 'success');
           }
           setEditor(null);
         }}
       />
 
-      <Sheet open={confirmDelete !== null} onClose={() => setConfirmDelete(null)} title="Delete reply">
+      <Sheet
+        open={confirmDelete !== null}
+        onClose={() => {
+          if (!deleteBusy) setConfirmDelete(null);
+        }}
+        title="Delete reply"
+      >
         {confirmDelete ? (
           <div className="px-4 pb-6 pt-1">
             <p className="text-body text-text-secondary">
@@ -110,15 +135,28 @@ export default function QuickRepliesPage() {
               <Button
                 variant="danger"
                 className="flex-1"
-                onClick={() => {
-                  remove(confirmDelete.id);
-                  setConfirmDelete(null);
-                  toast.show('Reply deleted', 'info');
+                disabled={deleteBusy}
+                onClick={async () => {
+                  const target = confirmDelete;
+                  setDeleteBusy(true);
+                  try {
+                    await mutations.remove(target.id);
+                    setConfirmDelete(null);
+                    toast.show('Reply deleted', 'info');
+                  } catch {
+                    toast.show("Couldn't delete the reply — try again", 'error');
+                  } finally {
+                    setDeleteBusy(false);
+                  }
                 }}
               >
-                Delete
+                {deleteBusy ? 'Deleting…' : 'Delete'}
               </Button>
-              <Button variant="secondary" onClick={() => setConfirmDelete(null)}>
+              <Button
+                variant="secondary"
+                disabled={deleteBusy}
+                onClick={() => setConfirmDelete(null)}
+              >
                 Keep
               </Button>
             </div>

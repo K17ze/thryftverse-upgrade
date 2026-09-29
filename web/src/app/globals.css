@@ -334,7 +334,7 @@ body {
   background: transparent;
 }
 
-/* Focus ring — 2px emphasis stroke, keyboard only */
+/* Focus ring — 2px emphasis stroke, keyboard only on interactive buttons/links */
 :focus-visible {
   outline: 2px solid var(--brand);
   outline-offset: 2px;
@@ -342,6 +342,12 @@ body {
 :focus:not(:focus-visible) {
   outline: none;
 }
+/* Form inputs and textareas manage their own border/focus container styles */
+input:not([type="checkbox"]):not([type="radio"]):not([type="range"]):focus-visible,
+textarea:focus-visible {
+  outline: none;
+}
+
 
 /* Press feedback — charter range 0.97–0.985, transform only (no layout shift) */
 .pressable {

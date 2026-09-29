@@ -67,7 +67,7 @@ export function EvidencePhotoField({ label, hint, items, onChange }: EvidencePho
     for (let i = 0; i < picked.length; i++) {
       const pending = staged[i];
       try {
-        const url = await uploadImageFile(picked[i], 'evidence');
+        const url = (await uploadImageFile(picked[i], 'evidence')).publicUrl;
         URL.revokeObjectURL(pending.uri);
         current = current.map((it) =>
           it.id === pending.id ? { ...it, uri: url, state: 'attached' as const } : it,
@@ -86,7 +86,7 @@ export function EvidencePhotoField({ label, hint, items, onChange }: EvidencePho
 
   return (
     <div className="mt-4">
-      <p className="text-label font-medium uppercase tracking-wide text-text-muted">{label}</p>
+      <p className="text-label text-text-muted">{label}</p>
       {hint ? <p className="mt-1 text-caption text-text-secondary">{hint}</p> : null}
 
       {items.length > 0 ? (

@@ -242,7 +242,7 @@ export function ListingQA({ listing, isSellerBlocked = false }: ListingQAProps) 
               {q.answer ? (
                 <div className="ml-3 mt-3 border-l-2 border-success pl-3">
                   <div className="mb-1 flex items-center gap-1.5">
-                    <Icon name="verified" size={12} className="shrink-0 text-success-text" />
+                    <Icon name="verified" size={12} className="shrink-0 text-commerce-trust" />
                     <p className="flex-1 text-meta font-medium text-success-text">
                       Seller{q.answer.responderName ? ` · ${q.answer.responderName}` : ''}
                     </p>

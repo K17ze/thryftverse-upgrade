@@ -100,7 +100,7 @@ export function ArchiveStoryCard({
             src={cover}
             alt={story.frames[0]?.caption ?? 'Poster story'}
             fill
-            sizes="(max-width: 640px) 50vw, (max-width: 1024px) 33vw, 25vw"
+            sizes="(max-width: 640px) 50vw, (max-width: 1024px) 33vw, (max-width: 1280px) 25vw, 228px"
             className="h-full w-full media-zoom"
             fallbackIcon="image"
           />
@@ -160,7 +160,7 @@ export function ArchiveHighlightCard({
           src={highlight.coverUri}
           alt={highlight.title}
           fill
-          sizes="(max-width: 640px) 50vw, (max-width: 1024px) 33vw, 25vw"
+          sizes="(max-width: 640px) 50vw, (max-width: 1024px) 33vw, (max-width: 1280px) 25vw, 228px"
           className="h-full w-full media-zoom"
           fallbackIcon="bookmark"
         />

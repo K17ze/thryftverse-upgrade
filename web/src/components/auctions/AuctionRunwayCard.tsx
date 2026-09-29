@@ -15,31 +15,24 @@ import { AppImage } from '@/components/ui/AppImage';
 import { Avatar } from '@/components/ui/Avatar';
 import { Icon } from '@/components/ui/Icon';
 import { AuctionCountdownChip } from '@/components/auctions/AuctionCountdown';
+import { AuctionWatchButton } from '@/components/auctions/AuctionWatchButton';
+import { LiveBadge } from '@/components/live/LiveBadge';
 import { auctionChipLabel, auctionChipUrgency } from '@/components/auctions/AuctionCard';
 import { userById } from '@/lib/data/fixtures';
 import { formatPrice } from '@/lib/utils/format';
 
-/** The white-dot LIVE pulse — same grammar as AuctionCard's badge. */
-function LivePulse() {
-  return (
-    <span className="absolute left-3 top-3 inline-flex items-center gap-1.5 rounded-md bg-danger px-2 py-1 text-meta font-bold uppercase tracking-[0.08em] text-scrim-text-primary">
-      <span className="relative flex h-1.5 w-1.5">
-        <span className="absolute inline-flex h-full w-full animate-ping rounded-full bg-white opacity-80" />
-        <span className="relative inline-flex h-1.5 w-1.5 rounded-full bg-white" />
-      </span>
-      Live
-    </span>
-  );
-}
-
 export function AuctionRunwayCard({
   auction,
-  priority = true,
+  priority = false,
 }: {
   auction: AuctionViewModel;
+  /** Opt-in — pass only when this card is the page's LCP candidate. */
   priority?: boolean;
 }) {
-  const seller = userById(auction.sellerId);
+  // Wire-provided seller identity first (live mapper populates it);
+  // fixture catalogue only for fixture-mode ids — a live id colliding
+  // with a catalogue id would attribute the lot to the wrong member.
+  const seller = auction.seller ?? userById(auction.sellerId);
   const label = auctionChipLabel(auction);
   const urgency = auctionChipUrgency(auction);
 
@@ -54,7 +47,14 @@ export function AuctionRunwayCard({
           sizes="(max-width: 1024px) 100vw, 62vw"
           className="h-full w-full"
         />
-        <LivePulse />
+        <LiveBadge className="absolute left-3 top-3" />
+        {/* Watch — the featured lot's re-entry point (mobile topRow:
+            state badge left, watch glyph right). Above the stretched link. */}
+        <AuctionWatchButton
+          auctionId={auction.id}
+          variant="media"
+          className="absolute right-1 top-1 z-[2]"
+        />
         <div className="absolute bottom-3 left-3">
           <AuctionCountdownChip label={label} urgency={urgency} />
         </div>
@@ -70,13 +70,16 @@ export function AuctionRunwayCard({
             <span className="clamp-1 text-meta font-medium">
               @{seller?.username ?? 'seller'}
             </span>
-            {seller?.isVerified ? (
-              <Icon name="verified" size={11} className="text-success-text" />
+            {/* Verification rides the fixture User; the wire seller shape
+                carries no verification field, so the badge stays off
+                rather than being assumed. */}
+            {seller && 'isVerified' in seller && seller.isVerified ? (
+              <Icon name="verified" size={11} className="text-commerce-trust" />
             ) : null}
           </div>
         </div>
         <div className="shrink-0 text-right">
-          <p className="text-meta font-medium uppercase tracking-wide text-text-muted">
+          <p className="text-meta font-semibold uppercase tracking-wide text-text-muted">
             Current bid
           </p>
           <p className="tnum text-price-hero font-bold text-text-primary">

@@ -2,10 +2,14 @@
 
 /**
  * BotBuilder — /agents/builder: name, a fixed purpose template (the
- * capability set comes with the job, never free-composed), a trigger rule
- * scoped to what that job supports, and the initial run state. Creates a
- * session bot in the agents query cache — a hard reload re-seeds, honest
- * fixture behaviour.
+ * permission set comes with the job, never free-composed), and the reply
+ * grammar the wire actually supports.
+ *
+ * Live mode creates a custom bot draft (POST /bots with isDraft + a real
+ * agentConfig — instructions composed from the job description, the
+ * 'reply_in_chat' permission publish validation requires). A failed save
+ * surfaces the server error verbatim and never wedges `saving`. Fixture
+ * mode keeps the authored session-bot behaviour.
  */
 
 import { useMemo, useState } from 'react';
@@ -13,33 +17,42 @@ import { useRouter } from 'next/navigation';
 import { Button } from '@/components/ui/Button';
 import { Icon } from '@/components/ui/Icon';
 import { IconButton } from '@/components/ui/IconButton';
+import { Skeleton } from '@/components/ui/Skeleton';
 import { Switch } from '@/components/settings/Switch';
 import { useToast } from '@/components/ui/Toast';
+import { DATA_MODE } from '@/lib/api/client';
+import { parseApiError } from '@/lib/api/http';
 import type {
   AgentPurposeId,
   AgentTriggerId,
+  AgentTriggerMode,
 } from '@/lib/contracts/agents';
 import {
   AGENT_PURPOSES,
   AGENT_TRIGGERS,
+  AGENT_TRIGGER_MODES,
   CAPABILITY_RISK_LABELS,
   purposeById,
   riskWord,
 } from '@/lib/contracts/agents';
 import { useAgentActions } from '@/lib/hooks/agents-queries';
+import { AgentsSignInWall, useAgentsAccess } from './AgentsGate';
 import { AgentIcon } from './AgentIcon';
 import { PermissionRow } from './AgentRunRow';
 
 export function BotBuilder() {
   const router = useRouter();
   const { show } = useToast();
-  const { createBot } = useAgentActions();
+  const { createBot, setEnabled: setBotEnabled } = useAgentActions();
+  const access = useAgentsAccess();
+  const isLive = DATA_MODE === 'live';
 
   const [name, setName] = useState('');
   const [purposeId, setPurposeId] = useState<AgentPurposeId>('listing_copilot');
   const [triggerId, setTriggerId] = useState<AgentTriggerId>(
     purposeById('listing_copilot')?.defaultTrigger ?? 'manual',
   );
+  const [triggerMode, setTriggerMode] = useState<AgentTriggerMode>('mention');
   const [enabled, setEnabled] = useState(true);
   const [saving, setSaving] = useState(false);
 
@@ -65,18 +78,74 @@ export function BotBuilder() {
   };
 
   const handleCreate = async () => {
-    if (!canCreate) return;
+    if (!canCreate || saving) return;
     setSaving(true);
-    const bot = await createBot({ name: nameTrimmed, purposeId, triggerId, enabled });
-    show(`${bot.name} created`, 'success');
-    router.push(`/agents/${bot.id}`);
+    try {
+      const bot = await createBot({
+        name: nameTrimmed,
+        purposeId,
+        triggerId,
+        triggerMode,
+        enabled,
+      });
+      // POST /bots always creates with status 'available' — the
+      // start-disabled choice is a second, awaited write so a failure is
+      // reported honestly instead of silently shipping an enabled bot.
+      if (isLive && !enabled) {
+        try {
+          await setBotEnabled(bot.id, false);
+        } catch (err) {
+          show(
+            `${bot.name} created — couldn't disable it: ${parseApiError(err).message}`,
+            'error',
+          );
+        }
+      }
+      show(`${bot.name} created`, 'success');
+      router.push(`/agents/${bot.id}`);
+    } catch (err) {
+      // Server errors arrive verbatim — CHAT_BOT_INVALID and friends.
+      show(parseApiError(err, 'Couldn’t create the agent').message, 'error');
+    } finally {
+      setSaving(false);
+    }
   };
+
+  if (access === 'blocked') {
+    return (
+      <div className="pb-16">
+        <div className="flex items-center gap-1 px-2 pt-1 sm:px-4">
+          <IconButton name="back" aria-label="Back to agents" onClick={() => router.push('/agents')} />
+          <h1 className="flex-1 text-screen-title text-text-primary">New agent</h1>
+        </div>
+        <AgentsSignInWall title="Sign in to build an agent" />
+      </div>
+    );
+  }
+
+  if (access === 'loading') {
+    return (
+      <div className="pb-16">
+        <div className="flex items-center gap-1 px-2 pt-1 sm:px-4">
+          <IconButton name="back" aria-label="Back to agents" onClick={() => router.push('/agents')} />
+          <h1 className="flex-1 text-screen-title text-text-primary">New agent</h1>
+        </div>
+        <div className="mt-8 px-4 sm:px-6" aria-busy aria-label="Loading builder">
+          <Skeleton className="h-4 w-32" />
+          <Skeleton className="mt-4 h-11 w-full max-w-[460px] rounded-lg" />
+          <Skeleton className="mt-8 h-4 w-24" />
+          <Skeleton className="mt-3 h-14 w-full" />
+          <Skeleton className="mt-px h-14 w-full" />
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div className="pb-16">
       <div className="flex items-center gap-1 px-2 pt-1 sm:px-4">
         <IconButton name="back" aria-label="Back to agents" onClick={() => router.push('/agents')} />
-        <h1 className="flex-1 text-screen-title font-semibold text-text-primary">
+        <h1 className="flex-1 text-screen-title text-text-primary">
           New agent
         </h1>
       </div>
@@ -85,12 +154,18 @@ export function BotBuilder() {
         than the job needs.
       </p>
 
+      {/* Builder columns — the form runs down the main column; the fixed
+          permission preview, run state and create CTA sit in a sticky
+          right rail at lg. On mobile the rail content flows after the
+          trigger section, same order as before. */}
+      <div className="lg:grid lg:grid-cols-[minmax(0,1fr)_360px] lg:gap-x-12">
+      <div className="min-w-0">
       {/* Identity */}
       <section aria-label="Name" className="mt-8">
-        <h2 className="px-4 text-label font-semibold uppercase tracking-wider text-text-muted sm:px-6">
+        <h2 className="px-4 text-label text-text-muted sm:px-6">
           Name
         </h2>
-        <div className="mt-2 px-4 sm:px-6">
+        <div className="mt-2 px-4 sm:px-6 lg:max-w-[460px]">
           <input
             type="text"
             value={name}
@@ -109,7 +184,7 @@ export function BotBuilder() {
 
       {/* Purpose — fixed capability templates */}
       <section aria-label="Purpose" className="mt-8">
-        <h2 className="px-4 text-label font-semibold uppercase tracking-wider text-text-muted sm:px-6">
+        <h2 className="px-4 text-label text-text-muted sm:px-6">
           Purpose
         </h2>
         <div className="mt-2 divide-y divide-border-subtle border-y border-border-subtle" role="radiogroup" aria-label="Agent purpose">
@@ -148,21 +223,29 @@ export function BotBuilder() {
         </div>
       </section>
 
-      {/* Trigger rules — scoped to the chosen purpose */}
+      {/* When it replies — live mode offers the wire's trigger grammar
+          (agentConfig.triggerMode); fixture mode keeps the authored
+          automation triggers scoped to the purpose. */}
       <section aria-label="Trigger" className="mt-8">
-        <h2 className="px-4 text-label font-semibold uppercase tracking-wider text-text-muted sm:px-6">
-          When it runs
+        <h2 className="px-4 text-label text-text-muted sm:px-6">
+          {isLive ? 'When it replies' : 'When it runs'}
         </h2>
         <div className="mt-2 divide-y divide-border-subtle border-y border-border-subtle" role="radiogroup" aria-label="Trigger rule">
-          {allowedTriggers.map((t) => {
-            const selected = t.value === triggerId;
+          {(isLive ? AGENT_TRIGGER_MODES : allowedTriggers).map((t) => {
+            const selected = isLive
+              ? t.value === triggerMode
+              : t.value === triggerId;
             return (
               <button
                 key={t.value}
                 type="button"
                 role="radio"
                 aria-checked={selected}
-                onClick={() => setTriggerId(t.value)}
+                onClick={() =>
+                  isLive
+                    ? setTriggerMode(t.value as AgentTriggerMode)
+                    : setTriggerId(t.value as AgentTriggerId)
+                }
                 className="pressable flex w-full items-center gap-3.5 px-4 py-3 text-left sm:px-6"
               >
                 <span className="min-w-0 flex-1">
@@ -184,10 +267,15 @@ export function BotBuilder() {
         </div>
       </section>
 
-      {/* What it will get — the template's fixed grants, read-only preview */}
+      </div>
+
+      <div className="lg:sticky lg:top-24 lg:self-start">
+      {/* What it will get — the template's fixed grants, read-only preview.
+          Live creates also carry 'reply_in_chat' — it's written to the bot
+          so the row shows it. */}
       {purpose ? (
         <section aria-label="Permissions" className="mt-8">
-          <h2 className="px-4 text-label font-semibold uppercase tracking-wider text-text-muted sm:px-6">
+          <h2 className="px-4 text-label text-text-muted sm:px-6">
             What it gets
           </h2>
           <ul className="mt-2 divide-y divide-border-subtle border-y border-border-subtle px-4 sm:px-6">
@@ -198,10 +286,14 @@ export function BotBuilder() {
                 riskWord={riskWord(CAPABILITY_RISK_LABELS[cap].risk)}
               />
             ))}
+            {isLive ? (
+              <PermissionRow label="Reply in chat" riskWord="Acts for you" />
+            ) : null}
           </ul>
           <p className="mt-3 px-4 text-caption text-text-muted sm:px-6">
-            Fixed by the template. Drafts wait for you — it can&rsquo;t publish,
-            message, or spend money.
+            {isLive
+              ? 'Fixed by the template — plus the reply grant every chat agent needs.'
+              : 'Fixed by the template. Drafts wait for you — it can’t publish, message, or spend money.'}
           </p>
         </section>
       ) : null}
@@ -210,22 +302,30 @@ export function BotBuilder() {
       <section aria-label="Finish" className="mt-8">
         <div className="flex items-center gap-3 border-y border-border-subtle px-4 py-4 sm:px-6">
           <div className="min-w-0 flex-1">
-            <p className="text-body-emphasis text-text-primary">Start running</p>
+            <p className="text-body-emphasis text-text-primary">
+              {isLive ? 'Enabled' : 'Start running'}
+            </p>
             <p className="mt-0.5 text-caption text-text-muted">
-              You can pause it any time from Your agents.
+              {isLive
+                ? 'A disabled agent stays yours but won’t reply.'
+                : 'You can pause it any time from Your agents.'}
             </p>
           </div>
           <Switch checked={enabled} onChange={setEnabled} aria-label="Start running" />
         </div>
         <div className="px-4 pt-6 sm:px-6">
           <Button fullWidth size="lg" disabled={!canCreate} onClick={handleCreate}>
-            Create agent
+            {saving ? 'Creating…' : 'Create agent'}
           </Button>
           <p className="mt-3 text-center text-meta text-text-muted">
-            Session agent — it lives in this app session and shows up in Your agents.
+            {isLive
+              ? 'Saved as a draft under Your agents — it can’t join a conversation until it’s published.'
+              : 'Session agent — it lives in this app session and shows up in Your agents.'}
           </p>
         </div>
       </section>
+      </div>
+      </div>
     </div>
   );
 }

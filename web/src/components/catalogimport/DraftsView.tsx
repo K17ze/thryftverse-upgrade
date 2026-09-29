@@ -70,7 +70,7 @@ export function DraftsView({ onRestart }: DraftsViewProps) {
 
   return (
     <div>
-      <h1 className="text-screen-title font-bold text-text-primary">Imported drafts</h1>
+      <h1 className="text-screen-title text-text-primary">Imported drafts</h1>
       <p className="mt-2 text-body text-text-secondary">
         {count} draft{count === 1 ? '' : 's'} this session — private until you publish.
       </p>

@@ -12,13 +12,17 @@ import { AppImage } from '@/components/ui/AppImage';
 import { Avatar } from '@/components/ui/Avatar';
 import { Icon } from '@/components/ui/Icon';
 import { AuctionCountdownChip } from '@/components/auctions/AuctionCountdown';
+import { AuctionWatchButton } from '@/components/auctions/AuctionWatchButton';
+import { LiveBadge } from '@/components/live/LiveBadge';
 import {
   auctionOutcome,
   countdownUrgency,
   formatClock,
   formatDuration,
+  isBidWar,
 } from '@/lib/data/fixtures-auctions';
 import { listingById, userById } from '@/lib/data/fixtures';
+import { DATA_MODE } from '@/lib/api/client';
 import { formatPrice } from '@/lib/utils/format';
 
 const MIN_MS = 60 * 1000;
@@ -66,8 +70,19 @@ interface AuctionCardProps {
 }
 
 export function AuctionCard({ auction, priority }: AuctionCardProps) {
-  const seller = userById(auction.sellerId);
-  const listing = listingById(auction.listingId);
+  // Live auctions carry the seller projection on the payload; fixture
+  // auctions resolve through USERS. A live seller with no projection
+  // renders no seller row rather than a fabricated handle.
+  const seller = auction.seller
+    ? {
+        username: auction.seller.username,
+        avatar: auction.seller.avatar,
+        isVerified: false,
+      }
+    : DATA_MODE === 'live'
+      ? null
+      : userById(auction.sellerId);
+  const listing = DATA_MODE === 'live' ? null : listingById(auction.listingId);
   const ratio = listing?.mediaAspectRatio ?? 0.8;
   const label = auctionChipLabel(auction);
   const urgency = auctionChipUrgency(auction);
@@ -85,14 +100,16 @@ export function AuctionCard({ auction, priority }: AuctionCardProps) {
 
         {/* Live pulse — the only badge that moves, reduced-motion safe */}
         {auction.lifecycle === 'live' ? (
-          <span className="absolute left-2 top-2 inline-flex items-center gap-1.5 rounded-md bg-danger px-2 py-1 text-meta font-bold uppercase tracking-[0.08em] text-scrim-text-primary">
-            <span className="relative flex h-1.5 w-1.5">
-              <span className="absolute inline-flex h-full w-full animate-ping rounded-full bg-white opacity-80" />
-              <span className="relative inline-flex h-1.5 w-1.5 rounded-full bg-white" />
-            </span>
-            Live
-          </span>
+          <LiveBadge className="absolute left-2 top-2" />
         ) : null}
+
+        {/* Watch — the watchlist's re-entry point, eye glyph on media
+            (mobile runway grammar). Sits above the stretched link. */}
+        <AuctionWatchButton
+          auctionId={auction.id}
+          variant="media"
+          className="absolute right-0.5 top-0.5 z-[2]"
+        />
 
         {/* Countdown — anchored to the media edge, scrim legible */}
         <div className="absolute bottom-2 left-2">
@@ -107,7 +124,16 @@ export function AuctionCard({ auction, priority }: AuctionCardProps) {
           <span className="tnum text-price-list font-bold text-text-primary">
             {formatPrice(auction.currentBid)}
           </span>
-          <span className="tnum text-meta text-text-muted">
+          {/* Bid count — a contested lot (5+ live bids) earns the
+              primary tone + fire glyph; the count itself never hides. */}
+          <span
+            className={`tnum inline-flex items-center gap-1 text-meta ${
+              isBidWar(auction)
+                ? 'font-semibold text-text-primary'
+                : 'text-text-muted'
+            }`}
+          >
+            {isBidWar(auction) ? <Icon name="fire" size={12} /> : null}
             {auction.bidCount} {auction.bidCount === 1 ? 'bid' : 'bids'}
           </span>
         </div>
@@ -128,13 +154,15 @@ export function AuctionCard({ auction, priority }: AuctionCardProps) {
           />
         </div>
 
-        <div className="mt-0.5 flex items-center gap-1.5 text-text-secondary">
-          <Avatar src={seller?.avatar} name={seller?.username ?? null} size={20} />
-          <span className="clamp-1 text-meta font-medium">@{seller?.username ?? 'seller'}</span>
-          {seller?.isVerified ? (
-            <Icon name="verified" size={11} className="text-success-text" />
-          ) : null}
-        </div>
+        {seller ? (
+          <div className="mt-0.5 flex items-center gap-1.5 text-text-secondary">
+            <Avatar src={seller.avatar} name={seller.username ?? null} size={20} />
+            <span className="clamp-1 text-meta font-medium">@{seller.username}</span>
+            {seller.isVerified ? (
+              <Icon name="verified" size={11} className="text-commerce-trust" />
+            ) : null}
+          </div>
+        ) : null}
       </div>
 
       <Link

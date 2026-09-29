@@ -11,15 +11,16 @@
  * Filters sheet (role, status, year). Skeleton and per-tab empty states.
  */
 
-import { useMemo, useState } from 'react';
-import { useRouter } from 'next/navigation';
+import { Suspense, useEffect, useMemo, useState } from 'react';
+import { useRouter, useSearchParams } from 'next/navigation';
 import { StateGate } from '@/components/flagship/StateGate';
+import { Button } from '@/components/ui/Button';
 import { EmptyState } from '@/components/ui/EmptyState';
 import { Icon } from '@/components/ui/Icon';
 import { IconButton } from '@/components/ui/IconButton';
 import { OrderRow } from '@/components/orders/OrderRow';
 import { RowSkeleton } from '@/components/orders/RowSkeleton';
-import { OrdersTabRail, type OrdersTab } from '@/components/orders/OrdersTabRail';
+import { OrdersTabRail, ORDERS_TABS, type OrdersTab } from '@/components/orders/OrdersTabRail';
 import {
   OrdersFilterSheet,
   EMPTY_ORDERS_FILTER,
@@ -35,9 +36,13 @@ import {
 } from '@/components/orders/orderCapabilities';
 import { orderEnrichmentFor } from '@/lib/data/fixtures-commerce';
 import { listingById, userById } from '@/lib/data/fixtures';
-import { useCommerceOrders } from '@/lib/hooks/queries';
+import { DATA_MODE } from '@/lib/api/client';
+import { useCommerceOrders, useCommerceOrderRows } from '@/lib/hooks/queries';
 import { useSession } from '@/lib/session/SessionProvider';
 import type { CommerceOrder } from '@/lib/contracts/domain';
+import type { CommerceUserOrderApi } from '@/lib/api/mappers';
+
+const LIVE = DATA_MODE === 'live';
 
 interface DateGroup {
   key: string;
@@ -71,8 +76,26 @@ function groupOrdersByMonth(orders: CommerceOrder[]): DateGroup[] {
   return [...groups.values()];
 }
 
-const EMPTY_COPY: Record<OrdersTab, { title: string; subtitle: string }> = {
-  all: {
+function isOrdersTab(value: string | null): value is OrdersTab {
+  return !!value && ORDERS_TABS.some((t) => t.key === value);
+}
+
+/**
+ * Deep link — /orders?tab=needs_action|active|completed|cancelled lands
+ * on the matching segment (Settings → Orders links here; same grammar as
+ * /inbox?tab=). Isolated under Suspense so the search-param read never
+ * deopts the page.
+ */
+function TabFromUrl({ onTab }: { onTab: (tab: OrdersTab) => void }) {
+  const searchParams = useSearchParams();
+  const param = searchParams.get('tab');
+  useEffect(() => {
+    if (isOrdersTab(param)) onTab(param);
+  }, [param, onTab]);
+  return null;
+}
+
+const EMPTY_COPY: Record<OrdersTab, { title: string; subtitle: string }> = {  all: {
     title: 'No orders yet',
     subtitle: 'When you buy or sell something, it shows up here with tracking.',
   },
@@ -102,7 +125,20 @@ export default function OrdersPage() {
     isLoading,
     isError,
     refetch,
+    hasNextPage,
+    fetchNextPage,
+    isFetchingNextPage,
+    isFetchNextPageError,
   } = useCommerceOrders();
+  // Live wire rows — the backend already returns listingTitle, counterparty
+  // usernames, hasReview and hasOpenResolution; fixture enrichment never
+  // fabricates live order context.
+  const { data: orderRows } = useCommerceOrderRows();
+  const rowById = useMemo(() => {
+    const map = new Map<string, CommerceUserOrderApi>();
+    for (const r of orderRows ?? []) map.set(r.id, r);
+    return map;
+  }, [orderRows]);
   const [tab, setTab] = useState<OrdersTab>('all');
   const [filter, setFilter] = useState<OrdersFilterState>(EMPTY_ORDERS_FILTER);
   const [filterOpen, setFilterOpen] = useState(false);
@@ -124,21 +160,23 @@ export default function OrdersPage() {
    * move it is.
    */
   const attentionOf = (order: CommerceOrder): OrderAttention | null => {
-    const enr = orderEnrichmentFor(order.id);
-    const rc = enr.returnCase ?? null;
+    const row = rowById.get(order.id);
+    const enr = LIVE ? null : orderEnrichmentFor(order.id);
+    const rc = enr?.returnCase ?? null;
     return orderAttention({
       status: order.status,
       role: roleOf(order.buyerId),
       hasOpenResolution:
-        rc != null && rc.status !== 'closed' && rc.status !== 'refund_confirmed',
-      hasReview: enr.hasReview === true,
-      reviewIsAuto: enr.reviewIsAuto === true,
+        row?.hasOpenResolution === true ||
+        (rc != null && rc.status !== 'closed' && rc.status !== 'refund_confirmed'),
+      hasReview: row?.hasReview ?? enr?.hasReview === true,
+      reviewIsAuto: enr?.reviewIsAuto === true,
       hasTracking:
-        !!order.trackingNumber || (enr.trackingEvents?.length ?? 0) > 0,
-      fulfilmentSnapshot: order.fulfilmentSnapshot ?? enr.fulfilmentSnapshot ?? null,
-      shipByDate: order.shipByDate ?? enr.shipByDate ?? null,
+        !!order.trackingNumber || (enr?.trackingEvents?.length ?? 0) > 0,
+      fulfilmentSnapshot: order.fulfilmentSnapshot ?? enr?.fulfilmentSnapshot ?? null,
+      shipByDate: order.shipByDate ?? enr?.shipByDate ?? null,
       dispatchExtension:
-        enr.dispatchExtension !== undefined
+        enr?.dispatchExtension !== undefined
           ? enr.dispatchExtension
           : (order.dispatchExtension ?? null),
     });
@@ -156,19 +194,26 @@ export default function OrdersPage() {
         return false;
       if (filter.year != null && new Date(o.createdAt).getFullYear() !== filter.year) return false;
       if (q) {
-        const listing = listingById(o.listingId);
-        const counterparty =
-          o.buyerId === viewerId
+        const row = rowById.get(o.id);
+        const listing = LIVE ? undefined : listingById(o.listingId);
+        const counterparty = row
+          ? (o.buyerId === viewerId ? row.sellerUsername : row.buyerUsername) ?? ''
+          : o.buyerId === viewerId
             ? (listing?.seller?.username ?? userById(o.sellerId)?.username ?? '')
             : (userById(o.buyerId)?.username ?? '');
-        const haystack = [o.id, listing?.title ?? '', listing?.brand ?? '', counterparty]
+        const haystack = [
+          o.id,
+          row?.listingTitle ?? listing?.title ?? '',
+          listing?.brand ?? '',
+          counterparty,
+        ]
           .join(' ')
           .toLowerCase();
         if (!haystack.includes(q)) return false;
       }
       return true;
     });
-  }, [orders, filter, viewerId, query]);
+  }, [orders, filter, viewerId, query, rowById]);
 
   /**
    * The ONE needs-attention classifier — resolved once per order and
@@ -273,9 +318,14 @@ export default function OrdersPage() {
     filter.role !== 'all' || filter.statuses.length > 0 || filter.year != null;
 
   return (
-    <div className="mx-auto max-w-[820px] px-4 py-8 sm:px-6">
+    <div className="mx-auto max-w-[820px] px-4 py-8 sm:px-6 lg:max-w-[1280px]">
+      {/* ?tab= deep link — the param reader renders nothing; the boundary
+          keeps the search-param read off the page's prerender path. */}
+      <Suspense fallback={null}>
+        <TabFromUrl onTab={setTab} />
+      </Suspense>
       <div className="flex items-center justify-between gap-3">
-        <h1 className="text-screen-title font-bold text-text-primary">Orders</h1>
+        <h1 className="text-screen-title text-text-primary">Orders</h1>
         <div className="flex items-center gap-1">
           <IconButton
             name="refresh"
@@ -295,7 +345,7 @@ export default function OrdersPage() {
 
       {/* Search — eBay purchase-history grammar: title, order id,
           counterparty. Client-side over the loaded page, honest scope. */}
-      <div className="mt-4 flex h-11 items-center rounded-lg border border-border bg-input px-3.5 focus-within:border-text-muted">
+      <div className="mt-4 flex h-11 items-center rounded-lg border border-border bg-input px-3.5 focus-within:border-text-muted lg:max-w-md">
         <Icon name="search" size={16} className="shrink-0 text-text-muted" />
         <input
           type="search"
@@ -391,6 +441,7 @@ export default function OrdersPage() {
                       order={order}
                       isBuyer={order.buyerId === viewerId}
                       attention={attention}
+                      meta={rowById.get(order.id)}
                     />
                   ))}
                 </ul>
@@ -414,11 +465,31 @@ export default function OrdersPage() {
                       order={order}
                       isBuyer={order.buyerId === viewerId}
                       attention={tab === 'needs_action' ? attentionMap.get(order.id) : undefined}
+                      meta={rowById.get(order.id)}
                     />
                   ))}
                 </ul>
               </section>
             ))}
+            {/* Order pagination — the server's nextCursor drives Load
+                more; a failed page gets an honest retry, an exhausted
+                history ends quietly. */}
+            {hasNextPage || isFetchingNextPage || isFetchNextPageError ? (
+              <div className="mt-6 flex justify-center">
+                <Button
+                  variant="outline"
+                  size="sm"
+                  disabled={isFetchingNextPage}
+                  onClick={() => void fetchNextPage()}
+                >
+                  {isFetchingNextPage
+                    ? 'Loading…'
+                    : isFetchNextPageError
+                      ? 'Couldn’t load more — try again'
+                      : 'Load more'}
+                </Button>
+              </div>
+            ) : null}
           </>
         )}
       </StateGate>

@@ -35,16 +35,16 @@ export function GalleriaHero({ editorial, onOpen }: GalleriaHeroProps) {
 
         {/* Masthead chrome — issue line up top */}
         <div className="absolute inset-x-0 top-0 mx-auto flex w-full max-w-[1440px] items-center justify-between px-4 pt-5 sm:px-6">
-          <p className="text-label font-semibold uppercase tracking-[0.18em] text-scrim-text-primary">
+          <p className="text-label text-scrim-text-primary">
             The Galleria
           </p>
-          <p className="text-label font-medium uppercase tracking-[0.18em] text-scrim-text-secondary">
+          <p className="text-label text-scrim-text-secondary">
             {editorial.issueLabel}
           </p>
         </div>
 
         <div className="absolute inset-x-0 bottom-0 mx-auto w-full max-w-[1440px] px-4 pb-10 sm:px-6 sm:pb-14">
-          <p className="text-label font-semibold uppercase tracking-[0.14em] text-scrim-text-secondary">
+          <p className="text-label text-scrim-text-secondary">
             {editorial.kicker}
           </p>
           <h1 className="mt-3 max-w-2xl whitespace-pre-line font-serif text-display-large font-bold leading-[1.04] text-scrim-text-primary sm:text-[56px] sm:leading-[1.02]">

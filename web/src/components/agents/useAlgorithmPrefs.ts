@@ -1,14 +1,16 @@
 'use client';
 
 /**
- * Algorithm preferences — the feed-tuning signals behind /agents/algorithm.
- * Persisted zustand slice (localStorage), same store grammar as
- * lib/store/savedSearches.ts. Device-local in fixture mode — the view says
- * so honestly rather than claiming a live backend re-tune.
+ * Algorithm preferences — the device-local signals behind /agents/algorithm
+ * in FIXTURE mode only. Persisted zustand slice (localStorage), same store
+ * grammar as lib/store/savedSearches.ts. The view labels it "Saved on this
+ * device" honestly — there is no live backend write in this mode.
  *
- * Topics port the mobile YourAlgorithm contract: a weight of low / medium /
- * high per topic; topics derived from activity are locked (tunable, not
- * removable); user-added topics are removable.
+ * Live mode uses the real intent wire instead:
+ * GET/POST /recommendations/intent/:userId/profile|mutate (see
+ * services/agents.ts + the live branch of AlgorithmView). No seed topic is
+ * ever presented as derived-from-activity — the seeds below are explicit,
+ * removable, user-facing demo preferences.
  */
 
 import { create } from 'zustand';
@@ -19,8 +21,6 @@ export type TopicWeight = 'low' | 'medium' | 'high';
 export interface AlgoTopic {
   id: string;
   label: string;
-  /** Locked topics come from activity — tunable but not removable. */
-  locked: boolean;
   weight: TopicWeight;
 }
 
@@ -44,19 +44,21 @@ let counter = 0;
 const nextId = (prefix: string) =>
   `${prefix}-${Date.now().toString(36)}-${(counter++).toString(36)}`;
 
+// Authored demo preferences — removable, device-local, never claimed as
+// derived from real browsing history.
 const SEED_TOPICS: AlgoTopic[] = [
-  { id: 't-vintage-denim', label: 'Vintage denim', locked: true, weight: 'high' },
-  { id: 't-sneakers', label: 'Sneakers', locked: true, weight: 'medium' },
-  { id: 't-workwear', label: 'Workwear', locked: true, weight: 'medium' },
-  { id: 't-outerwear', label: 'Tailored outerwear', locked: false, weight: 'high' },
-  { id: 't-knitwear', label: 'Knitwear', locked: false, weight: 'medium' },
-  { id: 't-leather', label: 'Leather goods', locked: false, weight: 'low' },
+  { id: 't-vintage-denim', label: 'Vintage denim', weight: 'high' },
+  { id: 't-sneakers', label: 'Sneakers', weight: 'medium' },
+  { id: 't-workwear', label: 'Workwear', weight: 'medium' },
+  { id: 't-outerwear', label: 'Tailored outerwear', weight: 'high' },
+  { id: 't-knitwear', label: 'Knitwear', weight: 'medium' },
+  { id: 't-leather', label: 'Leather goods', weight: 'low' },
 ];
 
 const SEED_BRANDS: AlgoTopic[] = [
-  { id: 'b-carhartt', label: 'Carhartt WIP', locked: false, weight: 'high' },
-  { id: 'b-barbour', label: 'Barbour', locked: false, weight: 'medium' },
-  { id: 'b-levis', label: 'Levi\u2019s', locked: false, weight: 'high' },
+  { id: 'b-carhartt', label: 'Carhartt WIP', weight: 'high' },
+  { id: 'b-barbour', label: 'Barbour', weight: 'medium' },
+  { id: 'b-levis', label: 'Levi\u2019s', weight: 'high' },
 ];
 
 export const useAlgorithmPrefs = create<AlgorithmPrefsState>()(
@@ -83,7 +85,6 @@ export const useAlgorithmPrefs = create<AlgorithmPrefsState>()(
           const topic: AlgoTopic = {
             id: nextId(kind === 'topics' ? 't' : 'b'),
             label: trimmed,
-            locked: false,
             weight: 'medium',
           };
           return kind === 'topics'
@@ -93,8 +94,8 @@ export const useAlgorithmPrefs = create<AlgorithmPrefsState>()(
       removeTopic: (kind, id) =>
         set((s) =>
           kind === 'topics'
-            ? { topics: s.topics.filter((t) => t.id !== id || t.locked) }
-            : { brands: s.brands.filter((t) => t.id !== id || t.locked) },
+            ? { topics: s.topics.filter((t) => t.id !== id) }
+            : { brands: s.brands.filter((t) => t.id !== id) },
         ),
       setPriceComfort: (value) =>
         set({ priceComfort: Math.min(300, Math.max(10, Math.round(value))) }),
@@ -110,6 +111,20 @@ export const useAlgorithmPrefs = create<AlgorithmPrefsState>()(
         priceComfort: s.priceComfort,
         discoveryDial: s.discoveryDial,
       }),
+      // Persisted slices from before the locked-rows removal may still carry
+      // the field — strip it so stale "from your activity" claims die.
+      merge: (persisted, current) => {
+        const p = persisted as Partial<AlgorithmPrefsState> | undefined;
+        const strip = (list?: AlgoTopic[]) =>
+          (list ?? []).map(({ id, label, weight }) => ({ id, label, weight }));
+        return {
+          ...current,
+          topics: p?.topics ? strip(p.topics) : current.topics,
+          brands: p?.brands ? strip(p.brands) : current.brands,
+          priceComfort: p?.priceComfort ?? current.priceComfort,
+          discoveryDial: p?.discoveryDial ?? current.discoveryDial,
+        };
+      },
     },
   ),
 );

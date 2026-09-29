@@ -2,7 +2,7 @@
 
 /** Query hooks — the only path from screens to data. */
 
-import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
+import { useQuery, useInfiniteQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { useCallback, useMemo } from 'react';
 import { data, DATA_MODE } from '@/lib/api/client';
 import type { Conversation, Message, NewConversationInput, User } from '@/lib/contracts/domain';
@@ -17,48 +17,102 @@ import * as chatService from '@/lib/api/services/chat';
 import { uploadImageFile } from '@/lib/api/services/uploads';
 import { isLocalMediaUri } from '@/lib/utils/media';
 import { useSession } from '@/lib/session/SessionProvider';
+import type { ListingFilters, SortKey } from '@/components/filters/filterTypes';
 import { useHydrated } from '@/lib/store/useStore';
 import { useInboxPrefs } from '@/lib/store/inboxPrefs';
+import { useNotificationCursor } from '@/lib/store/notificationCursor';
 
-export function useListings(category?: string, query?: string) {
-  return useQuery({
-    queryKey: ['listings', category ?? 'all', query ?? ''],
-    queryFn: () => data.listings(category, query),
+/**
+ * Listing retrieval — `useInfiniteQuery` on the service's cursor
+ * contract (`data.listings` routes browse→/listings, query→/search/
+ * listings and synthesises the cursor either way). `filters`, `sort` and
+ * `subcategory` are part of the query key AND the wire request, so every
+ * refinement is server-side and cached under its own key. `select`
+ * flattens pages to `{items, total}` — `total` is the backend's
+ * catalogue-wide match count (null when the surface can't know it).
+ */
+export function useListings(
+  category?: string,
+  query?: string,
+  opts?: {
+    enabled?: boolean;
+    limit?: number;
+    filters?: ListingFilters;
+    sort?: SortKey;
+    subcategory?: string;
+  },
+) {
+  const limit = opts?.limit;
+  // Facets join the key serialised — object identity is per-render, the
+  // value is what caches.
+  const facetsKey = `${opts?.sort ?? ''}|${opts?.subcategory ?? ''}|${JSON.stringify(opts?.filters ?? null)}`;
+  return useInfiniteQuery({
+    queryKey: ['listings', category ?? 'all', query ?? '', limit ?? 0, facetsKey],
+    queryFn: ({ pageParam, signal }) =>
+      data.listings({
+        category,
+        query,
+        cursor: pageParam,
+        limit,
+        signal,
+        filters: opts?.filters,
+        sort: opts?.sort,
+        subcategory: opts?.subcategory,
+      }),
+    initialPageParam: undefined as string | undefined,
+    getNextPageParam: (last) => last.nextCursor ?? undefined,
+    enabled: opts?.enabled ?? true,
+    select: (d) => ({
+      items: d.pages.flatMap((p) => p.items),
+      total: d.pages[0]?.total ?? null,
+    }),
   });
 }
 
 export function useFeed() {
-  return useQuery({ queryKey: ['feed'], queryFn: () => data.feed() });
+  return useQuery({
+    queryKey: ['feed'],
+    queryFn: ({ signal }) => data.feed(undefined, signal),
+  });
 }
 
 export function useListing(id: string) {
   return useQuery({
     queryKey: ['listing', id],
-    queryFn: () => data.listing(id),
+    queryFn: ({ signal }) => data.listing(id, signal),
+    // An empty id is a not-yet-resolved caller (checkout waiting on its
+    // order, PDP waiting on params) — never fire a doomed fetch for it.
+    enabled: !!id,
   });
 }
 
 export function useSellerListings(sellerId: string) {
   return useQuery({
     queryKey: ['seller-listings', sellerId],
-    queryFn: () => data.sellerListings(sellerId),
+    queryFn: ({ signal }) => data.sellerListings(sellerId, signal),
     enabled: !!sellerId,
   });
 }
 
 export function useUser(id: string) {
-  return useQuery({ queryKey: ['user', id], queryFn: () => data.user(id) });
+  return useQuery({
+    queryKey: ['user', id],
+    queryFn: ({ signal }) => data.user(id, signal),
+  });
 }
 
 export function useUserByUsername(username: string) {
   return useQuery({
     queryKey: ['user-by-username', username],
-    queryFn: () => data.userByUsername(username),
+    queryFn: ({ signal }) => data.userByUsername(username, signal),
   });
 }
 
 export function useReviews(userId: string) {
-  return useQuery({ queryKey: ['reviews', userId], queryFn: () => data.reviews(userId) });
+  return useQuery({
+    queryKey: ['reviews', userId],
+    queryFn: ({ signal }) => data.reviews(userId, signal),
+  });
 }
 
 /**
@@ -75,7 +129,7 @@ export function useConversations() {
   const mutedOverrides = useInboxPrefs((s) => s.muted);
   const query = useQuery({
     queryKey: ['conversations', user?.id ?? 'guest'],
-    queryFn: () => data.conversations(user?.id),
+    queryFn: ({ signal }) => data.conversations(user?.id, signal),
   });
   const conversations = useMemo(() => {
     if (!query.data || !hydrated) return query.data;
@@ -93,7 +147,7 @@ export function useConversation(id: string) {
   const { user } = useSession();
   return useQuery({
     queryKey: ['conversation', id, user?.id ?? 'guest'],
-    queryFn: () => data.conversation(id, user?.id),
+    queryFn: ({ signal }) => data.conversation(id, user?.id, signal),
     refetchInterval: 15_000,
   });
 }
@@ -156,25 +210,69 @@ export function useMarkConversationRead() {
   );
 }
 
-export function useNotifications() {
-  return useQuery({ queryKey: ['notifications'], queryFn: data.notifications });
+/**
+ * Header badge count — the count-only `/notifications/unread-count`
+ * endpoint rather than the full event feed. The persisted read overlay
+ * (`clearedIds` ∩ the feed's last-reported unread ids) still applies so
+ * an optimistic clear drops the badge before the next count fetch.
+ */
+export function useUnreadNotificationCount() {
+  const hydrated = useHydrated();
+  const clearedIds = useNotificationCursor((s) => s.clearedIds);
+  const sourceUnreadIds = useNotificationCursor((s) => s.sourceUnreadIds);
+  const query = useQuery({
+    queryKey: ['notifications', 'unread-count'],
+    queryFn: ({ signal }) => data.unreadNotificationCount(signal),
+    // Native re-polls the badge every ~30s on app resume; without an
+    // interval the web badge only moves on remount/staleTime, so a
+    // mark-read elsewhere or a new push goes invisible.
+    refetchInterval: 30_000,
+  });
+  const count = useMemo(() => {
+    if (!hydrated) return 0;
+    const serverCount = query.data ?? 0;
+    let pendingClears = 0;
+    for (const id of sourceUnreadIds) {
+      if (clearedIds.includes(id)) pendingClears += 1;
+    }
+    return Math.max(0, serverCount - pendingClears);
+  }, [hydrated, query.data, clearedIds, sourceUnreadIds]);
+  return { ...query, data: count };
 }
 
-/** Structured notification feed — the canonical /notifications contract
- *  (kind, text, time, image, href, unread). */
-export function useNotificationEntries() {
-  return useQuery({
-    queryKey: ['notification-entries'],
-    queryFn: () => data.notificationEntries(),
-  });
+/**
+ * Header badge count for the inbox — derived from `useConversations` so
+ * the mute overlay stays the single unread-accounting source. The chat
+ * API has no unread-count endpoint; only the render surface shrinks
+ * (the badge re-renders on count changes, not row-detail churn).
+ */
+export function useUnreadConversationCount() {
+  const hydrated = useHydrated();
+  const requestResolutions = useInboxPrefs((s) => s.requests);
+  const query = useConversations();
+  const count = useMemo(() => {
+    const convs = query.data ?? [];
+    return (
+      convs.filter((c) => c.unread && !c.isRequest).length +
+      convs.filter((c) => c.isRequest && !(hydrated && requestResolutions[c.id])).length
+    );
+  }, [query.data, hydrated, requestResolutions]);
+  return { ...query, data: count };
 }
 
 export function useOrders() {
-  return useQuery({ queryKey: ['orders'], queryFn: data.orders });
+  return useQuery({
+    queryKey: ['orders'],
+    queryFn: ({ signal }) => data.orders(signal),
+  });
 }
 
-export function useMyListings() {
-  return useQuery({ queryKey: ['my-listings'], queryFn: data.myListings });
+export function useMyListings(opts?: { enabled?: boolean }) {
+  return useQuery({
+    queryKey: ['my-listings'],
+    queryFn: ({ signal }) => data.myListings(signal),
+    enabled: opts?.enabled,
+  });
 }
 
 // ============================================================================
@@ -183,7 +281,7 @@ export function useMyListings() {
 // invalidates the 'orders' prefix — same posture as the mobile returnsApi.
 // ============================================================================
 
-import type { CommerceOrder, ReturnCase } from '@/lib/contracts/domain';
+import type { ReturnCase } from '@/lib/contracts/domain';
 import {
   allCommerceOrders,
   applyReturnCaseTransition,
@@ -200,19 +298,55 @@ import {
 } from '@/lib/data/fixtures-commerce';
 import * as commerceService from '@/lib/api/services/commerce';
 
-/** Full-vocabulary order list (purchases + sales) for the orders surfaces. */
-export function useCommerceOrders() {
-  return useQuery<CommerceOrder[]>({
+/** Full-vocabulary order list (purchases + sales) for the orders surfaces.
+ *  Live mode pages through GET /users/:id/orders on the server's keyset
+ *  cursor (`createdAt|id` — the response's `nextCursor`); the page size is
+ *  the route's own ceiling (limit maxes at 50 — a larger read 400s on the
+ *  Zod bound instead of returning more). Fixture mode serves its one
+ *  composed page and reports no cursor. */
+async function fetchCommerceOrderPage(
+  cursor: string | undefined,
+  signal?: AbortSignal,
+): Promise<commerceService.OrderPage> {
+  if (DATA_MODE === 'live') {
+    return commerceService.fetchOrders({ cursor, limit: 50 }, signal);
+  }
+  const base = await data.orders(signal);
+  return {
+    items: allCommerceOrders(base),
+    baseOrders: base,
+    raw: [],
+    nextCursor: null,
+    needsActionCount: 0,
+  };
+}
+
+/**
+ * Shared infinite query for the commerce-order surfaces — `select`
+ * flattens the loaded pages to whatever projection the caller needs, so
+ * consumers keep their array contract while `hasNextPage`/`fetchNextPage`
+ * walk the server's cursor past the first page (same posture as
+ * useSellerListingsPaged / useExploreFeed).
+ */
+function useCommerceOrdersPage<T>(select: (pages: commerceService.OrderPage[]) => T) {
+  return useInfiniteQuery({
     queryKey: ['orders', 'commerce'],
-    queryFn: async () => {
-      if (DATA_MODE === 'live') {
-        const page = await commerceService.fetchOrders();
-        return page.items;
-      }
-      const base = await data.orders();
-      return allCommerceOrders(base);
-    },
+    queryFn: ({ pageParam, signal }) => fetchCommerceOrderPage(pageParam, signal),
+    initialPageParam: undefined as string | undefined,
+    getNextPageParam: (last) => last.nextCursor ?? undefined,
+    select: (d) => select(d.pages),
   });
+}
+
+export function useCommerceOrders() {
+  return useCommerceOrdersPage((pages) => pages.flatMap((p) => p.items));
+}
+
+/** Raw wire rows — live only — carrying listingTitle, listingImageUrl,
+ *  counterparty usernames, hasReview and hasOpenResolution. Fixture mode
+ *  returns []; consumers keep the fixture enrichment path there. */
+export function useCommerceOrderRows() {
+  return useCommerceOrdersPage((pages) => pages.flatMap((p) => p.raw));
 }
 
 /**
@@ -223,9 +357,9 @@ export function useCommerceOrders() {
 export function useOrderReturnCase(orderId: string) {
   return useQuery<ReturnCase | null>({
     queryKey: ['order', orderId, 'return-case'],
-    queryFn: () =>
+    queryFn: ({ signal }) =>
       DATA_MODE === 'live'
-        ? commerceService.fetchOrderReturnCase(orderId)
+        ? commerceService.fetchOrderReturnCase(orderId, signal)
         : Promise.resolve(
             orderEnrichmentReturnCase(orderId),
           ),
@@ -292,11 +426,16 @@ export function useOrderActions(orderId: string) {
       respondToDispatchExtension(orderId, accept);
       return invalidate();
     },
-    leaveReview: (rating: number, text: string) => {
+    leaveReview: (rating: number, text: string, photoUrls?: string[]) => {
       if (DATA_MODE === 'live') {
         return commerceService
-          .reviewOrder(orderId, { rating, text })
+          .reviewOrder(orderId, {
+            rating,
+            comment: text || undefined,
+            photoUrls: photoUrls?.length ? photoUrls : undefined,
+          })
           .then(() => {
+            void qc.invalidateQueries({ queryKey: ['order', orderId, 'review'] });
             void qc.invalidateQueries({ queryKey: ['reviews'] });
             return invalidate();
           });
@@ -406,20 +545,27 @@ export function useOrderActions(orderId: string) {
 
 const tick = (ms = 80) => new Promise((r) => setTimeout(r, ms));
 
-/** Directory of messageable members — everyone but the viewer, filtered. */
+/** Directory of messageable members — everyone but the viewer, filtered.
+ *  Live mode is gated on the backend contract (auth + q≥2): a one-char
+ *  query is a guaranteed 400 and a guest query a guaranteed 401, and an
+ *  errored directory reads as "no members" downstream — so the request
+ *  only fires when it can succeed. Fixture mode keeps the open directory
+ *  (the composer sheets list everyone with an empty query). */
 export function useMemberDirectory(query: string) {
+  const { user } = useSession();
   const q = query.trim().toLowerCase();
   return useQuery({
     queryKey: ['member-directory', q],
-    queryFn: async (): Promise<User[]> => {
+    queryFn: async ({ signal }): Promise<User[]> => {
       if (DATA_MODE === 'live') {
-        return usersService.searchUsers(q);
+        return usersService.searchUsers(q, signal);
       }
       await tick();
       return USERS.filter(
         (u) => u.id !== 'me' && (!q || u.username.toLowerCase().includes(q)),
       );
     },
+    enabled: DATA_MODE !== 'live' || (q.length >= 2 && !!user),
   });
 }
 
@@ -444,11 +590,16 @@ export function useCreateConversation() {
               title: input.title ?? 'Group',
               participantIds: input.memberIds,
               description: input.description,
+              itemId: input.itemId,
             },
             user?.id,
           );
         }
-        return chatService.createDmConversation(input.memberIds[0], user?.id);
+        return chatService.createDmConversation(
+          input.memberIds[0],
+          { itemId: input.itemId },
+          user?.id,
+        );
       }
       await tick(140);
       return createFixtureConversation(input);
@@ -503,7 +654,7 @@ export function useSendChatMessage(conversationId: string) {
       if (DATA_MODE === 'live') {
         let mediaUri = input.mediaUri;
         if (input.file) {
-          mediaUri = await uploadImageFile(input.file, 'chat');
+          mediaUri = (await uploadImageFile(input.file, 'chat')).publicUrl;
         } else if (mediaUri && isLocalMediaUri(mediaUri)) {
           // A local pick without its File can't be uploaded — fail the send
           // rather than posting a URI no recipient could resolve.

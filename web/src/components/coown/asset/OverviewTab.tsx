@@ -7,6 +7,7 @@
 
 import { Icon } from '@/components/ui/Icon';
 import type { CoOwnAsset, DueDiligenceProfile } from '@/lib/contracts/coown';
+import { coOwnMarkGbp } from '@/lib/contracts/coown';
 import { gbpCompact } from '../format';
 import { DueDiligenceSection } from './DueDiligenceSection';
 
@@ -17,7 +18,9 @@ export function OverviewTab({
   asset: CoOwnAsset;
   diligence: DueDiligenceProfile | null | undefined;
 }) {
-  const marketCap = asset.totalUnits * asset.unitPriceGbp;
+  // Capitalisation marks to the last settled trade where the market has
+  // printed — issuance price only before first print.
+  const marketCap = asset.totalUnits * coOwnMarkGbp(asset);
 
   const stats = [
     { label: 'Market cap', value: gbpCompact(marketCap) },
@@ -53,7 +56,7 @@ export function OverviewTab({
           {provenance.map((row) =>
             row.value ? (
               <div key={row.label} className="flex items-baseline justify-between gap-6 py-3">
-                <dt className="shrink-0 text-meta font-semibold uppercase tracking-[0.08em] text-text-muted">
+                <dt className="shrink-0 text-meta font-semibold uppercase tracking-wide text-text-muted">
                   {row.label}
                 </dt>
                 <dd className="text-right text-body text-text-primary">{row.value}</dd>

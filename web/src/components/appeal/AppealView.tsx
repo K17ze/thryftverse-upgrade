@@ -103,7 +103,7 @@ export function AppealView() {
           onClick={() => router.back()}
           className="-ml-1"
         />
-        <h1 className="ml-1 text-screen-title font-semibold text-text-primary">
+        <h1 className="ml-1 text-screen-title text-text-primary">
           Appeal a decision
         </h1>
       </div>
@@ -143,7 +143,7 @@ export function AppealView() {
         <div className="mt-4">
           {/* Decision type — the picker mobile resolves from decisionId. */}
           <section aria-label="Decision type">
-            <h2 className="px-4 pb-2 text-label font-semibold uppercase tracking-wider text-text-muted sm:px-5">
+            <h2 className="px-4 pb-2 text-label text-text-muted sm:px-5">
               What are you appealing?
             </h2>
             {isLoading ? (
@@ -190,7 +190,7 @@ export function AppealView() {
           <section aria-label="Why are you appealing" className="mt-8 px-4 sm:px-5">
             <label
               htmlFor="appeal-grounds"
-              className="text-label font-semibold uppercase tracking-wider text-text-muted"
+              className="text-label text-text-muted"
             >
               Why are you appealing?
             </label>
@@ -218,7 +218,7 @@ export function AppealView() {
           <section aria-label="Reference" className="mt-2 px-4 sm:px-5">
             <label
               htmlFor="appeal-reference"
-              className="text-label font-semibold uppercase tracking-wider text-text-muted"
+              className="text-label text-text-muted"
             >
               Reference <span className="normal-case text-text-muted">(optional)</span>
             </label>

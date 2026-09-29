@@ -11,7 +11,7 @@ import { Button } from '@/components/ui/Button';
 import { Icon } from '@/components/ui/Icon';
 import { usePriceHistory } from '@/lib/hooks/coown-queries';
 import type { CoOwnAsset } from '@/lib/contracts/coown';
-import { deriveLifecycleState } from '@/lib/contracts/coown';
+import { coOwnMarkGbp, deriveLifecycleState } from '@/lib/contracts/coown';
 import { formatCount } from '@/lib/utils/format';
 import { gbp, gbpCompact } from './format';
 import { LifecycleTag } from './LifecycleTag';
@@ -67,7 +67,7 @@ export function FeaturedHero({ asset }: { asset: CoOwnAsset }) {
         </p>
 
         <div className="mt-5 flex flex-wrap items-baseline gap-x-3 gap-y-2">
-          <p className="text-price-hero font-semibold text-text-primary tnum">{gbp(asset.unitPriceGbp)}</p>
+          <p className="text-price-hero font-semibold text-text-primary tnum">{gbp(coOwnMarkGbp(asset))}</p>
           <MovePill pct={asset.marketMovePct24h} />
           <span className="text-meta text-text-muted">24h</span>
         </div>

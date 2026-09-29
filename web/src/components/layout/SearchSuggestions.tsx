@@ -9,12 +9,24 @@
  */
 
 import Link from 'next/link';
+import { useDeferredValue, useMemo } from 'react';
+import { useQuery } from '@tanstack/react-query';
 import { AppImage } from '@/components/ui/AppImage';
 import { Avatar } from '@/components/ui/Avatar';
 import { Chip } from '@/components/ui/Chip';
 import { Icon, type AppIconName } from '@/components/ui/Icon';
 import type { Listing, User } from '@/lib/contracts/domain';
 import { LISTINGS, USERS } from '@/lib/data/fixtures';
+import { DATA_MODE } from '@/lib/api/client';
+import { searchListings } from '@/lib/api/services/listings';
+import { fetchAutocompleteSuggestions } from '@/lib/api/services/search';
+import { searchUsers } from '@/lib/api/services/users';
+import { useDebouncedValue } from '@/lib/hooks/useDebouncedValue';
+import {
+  rankBrands,
+  useTrendingListings,
+  useTrendingSearches,
+} from '@/lib/hooks/search-queries';
 import { formatCount, formatPrice } from '@/lib/utils/format';
 import { TRENDING_SEARCHES } from '@/components/search/taxonomy';
 import { useLocale } from '@/lib/i18n';
@@ -38,6 +50,7 @@ const POPULAR_BRANDS = (() => {
 
 export type SuggestionKind =
   | 'search'
+  | 'suggestion'
   | 'listing'
   | 'member'
   | 'recent'
@@ -118,6 +131,118 @@ export function buildSuggestionOptions(
   return options;
 }
 
+const LIVE = DATA_MODE === 'live';
+
+/**
+ * Suggestion options against the active data source. Fixture mode runs
+ * the pure fixture matcher; live mode is backend-first — query text
+ * suggestions come from GET /search/autocomplete (mobile parity), item
+ * rows from the real catalogue (GET /listings?q=) and member rows from
+ * the real directory (GET /users/search), with trending queries/brands
+ * from the shared trending hooks. No fixture row can appear in live
+ * mode: the autocomplete payload carries no listing/member objects, and
+ * every rendered object row is a real fetch result.
+ */
+export function useSuggestionOptions(query: string, recent: string[]): SuggestionOption[] {
+  // Deferred + debounced — keystrokes trail the input by one commit and
+  // a typing pause, so the request fires once per pause (and a
+  // superseded fetch aborts via the react-query signal), not per char.
+  const deferredQ = useDeferredValue(query.trim());
+  const debouncedQ = useDebouncedValue(deferredQ, 220);
+  // Backend gates: autocomplete/listings want q ≥ 1 but mobile holds the
+  // stricter 2-char client gate; members/search also needs auth.
+  const usable = debouncedQ.length >= 2;
+  const autocompleteQuery = useQuery({
+    queryKey: ['search-suggest', 'autocomplete', debouncedQ],
+    queryFn: ({ signal }) => fetchAutocompleteSuggestions(debouncedQ, 8, signal),
+    enabled: LIVE && usable,
+    staleTime: 30_000,
+  });
+  const listingsQuery = useQuery({
+    queryKey: ['search-suggest', 'listings', debouncedQ],
+    queryFn: ({ signal }) => searchListings({ q: debouncedQ, limit: MAX_LISTING_RESULTS }, signal),
+    enabled: LIVE && usable,
+    staleTime: 30_000,
+  });
+  const membersQuery = useQuery({
+    queryKey: ['search-suggest', 'members', debouncedQ],
+    queryFn: ({ signal }) => searchUsers(debouncedQ, signal),
+    enabled: LIVE && usable,
+    staleTime: 30_000,
+  });
+  const trending = useTrendingListings(24);
+  const trendingSearches = useTrendingSearches();
+
+  return useMemo<SuggestionOption[]>(() => {
+    if (!LIVE) return buildSuggestionOptions(query, recent);
+
+    const q = query.trim();
+    const needle = q.toLowerCase();
+    const matches = (s: string) => !needle || s.toLowerCase().includes(needle);
+    const options: SuggestionOption[] = [];
+    // Text kinds share a term-key so "nike" can't repeat across the
+    // suggestion / trending / brand sections.
+    const seenText = new Set<string>();
+    const pushText = (option: SuggestionOption) => {
+      const key = option.term.toLowerCase();
+      if (seenText.has(key)) return;
+      seenText.add(key);
+      options.push(option);
+    };
+
+    if (q) {
+      options.push({ id: 'search-query', kind: 'search', term: q });
+      if (autocompleteQuery.isError) {
+        // Request failed — the local vocabulary pools answer instead of
+        // going dark (mobile parity). Text-only: the autocomplete
+        // response carries no listing/member objects either way.
+        for (const term of TRENDING_SEARCHES.filter(matches)) {
+          pushText({ id: `suggestion-${term}`, kind: 'suggestion', term });
+        }
+        for (const brand of POPULAR_BRANDS.filter(matches)) {
+          pushText({ id: `suggestion-${brand}`, kind: 'suggestion', term: brand });
+        }
+      } else {
+        for (const s of autocompleteQuery.data?.suggestions ?? []) {
+          pushText({ id: `suggestion-${s.text}`, kind: 'suggestion', term: s.text });
+        }
+      }
+      for (const l of (listingsQuery.data?.items ?? []).slice(0, MAX_LISTING_RESULTS)) {
+        options.push({ id: `listing-${l.id}`, kind: 'listing', term: l.title, listing: l });
+      }
+      for (const u of (membersQuery.data ?? []).slice(0, MAX_MEMBER_RESULTS)) {
+        options.push({
+          id: `member-${u.id}`,
+          kind: 'member',
+          term: u.username,
+          user: u,
+          href: `/u/${u.username}`,
+        });
+      }
+    }
+
+    for (const term of recent.filter(matches).slice(0, MAX_RECENT)) {
+      options.push({ id: `recent-${term}`, kind: 'recent', term });
+    }
+    for (const term of trendingSearches.terms.filter(matches)) {
+      pushText({ id: `trending-${term}`, kind: 'trending', term });
+    }
+    for (const brand of rankBrands(trending.listings, 10).filter(matches).slice(0, MAX_BRANDS)) {
+      pushText({ id: `brand-${brand}`, kind: 'brand', term: brand });
+    }
+    return options;
+  }, [
+    query,
+    recent,
+    autocompleteQuery.data,
+    autocompleteQuery.isError,
+    listingsQuery.data,
+    membersQuery.data,
+    trending.listings,
+    trendingSearches.terms,
+  ]);
+}
+
 interface SearchSuggestionsProps {
   listboxId: string;
   options: SuggestionOption[];
@@ -129,7 +254,7 @@ interface SearchSuggestionsProps {
 
 function SectionLabel({ children }: { children: React.ReactNode }) {
   return (
-    <p className="px-4 pb-1 pt-3 text-label font-semibold uppercase tracking-wide text-text-muted">
+    <p className="px-4 pb-1 pt-3 text-label text-text-muted">
       {children}
     </p>
   );
@@ -149,6 +274,7 @@ export function SearchSuggestions({
     indexed.filter(({ option }) => option.kind === kind);
 
   const searchRows = byKind('search');
+  const suggestionRows = byKind('suggestion');
   const listingRows = byKind('listing');
   const memberRows = byKind('member');
   const recentRows = byKind('recent');
@@ -172,7 +298,6 @@ export function SearchSuggestions({
     index: number,
     icon: AppIconName,
     label: React.ReactNode,
-    trailing?: React.ReactNode,
   ) => (
     <div
       key={option.id}
@@ -185,7 +310,6 @@ export function SearchSuggestions({
       <span className="clamp-1 min-w-0 flex-1 text-body text-text-primary">
         {label}
       </span>
-      {trailing}
     </div>
   );
 
@@ -209,6 +333,10 @@ export function SearchSuggestions({
             <span className="font-semibold">“{option.term}”</span>
           </>,
         ),
+      )}
+
+      {suggestionRows.map(({ option, index }) =>
+        textRow(option, index, 'search', option.term),
       )}
 
       {listingRows.length > 0 ? (
@@ -281,12 +409,13 @@ export function SearchSuggestions({
       {recentRows.length > 0 ? (
         <div role="group" aria-label={t('chrome.search.recent')}>
           <SectionLabel>{t('chrome.search.recent')}</SectionLabel>
-          {recentRows.map(({ option, index }) =>
-            textRow(
-              option,
-              index,
-              'clock',
-              option.term,
+          {recentRows.map(({ option, index }) => (
+            // The remove button must sit OUTSIDE role="option" — a
+            // focusable descendant inside an option is presentational
+            // per ARIA and strands keyboard users. It's absolutely
+            // anchored over the row's trailing edge instead.
+            <div key={option.id} role="presentation" className="relative">
+              {textRow(option, index, 'clock', option.term)}
               <button
                 type="button"
                 aria-label={t('chrome.search.removeRecent', { term: option.term })}
@@ -295,12 +424,12 @@ export function SearchSuggestions({
                   e.stopPropagation();
                   onRemoveRecent(option.term);
                 }}
-                className="pressable -mr-1 flex h-7 w-7 shrink-0 items-center justify-center rounded-md text-text-muted hover:text-text-primary"
+                className="pressable absolute right-3 top-1/2 flex h-7 w-7 -translate-y-1/2 items-center justify-center rounded-md text-text-muted after:absolute after:-inset-2 after:content-[''] hover:text-text-primary"
               >
                 <Icon name="close" size={14} />
-              </button>,
-            ),
-          )}
+              </button>
+            </div>
+          ))}
         </div>
       ) : null}
 

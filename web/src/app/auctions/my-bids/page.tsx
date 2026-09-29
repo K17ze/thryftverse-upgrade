@@ -9,11 +9,11 @@
 
 import { useMemo, useState } from 'react';
 import { useRouter } from 'next/navigation';
-import { SegmentedControl } from '@/components/feed/SegmentedControl';
+import { Tabs } from '@/components/ui/Tabs';
 import { EmptyState } from '@/components/ui/EmptyState';
 import { Icon } from '@/components/ui/Icon';
 import { MyBidRow, AuctionRowSkeleton, AuctionBoardSkeleton, AuctionCard } from '@/components/auctions';
-import { useAuctionBoard, useMyBids } from '@/lib/hooks/auction-queries';
+import { useMyBids, useWatchedAuctionBoard } from '@/lib/hooks/auction-queries';
 import { useAuctionWatchlist } from '@/components/auctions/auctionWatchlist';
 import { useSession } from '@/lib/session/SessionProvider';
 import { useHydrated } from '@/lib/store/useStore';
@@ -55,14 +55,18 @@ export default function MyBidsPage() {
   // signed-in demo identity, never to an anonymous viewer.
   const viewerId = user?.id;
   const { board, isLoading, isError, refetch } = useMyBids(viewerId ?? '');
-  const {
-    auctions,
-    isError: boardError,
-    refetch: refetchBoard,
-  } = useAuctionBoard();
   const { watched } = useAuctionWatchlist();
   const [tab, setTab] = useState<Tab>('active');
   const [endingSoonest, setEndingSoonest] = useState(false);
+  // Watching is a server-side scope (watchedOnly) in live mode — the old
+  // localStorage ∩ board-page-1 intersection silently dropped watched
+  // lots beyond the first page. Fixture mode keeps the local set.
+  const {
+    auctions: watchedAuctions,
+    isLoading: watchedLoading,
+    isError: boardError,
+    refetch: refetchBoard,
+  } = useWatchedAuctionBoard(watched, { enabled: tab === 'watching' });
 
   // Active = outbid + winning + unresolved 'active' bids merged. Outbid
   // rows always lead — they are the alerts — then the leads, then the
@@ -82,14 +86,14 @@ export default function MyBidsPage() {
 
   const rows = tab === 'active' ? activeRows : tab === 'won' ? board.won : board.lost;
   const watchingRows = useMemo(
-    () => (hydrated ? auctions.filter((a) => watched.has(a.id)) : []),
-    [auctions, watched, hydrated],
+    () => (hydrated ? watchedAuctions : []),
+    [watchedAuctions, hydrated],
   );
 
   if (isGuest) {
     return (
-      <div className="mx-auto w-full max-w-[820px] px-4 pb-16 pt-6 sm:px-6">
-        <h1 className="text-screen-title font-bold text-text-primary">My bids</h1>
+      <div className="mx-auto w-full max-w-[820px] px-4 pb-16 pt-6 sm:px-6 lg:max-w-[1280px]">
+        <h1 className="text-screen-title text-text-primary">My bids</h1>
         <div className="mt-8">
           <EmptyState
             icon="auction"
@@ -104,11 +108,27 @@ export default function MyBidsPage() {
   }
 
   return (
-    <div className="mx-auto w-full max-w-[820px] px-4 pb-16 pt-6 sm:px-6">
-      <div className="flex flex-wrap items-center justify-between gap-3">
-        <h1 className="text-screen-title font-bold text-text-primary">My bids</h1>
-        <SegmentedControl options={TABS} value={tab} onChange={setTab} />
-      </div>
+    <div className="mx-auto w-full max-w-[820px] px-4 pb-16 pt-6 sm:px-6 lg:max-w-[1280px]">
+      <h1 className="text-screen-title text-text-primary">My bids</h1>
+      <Tabs<Tab>
+        className="-mx-4 mt-4 sm:-mx-6"
+        railClassName="px-1 sm:px-3"
+        tabs={TABS.map((t) => ({
+          key: t.value,
+          label: t.label,
+          count:
+            t.value === 'active'
+              ? activeRows.length
+              : t.value === 'won'
+                ? board.won.length
+                : t.value === 'lost'
+                  ? board.lost.length
+                  : watchingRows.length,
+        }))}
+        active={tab}
+        onChange={setTab}
+        ariaLabel="Bid sections"
+      />
 
       {/* Ending-soonest sort — the active-scope utility toggle (mobile
           parity), honest ordering against the real window. */}
@@ -138,7 +158,7 @@ export default function MyBidsPage() {
             ))}
           </div>
         ) : tab === 'watching' ? (
-          !hydrated ? (
+          !hydrated || watchedLoading ? (
             <AuctionBoardSkeleton count={4} />
           ) : boardError ? (
             <EmptyState
@@ -157,7 +177,7 @@ export default function MyBidsPage() {
               onAction={() => router.push('/auctions')}
             />
           ) : (
-            <div className="grid grid-cols-2 gap-x-3 gap-y-8 sm:grid-cols-3">
+            <div className="grid grid-cols-2 gap-x-3 gap-y-8 sm:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5">
               {watchingRows.map((auction) => (
                 <AuctionCard key={auction.id} auction={auction} />
               ))}
@@ -180,11 +200,32 @@ export default function MyBidsPage() {
             onAction={() => router.push('/auctions')}
           />
         ) : (
-          <ul className="divide-y divide-border-subtle border-y border-border-subtle">
-            {rows.map((row) => (
-              <MyBidRow key={row.auction.id} row={row} />
-            ))}
-          </ul>
+          <>
+            {/* Column header at lg — mirrors MyBidRow's cell geometry. */}
+            <div
+              aria-hidden
+              className="hidden items-center gap-3 border-b border-border-subtle pb-2 lg:flex"
+            >
+              <span className="w-16 shrink-0" />
+              <span className="min-w-0 flex-1 text-label text-text-muted">
+                Auction
+              </span>
+              <span className="w-32 shrink-0 text-label text-text-muted">
+                Status
+              </span>
+              <span className="w-48 shrink-0 text-label text-text-muted">
+                Your bid
+              </span>
+              <span className="w-44 shrink-0 text-right text-label text-text-muted">
+                Closes
+              </span>
+            </div>
+            <ul className="divide-y divide-border-subtle border-y border-border-subtle lg:border-t-0">
+              {rows.map((row) => (
+                <MyBidRow key={row.auction.id} row={row} />
+              ))}
+            </ul>
+          </>
         )}
       </div>
     </div>

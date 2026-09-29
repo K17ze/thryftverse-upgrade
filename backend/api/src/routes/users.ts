@@ -1590,6 +1590,26 @@ app.delete('/users/:userId/follow', async (request, reply) => {
   return { ok: true, isFollowing: false };
 });
 
+// Public username → id resolution (GET /users/by-username/:username).
+// /u/[username] routes resolve a handle before loading the profile
+// aggregate. Case-insensitive via the LOWER(username) index. Public —
+// the profile route itself applies privacy/block semantics after.
+app.get('/users/by-username/:username', async (request, reply) => {
+  const paramsSchema = z.object({ username: z.string().trim().min(1).max(32) });
+  const { username } = paramsSchema.parse(request.params);
+
+  const result = await db.query<{ id: string }>(
+    `SELECT id FROM users WHERE LOWER(username) = LOWER($1) LIMIT 1`,
+    [username]
+  );
+  const user = result.rows[0];
+  if (!user) {
+    reply.code(404);
+    return { ok: false, error: 'User not found' };
+  }
+  return { ok: true, user: { id: user.id } };
+});
+
 app.get('/users/:userId/profile', async (request, reply) => {
   const paramsSchema = z.object({ userId: z.string().min(2) });
   const { userId } = paramsSchema.parse(request.params);

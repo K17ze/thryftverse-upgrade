@@ -104,10 +104,12 @@ export function ClosetMediaMosaic({
   const [lead, ...rest] = cells;
 
   return (
+    // Full-bleed band — same edge-to-edge contract as the authored cover
+    // (viewport breakout; the root clips overflow-x).
     <Link
       href={`/collection/closet-${ownerId}`}
       aria-label={`Browse @${username}'s closet${itemCount != null ? `, ${itemCount} items` : ''}`}
-      className="group relative block h-40 overflow-hidden bg-surface-alt focus-visible:outline-2 focus-visible:-outline-offset-2 focus-visible:outline-text-primary sm:h-52"
+      className="group relative left-1/2 block h-40 w-screen -translate-x-1/2 overflow-hidden bg-surface-alt focus-visible:outline-2 focus-visible:-outline-offset-2 focus-visible:outline-text-primary sm:h-52 lg:h-64 xl:h-72"
     >
       <div className="flex h-full gap-0.5">
         {/* Dominant cell — the lead listing carries the band. */}
@@ -116,31 +118,31 @@ export function ClosetMediaMosaic({
           className={`h-full ${
             rest.length === 2 ? 'w-[56%]' : rest.length === 3 ? 'w-[48%]' : 'w-[42%]'
           }`}
-          sizes="(max-width: 640px) 56vw, 45vw"
+          sizes="(max-width: 1024px) 56vw, 645px"
           priority
         />
         {rest.length === 2 ? (
           <div className="flex h-full flex-1 flex-col gap-0.5">
-            <Cell cell={rest[0]} className="h-1/2" sizes="44vw" />
-            <Cell cell={rest[1]} className="h-1/2" sizes="44vw" />
+            <Cell cell={rest[0]} className="h-1/2" sizes="(max-width: 1024px) 44vw, 510px" />
+            <Cell cell={rest[1]} className="h-1/2" sizes="(max-width: 1024px) 44vw, 510px" />
           </div>
         ) : rest.length === 3 ? (
           <>
             <div className="flex h-full flex-1 flex-col gap-0.5">
-              <Cell cell={rest[0]} className="h-1/2" sizes="26vw" />
-              <Cell cell={rest[1]} className="h-1/2" sizes="26vw" />
+              <Cell cell={rest[0]} className="h-1/2" sizes="(max-width: 1024px) 26vw, 300px" />
+              <Cell cell={rest[1]} className="h-1/2" sizes="(max-width: 1024px) 26vw, 300px" />
             </div>
-            <Cell cell={rest[2]} className="h-full w-[26%]" sizes="26vw" />
+            <Cell cell={rest[2]} className="h-full w-[26%]" sizes="(max-width: 1024px) 26vw, 300px" />
           </>
         ) : (
           <>
             <div className="flex h-full w-[29%] flex-col gap-0.5">
-              <Cell cell={rest[0]} className="h-1/2" sizes="29vw" />
-              <Cell cell={rest[1]} className="h-1/2" sizes="29vw" />
+              <Cell cell={rest[0]} className="h-1/2" sizes="(max-width: 1024px) 29vw, 335px" />
+              <Cell cell={rest[1]} className="h-1/2" sizes="(max-width: 1024px) 29vw, 335px" />
             </div>
             <div className="flex h-full flex-1 flex-col gap-0.5">
-              <Cell cell={rest[2]} className="h-1/2" sizes="29vw" />
-              <Cell cell={rest[3]} className="h-1/2" sizes="29vw" />
+              <Cell cell={rest[2]} className="h-1/2" sizes="(max-width: 1024px) 29vw, 335px" />
+              <Cell cell={rest[3]} className="h-1/2" sizes="(max-width: 1024px) 29vw, 335px" />
             </div>
           </>
         )}

@@ -18,6 +18,11 @@ import {
   type GalleriaFeaturedCollection,
 } from '@/lib/data/fixtures-media';
 import { listingById } from '@/lib/data/fixtures';
+import { DATA_MODE } from '@/lib/api/client';
+import { parseApiError } from '@/lib/api/http';
+import * as galleriaService from '@/lib/api/services/galleria';
+import * as listingsService from '@/lib/api/services/listings';
+import { useSession } from '@/lib/session/SessionProvider';
 import { EmptyState } from '@/components/ui/EmptyState';
 import { Icon } from '@/components/ui/Icon';
 import { GalleriaHero } from '@/components/galleria/GalleriaHero';
@@ -33,10 +38,47 @@ import { GalleriaSkeleton } from '@/components/galleria/GalleriaSkeleton';
 
 const tick = (ms = 320) => new Promise((r) => setTimeout(r, ms));
 
-function useGalleria() {
+const isLive = DATA_MODE === 'live';
+
+function useGalleria(enabled: boolean) {
   return useQuery({
     queryKey: ['galleria'],
-    queryFn: async () => {
+    enabled,
+    queryFn: async ({ signal }) => {
+      if (isLive) {
+        const [editorials, collections, assetPairs] = await Promise.all([
+          galleriaService.fetchGalleriaEditorials(signal),
+          galleriaService.fetchGalleriaCollections(signal),
+          galleriaService.fetchGalleriaFeaturedAssets(signal),
+        ]);
+        // Real listing resolution — items only reach the rail when the
+        // backend links them to a live listing.
+        const resolved = await Promise.all(
+          assetPairs.map(async ({ item, collectionTitle }) => {
+            if (!item.listingId) return null;
+            const listing = await listingsService
+              .fetchListingById(item.listingId, signal)
+              .catch(() => null);
+            return listing
+              ? ({
+                  listingId: item.listingId,
+                  fromCollection: collectionTitle,
+                  note: item.story || item.title,
+                  listing,
+                } satisfies ResolvedGalleriaAsset)
+              : null;
+          }),
+        );
+        return {
+          cover: editorials[0],
+          editorials: editorials.slice(1),
+          collections,
+          assets: resolved.filter((a): a is ResolvedGalleriaAsset => a != null),
+          // No back-issue archive endpoint exists — the archive section is
+          // fixture-scope only, so live mode resolves to an empty list.
+          archive: [],
+        };
+      }
       await tick();
       const assets: ResolvedGalleriaAsset[] = GALLERIA_FEATURED_ASSETS.flatMap((asset) => {
         const listing = listingById(asset.listingId);
@@ -55,9 +97,24 @@ function useGalleria() {
 
 export default function GalleriaPage() {
   const router = useRouter();
-  const { data, isLoading, isError, refetch } = useGalleria();
+  const { sessionLoading } = useSession();
+  // /galleria/* GETs are public server-side and native shows the hub to
+  // guests — no member wall here.
+  const { data, isLoading, isError, error, refetch } = useGalleria(true);
 
-  if (isLoading) return <GalleriaSkeleton />;
+  if (isLoading || (isLive && sessionLoading)) return <GalleriaSkeleton />;
+
+  if (isError && parseApiError(error).status === 401) {
+    return (
+      <EmptyState
+        icon="lock"
+        title="The Galleria is for members"
+        subtitle="Sign in to read the current issue and browse the curated edits."
+        actionLabel="Sign in"
+        onAction={() => router.push('/auth/login')}
+      />
+    );
+  }
 
   if (isError || !data) {
     return (
@@ -128,17 +185,23 @@ export default function GalleriaPage() {
           <GalleriaFeaturedAssets assets={data.assets} />
         </section>
 
-        {/* Back-issue archive */}
-        <section aria-label="Archive" className="mt-14 md:mt-20">
-          <GalleriaSectionHeader eyebrow="Back issues" title="The archive" />
-          <GalleriaArchive issues={data.archive} />
-        </section>
+        {/* Back-issue archive — fixture-scope only; live mode has no
+            back-issue endpoint, so the section drops rather than show a
+            heading over nothing. */}
+        {data.archive.length > 0 ? (
+          <section aria-label="Archive" className="mt-14 md:mt-20">
+            <GalleriaSectionHeader eyebrow="Back issues" title="The archive" />
+            <GalleriaArchive issues={data.archive} />
+          </section>
+        ) : null}
 
-        <p className="mt-14 flex items-center gap-1.5 text-caption text-text-muted md:mt-20">
-          <Icon name="info" size={14} className="shrink-0" />
-          Preview issue — stories and collections ship as bundled editorial
-          content in this build.
-        </p>
+        {!isLive ? (
+          <p className="mt-14 flex items-center gap-1.5 text-caption text-text-muted md:mt-20">
+            <Icon name="info" size={14} className="shrink-0" />
+            Preview issue — stories and collections ship as bundled editorial
+            content in this build.
+          </p>
+        ) : null}
       </div>
     </div>
   );

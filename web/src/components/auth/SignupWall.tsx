@@ -16,7 +16,13 @@
  */
 
 import { useRouter } from 'next/navigation';
-import { useCallback, useState } from 'react';
+import {
+  createContext,
+  useCallback,
+  useContext,
+  useMemo,
+  useState,
+} from 'react';
 import { Sheet } from '@/components/ui/Sheet';
 import { Button } from '@/components/ui/Button';
 import { Icon, type AppIconName } from '@/components/ui/Icon';
@@ -30,7 +36,8 @@ export type SignupAction =
   | 'message_seller'
   | 'place_bid'
   | 'purchase'
-  | 'create_listing';
+  | 'create_listing'
+  | 'create_board';
 
 /** One title + one sentence per action — a value prop, never a hard sell. */
 const ACTION_COPY: Record<SignupAction, { title: string; body: string; icon: AppIconName }> = {
@@ -64,6 +71,11 @@ const ACTION_COPY: Record<SignupAction, { title: string; body: string; icon: App
     body: 'List your own pieces and reach thousands of buyers.',
     icon: 'store',
   },
+  create_board: {
+    title: 'Join ThryftVerse to build boards',
+    body: 'Create moodboards and collections to plan your next find.',
+    icon: 'images',
+  },
 };
 
 /**
@@ -81,6 +93,7 @@ const NUDGE_COPY: Record<SignupAction, string> = {
   place_bid: 'Sign up to place bids',
   purchase: 'Sign up to buy securely',
   create_listing: 'Sign up to sell',
+  create_board: 'Sign up to build boards',
 };
 
 /**
@@ -96,6 +109,7 @@ interface SignupWallProps {
   onClose: () => void;
 }
 
+/** The wall sheet itself — value sentence, two CTAs, quiet exit. */
 export function SignupWall({ action, onClose }: SignupWallProps) {
   const router = useRouter();
   const copy = action ? ACTION_COPY[action] : null;
@@ -106,7 +120,7 @@ export function SignupWall({ action, onClose }: SignupWallProps) {
   };
 
   return (
-    <Sheet open={copy != null} onClose={onClose} title={copy?.title} maxWidth={400}>
+    <Sheet open={copy != null} onClose={onClose} title={copy?.title} ariaLabel="Create your account" maxWidth={400}>
       {copy ? (
         <div className="flex flex-col px-5 pb-6 pt-4">
           <div className="flex items-start gap-3">
@@ -140,17 +154,20 @@ export function SignupWall({ action, onClose }: SignupWallProps) {
   );
 }
 
-/**
- * Gate an account-bound action behind the soft signup wall.
- *
- *   const { requireAuth, wall } = useSignupWall();
- *   const handleSave = () => {
- *     if (!requireAuth('save_item')) return;
- *     // ... proceed
- *   };
- *   // render {wall} once near the end of the component's JSX
- */
-export function useSignupWall() {
+// ── App-level provider ──────────────────────────────────────────────────
+// One provider at the app root owns the wall sheet and the gate. Per-item
+// consumers (every ProductTile, follow button, dock) read `requireAuth`
+// from context — a stable callback, so opening/closing the wall
+// re-renders the provider (the sheet) only, never the tile grid, and no
+// consumer registers into module state on mount/unmount.
+
+interface SignupWallContextValue {
+  requireAuth: (action: SignupAction) => boolean;
+}
+
+const SignupWallContext = createContext<SignupWallContextValue | null>(null);
+
+export function SignupWallProvider({ children }: { children: React.ReactNode }) {
   const { isGuest } = useSession();
   const { show } = useToast();
   const router = useRouter();
@@ -182,6 +199,35 @@ export function useSignupWall() {
 
   const close = useCallback(() => setAction(null), []);
 
-  const wall = <SignupWall action={action} onClose={close} />;
-  return { requireAuth, wall };
+  // Stable context value — the wall's open/close state lives in the
+  // provider's own render, outside the context object.
+  const value = useMemo(() => ({ requireAuth }), [requireAuth]);
+
+  return (
+    <SignupWallContext.Provider value={value}>
+      {children}
+      {/* The sheet — mounted exactly once, here. Sheet portals to
+          document.body, so its position in the tree is invisible. */}
+      <SignupWall action={action} onClose={close} />
+    </SignupWallContext.Provider>
+  );
+}
+
+/**
+ * Gate an account-bound action behind the soft signup wall.
+ *
+ *   const { requireAuth } = useSignupWall();
+ *   const handleSave = () => {
+ *     if (!requireAuth('save_item')) return;
+ *     // ... proceed
+ *   };
+ *
+ * The wall sheet is owned by the app-level SignupWallProvider — callers
+ * render nothing. The `wall` key stays in the return shape so existing
+ * `{wall}` renders keep compiling; it is always null.
+ */
+export function useSignupWall() {
+  const ctx = useContext(SignupWallContext);
+  if (!ctx) throw new Error('useSignupWall must be used within SignupWallProvider');
+  return { requireAuth: ctx.requireAuth, wall: null };
 }

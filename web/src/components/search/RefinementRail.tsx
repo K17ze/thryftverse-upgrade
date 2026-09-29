@@ -297,7 +297,7 @@ export function RefinementRail({
   return (
     <div className="pb-4">
       <div className="flex h-9 items-center justify-between">
-        <h2 className="text-label font-semibold uppercase tracking-wide text-text-muted">
+        <h2 className="text-label text-text-muted">
           Refine
         </h2>
         {activeCount > 0 ? (
@@ -330,7 +330,7 @@ export function RefinementRail({
                 }
                 className="pressable flex h-10 w-full items-center justify-between text-left"
               >
-                <span className="text-label font-semibold uppercase tracking-wide text-text-primary">
+                <span className="text-label text-text-primary">
                   {group.title}
                 </span>
                 <Icon
@@ -378,7 +378,7 @@ export function RefinementRail({
       </ul>
 
       <div className="pt-3">
-        <h3 className="text-label font-semibold uppercase tracking-wide text-text-muted">
+        <h3 className="text-label text-text-muted">
           Price
         </h3>
         <PriceGroup filters={filters} onChange={onChange} />

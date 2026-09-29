@@ -29,6 +29,17 @@ interface MarketAuctionDetailApi extends MarketAuctionApi {
   cancelledAt?: string | null;
   settledAt?: string | null;
   paidAt?: string | null;
+  /** Sweep-written post-end state ('awaiting_payment', 'reserve_not_met',
+   *  'payment_expired', 'second_chance_offered') — richer than the
+   *  timestamp-derived `lifecycle`, which stays 'ended' through them. */
+  status?: string;
+  /** Server-computed viewer max bid — the detail read carries it so the
+   *  client stops re-deriving it from a 50-bid window. */
+  viewerHighestBid?: number | null;
+  /** Monotonic per-auction event sequence — realtime gap detection. */
+  auctionSequence?: number | null;
+  /** Anti-sniping extension count applied so far. */
+  extensionCount?: number;
 }
 
 const TERMINAL_REASONS: ReadonlySet<string> = new Set([
@@ -51,7 +62,13 @@ function mapAuction(a: MarketAuctionDetailApi): AuctionMarketItem {
     reservePrice: typeof a.reservePriceGbp === 'number' ? a.reservePriceGbp : undefined,
     minimumNextBid:
       typeof a.minimumNextBidGbp === 'number' ? a.minimumNextBidGbp : undefined,
-    serverLifecycle: typeof a.lifecycle === 'string' ? a.lifecycle : undefined,
+    // `status` is the sweep-written post-end vocabulary (awaiting_payment
+    // /reserve_not_met/payment_expired/second_chance_offered) — prefer it
+    // over `lifecycle`, which stays 'ended' through the settlement states
+    // and would hide the pay-CTA preconditions.
+    serverLifecycle:
+      (typeof a.status === 'string' && a.status) ||
+      (typeof a.lifecycle === 'string' ? a.lifecycle : undefined),
     terminalReason:
       a.terminalReason != null && TERMINAL_REASONS.has(a.terminalReason)
         ? (a.terminalReason as AuctionTerminalReason)
@@ -59,6 +76,8 @@ function mapAuction(a: MarketAuctionDetailApi): AuctionMarketItem {
     paymentDeadlineAt: a.paymentDeadlineAt ?? null,
     secondChanceOfferedTo: a.secondChanceOfferedTo ?? null,
     winnerBidderId: a.winnerBidderId ?? null,
+    paidAt: a.paidAt ?? null,
+    viewerHighestBid: typeof a.viewerHighestBid === 'number' ? a.viewerHighestBid : null,
   };
 }
 
@@ -67,9 +86,11 @@ interface AuctionListResponse {
   items?: MarketAuctionDetailApi[];
   auctions?: MarketAuctionDetailApi[];
   nextCursor?: string | null;
+  /** Server clock at response time — stamped onto each mapped item. */
+  serverNow?: string;
 }
 
-function toQuery(params: Record<string, string | number | undefined | null>) {
+function toQuery(params: Record<string, string | number | boolean | undefined | null>) {
   const usp = new URLSearchParams();
   for (const [k, v] of Object.entries(params)) {
     if (v === undefined || v === null || v === '') continue;
@@ -79,15 +100,48 @@ function toQuery(params: Record<string, string | number | undefined | null>) {
   return s ? `?${s}` : '';
 }
 
+/** Stamp the response-level serverNow onto each mapped item so a single
+ *  field carries the server clock wherever the row travels. */
+function stampServerNow(
+  items: AuctionMarketItem[],
+  serverNow: string | undefined,
+): AuctionMarketItem[] {
+  if (!serverNow) return items;
+  for (const item of items) item.serverNow = serverNow;
+  return items;
+}
+
 export async function fetchAuctionBoard(
-  params: { sort?: string; category?: string; cursor?: string; limit?: number } = {},
+  params: {
+    /** Backend lifecycle filter — 'live' | 'scheduled' | 'ended' | 'all'
+     *  (default 'all' server-side). */
+    status?: string;
+    sort?: string;
+    category?: string;
+    /** CSV multi-select form of `category` (filter-sheet grammar). */
+    categories?: string;
+    /** Free-text title/brand search. */
+    query?: string;
+    /** 'me' narrows to the caller's own auctions (authed only). */
+    seller?: 'me';
+    /** Authed-only server-side watchlist filter — replaces the old
+     *  client intersection against board page 1. */
+    watchedOnly?: boolean;
+    priceMin?: number;
+    priceMax?: number;
+    cursor?: string;
+    limit?: number;
+  } = {},
   signal?: AbortSignal,
 ): Promise<{ items: AuctionMarketItem[]; nextCursor: string | null }> {
   const payload = await fetchJson<AuctionListResponse>(`/auctions${toQuery(params)}`, undefined, {
     signal,
   });
   return {
-    items: (payload.items ?? payload.auctions ?? []).map(mapAuction),
+    items: stampServerNow(
+      (payload.items ?? payload.auctions ?? []).map(mapAuction),
+      payload.serverNow,
+    ),
     nextCursor: payload.nextCursor ?? null,
   };
 }
@@ -106,17 +160,45 @@ export async function fetchAuctionHome(
   };
 }
 
-export async function fetchAuctionDetail(
+/** The detail serve's companion payload — its own bid ledger (which,
+ *  unlike the standalone /bids route on this deployment, carries bidder
+ *  usernames) and the server clock. */
+export interface AuctionDetailBundle {
+  auction: AuctionMarketItem;
+  /** Detail-echoed ledger, mapped — null when the serve carries no
+   *  bidActivity and the /bids read stays the fallback. */
+  bids: AuctionBid[] | null;
+}
+
+export async function fetchAuctionDetailBundle(
   id: string,
   signal?: AbortSignal,
-): Promise<AuctionMarketItem | null> {
-  const payload = await fetchJson<{ ok: boolean; auction?: MarketAuctionDetailApi }>(
+): Promise<AuctionDetailBundle | null> {
+  const payload = await fetchJson<{
+    ok: boolean;
+    auction?: MarketAuctionDetailApi;
+    bidActivity?: AuctionBidActivityApi[];
+    serverNow?: string;
+  }>(
     `/auctions/${encodeURIComponent(id)}`,
     undefined,
     { signal },
   );
   if (!payload.ok || !payload.auction) return null;
-  return mapAuction(payload.auction);
+  const auction = mapAuction(payload.auction);
+  if (payload.serverNow) auction.serverNow = payload.serverNow;
+  const bids = Array.isArray(payload.bidActivity)
+    ? payload.bidActivity.map((b) => mapAuctionBidActivity(b, auction.id))
+    : null;
+  return { auction, bids };
+}
+
+export async function fetchAuctionDetail(
+  id: string,
+  signal?: AbortSignal,
+): Promise<AuctionMarketItem | null> {
+  const bundle = await fetchAuctionDetailBundle(id, signal);
+  return bundle ? bundle.auction : null;
 }
 
 export async function fetchAuctionByListing(
@@ -186,6 +268,13 @@ export function newSecondChanceAttemptKey(auctionId: string): string {
  *  reused across retries of the same attempt. */
 export function newBuyNowAttemptKey(): string {
   return newAttemptKey('web-buy-now');
+}
+
+/** Stable key for one auction-create form session — minted when the
+ *  seller first commits the form and held across retries so a lost
+ *  response replays the created auction instead of double-listing it. */
+export function newAuctionCreateAttemptKey(): string {
+  return newAttemptKey('web-auction-create');
 }
 
 /**
@@ -602,6 +691,33 @@ export async function setAuctionWatched(auctionId: string, watched: boolean): Pr
 }
 
 /**
+ * Seller cancellation — POST /auctions/:auctionId/cancel
+ * (backend/api/src/routes/auctions.ts:625). Seller-only: the route 403s
+ * non-owners, 409s an already-cancelled auction, a settled run, and any
+ * run with a bound winner. Success ends the auction, notifies every
+ * bidder, and unpauses the listing.
+ */
+export interface CancelAuctionResult {
+  ok: true;
+  auctionId: string;
+  cancelledAt?: string;
+}
+
+export async function cancelAuction(
+  auctionId: string,
+  reason?: string,
+): Promise<CancelAuctionResult> {
+  return fetchJson<CancelAuctionResult>(
+    `/auctions/${encodeURIComponent(auctionId)}/cancel`,
+    {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(reason ? { reason } : {}),
+    },
+  );
+}
+
+/**
  * POST /auctions payload — mirrors the live route's Zod schema
  * (backend/api/src/index.ts:37308). No `reservePriceGbp`: the schema
  * drops it silently, so it must not be part of this contract — reserve
@@ -614,15 +730,45 @@ export interface CreateAuctionServiceInput {
   startingBidGbp: number;
   buyNowPriceGbp?: number;
   minIncrementGbp?: number;
+  /** One stable key per create form session (minted via
+   *  newAuctionCreateAttemptKey) — the backend dedupes on
+   *  (seller, idempotency_key) and replays the created auction. */
+  idempotencyKey?: string;
 }
 
 export async function createAuction(input: CreateAuctionServiceInput): Promise<AuctionMarketItem> {
-  const payload = await fetchJson<{ ok: true; auction: MarketAuctionDetailApi }>('/auctions', {
+  const payload = await fetchJson<{
+    ok: true;
+    idempotent?: boolean;
+    /** A fresh create echoes the full market row; an idempotent replay
+     *  answers the reduced shape (sellerId not the seller block, status
+     *  not lifecycle, no title/image) — the optional fields normalise it. */
+    auction: MarketAuctionDetailApi & {
+      seller?: MarketAuctionDetailApi['seller'];
+      lifecycle?: string;
+      title?: string;
+      imageUrl?: string | null;
+      sellerId?: string;
+      status?: string;
+    };
+  }>('/auctions', {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify(input),
   });
-  return mapAuction(payload.auction);
+  const raw = payload.auction;
+  return mapAuction({
+    ...raw,
+    seller: raw.seller ?? {
+      id: raw.sellerId ?? '',
+      username: 'unknown',
+      displayName: null,
+      avatarUrl: null,
+    },
+    title: raw.title ?? 'Untitled',
+    imageUrl: raw.imageUrl ?? null,
+    lifecycle: raw.lifecycle ?? raw.status ?? 'upcoming',
+  });
 }
 
 export async function fetchAuctionWatchlist(signal?: AbortSignal): Promise<AuctionMarketItem[]> {

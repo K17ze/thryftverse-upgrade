@@ -82,6 +82,9 @@ export interface Listing {
   subcategory?: string | null;
   description: string;
   createdAt?: string;
+  /** Row's last-write timestamp (GET /listings/:id) — the optimistic
+   *  concurrency token PATCH expects back as `expectedUpdatedAt`. */
+  updatedAt?: string;
   auctionEndsAt?: string | null;
   shippingMethod?: string | null;
   shippingPayer?: string | null;
@@ -99,6 +102,28 @@ export interface Listing {
   dispatchSlaDays?: number | null;
   featured?: boolean | null;
   sustainabilityGrade?: 'A' | 'B' | 'C' | 'D' | null;
+  /** Detail-payload engagement rollup (spec 04_DIRECT §5) — the PDP
+   *  demand line reads these; absent means the server didn't project
+   *  them, never "zero demand". */
+  activeOfferCount?: number;
+  collectionSaveCount?: number;
+  questionCount?: number;
+  /** Item-evidence columns emitted by GET /listings/:id. */
+  materialComposition?: string | null;
+  weightKg?: number | null;
+  /** Real authentication pipeline state (commerce block) — 'verified'
+   *  carries the badge label; 'in_progress' means a request is live;
+   *  'eligible'/'not_offered' make no public claim. */
+  authenticity?: {
+    status: 'not_offered' | 'eligible' | 'in_progress' | 'verified';
+    label?: string;
+  } | null;
+  /** Buyer-protection policy the commerce block declares for this item. */
+  protectionPolicy?: {
+    available: boolean;
+    label?: string | null;
+    summary?: string | null;
+  } | null;
 }
 
 /** Production discovery-tile contract — mirrors contracts/DiscoveryListingSummary.ts. */
@@ -250,8 +275,15 @@ export type DiscoveryFeedUnit =
 export interface User {
   id: string;
   username: string;
+  /** Display name distinct from the @handle — native ProfileHero leads
+   *  with it; the handle stays the identity anchor. */
+  displayName?: string;
   avatar: string;
   coverPhoto?: string;
+  /** Cover video URL — native renders a muted loop in the profile hero. */
+  coverVideo?: string;
+  /** Member-since timestamp — drives the "Joined {date}" trust line. */
+  createdAt?: string;
   rating: number;
   reviewCount: number;
   location: string;
@@ -280,6 +312,14 @@ export interface Review {
   text: string;
   date: string;
   isAutomatic: boolean;
+  /** Why the platform auto-generated the row (e.g. 'order_completed'). */
+  autoReason?: string | null;
+  /** Buyer-attached photo evidence (moderated URLs). */
+  photoUrls?: string[];
+  /** The seller's public response to the review, when they replied. */
+  sellerResponse?: { text: string; createdAt: string } | null;
+  /** The listing the reviewed order was for — context link on the row. */
+  listing?: { id: string; title: string; imageUrl: string | null } | null;
 }
 
 // ============================================================================
@@ -442,6 +482,36 @@ export interface NotificationEntry {
   href?: string;
   /** Explicit read cursor — fixtures carry it honestly. */
   unread?: boolean;
+  /** Actor id from the wire — powers the in-row Follow back on follow
+   *  rows, no directory lookup. */
+  actorUserId?: string;
+  /** Actor handle — the wire's web-resolvable username (/u/* target). */
+  actorUsername?: string;
+  /** Actor display name — leads the "X and N others…" grouped copy
+   *  (native actorDisplayName || actorUsername). */
+  actorDisplayName?: string;
+  /** Event timestamp — powers the 24h aggregation window. */
+  createdAt?: string;
+  /** V2 aggregation key from the wire (e.g. "listing:l5") — events
+   *  sharing it collapse into one card within the window. */
+  aggregationKey?: string;
+  /** V2 structured object reference — the grouped sentence's object
+   *  label and the entity behind the fallback group key. */
+  objectRef?: {
+    type: string;
+    id: string;
+    label?: string;
+    imageUrl?: string;
+  };
+  /** Member event ids behind an aggregated card — mark-read/dismiss fan
+   *  out to these; the synthetic `agg:` id is a render key, not a
+   *  server-resolvable event id. */
+  aggregatedIds?: string[];
+  /** Members that were unread when the card was built — mark-read fans
+   *  out to these only; already-read members 404 server-side. */
+  aggregatedUnreadIds?: string[];
+  /** Group size behind an aggregated card — drives the "+N" badge. */
+  aggregatedCount?: number;
 }
 
 // ============================================================================
@@ -655,8 +725,73 @@ export interface CommerceOrder extends Omit<Order, 'status'> {
   inspectionDeadlineAt?: string | null;
   /** Durable flag — the buyer paid for physical verification at checkout. */
   verificationRequested?: boolean;
+  /**
+   * Checkout instrument refs stamped on the order (detail read only —
+   * GET /orders/:id emits them, the list projection omits them). The
+   * order-bound checkout resume hydrates its selections from these, the
+   * same fields the native CommerceOrder carries.
+   */
+  addressId?: number | null;
+  paymentMethodId?: number | null;
+  /** Carrier id the bound shipping quote charged — detail read only. */
+  shippingCarrierId?: string | null;
   dispatchExtension?: DispatchExtension | null;
   fulfilmentSnapshot?: FulfilmentSnapshot | null;
+  /**
+   * Wire fee split (GBP) — GET /orders/:id carries the real charge lines.
+   * Present on live reads; fixture orders derive the same split from the
+   * catalogue inside commerceOrderDetailFor instead.
+   */
+  subtotalGbp?: number;
+  postageFeeGbp?: number;
+  buyerProtectionFeeGbp?: number;
+  /** The carrier/service the parcel actually shipped with. */
+  shippingProvider?: string | null;
+  /** ISO timestamp the buyer's payment captured — anchors the paid
+   *  milestone and the dispatch SLA clock. */
+  paidAt?: string | null;
+  /**
+   * Server-computed escrow projection (GET /orders/:id): the scheduled
+   * auto-release and the settled release timestamp (null until released).
+   */
+  moneyProjection?: {
+    estimatedReleaseAt: string | null;
+    releasedAt: string | null;
+  } | null;
+  /** Actual escrow-release instant — mirrors moneyProjection.releasedAt. */
+  releasedAt?: string | null;
+  /**
+   * Recorded seller SLA defect (migration 284) — the platform's
+   * auto-feedback sweep flagged the order past its effective ship-by. A
+   * platform notice, never buyer-authored feedback.
+   */
+  slaBreach?: {
+    breachType: string;
+    shipBy: string;
+    detectedAt: string;
+  } | null;
+  /** Hosted carrier label artifact — present once the label path ran. */
+  shippingLabelUrl?: string | null;
+  /**
+   * Checkout-reservation deadline (ISO) — a 'created' order holds the
+   * listing until this instant; the listing returns to sale after it.
+   * Emitted by the checkout responses; absent on older rows.
+   */
+  checkoutExpiresAt?: string | null;
+  /**
+   * Server-computed review flag — TRUE only when a buyer-authored review
+   * exists (platform auto-feedback rows don't set it). Emitted on the
+   * orders LIST read; the detail endpoint omits it — detail surfaces read
+   * the verdict from GET /orders/:id/review instead.
+   */
+  hasReview?: boolean;
+  /**
+   * Server-computed open-resolution flag — an open protection ticket or
+   * non-closed return case. Emitted on both the list and detail reads so
+   * the capability model never depends on a separately-fetched ticket
+   * store that may lag.
+   */
+  hasOpenResolution?: boolean;
 }
 
 // ============================================================================
@@ -672,6 +807,10 @@ export interface Look {
   itemIds: string[];
   likeCount?: number | null;
   createdAt?: string;
+  /** Creator identity — joined on the feed read so discovery tiles can
+   *  carry "shop this person" without a per-row profile fetch. */
+  creatorUsername?: string | null;
+  creatorAvatar?: string | null;
 }
 
 export interface Poster {
@@ -681,16 +820,27 @@ export interface Poster {
   aspectRatio?: number | null;
   caption?: string | null;
   createdAt?: string;
+  /** Author identity — joined on the feed read. */
+  authorUsername?: string | null;
+  authorAvatar?: string | null;
 }
 
 export interface Moodboard {
   id: string;
   ownerId: string;
   title: string;
+  description?: string | null;
   coverUri: string;
+  /** Curator display name + avatar — populated by the live API. */
+  curator?: string | null;
+  curatorAvatar?: string | null;
+  isPublic?: boolean;
+  /** Real item image URIs (up to 4) for collage thumbs. */
+  thumbs?: string[];
   aspectRatio?: number | null;
   itemCount?: number | null;
   createdAt?: string;
+  updatedAt?: string;
 }
 
 export interface Category {
@@ -777,4 +927,8 @@ export interface NewConversationInput {
   memberIds: string[];
   title?: string;
   description?: string;
+  /** Marketplace context — the listing the thread is about. The backend
+   *  binds it into conversation context so the thread renders the item
+   *  bar (POST /chat/dm + /chat/groups accept it). */
+  itemId?: string;
 }

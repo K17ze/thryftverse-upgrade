@@ -13,9 +13,11 @@ import Link from 'next/link';
 import { EmptyState } from '@/components/ui/EmptyState';
 import { useToast } from '@/components/ui/Toast';
 import { useSession } from '@/lib/session/SessionProvider';
+import { coOwnMarkGbp } from '@/lib/contracts/coown';
 import {
   useCoOwnAssets,
   useCoOwnOrders,
+  useCoOwnPortfolioMeta,
   useCoOwnPositions,
   useDistributionReceipts,
 } from '@/lib/hooks/coown-queries';
@@ -34,6 +36,7 @@ export function PortfolioView() {
   const positionsQ = useCoOwnPositions();
   const ordersQ = useCoOwnOrders();
   const receiptsQ = useDistributionReceipts();
+  const portfolioMetaQ = useCoOwnPortfolioMeta();
   const { cancelOrder: cancel } = useCancelCoOwnOrder();
   const { show } = useToast();
   // Session fills flow through the same assets snapshot — alerts evaluate
@@ -60,14 +63,20 @@ export function PortfolioView() {
       if (position.units <= 0) continue;
       const asset = byId.get(position.assetId);
       if (!asset) continue;
-      const value = position.units * asset.unitPriceGbp;
-      const cost = position.units * position.avgEntryPriceGbp;
+      // Prefer the server projection's own figures (live read) — mark,
+      // market value, cost basis and unrealised P&L all come back
+      // computed from the same mark basis. Fall back to the local mark
+      // only when the row carries no projection fields (fixtures).
+      const mark = position.markPriceGbp ?? coOwnMarkGbp(asset);
+      const value = position.marketValueGbp ?? position.units * mark;
+      const cost = position.costBasisGbp ?? position.units * position.avgEntryPriceGbp;
+      const plGbp = position.unrealisedPnlGbp ?? value - cost;
       out.push({
         position,
         asset,
         value,
-        plGbp: value - cost,
-        plPct: cost > 0 ? ((value - cost) / cost) * 100 : 0,
+        plGbp,
+        plPct: cost > 0 ? (plGbp / cost) * 100 : 0,
       });
     }
     return out.sort((a, b) => b.value - a.value);
@@ -79,19 +88,32 @@ export function PortfolioView() {
     const year =
       receipts.length > 0 ? new Date(receipts[0]!.exDate).getFullYear() : new Date().getFullYear();
     const ytd = receipts
-      .filter((r) => r.status === 'paid' && new Date(r.exDate).getFullYear() === year)
+      .filter(
+        (r) =>
+          (r.status === 'settled' || r.status === 'paid') &&
+          new Date(r.exDate).getFullYear() === year,
+      )
       .reduce((s, r) => s + r.totalGbp, 0);
     return { year, ytd };
   }, [receiptsQ.data]);
 
   const summary = useMemo(() => {
     const marketValue = rows.reduce((s, r) => s + r.value, 0);
-    const cost = rows.reduce((s, r) => s + r.position.units * r.position.avgEntryPriceGbp, 0);
+    // Derived from the row figures so the server's own cost basis /
+    // unrealised split (live read) flows through unchanged.
+    const cost = rows.reduce((s, r) => s + (r.value - r.plGbp), 0);
     const todayMove = rows.reduce(
       (s, r) => s + r.value * ((r.asset.marketMovePct24h ?? 0) / 100),
       0,
     );
-    const realized = (positionsQ.data ?? []).reduce((s, p) => s + p.realizedProfitGbp, 0);
+    // The live projection reports no realised P&L — null stays null and
+    // the summary renders '—' rather than a fabricated zero. Only when
+    // every row reports a figure (fixture/session rows) does it sum.
+    const positions = positionsQ.data ?? [];
+    const realized =
+      positions.length > 0 && positions.every((p) => p.realizedProfitGbp != null)
+        ? positions.reduce((s, p) => s + p.realizedProfitGbp!, 0)
+        : null;
     return {
       marketValue,
       cost,
@@ -123,11 +145,16 @@ export function PortfolioView() {
   );
 
   const cancelOrder = async (id: string) => {
-    const ok = await cancel(id);
-    show(
-      ok ? 'Order cancelled — unfilled units released' : "Couldn't cancel this order",
-      ok ? 'success' : 'error',
-    );
+    try {
+      const ok = await cancel(id);
+      show(
+        ok ? 'Order cancelled — unfilled units released' : "Couldn't cancel this order",
+        ok ? 'success' : 'error',
+      );
+    } catch (err) {
+      // Live mode throws — surface the backend's refusal verbatim.
+      show(err instanceof Error ? err.message : "Couldn't cancel this order", 'error');
+    }
   };
 
   if (sessionLoading || loading) return <PortfolioSkeleton />;
@@ -136,7 +163,7 @@ export function PortfolioView() {
   // read the demo identity's holdings.
   if (isGuest) {
     return (
-      <div className="mx-auto w-full max-w-5xl px-4 pb-20 pt-8 sm:px-6 md:pt-10">
+      <div className="mx-auto w-full max-w-5xl px-4 pb-20 pt-8 sm:px-6 md:pt-10 lg:max-w-[1440px]">
         <EmptyState
           icon="layers"
           title="Sign in to see your portfolio"
@@ -163,7 +190,7 @@ export function PortfolioView() {
   const hasPositions = rows.length > 0;
 
   return (
-    <div className="mx-auto w-full max-w-5xl px-4 pb-20 pt-8 sm:px-6 md:pt-10">
+    <div className="mx-auto w-full max-w-5xl px-4 pb-20 pt-8 sm:px-6 md:pt-10 lg:max-w-[1440px]">
       <header className="flex flex-wrap items-end justify-between gap-x-6 gap-y-3">
         <div>
           <h1 className="text-editorial-display text-text-primary">Portfolio</h1>
@@ -199,6 +226,22 @@ export function PortfolioView() {
           </Link>
         </nav>
       </header>
+
+      {/* Degraded read — the backend flagged the projection as partial,
+          so the totals below may undercount. Say so, don't imply
+          completeness. */}
+      {portfolioMetaQ.data?.partial ? (
+        <p
+          role="status"
+          className="mt-4 flex items-start gap-2 border-y border-warning-border bg-warning-subtle px-3 py-2.5 text-meta text-warning-text"
+        >
+          <svg viewBox="0 0 20 20" fill="currentColor" className="mt-0.5 h-3.5 w-3.5 shrink-0" aria-hidden="true">
+            <path fillRule="evenodd" d="M8.485 2.495c.673-1.167 2.357-1.167 3.03 0l6.28 10.875c.673 1.167-.17 2.625-1.516 2.625H3.72c-1.347 0-2.189-1.458-1.515-2.625L8.485 2.495zM10 6a.75.75 0 01.75.75v3.5a.75.75 0 01-1.5 0v-3.5A.75.75 0 0110 6zm0 9a1 1 0 100-2 1 1 0 000 2z" clipRule="evenodd" />
+          </svg>
+          The portfolio read degraded — some holdings may be missing
+          below. Retry in a moment.
+        </p>
+      ) : null}
 
       {hasPositions ? <PortfolioSummary {...summary} /> : (
         <div className="mt-8 border-b border-border-subtle pb-8">

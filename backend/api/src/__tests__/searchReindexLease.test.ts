@@ -156,7 +156,9 @@ test('lease acquisition is ONE atomic statement gated on expiry-or-same-holder',
     assert.match(sql, /INSERT INTO search_reindex_lease/);
     assert.match(sql, /ON CONFLICT \(name\) DO UPDATE/);
     // Takeover only when the existing lease expired or is already ours.
-    assert.match(sql, /expires_at < now\(\)/);
+    // clock_timestamp() (wall clock), not now() — correct even if a caller
+    // ever wraps the statement in a longer transaction.
+    assert.match(sql, /expires_at < clock_timestamp\(\)/);
     assert.match(sql, /holder = \$2/);
     // Fencing: the fence increments on every takeover and is returned.
     assert.match(sql, /fence = search_reindex_lease\.fence \+ 1/);
@@ -231,7 +233,7 @@ test('the heartbeat renews holder+fence-matched while work is in flight', async 
     const renewals = queriesMatching(/UPDATE search_reindex_lease/);
     assert.ok(renewals.length >= 1, 'heartbeat must renew the lease while work runs');
     const renewal = renewals[0];
-    assert.match(renewal.sql, /SET expires_at = now\(\)/);
+    assert.match(renewal.sql, /SET expires_at = clock_timestamp\(\)/);
     assert.match(renewal.sql, /WHERE name = \$1 AND holder = \$2 AND fence = \$3/);
     assert.match(String(renewal.params[1]), /^pid\d+-[0-9a-f-]{36}$/);
     assert.equal(renewal.params[2], 7, 'heartbeat is fenced to the acquired epoch');

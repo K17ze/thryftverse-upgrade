@@ -32,9 +32,13 @@ interface EditableMoodboardGridProps {
   selectedIds: ReadonlySet<string>;
   onToggleSelect: (id: string) => void;
   onRemove: (id: string) => void;
-  onMove: (id: string, direction: -1 | 1) => void;
-  /** Drop semantics — `draggedId` takes `targetId`'s slot in the order. */
-  onReorder: (draggedId: string, targetId: string) => void;
+  /** Optional — surfaces without an order contract (live collections:
+   *  the backend orders by added_at) omit it and the move affordances
+   *  hide rather than snap back. */
+  onMove?: (id: string, direction: -1 | 1) => void;
+  /** Drop semantics — `draggedId` takes `targetId`'s slot in the order.
+   *  Omitting it disables drag entirely. */
+  onReorder?: (draggedId: string, targetId: string) => void;
 }
 
 interface EditableTileProps {
@@ -45,9 +49,11 @@ interface EditableTileProps {
   selected: boolean;
   dragging: boolean;
   dropTarget: boolean;
+  /** False where no reorder contract exists — no drag, no move arrows. */
+  canReorder: boolean;
   onToggleSelect: () => void;
   onRemove: () => void;
-  onMove: (direction: -1 | 1) => void;
+  onMove?: (direction: -1 | 1) => void;
   onDragStart: (e: DragEvent<HTMLElement>) => void;
   onDragOver: (e: DragEvent<HTMLElement>) => void;
   onDragLeave: () => void;
@@ -63,6 +69,7 @@ function EditableTile({
   selected,
   dragging,
   dropTarget,
+  canReorder,
   onToggleSelect,
   onRemove,
   onMove,
@@ -80,7 +87,7 @@ function EditableTile({
   return (
     <article
       className={`group relative ${dragging ? 'opacity-40' : ''}`}
-      draggable={!selectMode}
+      draggable={!selectMode && canReorder}
       onDragStart={onDragStart}
       onDragOver={onDragOver}
       onDragLeave={onDragLeave}
@@ -118,12 +125,12 @@ function EditableTile({
               onClick={onToggleSelect}
               aria-pressed={selected}
               aria-label={`${selected ? 'Deselect' : 'Select'} ${item.title}`}
-              className="absolute inset-0 z-10 rounded-lg"
+              className="absolute inset-0 z-elevated rounded-lg"
             />
             <span
               aria-hidden
               className={[
-                'pointer-events-none absolute left-2 top-2 z-10 flex h-7 w-7 items-center justify-center rounded-full border',
+                'pointer-events-none absolute left-2 top-2 z-elevated flex h-7 w-7 items-center justify-center rounded-full border',
                 selected
                   ? 'border-transparent bg-brand text-text-inverse'
                   : 'border-scrim-text-primary/70 bg-overlay text-transparent',
@@ -140,32 +147,35 @@ function EditableTile({
               type="button"
               onClick={onRemove}
               aria-label={`Remove ${item.title} from board`}
-              className="pressable absolute right-0 top-0 z-10 flex h-11 w-11 items-center justify-center"
+              className="pressable absolute right-0 top-0 z-elevated flex h-11 w-11 items-center justify-center"
             >
               <Icon name="trash" size={17} className="text-scrim-text-primary drop-scrim" />
             </button>
             {/* Accessible reorder — the keyboard/touch path for the same
-                moves drag handles on pointer. Earlier = chevron-back. */}
-            <div className="absolute inset-x-0 bottom-0 z-10 flex items-center justify-between transition-opacity md:opacity-0 md:group-hover:opacity-100 md:group-focus-within:opacity-100">
-              <button
-                type="button"
-                onClick={() => onMove(-1)}
-                disabled={isFirst}
-                aria-label={`Move ${item.title} earlier`}
-                className="pressable flex h-11 w-11 items-center justify-center disabled:pointer-events-none disabled:opacity-30"
-              >
-                <Icon name="back" size={18} className="text-scrim-text-primary drop-scrim" />
-              </button>
-              <button
-                type="button"
-                onClick={() => onMove(1)}
-                disabled={isLast}
-                aria-label={`Move ${item.title} later`}
-                className="pressable flex h-11 w-11 items-center justify-center disabled:pointer-events-none disabled:opacity-30"
-              >
-                <Icon name="forward" size={18} className="text-scrim-text-primary drop-scrim" />
-              </button>
-            </div>
+                moves drag handles on pointer. Earlier = chevron-back. Hidden
+                where the board has no reorder contract (live collections). */}
+            {canReorder && onMove ? (
+              <div className="absolute inset-x-0 bottom-0 z-elevated flex items-center justify-between transition-opacity md:opacity-0 md:group-hover:opacity-100 md:group-focus-within:opacity-100">
+                <button
+                  type="button"
+                  onClick={() => onMove(-1)}
+                  disabled={isFirst}
+                  aria-label={`Move ${item.title} earlier`}
+                  className="pressable flex h-11 w-11 items-center justify-center disabled:pointer-events-none disabled:opacity-30"
+                >
+                  <Icon name="back" size={18} className="text-scrim-text-primary drop-scrim" />
+                </button>
+                <button
+                  type="button"
+                  onClick={() => onMove(1)}
+                  disabled={isLast}
+                  aria-label={`Move ${item.title} later`}
+                  className="pressable flex h-11 w-11 items-center justify-center disabled:pointer-events-none disabled:opacity-30"
+                >
+                  <Icon name="forward" size={18} className="text-scrim-text-primary drop-scrim" />
+                </button>
+              </div>
+            ) : null}
           </>
         )}
       </div>
@@ -250,9 +260,10 @@ export function EditableMoodboardGrid({
                 selected={selectedIds.has(item.id)}
                 dragging={dragId === item.id}
                 dropTarget={dropTargetId === item.id}
+                canReorder={!!onReorder}
                 onToggleSelect={() => onToggleSelect(item.id)}
                 onRemove={() => onRemove(item.id)}
-                onMove={(dir) => onMove(item.id, dir)}
+                onMove={onMove ? (dir) => onMove(item.id, dir) : undefined}
                 onDragStart={(e) => {
                   e.dataTransfer.setData('text/plain', item.id);
                   e.dataTransfer.effectAllowed = 'move';
@@ -269,7 +280,7 @@ export function EditableMoodboardGrid({
                 }}
                 onDrop={(e) => {
                   e.preventDefault();
-                  if (dragId && dragId !== item.id) onReorder(dragId, item.id);
+                  if (onReorder && dragId && dragId !== item.id) onReorder(dragId, item.id);
                   endDrag();
                 }}
                 onDragEnd={endDrag}

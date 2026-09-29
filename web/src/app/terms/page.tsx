@@ -56,7 +56,7 @@ export default function TermsPage() {
           prohibited and removed without refund of fees.
         </p>
         <p>
-          When an item sells you agree to dispatch within {DISPATCH_SLA_DAYS} working days using
+          When an item sells you agree to dispatch within {DISPATCH_SLA_DAYS} days using
           the label we provide. Payment is released to your wallet on
           confirmed delivery, minus our seller fee shown at listing time.
         </p>

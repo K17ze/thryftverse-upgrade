@@ -11,14 +11,17 @@
  */
 
 import { useRef, useState } from 'react';
+import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import { Button } from '@/components/ui/Button';
 import { EmptyState } from '@/components/ui/EmptyState';
+import { Tabs } from '@/components/ui/Tabs';
 import { Icon } from '@/components/ui/Icon';
 import { Sheet } from '@/components/ui/Sheet';
 import { useToast } from '@/components/ui/Toast';
 import { useCancelCoOwnOrder } from '@/components/trading/useCoOwnTrading';
 import type { PriceWindow } from '@/lib/contracts/coown';
+import { coOwnMarkGbp } from '@/lib/contracts/coown';
 import {
   useCoOwnActivity,
   useCoOwnAsset,
@@ -35,7 +38,9 @@ import {
 import { gbp } from '../format';
 import { useCoOwnWatchlist } from '@/lib/store/coownWatchlist';
 import { useHydrated } from '@/lib/store/useStore';
-import { useCoOwnAlerts, useEvaluateCoOwnAlerts } from '../alertStore';
+import { useOnlineStatus } from '@/lib/offline';
+import { useCoOwnOrderBookStream } from '@/lib/realtime/useCoOwnOrderBookStream';
+import { useCoOwnAlertsApi, useEvaluateCoOwnAlerts } from '../alertStore';
 import { CreateAlertSheet } from '../CreateAlertSheet';
 import { MovePill } from '../MovePill';
 import { ActivityTab } from './ActivityTab';
@@ -78,16 +83,19 @@ export function AssetDetailView({ id }: { id: string }) {
   const { data: actions } = useGovernanceActions(id);
   const { data: allAssets } = useCoOwnAssets();
   const hydrated = useHydrated();
-  // Persisted read — gate behind hydration so SSR and first paint agree.
-  const storedHasAlert = useCoOwnAlerts((s) =>
-    s.alerts.some((a) => a.assetId === id && a.active),
-  );
-  const hasAlert = hydrated && storedHasAlert;
+  // Live order book — SSE deltas write through the same query cache the
+  // REST snapshot owns, so every consumer (ladder, composer, spread band)
+  // stays in step without prop plumbing.
+  useCoOwnOrderBookStream(id);
+  const { isOffline } = useOnlineStatus();
+  // Mode-aware: server-persisted alerts in live mode, the device store
+  // under fixtures — `ready` plays the hydration role for both.
+  const { alerts, ready: alertsReady } = useCoOwnAlertsApi();
+  const hasAlert = alertsReady && alerts.some((a) => a.assetId === id && a.active);
   const storedWatching = useCoOwnWatchlist((s) => s.watchedIds.includes(id));
   const toggleWatch = useCoOwnWatchlist((s) => s.toggleWatch);
   const watching = hydrated && storedWatching;
-  // A session fill moves unitPriceGbp through this same query data —
-  // evaluate alerts every time the snapshot refreshes.
+  // Fixture-mode evaluator — no-op when the server owns evaluation.
   useEvaluateCoOwnAlerts();
 
   const [tab, setTab] = useState<Tab>('overview');
@@ -107,8 +115,14 @@ export function AssetDetailView({ id }: { id: string }) {
   const position = positions?.find((p) => p.assetId === id) ?? null;
 
   const cancel = async (orderId: string) => {
-    const ok = await cancelOrder(orderId);
-    show(ok ? 'Order cancelled — remainder released' : 'Could not cancel that order', ok ? 'info' : 'error');
+    try {
+      const ok = await cancelOrder(orderId);
+      show(ok ? 'Order cancelled — remainder released' : 'Could not cancel that order', ok ? 'info' : 'error');
+    } catch (err) {
+      // Live mode throws — the backend's refusal (locked, not yours,
+      // already filled) is the message worth showing.
+      show(err instanceof Error ? err.message : 'Could not cancel that order', 'error');
+    }
   };
 
   const pickLevel = (price: number, side: 'buy' | 'sell') => {
@@ -147,7 +161,7 @@ export function AssetDetailView({ id }: { id: string }) {
   );
 
   return (
-    <div className="mx-auto w-full max-w-6xl px-4 pb-44 pt-6 sm:px-6 md:pb-16 md:pt-8">
+    <div className="mx-auto w-full max-w-6xl px-4 pb-44 pt-6 sm:px-6 md:pb-16 md:pt-8 lg:max-w-[1440px]">
       <MarketHeader
         asset={asset}
         alertActive={hasAlert}
@@ -157,8 +171,43 @@ export function AssetDetailView({ id }: { id: string }) {
         actions={<AssetActionsMenu asset={asset} />}
       />
 
-      <div className="mt-8 grid gap-10 lg:grid-cols-12">
-        <div className="lg:col-span-7">
+      {/* Per-surface state strips — offline and book reconciliation.
+          The book is the most price-sensitive surface on the page, so a
+          stale or offline book says so rather than reading as fresh. */}
+      {isOffline ? (
+        <p
+          role="status"
+          className="mt-4 flex items-start gap-2 border-y border-warning-border bg-warning-subtle px-3 py-2.5 text-meta text-warning-text"
+        >
+          <Icon name="warning" size={14} className="mt-0.5 shrink-0" />
+          You&rsquo;re offline — prices and the order book are the last
+          snapshot, and orders can&rsquo;t be placed until you reconnect.
+        </p>
+      ) : book?.reconciliationState === 'reconciling' ? (
+        <p
+          role="status"
+          className="mt-4 flex items-start gap-2 border-y border-warning-border bg-warning-subtle px-3 py-2.5 text-meta text-warning-text"
+        >
+          <Icon name="warning" size={14} className="mt-0.5 shrink-0" />
+          The book is reconciling — the ladder below may be a few seconds
+          behind live fills.
+        </p>
+      ) : book?.reconciliationState === 'break' ? (
+        <p
+          role="status"
+          className="mt-4 flex items-start gap-2 border-y border-danger-border bg-danger-subtle px-3 py-2.5 text-meta text-danger-text"
+        >
+          <Icon name="warning" size={14} className="mt-0.5 shrink-0" />
+          Live updates dropped — the book is resyncing from the server.
+          Treat the ladder below as indicative until it reconnects.
+        </p>
+      ) : null}
+
+      {/* Contract trading surface: fluid chart/book column + fixed 400px
+          sticky trade rail at lg. Mobile keeps the stacked order with the
+          fixed bottom dock. */}
+      <div className="mt-8 grid gap-10 lg:grid-cols-[minmax(0,1fr)_400px]">
+        <div className="min-w-0">
           <PricePanel
             asset={asset}
             book={book ?? null}
@@ -223,36 +272,20 @@ export function AssetDetailView({ id }: { id: string }) {
           ) : null}
         </div>
 
-        <aside className="lg:col-span-5">
+        <aside className="min-w-0">
           <div className="lg:sticky lg:top-24">{tradePanel}</div>
         </aside>
       </div>
 
       <section className="mt-14" aria-label="Asset details">
-        <div
-          role="tablist"
-          aria-label="Asset details"
-          className="no-scrollbar -mx-4 flex gap-6 overflow-x-auto border-b border-border-subtle px-4 sm:mx-0 sm:px-0"
-        >
-          {TABS.map((t) => (
-            <button
-              key={t.value}
-              role="tab"
-              aria-selected={tab === t.value}
-              onClick={() => setTab(t.value)}
-              className={`pressable relative shrink-0 pb-3 text-body-emphasis ${
-                tab === t.value
-                  ? 'font-semibold text-text-primary'
-                  : 'text-text-secondary hover:text-text-primary'
-              }`}
-            >
-              {t.label}
-              {tab === t.value ? (
-                <span aria-hidden="true" className="absolute inset-x-0 -bottom-px h-0.5 bg-text-primary" />
-              ) : null}
-            </button>
-          ))}
-        </div>
+        <Tabs<Tab>
+          tabs={TABS.map((t) => ({ key: t.value, label: t.label }))}
+          active={tab}
+          onChange={setTab}
+          ariaLabel="Asset details"
+          className="-mx-4 sm:-mx-6"
+          railClassName="px-1 sm:px-3"
+        />
 
         <div role="tabpanel" className="mt-7">
           {tab === 'overview' ? <OverviewTab asset={asset} diligence={diligence} /> : null}
@@ -274,6 +307,29 @@ export function AssetDetailView({ id }: { id: string }) {
 
       <RiskDisclosure />
 
+      {/* Concierge line — same posture as the mobile asset footer: a
+          human-readable route into support, anchored to this market. */}
+      <p className="mt-8 flex items-start gap-2 text-meta text-text-muted">
+        <Icon name="chat" size={15} className="mt-0.5 shrink-0" />
+        <span>
+          Questions about this market?{' '}
+          <Link
+            href="/support"
+            className="font-medium text-text-secondary underline-offset-4 hover:text-text-primary hover:underline"
+          >
+            Talk to support
+          </Link>
+          {' '}or{' '}
+          <Link
+            href={`/co-own/${asset.id}/issue`}
+            className="font-medium text-text-secondary underline-offset-4 hover:text-text-primary hover:underline"
+          >
+            report an issue
+          </Link>
+          .
+        </span>
+      </p>
+
       {/* Mobile trade dock — price + entry point; the composer lives in the Sheet */}
       <div
         className="fixed inset-x-0 z-sticky border-t border-border-subtle bg-header/95 backdrop-blur-xl md:hidden"
@@ -282,7 +338,7 @@ export function AssetDetailView({ id }: { id: string }) {
         <div className="flex items-center justify-between gap-3 px-4 py-3">
           <div className="min-w-0">
             <p className="text-body-emphasis font-semibold text-text-primary tnum">
-              {gbp(asset.unitPriceGbp)}
+              {gbp(coOwnMarkGbp(asset))}
             </p>
             <MovePill pct={asset.marketMovePct24h} className="mt-0.5" />
           </div>

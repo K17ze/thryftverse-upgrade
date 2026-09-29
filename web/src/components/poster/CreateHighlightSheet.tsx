@@ -16,6 +16,8 @@ import { EmptyState } from '@/components/ui/EmptyState';
 import { Icon } from '@/components/ui/Icon';
 import { Sheet } from '@/components/ui/Sheet';
 import { useToast } from '@/components/ui/Toast';
+import { DATA_MODE } from '@/lib/api/client';
+import * as socialService from '@/lib/api/services/social';
 import {
   usePosterArchive,
 } from '@/lib/store/posterArchive';
@@ -97,16 +99,18 @@ export function CreateHighlightSheet({
     });
   };
 
-  const canCreate = title.trim().length > 0 && picked.size > 0;
+  const [creating, setCreating] = useState(false);
+  const canCreate = title.trim().length > 0 && picked.size > 0 && !creating;
 
   const handleCreate = () => {
-    if (!canCreate) {
+    if (!title.trim() || picked.size === 0) {
       show(
         !title.trim() ? 'Give your highlight a name' : 'Select at least one frame',
         'error',
       );
       return;
     }
+    if (creating) return;
     const ordered = [...picked.values()];
     const cover = (coverKey ? picked.get(coverKey) : undefined) ?? ordered[0];
     const highlight: PosterHighlight = {
@@ -119,6 +123,31 @@ export function CreateHighlightSheet({
         caption: f.caption,
       })),
     };
+    if (DATA_MODE === 'live') {
+      // Live mode persists through POST /poster-highlights — the local
+      // store is the fixture-session overlay only.
+      setCreating(true);
+      void (async () => {
+        try {
+          await socialService.createPosterHighlight({
+            id:
+              typeof crypto !== 'undefined' && crypto.randomUUID
+                ? `hl_${crypto.randomUUID()}`
+                : `hl_${Date.now().toString(36)}`,
+            title: highlight.title,
+            coverFrameId: cover.frameId,
+            frameIds: ordered.map((f) => f.frameId),
+          });
+          show('Highlight created', 'success');
+          onCreated(highlight);
+        } catch {
+          show('Could not create the highlight', 'error');
+        } finally {
+          setCreating(false);
+        }
+      })();
+      return;
+    }
     createHighlight(highlight);
     show('Highlight created', 'success');
     onCreated(highlight);

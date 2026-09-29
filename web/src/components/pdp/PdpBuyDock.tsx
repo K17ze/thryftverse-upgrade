@@ -25,8 +25,15 @@ import { useIsBlockedUser } from '@/components/inbox/inboxSafety';
 import { recordSentOffer } from '@/lib/data/fixtures-commerce';
 import { useMyListingOffer, useSellerTrustSummary } from '@/lib/hooks/pdp-queries';
 import { formatPrice } from '@/lib/utils/format';
-import { OfferSheet } from './OfferSheet';
+import dynamic from 'next/dynamic';
 import type { Listing } from '@/lib/contracts/domain';
+
+// Offer composer — the same sheet the buy panel opens; mounts only behind
+// the dock's offer action, so the chunk fetches on first open.
+const OfferSheet = dynamic(
+  () => import('./OfferSheet').then((m) => m.OfferSheet),
+  { ssr: false },
+);
 
 export function PdpBuyDock({ listing }: { listing: Listing }) {
   const router = useRouter();

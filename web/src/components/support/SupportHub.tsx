@@ -13,6 +13,7 @@ import { EmptyState } from '@/components/ui/EmptyState';
 import { Icon } from '@/components/ui/Icon';
 import { IconButton } from '@/components/ui/IconButton';
 import { Skeleton } from '@/components/ui/Skeleton';
+import { Tabs } from '@/components/ui/Tabs';
 import { useToast } from '@/components/ui/Toast';
 import { POPULAR_ARTICLES } from '@/lib/data/fixtures-support';
 import { SUPPORT_TOPICS, type SupportTopicId } from '@/lib/contracts/support';
@@ -64,9 +65,12 @@ export function SupportHub() {
     router.push(`/support/${ticketId}`);
   };
 
-  if (sessionLoading || isLoading) return <HubSkeleton />;
+  if (sessionLoading || (!isGuest && isLoading)) return <HubSkeleton />;
 
-  if (isError || !tickets) {
+  // Guests never run the list query (enabled: !!user) — `tickets` stays
+  // undefined for them, so the error guard must not read that as a
+  // failed fetch; the sign-in wall below is their state.
+  if (!isGuest && (isError || !tickets)) {
     return (
       <EmptyState
         icon="help"
@@ -78,67 +82,56 @@ export function SupportHub() {
     );
   }
 
-  const isOpen = (s: (typeof tickets)[number]['status']) =>
+  const list = tickets ?? [];
+
+  const isOpen = (s: (typeof list)[number]['status']) =>
     s === 'open' || s === 'in_review';
-  const openCount = tickets.filter((t) => isOpen(t.status)).length;
-  const visible = filter === 'open' ? tickets.filter((t) => isOpen(t.status)) : tickets;
+  const openCount = list.filter((t) => isOpen(t.status)).length;
+  const visible = filter === 'open' ? list.filter((t) => isOpen(t.status)) : list;
 
   return (
     <div className="pb-16">
       <div className="flex items-center gap-1 px-2 pt-1 sm:px-4">
         <IconButton name="back" aria-label="Back" onClick={() => router.back()} />
-        <h1 className="text-screen-title font-semibold text-text-primary">Support</h1>
+        <h1 className="text-screen-title text-text-primary">Support</h1>
       </div>
       <p className="mt-1 px-4 text-caption text-text-secondary sm:px-6">
         Cases, answers and ways to reach us.
       </p>
 
+      {/* Desktop split — the resolution centre is the primary column;
+          articles + contact ride a sticky right rail so the case list
+          stays beside them (Linear/Vinted grammar). Mobile keeps the
+          authored vertical order unchanged. */}
+      <div className="lg:grid lg:grid-cols-[minmax(0,1fr)_380px] lg:items-start lg:gap-x-8 xl:grid-cols-[minmax(0,1fr)_400px] xl:gap-x-12">
       {/* Resolution centre — the case list is the entry point */}
       <section aria-label="Resolution centre" className="mt-8">
         <div className="flex items-baseline justify-between px-4 sm:px-6">
           <h2 className="text-section-title font-semibold text-text-primary">Resolution centre</h2>
           <p className="tnum text-caption text-text-muted">
-            {openCount} open · {tickets.length} total
+            {openCount} open · {list.length} total
           </p>
         </div>
         <p className="mt-1 px-4 text-caption text-text-secondary sm:px-6">
           Order issues, refunds and verification cases.
         </p>
 
-        {/* Open/All filter chips — mirrors the mobile ResolutionCentre
-            scope filter. Counts sit inside the chips so the header stays
-            a single line. */}
-        <div role="tablist" aria-label="Filter cases" className="mt-3 flex gap-2 px-4 sm:px-6">
-          {(
-            [
-              { key: 'open', label: 'Open', count: openCount },
-              { key: 'all', label: 'All', count: tickets.length },
-            ] as const
-          ).map((opt) => {
-            const selected = filter === opt.key;
-            return (
-              <button
-                key={opt.key}
-                type="button"
-                role="tab"
-                aria-selected={selected}
-                onClick={() => setFilter(opt.key)}
-                className={`pressable inline-flex min-h-11 items-center gap-1.5 rounded-full border px-4 text-body font-medium ${
-                  selected
-                    ? 'border-brand bg-brand text-text-inverse'
-                    : 'border-border text-text-secondary hover:border-text-muted'
-                }`}
-              >
-                {opt.label}
-                <span className={`tnum ${selected ? 'text-text-inverse/70' : 'text-text-muted'}`}>
-                  {opt.count}
-                </span>
-              </button>
-            );
-          })}
-        </div>
+        {/* Open/All scope filter — the app Tabs grammar (APG roving
+            tabindex + arrows), counts as quiet tab meta. Its hairline
+            doubles as the list's top rule. */}
+        <Tabs
+          className="mt-3"
+          railClassName="px-1 sm:px-3"
+          tabs={[
+            { key: 'open' as const, label: 'Open', count: openCount },
+            { key: 'all' as const, label: 'All', count: list.length },
+          ]}
+          active={filter}
+          onChange={setFilter}
+          ariaLabel="Filter cases"
+        />
 
-        <div className="mt-3 border-t border-border-subtle">
+        <div>
           {isGuest ? (
             // Fixture seeds belong to the demo identity — guests get a
             // sign-in prompt, never 'me' data.
@@ -152,7 +145,7 @@ export function SupportHub() {
             />
           ) : visible.length > 0 ? (
             visible.map((ticket) => <TicketListRow key={ticket.id} ticket={ticket} />)
-          ) : tickets.length > 0 ? (
+          ) : list.length > 0 ? (
             <EmptyState
               compact
               icon="folder"
@@ -170,8 +163,13 @@ export function SupportHub() {
         </div>
       </section>
 
+      {/* Right rail on desktop — articles and contact compose beside
+          the case list; on mobile the aside is a plain block so the
+          sections keep their authored order. */}
+      <aside className="lg:sticky lg:top-20 lg:self-start">
+
       {/* Popular articles */}
-      <section aria-label="Popular articles" className="mt-10 px-4 sm:px-6">
+      <section aria-label="Popular articles" className="mt-10 px-4 sm:px-6 lg:mt-8">
         <h2 className="text-section-title font-semibold text-text-primary">Popular articles</h2>
         <div className="mt-3">
           <ArticleAccordion articles={POPULAR_ARTICLES} />
@@ -244,6 +242,8 @@ export function SupportHub() {
           Fixture mode — cases are stored for this session only and reset on reload.
         </p>
       ) : null}
+      </aside>
+      </div>
     </div>
   );
 }

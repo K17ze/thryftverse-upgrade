@@ -19,6 +19,11 @@ import { Avatar } from '@/components/ui/Avatar';
 import { Icon, type AppIconName } from '@/components/ui/Icon';
 import { ProductTile } from '@/components/cards/ProductTile';
 
+/** Unauthored editorial units default to this cinematic ratio — the
+ *  tile render and the masonry distributor must share the same value or
+ *  the column heights lie. */
+export const DEFAULT_EDITORIAL_ASPECT_RATIO = 1.9;
+
 /**
  * Content-type badge — the glanceable unit identifier (Instagram's
  * documented micro-badge fix). A clearly contrasted scrim chip holding a
@@ -46,7 +51,7 @@ export function LookTile({ unit, priority }: { unit: LookFeedUnit; priority?: bo
           src={unit.coverImageUri}
           alt="Look"
           aspectRatio={unit.coverAspectRatio ?? 0.75}
-          sizes="(max-width: 640px) 50vw, (max-width: 1024px) 33vw, 20vw"
+          sizes="(max-width: 480px) 50vw, (max-width: 768px) 33vw, (max-width: 1200px) 25vw, (max-width: 1600px) 20vw, 15vw"
           priority={priority}
           className="media-zoom"
         />
@@ -80,7 +85,7 @@ export function PosterTile({ unit, priority }: { unit: PosterFeedUnit; priority?
           src={unit.coverUri}
           alt="Poster"
           aspectRatio={unit.aspectRatio ?? 0.75}
-          sizes="(max-width: 640px) 50vw, (max-width: 1024px) 33vw, 20vw"
+          sizes="(max-width: 480px) 50vw, (max-width: 768px) 33vw, (max-width: 1200px) 25vw, (max-width: 1600px) 20vw, 15vw"
           priority={priority}
           className="media-zoom"
         />
@@ -106,7 +111,7 @@ export function MoodboardTile({ unit, priority }: { unit: MoodboardFeedUnit; pri
           src={unit.coverUri}
           alt={unit.title ?? 'Moodboard'}
           aspectRatio={unit.aspectRatio ?? 0.8}
-          sizes="(max-width: 640px) 50vw, (max-width: 1024px) 33vw, 20vw"
+          sizes="(max-width: 480px) 50vw, (max-width: 768px) 33vw, (max-width: 1200px) 25vw, (max-width: 1600px) 20vw, 15vw"
           priority={priority}
           className="media-zoom"
         />
@@ -127,7 +132,7 @@ export function EditorialTile({ unit, priority }: { unit: EditorialFeedUnit; pri
       <AppImage
         src={unit.mediaUri}
         alt={unit.headline ?? 'Editorial'}
-        aspectRatio={unit.aspectRatio ?? 1.9}
+        aspectRatio={unit.aspectRatio ?? DEFAULT_EDITORIAL_ASPECT_RATIO}
         sizes="(max-width: 640px) 100vw, 90vw"
         priority={priority}
         className="media-zoom"

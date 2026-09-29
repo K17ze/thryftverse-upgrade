@@ -80,7 +80,7 @@ export function ForgotPasswordView() {
         Back
       </Link>
 
-      <h1 className="text-screen-title font-bold text-text-primary">Reset password</h1>
+      <h1 className="text-screen-title text-text-primary">Reset password</h1>
 
       {sent ? (
         <div className="mt-8 flex flex-col items-center text-center">

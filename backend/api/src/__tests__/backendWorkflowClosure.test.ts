@@ -986,6 +986,9 @@ test('upload finalization ignores client metadata and verifies the canonical pre
     verifyUploadedObject: async (...args) => {
       verified.push(args);
     },
+    // No Redis in the unit harness — the enqueue seam is stubbed so the
+    // handler resolves instead of waiting on a broker connection.
+    enqueueMediaIngest: async () => {},
   });
 
   const handler = handlers.get('POST /uploads/finalize');

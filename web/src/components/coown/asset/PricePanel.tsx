@@ -22,6 +22,7 @@ import type {
   OrderBookSnapshot,
   PriceWindow,
 } from '@/lib/contracts/coown';
+import { coOwnMarkGbp } from '@/lib/contracts/coown';
 import { gbp, gbpCompact, signedPct } from '../format';
 
 const WINDOWS: { value: PriceWindow; label: string }[] = [
@@ -98,6 +99,10 @@ export function PricePanel({
   const move = asset.marketMovePct24h;
   const moveFlat = move != null && Math.abs(move) < 0.05;
   const moveUp = move != null && move >= 0;
+  // The headline quote is the market mark — the last settled secondary
+  // print where one exists, the issuance price before the market opens.
+  const mark = coOwnMarkGbp(asset);
+  const hasPrinted = asset.lastTradePriceGbp != null && asset.lastTradePriceGbp > 0;
 
   const hasDetails =
     bestBid != null ||
@@ -110,9 +115,11 @@ export function PricePanel({
       {/* Quote hero — the unit price in natural language first. */}
       <div className="flex flex-wrap items-end gap-x-3 gap-y-1">
         <p className="text-price-hero font-semibold leading-none text-text-primary tnum">
-          {gbp(asset.unitPriceGbp)}
+          {gbp(mark)}
         </p>
-        <p className="pb-0.5 text-meta text-text-muted">per unit</p>
+        <p className="pb-0.5 text-meta text-text-muted">
+          per unit{hasPrinted ? ' · last trade' : ' · issue price'}
+        </p>
       </div>
       {move != null ? (
         <p
@@ -152,6 +159,24 @@ export function PricePanel({
       <p className="mt-3 text-caption text-text-muted">
         Issuer-run fractional market · not a public exchange
       </p>
+      {/* Freshness/provenance — the detail wire's market snapshot verdict.
+          A stale or closed mark says so rather than reading as live. */}
+      {asset.marketSnapshot ? (
+        <p className="mt-1 text-caption tnum text-text-muted">
+          {asset.marketSnapshot.connectionStatus === 'live'
+            ? 'Live pricing'
+            : asset.marketSnapshot.connectionStatus === 'stale'
+              ? 'Pricing may be stale'
+              : 'Market closed'}
+          {' · figures as of '}
+          <time dateTime={asset.marketSnapshot.sourceAsOf}>
+            {new Date(asset.marketSnapshot.sourceAsOf).toLocaleTimeString('en-GB', {
+              hour: '2-digit',
+              minute: '2-digit',
+            })}
+          </time>
+        </p>
+      ) : null}
 
       <div className="mt-5 flex flex-wrap items-center justify-between gap-3">
         <div className="flex flex-wrap items-center gap-3">
@@ -191,7 +216,7 @@ export function PricePanel({
                   data={history}
                   ariaLabel={`${asset.title} unit price, ${activeWindow} window`}
                   windowLabel={activeWindow}
-                  currentPrice={asset.unitPriceGbp}
+                  currentPrice={mark}
                 />
               )}
               {history.length >= 2 ? (

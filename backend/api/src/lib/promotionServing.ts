@@ -56,8 +56,13 @@ export const PROMOTED_REASON_CODE = 'paid_placement';
 
 export interface PromotionContextFilters {
   category?: string | null;
+  /** Multi-select category filter — listing category must be in the set
+   *  (case-insensitive, mirrors the search route's `categories` CSV). */
+  categories?: string[] | null;
   /** Exact condition match — same semantics as the search filter sheet. */
   condition?: string | null;
+  /** Multi-select condition filter — listing condition must be in the set. */
+  conditions?: string[] | null;
   /** Exact size match (single-select size filter). */
   size?: string | null;
   /** Multi-select brand filter — listing brand must be in the set. */
@@ -471,15 +476,29 @@ export async function fetchPromotedListingsForQuery(
   // filter set the organic query applied. Clauses mirror
   // computeSearchResults in routes/searchExtended.ts.
   const filters = options.filters;
-  const category = filters?.category?.trim();
-  if (category) {
-    params.push(category);
-    clauses.push(`l.category = $${params.length}`);
+  const categories = filters?.categories?.map((c) => c.trim()).filter(Boolean);
+  if (categories && categories.length > 0) {
+    // Case-insensitive set match — search slugs ('women') must satisfy
+    // the same predicate as the organic query's LOWER() comparison.
+    params.push(categories.map((c) => c.toLowerCase()));
+    clauses.push(`LOWER(l.category) = ANY($${params.length})`);
+  } else {
+    const category = filters?.category?.trim();
+    if (category) {
+      params.push(category.toLowerCase());
+      clauses.push(`LOWER(l.category) = $${params.length}`);
+    }
   }
-  const condition = filters?.condition?.trim();
-  if (condition) {
-    params.push(condition);
-    clauses.push(`l.condition = $${params.length}`);
+  const conditions = filters?.conditions?.map((c) => c.trim()).filter(Boolean);
+  if (conditions && conditions.length > 0) {
+    params.push(conditions);
+    clauses.push(`l.condition = ANY($${params.length})`);
+  } else {
+    const condition = filters?.condition?.trim();
+    if (condition) {
+      params.push(condition);
+      clauses.push(`l.condition = $${params.length}`);
+    }
   }
   const size = filters?.size?.trim();
   if (size) {

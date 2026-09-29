@@ -23,6 +23,7 @@ import {
 } from '@tanstack/react-query';
 import { useCallback, useRef } from 'react';
 import { data, DATA_MODE } from '@/lib/api/client';
+import * as feedService from '@/lib/api/services/feed';
 import * as recommendations from '@/lib/api/services/recommendations';
 import type {
   DiscoveryFeedUnit,
@@ -116,7 +117,7 @@ export function useHomeFeed() {
         };
       }
 
-      const page = await data.feed(pageParam ?? undefined);
+      const page = await data.feed(pageParam ?? undefined, signal);
       return {
         units: page.units,
         nextCursor: page.nextCursor,
@@ -129,6 +130,45 @@ export function useHomeFeed() {
       };
     },
     getNextPageParam: (last) => last.nextCursor,
+  });
+}
+
+/**
+ * Following feed — the authoritative live source: GET
+ * /feed/following/listings returns followed sellers' active listings in
+ * one joined query (native semantic: per-seller inventory fetch, merged
+ * newest-first). Disabled unless live + signed in — the caller keeps the
+ * local-follows fixture path for guest/fixture sessions. `staleTime` is
+ * 0 so a follow/unfollow mutation is reflected on the next mount.
+ */
+export function useFollowingFeed(enabled: boolean) {
+  const { user } = useSession();
+  const userId = user?.id ?? null;
+  return useInfiniteQuery({
+    queryKey: ['following-feed', DATA_MODE, userId ?? 'guest'],
+    enabled: enabled && DATA_MODE === 'live' && userId !== null,
+    initialPageParam: undefined as string | undefined,
+    queryFn: ({ pageParam, signal }) =>
+      feedService.fetchFollowingListings(signal, { cursor: pageParam, limit: 24 }),
+    getNextPageParam: (last) => last.nextCursor ?? undefined,
+  });
+}
+
+/**
+ * Explore feed — the browse surface's read of the same feed contract as
+ * the home fallback (`data.feed` → `/feed/home` in live, the authored
+ * fixture page otherwise). Unlike `useFeed` — the single-page query the
+ * other surfaces share — this threads `nextCursor` through
+ * `useInfiniteQuery` so the Explore masonry actually paginates. Fixture
+ * mode serves its one authored page and reports no cursor, so the tail
+ * marker is honest in both modes.
+ */
+export function useExploreFeed() {
+  return useInfiniteQuery({
+    queryKey: ['explore-feed', DATA_MODE],
+    initialPageParam: undefined as string | undefined,
+    queryFn: ({ pageParam, signal }) => data.feed(pageParam, signal),
+    getNextPageParam: (last) => last.nextCursor ?? undefined,
   });
 }
 
@@ -245,7 +285,7 @@ export function useIntentTopics() {
     queryKey: ['intent-topics', userId ?? 'guest'],
     enabled: DATA_MODE === 'live' && userId !== null,
     staleTime: 60_000,
-    queryFn: () =>
-      userId ? recommendations.fetchIntentTopics(userId) : Promise.resolve(null),
+    queryFn: ({ signal }) =>
+      userId ? recommendations.fetchIntentTopics(userId, signal) : Promise.resolve(null),
   });
 }

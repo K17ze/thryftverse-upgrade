@@ -133,8 +133,8 @@ export default function SellerPromotionsPage() {
   const rows = promotions.data ?? [];
 
   return (
-    <div className="mx-auto w-full max-w-3xl px-4 pb-16 pt-8 sm:px-6 md:pt-12">
-      <h1 className="text-screen-title font-semibold text-text-primary">Promoted listings</h1>
+    <div className="mx-auto w-full max-w-3xl px-4 pb-16 pt-8 sm:px-6 md:pt-12 lg:max-w-[1440px]">
+      <h1 className="text-screen-title text-text-primary">Promoted listings</h1>
       <SellerSectionNav toPost={counts.toPost} posted={counts.posted} />
 
       {promotions.isLoading ? (

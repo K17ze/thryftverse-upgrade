@@ -355,6 +355,47 @@ tsc 0 · eslint 0/0 · build 80 routes clean · 100/100 routes 200 ·
 0 dead controls · 0 console-error risks found in code audit (hydration-safe
 Date.now usage confirmed; SSR renders skeletons for client-fetched surfaces)
 
+---
+
+## SESSION — shared-backend hardening + end-to-end wiring completion (2026-09-27)
+
+### Parallel login (mobile + web simultaneously) — verified and hardened
+- **Backend contract verified** (`backend/api/src/lib/auth.ts`): every login
+  issues its own `user_sessions` row + opaque refresh token; rotation
+  (`rotateRefreshSession`) revokes only the current token row under the SAME
+  session; logout (`revokeSessionByRefreshToken`) revokes only that session.
+  Mobile and web logins are independent sessions against one Postgres DB —
+  parallel sign-in works by design.
+- **Same backend + DB verified**: mobile `EXPO_PUBLIC_API_BASE_URL` and web
+  `NEXT_PUBLIC_API_BASE_URL` both default to `http://localhost:4000`; one
+  Fastify app, one `DATABASE_URL`.
+- **Web multi-tab race fixed** (`web/src/lib/api/http.ts`): two tabs sharing
+  one session could rotate the refresh token concurrently — the loser got
+  "revoked" and dropped the session. Fixes:
+  1. `storage`-event listener adopts another tab's rotated session (and
+     logout) instead of silently holding a dead token;
+  2. refresh retry-once: on a rejected refresh, re-read localStorage — if
+     the stored token differs from the one tried (the other tab rotated),
+     retry with it before declaring the session dead;
+  3. refresh outcomes split into refreshed / rejected / transient — network
+     blips no longer clear the session or emit session-expired;
+  4. `userId` now parsed on hydration (was dropped, breaking
+     `/users/:id/*` self-scoped calls after reload).
+
+### End-to-end wiring completed (fixture-only surfaces → live)
+- **Poster detail** → `GET /poster-stories/:storyId` (frames → slides +
+  captions; archive-shaped projection powers owner features)
+- **Moodboard detail** → `GET /moodboards/:id` (board + items; shoppable
+  items hydrate real listings in parallel; import-only media pins without a
+  listingId are skipped honestly rather than fabricating Listing fields)
+- **Profile looks (own + public)** → `GET /looks?creatorId=` on both
+  `/profile` and `/u/[username]`; fixture mode unchanged
+
+### Verified
+tsc 0 · eslint 0/0 · build clean (127 routes incl. user's parallel work) ·
+127/127 routes 200 (the one flagged 404 was a test-artifact placeholder id;
+the real demand id returns 200)
+
 ## WAVE 11 — cross-reference parity upgrade (Polymarket + TradingView + eBay + Vinted + Instagram)
 
 8 parallel workstreams mapped each department to its closest reference grammar; orchestrator handled notifications + integration.
@@ -412,3 +453,44 @@ Verified: tsc 0 · eslint 0/0 · clean build 97/97 static pages · 66-route prod
 - **Odds** — group ownership transfer wired to real endpoint + MemberActionsSheet row; TileVideo viewability autoplay (muted, reduced-motion/data-saver respect — activates on real video media); PDP lightbox dblclick zoom fix; visual-search camera capture; verified already-done: trade receipt, order→DM, /seller-hub/promotions.
 
 Verified: tsc 0 · eslint 0/0 · clean build 98 routes · 18-route smoke all 200 · functional QA (bundle select→ledger→CTA, sell strip+camera entry, closet mosaic+price-drop) · zero console errors.
+
+## Copilot PR review pass — 16 findings resolved
+
+CI/runtime: secret-scan pinned to gitleaks-action@83373cf2 (immutable SHA for v2.3.7) + pull-requests: write for PR annotations; backend Dockerfile moved to node:22-alpine and engines >=22 (was node:20 — --test-force-exit is a Node 22 flag; CI already ran 22); kycProviders.ts require('node:crypto') replaced with the module's ESM timingSafeEqual/createHmac import (was a guaranteed ReferenceError on every Persona webhook); 339 down migration now deletes post-migration audit-event rows (run_waiting_approval, memory_*) before recreating the check constraint so rollback completes.
+
+Live-mode honesty (the core of the review): /live/create now calls POST /streaming/sessions + POST /streaming/sessions/:id/lots in live mode (pins become real scheduled lots; schedule-only since web has no broadcast client — copy says so, no fake 'Go live'); /verification mounts LiveVerificationFlow in live mode — status from GET /compliance/kyc-status, capture on the provider-hosted verificationUrl from POST /compliance/kyc-session, no local approval path; SessionProvider no longer merges the persisted fixture KYC 'approved' into the live session (a stale localStorage flag could previously mint identityVerified); all 5 co-own generateMetadata fns return generic live-safe metadata instead of fixture titles; FreshDropsRail derives from the feed units prop (real listings in live mode) instead of bundled LISTINGS.
+
+Copy/a11y: dispatch SLA consumers (terms, buyer-protection, checkout states, help) now say calendar-day 'days' matching backend paid_at + slaDays×24h enforcement; MovePill renders '—' at exactly 0 instead of positive '−0.0%'; PoolMeter gained aria-label='Funding progress'; /search/chat Suspense got an explicit fallback.
+
+Verification: web tsc 0 · eslint 0 · next build 97/97 routes · backend tsc 0 · node:test 118 files 1630 pass · vitest 372 pass. Two pre-existing backend test defects fixed in passing: searchReindexLease.test regexes expected now() but source deliberately uses clock_timestamp(); backendWorkflowClosure upload-finalize test awaited a BullMQ enqueue against no Redis (180s timeout — same in CI, which declares no redis service) → added an injectable enqueueMediaIngest dep to registerUploadRoutes and stubbed it in the test.
+## Backend-wiring campaign — seller inventory + live surfaces (continuation)
+
+Seller-hub listings (`/seller-hub/listings`) fully wired to the shared backend: `fetchMyListings` now hits the real `GET /users/:me/listings` (the web service had invented `/listings/mine`) through a new lenient `mapInventoryListings` — owner rows legitimately lack the buyer display floor, so drafts map with empty condition/price/`uncategorised` category and the shelf's own `draftMissingFields` vocabulary renders the gaps; terminal `deleted`/`removed` rows drop (matching the backend's own inventory-totals definition). Mark-sold writes `PATCH /listings/:id {status:'sold'}` (canonical transition table enforced server-side); bulk delete sends every backend row — drafts included, `draft → deleted` is legal — through the durable `/seller-hub/batch-command` with per-item receipts; single draft delete uses `DELETE /listings/:id` (new service fn, mobile `deleteListingOnApi` parity). Bump and Relist are fixture-only affordances — no backend bump endpoint exists and `sold` is terminal in the lifecycle table — so both actions are absent in live mode (optional table props, no dead buttons) and the mark-sold confirm copy drops the "relist anytime" promise live. Footer copy is mode-aware.
+
+Held-state honesty: the unfiltered owner endpoint can return `risk_pending`/`reserved`/`unknown` rows, which `listingStatusOf` previously rendered as mutable "active" — every action would 409 `LISTING_STATUS_HELD`. Added a `held` row status ("On hold" badge, view-only actions, no filter chip — it's an exception state, not a working bucket).
+
+Backend fix at the source: `GET /users/:userId/listings` had no non-owner status gate — a storefront fetch (or explicit `?status=draft`) emitted drafts/paused/deleted/risk-held rows to any viewer. Non-owner viewers are now scoped to `active`/`reserved`/`sold` (the public vocabulary mobile's ProfileShopTile already renders); owner/admin reads unchanged.
+
+Live components de-fabricated: `LiveNowCard` + `LiveViewerOverlay` resolve the seller from the session's own host projection (`sellerName/sellerAvatar/sellerVerified` mapped off the backend room) via a shared `liveSellerOf` — real ids never hit the fixture `userById`; the followers line hides when the backend doesn't report it. `LiveProductRail` in live mode renders from the real lot engine (`useLiveLots`: current lot first with the pin mark, then the queue, then sold lots) instead of fixture pin ids that never resolve.
+
+Lint hygiene: unused `regenerateBackupCodes`/catch binding in SecurityView, unused `CommerceOrder`/`DiscoveryListingSummary` type imports removed.
+
+Verified: web tsc 0 · eslint 0/0 · next build 102/102 routes · backend tsc 0 · node:test 1630 pass / 0 fail · vitest 372/372 (fixed a CRLF-brittle source assertion in moderationImportSafety.test — the Windows editor save changed index.ts line endings; the test now normalizes before matching).
+
+## Backend-wiring campaign — moodboard collaboration + sweep wave
+
+Moodboard detail sheets fully wired to the real `/moodboards/*` contracts (the sheets' header comments claimed no live contract existed — the backend has full CRUD): **comments** (GET/POST/PATCH resolve/DELETE — live threads fetch real rows with the backend's author projection, guests read but can't post, resolve/delete are owner-editor gated); **collaborators** (GET members + owner-only GET invites, role change PATCH, member removal DELETE, invite create returns its link token exactly once — only a hash is stored server-side, revoke POST); **versions** (GET history, server-side snapshot on save, pin PATCH, restore POST — history is never overwritten, the restore becomes a new revision and the board refetches; the compare preview is fixture-only since the list wire carries no snapshot content — live rows hide the affordance rather than compare against nothing). Board membership writes now flow through the write-through actions hook with the listing-id/row-id duality handled: the overlay keys by listing id, live DELETE/PATCH/reorder address the board-item row id (exposed as `rowIdByListing` on the live board query) — add/remove/undo/position/layer/theme all hit the real endpoints with optimistic mirror + revert-on-failure.
+
+Service-layer corrections found during wiring: the web `unblockUser` called `DELETE /users/:id/block` — no such route exists; the backend serves `POST /users/:id/unblock` (fixed to mobile parity). Duplicate `addMoodboardItem`/`removeMoodboardItem` declarations from the parallel session reconciled (kept the consumer contract, dropped dead duplicates).
+
+Fixture-leak sweep wave 2: **header search suggestions** — the dropdown previously matched fixture LISTINGS/USERS unconditionally; live mode now searches the real catalogue (`GET /listings?q=`) and member directory (`GET /users/search`) with `useDeferredValue` trailing the keystrokes, trending queries/brands from the shared trending hooks. **Auction cards** resolve the seller from the payload's embedded projection (real ids never hit fixture `userById`); a seller-less live card renders no seller row instead of a fabricated `@seller`. **Live rails** (Replays/Schedule/Upcoming) use the shared `liveSellerOf`; host console pinned rails resolve through the shared id resolver. **Bundle upsell** bag progress resolves bag ids via the new shared `useResolvedListings` (the undercount would have lied about tier progress); **feed explanation** saved/viewed reasons resolve real pieces; **chat panel** thread/counter listings resolve live (hoisted above early returns — rules of hooks); **privacy settings** — blocked list reads `GET /users/me/blocked-users`, member search hits the real directory, block/unblock/mute writes hit the real endpoints with revert-on-failure; **sustainability impact** counts the viewer's real delivered orders.
+
+Verified: web tsc 0 · eslint 0/0 (whole tree) · next build 102/102 routes · 7 touched routes all 200 on the production build.
+
+## Wave 15 — Department depth + profile corrections (4 parallel agents)
+
+- **Profile**: HighlightsRail ripped from both /u/[username] and /profile (files deleted); cover + mosaic bands are now true full-bleed (viewport-width breakout, edge-to-edge at every breakpoint).
+- **Home**: module fatigue + dismissal (dismissedModuleIds/impressions/engagements, persisted v3; auto-fatigue at 8 in-view impressions with zero engagement; Undo toast); BackToTop affordance; price-drop badges aligned with closet predicate; verified scroll restoration.
+- **Explore**: CategoryShelf on edge-fade Rail, TrendingQueries (trending searches + popular brands), FeedCategoryPills department filter, ClosetsToFollow member rail, visual-search + conversational-search entries from the header.
+- **Auctions**: watch affordance on all card/runway/row surfaces (persisted store), explicit "Ending soon"/"Most bids" sort, bid-war prominence (fire glyph ≥5 real bids), eBay dual-format hierarchy (Buy now primary above Place bid), seller rows carry reserve status + watchers.
+- **Pulse/Live**: real LIVE badges + honest meta on auction pulse cards, live-first ending-soonest ordering, /live?watch=<id> deep links, "Your shows" host index, removed fabricated engagement numbers (likeCount:0, fake 'All' category, ambient reactions now fixture-only).

@@ -482,10 +482,15 @@ interface BackendIntentProfile {
 
 /** The user's intent-ledger topics. Returns null when unreachable — callers
  *  treat that as "no profile signals", never fabricate topics. */
-export async function fetchIntentTopics(userId: string): Promise<IntentTopic[] | null> {
+export async function fetchIntentTopics(
+  userId: string,
+  signal?: AbortSignal,
+): Promise<IntentTopic[] | null> {
   try {
     const payload = await fetchJson<BackendIntentProfile>(
       `/recommendations/intent/${encodeURIComponent(userId)}/profile`,
+      undefined,
+      { signal },
     );
     return (payload.topics ?? [])
       .filter((t): t is NonNullable<typeof t> & { id: string; label: string } =>

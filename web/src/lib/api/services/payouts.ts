@@ -410,3 +410,203 @@ export async function submitPayoutRequest(
     throw err;
   }
 }
+
+// ── Wallet balances — ledger-backed money truth ───────────────────────
+// GET /users/:userId/wallet/balances (backend/api/src/index.ts:20211) —
+// seller_payable ledger + escrow pending + reserve holds, with a
+// per-order release schedule. This is the number the withdraw composer
+// must gate on: the /wallets/:id/snapshot read accepts a client-asserted
+// blob and cannot authorise money UI (mobile useWithdrawData:34-58).
+
+export interface WalletPendingBreakdownRow {
+  orderId: string;
+  listingTitle: string | null;
+  amountGbp: number;
+  orderStatus: string;
+  deliveredAt: string | null;
+  releaseScheduledAt: string | null;
+}
+
+export interface WalletBalances {
+  availableGbp: number;
+  pendingGbp: number;
+  heldInReserveGbp: number;
+  pendingBreakdown: WalletPendingBreakdownRow[];
+}
+
+interface WalletBalancesResponse {
+  ok: true;
+  balances: {
+    availableGbp: number;
+    pendingGbp: number;
+    heldInReserveGbp: number;
+  };
+  pendingBreakdown?: WalletPendingBreakdownRow[];
+}
+
+export async function fetchWalletBalances(
+  userId: string,
+  signal?: AbortSignal,
+): Promise<WalletBalances> {
+  const payload = await fetchJson<WalletBalancesResponse>(
+    `/users/${encodeURIComponent(userId)}/wallet/balances`,
+    undefined,
+    { signal },
+  );
+  return {
+    availableGbp: payload.balances.availableGbp,
+    pendingGbp: payload.balances.pendingGbp,
+    heldInReserveGbp: payload.balances.heldInReserveGbp,
+    pendingBreakdown: payload.pendingBreakdown ?? [],
+  };
+}
+
+// ── Country capabilities — GET /users/:userId/capabilities ────────────
+// (backend/api/src/routes/users.ts:72) — the resolved country policy
+// profile behind mobile's capabilitiesApi.getUserCountryCapabilities.
+// The withdraw surface gates its payout rail on `payouts.gatewayPriority`
+// (native usePayoutAccountConnection) — a missing rail means "payouts
+// unavailable for this country", not a failed setup attempt.
+
+export interface UserCountryCapabilities {
+  policyVersion: string;
+  countryCode: string;
+  residencyCountryCode: string | null;
+  effectiveCountryCode: string;
+  countryCluster: string;
+  currency: {
+    defaultCurrency: string;
+    supportedCurrencies: string[];
+  };
+  payments: {
+    methodTypes: string[];
+  };
+  payouts: {
+    defaultCurrency: string;
+    supportedCurrencies: string[];
+    gatewayPriority: string[];
+  };
+}
+
+interface UserCapabilitiesResponse {
+  ok: true;
+  userId: string;
+  profile: {
+    countryCode: string | null;
+    residencyCountryCode: string | null;
+    kycStatus: string;
+  };
+  capabilities: UserCountryCapabilities;
+}
+
+export async function getUserCountryCapabilities(
+  userId: string,
+  signal?: AbortSignal,
+): Promise<UserCountryCapabilities> {
+  const payload = await fetchJson<UserCapabilitiesResponse>(
+    `/users/${encodeURIComponent(userId)}/capabilities`,
+    undefined,
+    { signal },
+  );
+  return payload.capabilities;
+}
+
+// ── 1ZE → fiat conversion — mirrors walletApi.getConvertQuote /
+//    convertIzeToFiat ──────────────────────────────────────────────────
+// POST /wallet/convert-1ze-to-fiat (index.ts:22494): `preview: true`
+// returns the identical breakdown with no ledger mutation (MiCA EMT
+// transparent-fee disclosure — the client never assumes a fee rate);
+// execution claims the idempotency key inside the debit transaction
+// (FIN-04) so a same-key retry replays the stored response instead of
+// double-burning.
+
+export interface ConvertQuotePayload {
+  izeAmount: number;
+  principalAmount: number;
+  feeAmount: number;
+  feeBps: number;
+  netFiatAmount: number;
+  fiatCurrency: string;
+  rateUsed: number;
+  fxRate?: number;
+}
+
+export interface ConvertWalletPayload {
+  onezeBalanceUnits: number;
+  onezeBalance: number;
+  fiatBalanceMinor: number;
+  fiatBalance: number;
+  fiatCurrency?: string;
+}
+
+interface ConvertQuoteResponse {
+  ok: true;
+  conversion: ConvertQuotePayload;
+}
+
+export interface ConvertIzeToFiatResult {
+  ok: true;
+  userId: string;
+  /** Post-conversion wallet balances — the server-computed truth the
+   *  receipt and the wallet-cache mirror both read. */
+  wallet: ConvertWalletPayload;
+  conversion: ConvertQuotePayload;
+}
+
+/** Non-binding preview — same payload shape execution returns, no writes. */
+export async function getConvertQuote(
+  input: {
+    userId: string;
+    izeAmount: number;
+    fiatCurrency?: string;
+  },
+  signal?: AbortSignal,
+): Promise<ConvertQuoteResponse> {
+  return fetchJson<ConvertQuoteResponse>(
+    '/wallet/convert-1ze-to-fiat',
+    {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        userId: input.userId,
+        izeAmount: input.izeAmount,
+        fiatCurrency: input.fiatCurrency ?? 'GBP',
+        preview: true,
+      }),
+    },
+    { signal },
+  );
+}
+
+/** Fresh key for one user-initiated conversion attempt. A retry of the
+ *  same attempt reuses it — the server claimed the key inside the debit
+ *  transaction and replays the stored response, so a lost response can
+ *  never burn the 1ZE balance twice. */
+export function newConvertAttemptKey(): string {
+  const rand =
+    typeof crypto !== 'undefined' && typeof crypto.randomUUID === 'function'
+      ? crypto.randomUUID()
+      : `${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 14)}`;
+  return `web-cv-${rand}`;
+}
+
+export async function convertIzeToFiat(input: {
+  userId: string;
+  izeAmount: number;
+  fiatCurrency?: string;
+  idempotencyKey: string;
+}): Promise<ConvertIzeToFiatResult> {
+  return fetchJson<ConvertIzeToFiatResult>(
+    '/wallet/convert-1ze-to-fiat',
+    {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        userId: input.userId,
+        izeAmount: input.izeAmount,
+        fiatCurrency: input.fiatCurrency ?? 'GBP',
+        idempotencyKey: input.idempotencyKey,
+      }),
+    },
+  );
+}

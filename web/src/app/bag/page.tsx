@@ -17,10 +17,14 @@ import { Icon } from '@/components/ui/Icon';
 import { Skeleton } from '@/components/ui/Skeleton';
 import { useToast } from '@/components/ui/Toast';
 import { BagSellerGroup } from '@/components/bag/BagSellerGroup';
+import { BagUrgencyBanner } from '@/components/bag/BagUrgencyBanner';
+import { BagPromoCodeInput } from '@/components/bag/BagPromoCodeInput';
+import { BagTrustBadges } from '@/components/bag/BagTrustBadges';
 import { useStore } from '@/lib/store/useStore';
 import { useBagListings } from '@/lib/store/useBagListings';
 import { BUNDLE_RULE_LABEL, sellerGroups } from '@/lib/data/fixtures';
-import { bundleSuggestions, AUTHENTICATION_THRESHOLD_GBP } from '@/lib/data/fixtures-commerce';
+import { bundleSuggestions } from '@/lib/data/fixtures-commerce';
+import { DATA_MODE } from '@/lib/api/client';
 import { checkoutTotals } from '@/lib/commerce/postage';
 import { formatPrice } from '@/lib/utils/format';
 import { getCategoryFocalPoint, getListingCoverUri } from '@/lib/utils/media';
@@ -83,6 +87,8 @@ export default function BagPage() {
   const [hydrated, setHydrated] = useState(false);
   useEffect(() => setHydrated(true), []);
 
+  const [appliedPromo, setAppliedPromo] = useState<{ code: string; discountPct: number } | null>(null);
+
   // Mode-aware resolution — fixture ids map onto the catalogue; live ids
   // batch-fetch GET /listings/:id. A live entry that can't be resolved is
   // dropped honestly (counted below), never replaced by a fixture row.
@@ -99,7 +105,22 @@ export default function BagPage() {
     () => groups.reduce((sum, g) => sum + g.discount, 0),
     [groups],
   );
-  const payableTotal = Math.round((totals.total - bundleDiscount) * 100) / 100;
+  // Live honesty: promo codes are fixture-demo only (POST /orders carries
+  // no promo field) and the backend applies no bundle discount, so the
+  // live payable total is exactly the sum of real order totals.
+  const promoDiscount = useMemo(
+    () =>
+      DATA_MODE !== 'live' && appliedPromo
+        ? Math.round(totals.items * appliedPromo.discountPct * 100) / 100
+        : 0,
+    [appliedPromo, totals.items],
+  );
+  const payableTotal = Math.max(
+    0,
+    Math.round(
+      (totals.total - (DATA_MODE === 'live' ? 0 : bundleDiscount) - promoDiscount) * 100,
+    ) / 100,
+  );
 
   // Sellers already in the bag with more stock — the bundle hint.
   const bagIds = useMemo(() => new Set(items.map((l) => l.id)), [items]);
@@ -152,9 +173,18 @@ export default function BagPage() {
 
   return (
     <div className="mx-auto max-w-[1100px] px-4 py-8 sm:px-6">
-      <h1 className="text-screen-title font-bold text-text-primary">
-        Bag <span className="tnum text-text-muted">· {items.length}</span>
-      </h1>
+      <div className="flex flex-wrap items-baseline justify-between gap-4">
+        <h1 className="text-screen-title text-text-primary">
+          Bag <span className="tnum text-text-muted">· {items.length}</span>
+        </h1>
+        <p className="text-caption text-text-secondary">
+          Delivery address and payment method selected at checkout
+        </p>
+      </div>
+
+      <div className="mt-4">
+        <BagUrgencyBanner itemCount={items.length} />
+      </div>
 
       <div className="mt-6 grid gap-10 lg:grid-cols-[minmax(0,1fr)_340px]">
         <div className="min-w-0">
@@ -182,11 +212,22 @@ export default function BagPage() {
                   show('Removed from bag', 'info');
                 }}
                 onSaveForLater={(listingId) => {
-                  // "Save for later" has no bag slice — the wishlist is the
-                  // model's parked state; the item lands in /saved favourites.
-                  if (!isWishlisted(listingId)) toggleWishlist(listingId);
+                  // Bag removal is local — it moves regardless. The
+                  // wishlist write resolves honestly: only claim "Saved"
+                  // once it lands, and say so if it doesn't.
                   removeFromBag(listingId);
-                  show('Saved for later — it’s in your Saved items', 'success');
+                  if (!isWishlisted(listingId)) {
+                    void toggleWishlist(listingId).then((ok) =>
+                      show(
+                        ok
+                          ? 'Saved for later — it’s in your Saved items'
+                          : 'Removed from bag — the save didn’t sync',
+                        ok ? 'success' : 'error',
+                      ),
+                    );
+                  } else {
+                    show('Saved for later — it’s in your Saved items', 'success');
+                  }
                 }}
               />
             ))}
@@ -194,57 +235,69 @@ export default function BagPage() {
 
           {/* Bundle hint — other stock from sellers already in the bag */}
           {bundleGroups.map((group) => (
-            <section key={group.sellerId} className="mt-8">
-              <h2 className="text-body-emphasis text-text-primary">
-                {group.username ? (
-                  /* The rail is quick-add only — the heading carries the
-                     deeper affordance into the per-seller bundle builder. */
-                  <Link
-                    href={`/u/${group.username}/bundle`}
-                    className="pressable flex items-center gap-1.5 rounded-sm"
-                  >
-                    <Icon name="pricetag" size={16} className="text-text-secondary" />
-                    Add another item from @{group.username} — {BUNDLE_RULE_LABEL}
-                  </Link>
-                ) : (
-                  <span className="flex items-center gap-1.5">
-                    <Icon name="pricetag" size={16} className="text-text-secondary" />
-                    Add another item — {BUNDLE_RULE_LABEL}
-                  </span>
-                )}
-              </h2>
-              <div className="no-scrollbar mt-3 flex gap-2 overflow-x-auto" role="list">
+            <section key={group.sellerId} className="mt-10 rounded-xl border border-border-subtle bg-surface p-5">
+              <div className="flex flex-wrap items-center justify-between gap-2">
+                <h2 className="text-body-emphasis font-bold text-text-primary">
+                  {group.username ? (
+                    <Link
+                      href={`/u/${group.username}/bundle`}
+                      className="pressable flex items-center gap-1.5 hover:underline"
+                    >
+                      <Icon name="pricetag" size={16} className="text-brand" />
+                      {DATA_MODE === 'live'
+                        ? `More pieces from @${group.username} — they post together`
+                        : `More pieces from @${group.username} — save ${BUNDLE_RULE_LABEL}`}
+                    </Link>
+                  ) : (
+                    <span className="flex items-center gap-1.5">
+                      <Icon name="pricetag" size={16} className="text-brand" />
+                      {DATA_MODE === 'live'
+                        ? 'Add another item — same-seller pieces post together'
+                        : `Add another item — ${BUNDLE_RULE_LABEL}`}
+                    </span>
+                  )}
+                </h2>
+                <span className="text-caption text-text-muted">Combined shipping</span>
+              </div>
+              <div className="no-scrollbar mt-4 flex gap-3 overflow-x-auto pb-1" role="list">
                 {group.suggestions.map((s) => (
                   <div
                     key={s.id}
                     role="listitem"
-                    className="group relative w-[130px] shrink-0"
+                    className="group relative w-[140px] shrink-0 overflow-hidden rounded-lg border border-border-subtle bg-surface-alt p-2 transition-shadow hover:shadow-sm"
                   >
-                    <Link href={`/item/${s.id}`} className="block overflow-hidden rounded-lg">
+                    <Link href={`/item/${s.id}`} className="block overflow-hidden rounded-md">
                       <AppImage
                         src={getListingCoverUri(s.images)}
                         alt={s.title}
                         aspectRatio={0.8}
                         focalPoint={getCategoryFocalPoint(s.category)}
-                        sizes="130px"
-                        className="w-full"
+                        sizes="140px"
+                        className="w-full transition-transform duration-200 group-hover:scale-105"
                       />
                     </Link>
-                    <button
-                      type="button"
-                      onClick={() => {
-                        addToBag(s.id);
-                        show('Added to bag', 'success');
-                      }}
-                      aria-label={`Add ${s.title} to bag`}
-                      className="pressable absolute right-1.5 top-1.5 flex h-8 w-8 items-center justify-center rounded-full bg-overlay text-scrim-text-primary"
-                    >
-                      <Icon name="plus" size={18} />
-                    </button>
-                    <p className="clamp-1 mt-1.5 text-caption text-text-secondary">{s.title}</p>
-                    <p className="tnum text-caption font-semibold text-text-primary">
-                      {formatPrice(s.price)}
-                    </p>
+                    <div className="mt-2 min-w-0">
+                      <p className="clamp-1 text-caption font-medium text-text-primary">{s.title}</p>
+                      <div className="mt-0.5 flex items-center justify-between">
+                        <p className="tnum text-caption font-bold text-text-primary">
+                          {formatPrice(s.price)}
+                        </p>
+                        {s.size ? (
+                          <span className="text-meta text-text-muted">Sz {s.size}</span>
+                        ) : null}
+                      </div>
+                      <button
+                        type="button"
+                        onClick={() => {
+                          addToBag(s.id);
+                          show('Added to bag', 'success');
+                        }}
+                        className="pressable mt-2 flex w-full items-center justify-center gap-1 rounded bg-brand py-1 text-meta font-semibold text-text-inverse hover:bg-brand-pressed"
+                      >
+                        <Icon name="plus" size={13} />
+                        Add to bag
+                      </button>
+                    </div>
                   </div>
                 ))}
               </div>
@@ -254,60 +307,88 @@ export default function BagPage() {
 
         {/* Totals — flat ledger, hairlines, one action */}
         <aside className="lg:sticky lg:top-20 lg:self-start">
-          <dl className="flex flex-col gap-2.5 border-y border-border-subtle py-5">
-            <div className="flex justify-between text-body text-text-secondary">
-              <dt>Items ({items.length})</dt>
-              <dd className="tnum text-text-primary">{formatPrice(totals.items)}</dd>
-            </div>
-            <div className="flex justify-between text-body text-text-secondary">
-              {/* One parcel per seller — the same model the checkout
-                  parcel manifest itemizes. */}
-              <dt>
-                Postage{totals.parcels > 1 ? ` · ${totals.parcels} parcels` : ''}
-              </dt>
-              <dd className="tnum text-text-primary">{formatPrice(totals.shippingFee)}</dd>
-            </div>
-            <div className="flex justify-between text-body text-text-secondary">
-              <dt>Buyer Protection fee</dt>
-              <dd className="tnum text-text-primary">{formatPrice(totals.protectionFee)}</dd>
-            </div>
-            {bundleDiscount > 0 ? (
+          <div className="rounded-xl border border-border-subtle bg-surface p-5">
+            <h2 className="text-body-emphasis font-bold text-text-primary">Order summary</h2>
+            <dl className="mt-4 flex flex-col gap-2.5 border-y border-border-subtle py-4">
               <div className="flex justify-between text-body text-text-secondary">
-                <dt className="flex items-center gap-1.5">
-                  <Icon name="pricetag" size={15} className="text-success-text" />
-                  Bundle discount ({BUNDLE_RULE_LABEL})
+                <dt>Items ({items.length})</dt>
+                <dd className="tnum text-text-primary">{formatPrice(totals.items)}</dd>
+              </div>
+              <div className="flex justify-between text-body text-text-secondary">
+                <dt>
+                  Postage{totals.parcels > 1 ? ` · ${totals.parcels} parcels` : ''}
                 </dt>
-                <dd className="tnum font-semibold text-success-text">−{formatPrice(bundleDiscount)}</dd>
+                <dd className="tnum text-text-primary">{formatPrice(totals.shippingFee)}</dd>
+              </div>
+              <div className="flex justify-between text-body text-text-secondary">
+                <dt>Buyer Protection fee</dt>
+                <dd className="tnum text-text-primary">{formatPrice(totals.protectionFee)}</dd>
+              </div>
+              {/* Live: informational only — the server charges each
+                  listing in full, so no −£ amount may render here. */}
+              {bundleDiscount > 0 ? (
+                <div className="flex justify-between text-body text-text-secondary">
+                  {DATA_MODE === 'live' ? (
+                    <dt className="flex items-center gap-1.5">
+                      <Icon name="box" size={15} className="text-text-muted" />
+                      Bundle posts together — no checkout discount
+                    </dt>
+                  ) : (
+                    <>
+                      <dt className="flex items-center gap-1.5">
+                        <Icon name="pricetag" size={15} className="text-success-text" />
+                        Bundle discount ({BUNDLE_RULE_LABEL})
+                      </dt>
+                      <dd className="tnum font-semibold text-success-text">−{formatPrice(bundleDiscount)}</dd>
+                    </>
+                  )}
+                </div>
+              ) : null}
+              {promoDiscount > 0 ? (
+                <div className="flex justify-between text-body text-text-secondary">
+                  <dt className="flex items-center gap-1.5">
+                    <Icon name="pricetag" size={15} className="text-success-text" />
+                    Promo code ({appliedPromo?.code})
+                  </dt>
+                  <dd className="tnum font-semibold text-success-text">−{formatPrice(promoDiscount)}</dd>
+                </div>
+              ) : null}
+              <div className="mt-1 flex justify-between border-t border-border-subtle pt-3 text-body-emphasis text-text-primary">
+                <dt className="font-bold">Total</dt>
+                <dd className="tnum text-price-list font-bold">{formatPrice(payableTotal)}</dd>
+              </div>
+            </dl>
+
+            {/* Promo input is fixture-demo only — the server never sees a
+                promo field, so live mode renders no input and no toasts. */}
+            {DATA_MODE !== 'live' ? (
+              <div className="mt-3">
+                <BagPromoCodeInput
+                  appliedPromo={appliedPromo}
+                  onApplyPromo={(code, discountPct) => {
+                    setAppliedPromo({ code, discountPct });
+                    show(`Promo code ${code} applied!`, 'success');
+                  }}
+                  onRemovePromo={() => {
+                    setAppliedPromo(null);
+                    show('Promo code removed', 'info');
+                  }}
+                />
               </div>
             ) : null}
-            <div className="mt-1 flex justify-between border-t border-border-subtle pt-3 text-body-emphasis text-text-primary">
-              <dt className="font-semibold">Total</dt>
-              <dd className="tnum text-price-list font-bold">{formatPrice(payableTotal)}</dd>
-            </div>
-          </dl>
-          <p className="mt-3 flex items-start gap-1.5 text-caption text-text-secondary">
-            <Icon name="shieldCheck" size={15} className="mt-px shrink-0 text-commerce-trust" />
-            Covered by Buyer Protection — full refund if an item never arrives or isn’t as described.
-          </p>
-          {/* Authentication — the same threshold claim the PDP and
-              checkout make, so the promise never appears and disappears
-              between surfaces. */}
-          {items.some((l) => l.price >= AUTHENTICATION_THRESHOLD_GBP) ? (
-            <p className="mt-2 flex items-start gap-1.5 text-caption text-text-secondary">
-              <Icon name="verified" size={15} className="mt-px shrink-0 text-commerce-trust" />
-              Physical authentication included on items over{' '}
-              <span className="tnum">{formatPrice(AUTHENTICATION_THRESHOLD_GBP)}</span>.
-            </p>
-          ) : null}
-          <Button
-            variant="primary"
-            size="lg"
-            fullWidth
-            className="mt-4"
-            onClick={() => router.push('/checkout')}
-          >
-            Checkout · <span className="tnum">{formatPrice(payableTotal)}</span>
-          </Button>
+
+            <Button
+              variant="primary"
+              size="lg"
+              fullWidth
+              className="mt-5"
+              onClick={() => router.push('/checkout')}
+            >
+              Checkout · <span className="tnum">{formatPrice(payableTotal)}</span>
+            </Button>
+
+            <BagTrustBadges />
+          </div>
         </aside>
       </div>
     </div>

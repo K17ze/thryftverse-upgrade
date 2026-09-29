@@ -344,6 +344,8 @@ export interface GalleriaFeaturedCollection extends GalleriaCollection {
   /** Theme kicker shown over the cover — the editorial lens, not a category. */
   theme: string;
   curator: GalleriaByline;
+  /** Server publish date — live rows carry it; fixtures don't need it. */
+  publishedAt?: string;
 }
 
 export const GALLERIA_FEATURED_COLLECTIONS: GalleriaFeaturedCollection[] = [

@@ -9,7 +9,7 @@ import { CuratedRailSkeleton } from './CuratedRail';
 export function CollectionsGridSkeleton() {
   return (
     <div
-      className="grid grid-cols-2 gap-3 px-4 sm:grid-cols-3 sm:px-6 lg:grid-cols-4"
+      className="grid grid-cols-2 gap-3 px-4 sm:grid-cols-3 sm:px-6 lg:grid-cols-4 xl:grid-cols-5"
       aria-busy
       aria-label="Loading your collections"
     >

@@ -112,7 +112,7 @@ export function MobileTabBar() {
           <span className="relative" aria-hidden>
             <Icon name="inbox" filled={isActive('/inbox')} size={24} />
             {unread > 0 ? (
-              <span className="absolute -right-2 -top-1.5 flex h-4 min-w-4 items-center justify-center rounded-md border border-surface bg-danger px-1 text-[10px] font-bold text-scrim-text-primary">
+              <span className="absolute -right-2 -top-1.5 flex h-4 min-w-4 items-center justify-center rounded-md border border-surface bg-danger px-1 text-micro font-bold text-scrim-text-primary">
                 {unread > 99 ? '99+' : unread}
               </span>
             ) : null}

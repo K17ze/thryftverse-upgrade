@@ -11,6 +11,8 @@ import { useRouter } from 'next/navigation';
 import { useEffect, useState } from 'react';
 import { Button } from '@/components/ui/Button';
 import { useHydrated, useStore } from '@/lib/store/useStore';
+import { ONBOARDING_RETURN_KEY } from '@/components/layout/AppShell';
+import { DATA_MODE } from '@/lib/api/client';
 
 /**
  * Denial has two honest shapes:
@@ -31,6 +33,8 @@ type Denial = 'dismissed' | 'blocked' | null;
  */
 type Step = 'intro' | 'notify';
 
+const LIVE = DATA_MODE === 'live';
+
 export function OnboardingView() {
   const router = useRouter();
   const markOnboardingSeen = useStore((s) => s.markOnboardingSeen);
@@ -47,9 +51,45 @@ export function OnboardingView() {
     if (hydrated && hasSeenOnboarding) router.replace('/');
   }, [hydrated, hasSeenOnboarding, router]);
 
+  /**
+   * The stashed deep-link destination (AppShell writes it when it gates
+   * to /onboarding) — validated to an internal path (starts with '/',
+   * never protocol-relative) and consumed on read so a reload can't
+   * replay a stale destination.
+   */
+  const returnTo = (): string => {
+    try {
+      const stashed = sessionStorage.getItem(ONBOARDING_RETURN_KEY);
+      sessionStorage.removeItem(ONBOARDING_RETURN_KEY);
+      if (stashed && stashed.startsWith('/') && !stashed.startsWith('//')) {
+        return stashed;
+      }
+    } catch {
+      // Storage unavailable — home is the honest default.
+    }
+    return '/';
+  };
+
   const finish = () => {
     markOnboardingSeen();
-    router.replace('/');
+    router.replace(returnTo());
+  };
+
+  /**
+   * The notify step only exists where the permission can do something.
+   * Web has no push rail — no service worker, no PushSubscription, and the
+   * backend device registry (POST /notifications/devices/register) only
+   * accepts Expo push tokens a browser cannot mint. Asking for
+   * Notification permission in live mode would promise order updates and
+   * auction alerts nothing delivers, so live skips the ask; the fixture
+   * preview keeps the designed flow.
+   */
+  const handleGetStarted = () => {
+    if (LIVE) {
+      finish();
+      return;
+    }
+    setStep('notify');
   };
 
   const handleContinue = async () => {
@@ -93,10 +133,14 @@ export function OnboardingView() {
   }
 
   return (
-    <div className="flex min-h-[calc(100dvh-56px)] flex-col px-5 pb-10 pt-8 sm:px-8">
-      <p className="text-body-emphasis font-bold tracking-tight text-text-primary">ThryftVerse</p>
+    <div className="flex min-h-[calc(100dvh-56px)] flex-col px-5 pb-10 pt-8 sm:px-8 lg:items-center lg:justify-center lg:py-12">
+      {/* Below lg this inner box is a transparent full-height column —
+          wordmark top, welcome block bottom-anchored, exactly the mobile
+          composition. At lg it becomes a centered first-run card. */}
+      <div className="flex min-h-0 flex-1 flex-col lg:w-full lg:max-w-[440px] lg:flex-none lg:rounded-xl lg:border lg:border-border-subtle lg:bg-surface-alt lg:px-10 lg:py-9">
+        <p className="text-body-emphasis font-bold tracking-tight text-text-primary">ThryftVerse</p>
 
-      <div className="mt-auto max-w-sm">
+        <div className="mt-auto max-w-sm lg:mt-10 lg:max-w-none">
         {denial === 'blocked' ? (
           <>
             <h1 className="text-display font-bold tracking-tight text-text-primary">
@@ -174,7 +218,7 @@ export function OnboardingView() {
               Curated fashion from independent sellers. Co-own high-value pieces. Bid at live auctions.
             </p>
             <div className="mt-6 space-y-2">
-              <Button variant="primary" className="w-full" onClick={() => setStep('notify')}>
+              <Button variant="primary" className="w-full" onClick={handleGetStarted}>
                 Get started
               </Button>
               <Button variant="quiet" className="w-full" onClick={finish}>
@@ -183,6 +227,7 @@ export function OnboardingView() {
             </div>
           </>
         )}
+        </div>
       </div>
     </div>
   );

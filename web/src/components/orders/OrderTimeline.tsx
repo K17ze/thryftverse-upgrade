@@ -112,7 +112,7 @@ export function OrderTimeline({ order, detail }: { order: CommerceOrder; detail:
               <span
                 className={`flex h-5 w-5 shrink-0 items-center justify-center rounded-full ${
                   current
-                    ? 'bg-success text-white'
+                    ? 'bg-success text-scrim-text-primary'
                     : done
                       ? 'bg-success-subtle text-success-text'
                       : 'bg-surface-alt text-text-muted'

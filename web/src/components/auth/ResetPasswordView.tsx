@@ -98,7 +98,7 @@ function ResetPasswordFlow() {
       {!token || expired ? (
         <div className="flex flex-col items-center text-center">
           <Icon name="link" size={40} className="text-text-muted" />
-          <h1 className="mt-4 text-screen-title font-bold text-text-primary">
+          <h1 className="mt-4 text-screen-title text-text-primary">
             {expired ? 'Link expired' : 'Incomplete link'}
           </h1>
           <p className="mt-2 max-w-xs text-body text-text-secondary">
@@ -125,7 +125,7 @@ function ResetPasswordFlow() {
       ) : done ? (
         <div className="flex flex-col items-center text-center">
           <Icon name="shieldCheck" size={40} className="text-success-text" />
-          <h1 className="mt-4 text-screen-title font-bold text-text-primary">Password reset</h1>
+          <h1 className="mt-4 text-screen-title text-text-primary">Password reset</h1>
           <p className="mt-2 max-w-xs text-body text-text-secondary">
             Your password has been reset. You can now log in.
           </p>
@@ -146,7 +146,7 @@ function ResetPasswordFlow() {
         </div>
       ) : (
         <>
-          <h1 className="text-screen-title font-bold text-text-primary">New password</h1>
+          <h1 className="text-screen-title text-text-primary">New password</h1>
           <p className="mt-1.5 text-body text-text-secondary">
             Choose a new password for your account.
           </p>

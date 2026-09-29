@@ -52,7 +52,7 @@ function EditorialRow({
 
       {/* Headline + dek */}
       <div className="min-w-0 flex-1">
-        <p className="text-label font-semibold uppercase tracking-[0.14em] text-text-muted">
+        <p className="text-label text-text-muted">
           {editorial.kicker}
         </p>
         <h3 className="clamp-2 mt-1 text-editorial-title text-text-primary">

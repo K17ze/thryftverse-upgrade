@@ -12,7 +12,7 @@ import { useMemo, useState } from 'react';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import { SellerSectionNav } from '@/components/seller/SellerSectionNav';
-import { SegmentedControl } from '@/components/feed/SegmentedControl';
+import { Tabs } from '@/components/ui/Tabs';
 import { EmptyState } from '@/components/ui/EmptyState';
 import { Icon } from '@/components/ui/Icon';
 import {
@@ -44,9 +44,9 @@ export default function SellerAuctionsPage() {
   const empty = SELLER_EMPTY[tab];
 
   return (
-    <div className="mx-auto w-full max-w-3xl px-4 pb-16 pt-8 sm:px-6 md:pt-12">
+    <div className="mx-auto w-full max-w-3xl px-4 pb-16 pt-8 sm:px-6 md:pt-12 lg:max-w-[1440px]">
       <header className="flex items-end justify-between gap-3">
-        <h1 className="text-screen-title font-semibold text-text-primary">Auctions</h1>
+        <h1 className="text-screen-title text-text-primary">Auctions</h1>
         <Link
           href="/auctions/create"
           className="pressable inline-flex h-10 items-center gap-1.5 rounded-md bg-brand px-4 text-body-emphasis font-semibold text-text-inverse hover:bg-brand-pressed"
@@ -73,9 +73,18 @@ export default function SellerAuctionsPage() {
         <>
           {stats.total > 0 ? <SellerAuctionSummary stats={stats} /> : null}
 
-          <div className="no-scrollbar -mx-4 mt-7 overflow-x-auto px-4 sm:mx-0 sm:px-0">
-            <SegmentedControl options={tabs} value={tab} onChange={setTab} />
-          </div>
+          <Tabs
+            className="-mx-4 mt-7 sm:-mx-6"
+            railClassName="px-1 sm:px-3"
+            tabs={tabs.map((t) => ({
+              key: t.value,
+              label: t.label,
+              count: t.count,
+            }))}
+            active={tab}
+            onChange={setTab}
+            ariaLabel="Auction sections"
+          />
 
           <section className="mt-4" aria-label={`${tab} auctions`}>
             {visible.length === 0 ? (

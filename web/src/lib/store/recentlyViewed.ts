@@ -10,6 +10,8 @@
 import { useEffect } from 'react';
 import { create } from 'zustand';
 import { persist, createJSONStorage } from 'zustand/middleware';
+import { DATA_MODE } from '@/lib/api/client';
+import { trackListingView } from '@/lib/api/services/listings';
 
 const RECENTLY_VIEWED_CAP = 20;
 
@@ -42,13 +44,24 @@ export const useRecentlyViewed = create<RecentlyViewedState>()(
   ),
 );
 
+/** Session dedupe — a listing earns one server view per session, the
+ *  same contract native trackListingView applies on item resolve. */
+const viewTracked = new Set<string>();
+
 /**
  * PDP wiring — the item page calls this with the resolved listing id.
  * Recording waits for a real listing (never the raw route param), so a
- * deleted/unknown id can't enter the history.
+ * deleted/unknown id can't enter the history. Live mode also fires the
+ * qualified-detail-view write that feeds seller analytics — without it
+ * web PDP traffic is invisible to view counters.
  */
 export function useRecordListingView(listingId: string | null | undefined): void {
   useEffect(() => {
-    if (listingId) useRecentlyViewed.getState().record(listingId);
+    if (!listingId) return;
+    useRecentlyViewed.getState().record(listingId);
+    if (DATA_MODE === 'live' && !viewTracked.has(listingId)) {
+      viewTracked.add(listingId);
+      void trackListingView(listingId, { qualified: true });
+    }
   }, [listingId]);
 }

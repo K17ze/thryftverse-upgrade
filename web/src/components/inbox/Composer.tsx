@@ -15,6 +15,8 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import Link from 'next/link';
 import type { SendChatMessageInput } from '@/lib/hooks/queries';
+import { DATA_MODE } from '@/lib/api/client';
+import { setTypingStatus } from '@/lib/api/services/chat';
 import { Icon } from '@/components/ui/Icon';
 import { IconButton } from '@/components/ui/IconButton';
 import { useToast } from '@/components/ui/Toast';
@@ -22,6 +24,7 @@ import { useQuickReplies } from '@/lib/store/quickReplies';
 import { useHydrated } from '@/lib/store/useStore';
 import { ChatSafetyBanner } from './ChatSafetyBanner';
 import { detectComposerSafetyWarning, type ChatSafetyWarning } from './chatSafety';
+import { useChatDrafts } from './useChatDrafts';
 
 const MAX_HEIGHT = 128;
 
@@ -135,6 +138,10 @@ export function Composer({
 }: ComposerProps) {
   const toast = useToast();
   const [value, setValue] = useState('');
+  // Per-thread drafts — the mobile draftText grammar: text typed here is
+  // owned by this conversation; switching threads swaps the draft and
+  // the inbox row previews it as "Draft".
+  const setDraft = useChatDrafts((s) => s.setDraft);
   const [staged, setStaged] = useState<StagedAttachment | null>(null);
   const [repliesOpen, setRepliesOpen] = useState(false);
   // The mobile useConversationSafety composer check — the draft scans on
@@ -169,6 +176,81 @@ export function Composer({
   const repliesBtnRef = useRef<HTMLButtonElement>(null);
   const replies = useQuickReplies((s) => s.replies);
 
+  // ── Typing signal — the mobile useConversationComposer grammar. The
+  // edge is realtime-only (chat.typing.update fans out to the thread
+  // topic, nothing persists), so it fires purely on local transitions:
+  // start after a 1s debounce while the draft is non-empty, stop after
+  // 3s idle, on send, or when the draft clears. Live mode only — the
+  // fixture dataset has no endpoint. The endpoint is rate-limited
+  // (10/10s); one POST per transition stays far inside it.
+  const typingOn = useRef(false);
+  const typingStartTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const typingStopTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const postTyping = useCallback(
+    (on: boolean) => {
+      if (!threadId || DATA_MODE !== 'live' || typingOn.current === on) return;
+      typingOn.current = on;
+      setTypingStatus(threadId, on).catch(() => undefined);
+    },
+    [threadId],
+  );
+  const clearTypingTimers = useCallback(() => {
+    if (typingStartTimer.current) {
+      clearTimeout(typingStartTimer.current);
+      typingStartTimer.current = null;
+    }
+    if (typingStopTimer.current) {
+      clearTimeout(typingStopTimer.current);
+      typingStopTimer.current = null;
+    }
+  }, []);
+  const stopTypingNow = useCallback(() => {
+    clearTypingTimers();
+    postTyping(false);
+  }, [clearTypingTimers, postTyping]);
+  const noteKeystroke = useCallback(
+    (next: string) => {
+      if (!threadId || DATA_MODE !== 'live') return;
+      if (typingStopTimer.current) {
+        clearTimeout(typingStopTimer.current);
+        typingStopTimer.current = null;
+      }
+      if (next.length > 0) {
+        if (!typingOn.current && !typingStartTimer.current) {
+          typingStartTimer.current = setTimeout(() => {
+            typingStartTimer.current = null;
+            postTyping(true);
+          }, 1000);
+        }
+        typingStopTimer.current = setTimeout(() => {
+          typingStopTimer.current = null;
+          postTyping(false);
+        }, 3000);
+      } else {
+        // Draft cleared — no lingering "typing…" on the far side.
+        if (typingStartTimer.current) {
+          clearTimeout(typingStartTimer.current);
+          typingStartTimer.current = null;
+        }
+        postTyping(false);
+      }
+    },
+    [threadId, postTyping],
+  );
+
+  // Thread switch / unmount — a live "typing" must be stopped on the
+  // thread it belongs to before the composer moves on. The cleanup runs
+  // with the previous threadId, which is exactly the target of the stop.
+  useEffect(() => {
+    return () => {
+      clearTypingTimers();
+      if (threadId && DATA_MODE === 'live' && typingOn.current) {
+        typingOn.current = false;
+        setTypingStatus(threadId, false).catch(() => undefined);
+      }
+    };
+  }, [threadId, clearTypingTimers]);
+
   useEffect(() => {
     if (!repliesOpen) return;
     const onDoc = (e: MouseEvent) => {
@@ -195,6 +277,22 @@ export function Composer({
       document.removeEventListener('keydown', onEsc);
     };
   }, [repliesOpen]);
+
+  // Escape while recording cancels it — capture phase so it wins over
+  // the thread's Escape-to-deselect (an active recording is the
+  // innermost thing to unwind, same grammar as a staged reply).
+  useEffect(() => {
+    if (!recording) return;
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key !== 'Escape') return;
+      e.preventDefault();
+      e.stopPropagation();
+      recordCancelledRef.current = true;
+      recorderRef.current?.stop();
+    };
+    document.addEventListener('keydown', onKey, true);
+    return () => document.removeEventListener('keydown', onKey, true);
+  }, [recording]);
 
   // Recording elapsed clock — 4fps tick keeps the readout honest without
   // re-rendering the composer per animation frame.
@@ -229,6 +327,10 @@ export function Composer({
     if (replyTo) areaRef.current?.focus();
   }, [replyTo]);
 
+  // Mount — restore this thread's stored draft (the thread-switch path
+  // above only runs on a prop change), then put the caret in the
+  // composer on desktop (Messenger web grammar; touch viewports skip it
+  // so no keyboard pops unprompted).
   const grow = useCallback(() => {
     const el = areaRef.current;
     if (!el) return;
@@ -249,10 +351,12 @@ export function Composer({
   const valueRef = useRef(value);
   valueRef.current = value;
 
-  // Thread switch — stash entries and a resumed edit reference message
-  // ids from the conversation they came from; carrying them into a new
-  // thread would edit the wrong message, so the local edit state clears
-  // (the plain draft keeps its existing carry-over behaviour).
+  // Thread switch — the sanctioned derive-state-on-prop-change reset:
+  // stash entries and a resumed edit reference message ids from the
+  // conversation they came from; carrying them into a new thread would
+  // edit the wrong message, so the local edit state clears in render.
+  // The draft store read + grow/focus frames live in the effect below —
+  // a render can't own an external-store read or an uncancellable rAF.
   const stashThread = useRef(threadId);
   if (stashThread.current !== threadId) {
     stashThread.current = threadId;
@@ -261,6 +365,38 @@ export function Composer({
     stagedEditBanner.current = '';
     if (resumedEdit) setResumedEdit(null);
   }
+
+  // Draft restore + thread switch — mount runs this once for the initial
+  // draft restore + desktop autofocus; a threadId change re-runs it with
+  // the new thread's stored draft ("draft stays with its conversation").
+  // Pending frame ids are tracked so a rapid switch or unmount cancels
+  // them instead of firing a stale frame into the next thread.
+  const draftRafIds = useRef<number[]>([]);
+  useEffect(() => {
+    const raf = (fn: () => void) => {
+      const id = requestAnimationFrame(() => {
+        draftRafIds.current = draftRafIds.current.filter((x) => x !== id);
+        fn();
+      });
+      draftRafIds.current.push(id);
+    };
+    const nextDraft = threadId
+      ? (useChatDrafts.getState().drafts[threadId] ?? '')
+      : '';
+    if (nextDraft !== valueRef.current) {
+      setValue(nextDraft);
+      raf(grow);
+    }
+    // Desktop grammar — opening a thread puts the caret in the composer
+    // (Messenger web); touch viewports skip it so no keyboard pops.
+    if (window.matchMedia('(min-width: 768px)').matches) {
+      raf(() => areaRef.current?.focus());
+    }
+    return () => {
+      draftRafIds.current.forEach((id) => cancelAnimationFrame(id));
+      draftRafIds.current = [];
+    };
+  }, [threadId, grow]);
 
   useEffect(() => {
     const activeId = activeEdit?.id ?? null;
@@ -309,9 +445,12 @@ export function Composer({
     } else {
       setResumedEdit(null);
       setValue(entry?.text ?? '');
+      // The restored draft re-asserts itself in the store — an edit
+      // staged over it never overwrote the draft slot.
+      if (threadId) setDraft(threadId, entry?.text ?? '');
       requestAnimationFrame(grow);
     }
-  }, [activeEdit, grow]);
+  }, [activeEdit, grow, threadId, setDraft]);
 
   // × / Escape end the staged edit — a stash-resumed edit isn't in the
   // parent's staging, so clearing it locally unwinds the stash the same
@@ -323,6 +462,9 @@ export function Composer({
 
   const submit = () => {
     if (sending) return;
+    // The recipient's indicator clears the moment the message lands, not
+    // 3s later — stop the signal before the send path runs.
+    stopTypingNow();
     const text = value.trim();
     // Edit mode routes the submit to the edit write — an empty edit is a
     // no-op (the server would reject it anyway). A resumed edit has no
@@ -349,6 +491,7 @@ export function Composer({
     });
     setValue('');
     setStaged(null);
+    if (threadId) setDraft(threadId, '');
     // The draft is gone — the warning and its dismissal go with it.
     setDraftWarning(null);
     setDraftWarningDismissed(false);
@@ -473,12 +616,17 @@ export function Composer({
 
   return (
     <form
+      data-chat-composer
       onSubmit={(e) => {
         e.preventDefault();
         submit();
       }}
       className="shrink-0 border-t border-border-subtle bg-background"
     >
+      {/* Readable column — the input tracks the message column on
+          desktop (ChatPanel's lg:max-w-3xl); the border stays full-width
+          pane chrome. */}
+      <div className="mx-auto w-full lg:max-w-3xl">
       {/* Edit staging — the mobile composer edit banner: same edge/sender/
           preview grammar as the reply bar, Escape or × cancels. */}
       {activeEdit ? (
@@ -571,7 +719,7 @@ export function Composer({
             name="close"
             size={16}
             aria-label={`Remove ${staged.kind}`}
-            className="h-9 w-9"
+            className="-my-1 shrink-0"
             onClick={clearStaged}
           />
         </div>
@@ -688,9 +836,9 @@ export function Composer({
                   setRepliesOpen(false);
                   repliesBtnRef.current?.focus();
                 }}
-                className="absolute bottom-full left-0 mb-2 w-72 overflow-hidden rounded-lg border border-border bg-surface py-1 shadow-lg"
+                className="absolute bottom-full left-0 mb-2 w-72 overflow-hidden rounded-lg border border-border bg-surface py-1 shadow-floating"
               >
-                <p className="px-3.5 pb-1 pt-2 text-micro font-semibold uppercase tracking-wide text-text-muted">
+                <p className="px-3.5 pb-1 pt-2 text-micro font-semibold uppercase tracking-[0.08em] text-text-muted">
                   Quick replies
                 </p>
                 {replies.map((r) => (
@@ -704,6 +852,7 @@ export function Composer({
                       // saved template carrying risky grammar still warns.
                       setDraftWarning(detectComposerSafetyWarning(r.message));
                       setDraftWarningDismissed(false);
+                      noteKeystroke(r.message);
                       setRepliesOpen(false);
                       requestAnimationFrame(() => {
                         grow();
@@ -735,12 +884,16 @@ export function Composer({
             value={value}
             onChange={(e) => {
               setValue(e.target.value);
+              // Draft persistence — plain typing only; an in-progress
+              // edit's text is not the conversation's draft.
+              if (!activeEdit && threadId) setDraft(threadId, e.target.value);
               // Mobile useConversationSafety: re-scan on every change; a
               // draft that no longer matches clears the warning AND the
               // dismissal, so re-typing risky text warns again.
               const w = detectComposerSafetyWarning(e.target.value);
               setDraftWarning(w);
               if (!w) setDraftWarningDismissed(false);
+              noteKeystroke(e.target.value);
               grow();
             }}
             onKeyDown={(e) => {
@@ -773,6 +926,7 @@ export function Composer({
         </button>
       </div>
       )}
+      </div>
     </form>
   );
 }

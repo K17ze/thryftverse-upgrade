@@ -63,49 +63,52 @@ export function ForwardSheet({ open, onClose, targets, onSelect }: ForwardSheetP
             className="min-w-0 flex-1 bg-transparent text-body text-input-text placeholder:text-text-muted focus:outline-none"
           />
         </div>
-        <div role="listbox" aria-label="Conversations" className="mt-3 max-h-[50vh] overflow-y-auto">
+        {/* Action picker, not a selection — list semantics with plain
+            buttons (a listbox's option/aria-selected grammar would imply
+            a persistent selection that doesn't exist here). */}
+        <ul aria-label="Conversations" className="mt-3 max-h-[50vh] overflow-y-auto">
           {matches.map((c) => {
             const title = conversationTitle(c);
             const isGroup = isGroupConversation(c);
             return (
-              <button
-                key={c.id}
-                type="button"
-                role="option"
-                aria-selected={false}
-                onClick={() => onSelect(c.id)}
-                className="pressable flex w-full items-center gap-3 rounded-md px-2 py-2.5 text-left hover:bg-row-pressed focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand"
-              >
-                {isGroup ? (
-                  <GroupAvatarMosaic
-                    members={mosaicMembers(c, viewerId)}
-                    size={40}
-                    groupPhoto={c.avatar}
-                    fallbackName={title}
-                    groupId={c.id}
-                  />
-                ) : (
-                  <Avatar src={c.participantAvatar} name={title} size={40} />
-                )}
-                <span className="min-w-0 flex-1">
-                  <span className="clamp-1 block text-body font-medium text-text-primary">
-                    {title}
-                  </span>
+              <li key={c.id}>
+                <button
+                  type="button"
+                  onClick={() => onSelect(c.id)}
+                  aria-label={`Forward to ${title}`}
+                  className="pressable flex w-full items-center gap-3 rounded-md px-2 py-2.5 text-left hover:bg-row-pressed focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand"
+                >
                   {isGroup ? (
-                    <span className="block text-meta text-text-muted">Group</span>
-                  ) : null}
-                </span>
-              </button>
+                    <GroupAvatarMosaic
+                      members={mosaicMembers(c, viewerId)}
+                      size={40}
+                      groupPhoto={c.avatar}
+                      fallbackName={title}
+                      groupId={c.id}
+                    />
+                  ) : (
+                    <Avatar src={c.participantAvatar} name={title} size={40} />
+                  )}
+                  <span className="min-w-0 flex-1">
+                    <span className="clamp-1 block text-body font-medium text-text-primary">
+                      {title}
+                    </span>
+                    {isGroup ? (
+                      <span className="block text-meta text-text-muted">Group</span>
+                    ) : null}
+                  </span>
+                </button>
+              </li>
             );
           })}
-          {matches.length === 0 ? (
-            <p className="py-8 text-center text-body text-text-muted">
-              {targets.length === 0
-                ? 'No other conversations to forward to.'
-                : `No conversations match “${query.trim()}”.`}
-            </p>
-          ) : null}
-        </div>
+        </ul>
+        {matches.length === 0 ? (
+          <p className="py-8 text-center text-body text-text-muted">
+            {targets.length === 0
+              ? 'No other conversations to forward to.'
+              : `No conversations match “${query.trim()}”.`}
+          </p>
+        ) : null}
       </div>
     </Sheet>
   );

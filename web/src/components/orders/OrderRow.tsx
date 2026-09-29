@@ -19,8 +19,11 @@ import type { CommerceOrder, Order } from '@/lib/contracts/domain';
 import { AppImage } from '@/components/ui/AppImage';
 import { Badge } from '@/components/ui/Badge';
 import { Icon } from '@/components/ui/Icon';
+import { DATA_MODE } from '@/lib/api/client';
+import { useListingIds, useSellerSummary } from '@/lib/hooks/listing-resolution';
 import { listingById, userById } from '@/lib/data/fixtures';
 import { orderEnrichmentFor } from '@/lib/data/fixtures-commerce';
+import type { CommerceUserOrderApi } from '@/lib/api/mappers';
 import { formatDate, formatPrice } from '@/lib/utils/format';
 import { getCategoryFocalPoint, getListingCoverUri } from '@/lib/utils/media';
 import {
@@ -41,6 +44,10 @@ interface ShipBy {
   overdue: boolean;
   urgent: boolean;
 }
+
+/** Stable empty id list — keeps the live-resolution hooks disabled without
+ *  a new array identity per render. */
+const EMPTY_IDS: readonly string[] = [];
 
 /** "Post by Friday" grammar — the real shipByDate, urgency-toned. */
 function shipByText(iso: string): ShipBy | null {
@@ -75,22 +82,46 @@ export function OrderRow({
   order,
   isBuyer,
   attention,
+  meta,
 }: {
   order: CommerceOrder;
   isBuyer: boolean;
   /** Canonical attention item when the row sits in the Needs-attention lane. */
   attention?: OrderAttention | null;
+  /** Live wire row — the backend's own listingTitle/listingImageUrl and
+   *  counterparty usernames. When present, fixture lookups never run. */
+  meta?: CommerceUserOrderApi;
 }) {
-  const listing = listingById(order.listingId);
-  const counterparty = isBuyer
-    ? (listing?.seller ?? null)
-    : (userById(order.buyerId) ?? null);
+  const LIVE = DATA_MODE === 'live';
+  // Live fallback — when the caller has no wire row, the listing and
+  // counterparty resolve through the shared hooks (GET /listings/:id,
+  // GET /sellers/:id) instead of the fixture catalogue. Unresolved ids
+  // render the honest placeholder, never a catalogue ghost.
+  const liveListing = useListingIds(LIVE && !meta ? [order.listingId] : EMPTY_IDS);
+  const liveSeller = useSellerSummary(
+    LIVE && !meta ? (isBuyer ? order.sellerId : order.buyerId) : null,
+  );
+  const listing = meta
+    ? null
+    : LIVE
+      ? liveListing.byId.get(order.listingId) ?? null
+      : listingById(order.listingId);
+  const counterpartyName = meta
+    ? (isBuyer ? meta.sellerUsername : meta.buyerUsername) ?? null
+    : LIVE
+      ? liveSeller.data?.username ?? null
+      : (isBuyer
+          ? (listing?.seller?.username ?? null)
+          : (userById(order.buyerId)?.username ?? null));
+  const title = meta?.listingTitle ?? listing?.title ?? 'Order item';
+  const imageUri = meta?.listingImageUrl ?? getListingCoverUri(listing?.images);
+  const category = meta ? undefined : listing?.category;
   const role: OrderRole = isBuyer ? 'buyer' : 'seller';
   const attentionIcon = needsAction(order.status, role);
 
-  const enrichment = orderEnrichmentFor(order.id);
-  const hasReview = enrichment.hasReview === true;
-  const reviewIsAuto = enrichment.reviewIsAuto === true;
+  const enrichment = meta || LIVE ? null : orderEnrichmentFor(order.id);
+  const hasReview = meta?.hasReview ?? enrichment?.hasReview === true;
+  const reviewIsAuto = enrichment?.reviewIsAuto === true;
 
   const statusKey = normaliseOrderStatus(order.status);
   // Seller-side to-post deadline — shown wherever the row renders, lane or
@@ -113,7 +144,7 @@ export function OrderRow({
   } else if (hasReview) {
     caption = reviewIsAuto
       ? 'Automatic feedback'
-      : enrichment.reviewRating != null
+      : enrichment?.reviewRating != null
         ? `${isBuyer ? 'You rated' : 'Buyer rated'} ${enrichment.reviewRating}`
         : 'Reviewed';
     captionTone = 'muted';
@@ -128,27 +159,29 @@ export function OrderRow({
     <li>
       <Link
         href={href}
-        className="pressable flex items-center gap-3 py-[var(--density-row-py)] hover:bg-row-pressed sm:gap-4"
+        className="pressable flex items-center gap-3 py-[var(--density-row-py)] hover:bg-row-pressed sm:gap-4 lg:grid lg:grid-cols-[3.5rem_minmax(0,1.4fr)_minmax(0,0.8fr)_8.5rem_auto_auto_1.25rem] lg:gap-x-5"
       >
         <span className="w-14 shrink-0 overflow-hidden rounded-md">
           <AppImage
-            src={getListingCoverUri(listing?.images)}
-            alt={listing?.title ?? 'Order item'}
+            src={imageUri}
+            alt={title}
             aspectRatio={0.8}
-            focalPoint={getCategoryFocalPoint(listing?.category)}
+            focalPoint={getCategoryFocalPoint(category)}
             sizes="56px"
             className="w-full"
           />
         </span>
         <span className="min-w-0 flex-1">
           <span className="clamp-1 text-body font-medium text-text-primary">
-            {listing?.title ?? 'Order item'}
+            {title}
           </span>
-          <span className="mt-0.5 flex items-center gap-2 text-caption text-text-secondary">
+          {/* Compact meta line — mobile only; at lg the same facts render
+              as their own table cells so the row reads as columns. */}
+          <span className="mt-0.5 flex items-center gap-2 text-caption text-text-secondary lg:hidden">
             <span>{formatDate(order.createdAt)}</span>
-            {counterparty?.username ? (
+            {counterpartyName ? (
               <span className="clamp-1">
-                · {isBuyer ? 'Sold by' : 'Bought by'} @{counterparty.username}
+                · {isBuyer ? 'Sold by' : 'Bought by'} @{counterpartyName}
               </span>
             ) : null}
           </span>
@@ -171,16 +204,36 @@ export function OrderRow({
             </span>
           ) : null}
         </span>
-        <span className="flex shrink-0 items-center gap-1.5">
+        {/* Desktop cells — the eBay purchase-history column grammar:
+            counterparty, order number + date, then status / total. */}
+        <span className="hidden min-w-0 lg:block">
+          {counterpartyName ? (
+            <span className="clamp-1 block text-body text-text-secondary">
+              {isBuyer ? 'Sold by' : 'Bought by'}{' '}
+              <span className="font-medium text-text-primary">@{counterpartyName}</span>
+            </span>
+          ) : (
+            <span className="text-body text-text-muted">—</span>
+          )}
+        </span>
+        <span className="hidden min-w-0 lg:block">
+          <span className="clamp-1 tnum block text-caption text-text-secondary">
+            Order {order.id}
+          </span>
+          <span className="mt-0.5 block text-caption text-text-muted">
+            {formatDate(order.createdAt)}
+          </span>
+        </span>
+        <span className="flex shrink-0 items-center gap-1.5 lg:justify-self-end">
           {attentionIcon ? (
             <Icon name="alert" size={14} className="text-warning-text" aria-label="Needs your action" />
           ) : null}
           <OrderStatusBadge status={order.status} />
         </span>
-        <span className="tnum shrink-0 text-body font-semibold text-text-primary">
+        <span className="tnum shrink-0 text-body font-semibold text-text-primary lg:justify-self-end lg:text-right">
           {formatPrice(order.totalPrice)}
         </span>
-        <Icon name="forward" size={16} className="shrink-0 text-text-muted" />
+        <Icon name="forward" size={16} className="shrink-0 text-text-muted lg:justify-self-end" />
       </Link>
     </li>
   );

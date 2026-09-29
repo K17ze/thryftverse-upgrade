@@ -44,6 +44,7 @@ export function ReviewComposer({
   const [tags, setTags] = useState<string[]>([]);
   const [text, setText] = useState('');
   const [photoUrls, setPhotoUrls] = useState<string[]>([]);
+  const [photoFiles, setPhotoFiles] = useState<File[]>([]);
   const fileRef = useRef<HTMLInputElement>(null);
 
   const canSubmit = rating > 0 && !submitting;
@@ -56,12 +57,15 @@ export function ReviewComposer({
 
   const attachFiles = (files: File[]) => {
     if (slotsLeft <= 0 || files.length === 0) return;
-    const urls = files.slice(0, slotsLeft).map((f) => URL.createObjectURL(f));
-    setPhotoUrls((prev) => [...prev, ...urls]);
+    const kept = files.slice(0, slotsLeft);
+    setPhotoUrls((prev) => [...prev, ...kept.map((f) => URL.createObjectURL(f))]);
+    setPhotoFiles((prev) => [...prev, ...kept]);
   };
 
-  const removePhoto = (index: number) =>
+  const removePhoto = (index: number) => {
     setPhotoUrls((prev) => prev.filter((_, i) => i !== index));
+    setPhotoFiles((prev) => prev.filter((_, i) => i !== index));
+  };
 
   return (
     <div className="flex flex-col gap-6">
@@ -197,7 +201,7 @@ export function ReviewComposer({
           fullWidth
           disabled={!canSubmit}
           onClick={() =>
-            onSubmit({ rating, text: text.trim(), tags, photoUrls })
+            onSubmit({ rating, text: text.trim(), tags, photoUrls, files: photoFiles })
           }
         >
           {submitting ? 'Publishing…' : 'Publish review'}

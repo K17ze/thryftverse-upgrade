@@ -2066,6 +2066,10 @@ interface WalletLedgerRow {
   asset: '1ZE' | 'FIAT';
   amount: number | string;
   balance_after: number | string;
+  /** Per-leg pocket currency stamped by migration 340 — '1ZE' for token
+   *  legs, the pocket's ISO code for fiat legs. Older deployments may still
+   *  have NULLs; the payload falls back to the wallet's fiat_currency. */
+  currency: string | null;
   kind: string;
   ref_type: string | null;
   ref_id: string | null;
@@ -2280,6 +2284,12 @@ function toWalletLedgerPayload(row: WalletLedgerRow, fiatCurrency = 'GBP') {
   const asset = row.asset;
   const amount = Number(row.amount);
   const balanceAfter = Number(row.balance_after);
+  // Per-leg currency, not the wallet default — an FX leg denominated in
+  // EUR/JPY must carry its own ISO code (and its own exponent) rather than
+  // being mislabeled as the wallet's fiat_currency.
+  const legCurrency = asset === 'FIAT'
+    ? (row.currency?.trim().toUpperCase() || fiatCurrency)
+    : '1ZE';
   // The internal anchor is intentionally hidden from user-facing responses.
   const anchorValueInInr = null;
 
@@ -2291,10 +2301,10 @@ function toWalletLedgerPayload(row: WalletLedgerRow, fiatCurrency = 'GBP') {
     amount,
     // FIAT amounts are stored in minor units — display fields must be major
     // units so clients don't render a 100× inflation.
-    amountDisplay: asset === '1ZE' ? unitsToOnezeAmount(amount) : fromFiatMinor(amount, fiatCurrency),
+    amountDisplay: asset === '1ZE' ? unitsToOnezeAmount(amount) : fromFiatMinor(amount, legCurrency),
     balanceAfter,
-    balanceAfterDisplay: asset === '1ZE' ? unitsToOnezeAmount(balanceAfter) : fromFiatMinor(balanceAfter, fiatCurrency),
-    currency: asset === 'FIAT' ? fiatCurrency : '1ZE',
+    balanceAfterDisplay: asset === '1ZE' ? unitsToOnezeAmount(balanceAfter) : fromFiatMinor(balanceAfter, legCurrency),
+    currency: legCurrency,
     kind: row.kind,
     refType: row.ref_type,
     refId: row.ref_id,
@@ -16724,13 +16734,21 @@ app.get('/listings', async (request, reply) => {
   const querySchema = z.object({
     q: z.string().trim().min(1).max(120).optional(),
     category: z.string().optional(),
+    // Multi-select categories — CSV; takes precedence over `category`.
+    categories: z.string().optional(),
     subcategory: z.string().optional(),
     brand: z.string().optional(),
     // Multi-select brands — CSV of brand names; takes precedence over the
     // single `brand` value when present.
     brands: z.string().optional(),
     size: z.string().optional(),
+    // Multi-select sizes — CSV; takes precedence over `size`.
+    sizes: z.string().optional(),
     condition: z.string().optional(),
+    // Multi-select conditions — CSV; takes precedence over `condition`.
+    conditions: z.string().optional(),
+    // The filter sheet's "Sold items" toggle — widens status beyond active.
+    includeSold: z.coerce.boolean().optional().default(false),
     minPrice: z.coerce.number().nonnegative().optional(),
     maxPrice: z.coerce.number().nonnegative().optional(),
     // The browse sort contract — the client sends these for every category
@@ -16747,7 +16765,9 @@ app.get('/listings', async (request, reply) => {
     return { items: [], error: 'minPrice must not exceed maxPrice' };
   }
 
-  const conditions: string[] = ["l.status = 'active'"];
+  const conditions: string[] = [
+    params.includeSold ? `l.status IN ('active', 'sold')` : `l.status = 'active'`,
+  ];
   const args: unknown[] = [];
 
   if (params.q) {
@@ -16760,7 +16780,14 @@ app.get('/listings', async (request, reply) => {
     args.push(`%${params.q}%`);
   }
 
-  if (params.category) {
+  const categoriesList = params.categories
+    ? params.categories.split(',').map((c) => c.trim()).filter(Boolean)
+    : [];
+  if (categoriesList.length > 0) {
+    // Same case-insensitive semantics as the scalar filter, set-scoped.
+    conditions.push(`LOWER(l.category) = ANY($${args.length + 1})`);
+    args.push(categoriesList.map((c) => c.toLowerCase()));
+  } else if (params.category) {
     // Stored categories are taxonomy display names ("Women") while clients
     // send route ids ("women") — normalize both sides to compare.
     conditions.push(`LOWER(l.category) = LOWER($${args.length + 1})`);
@@ -16780,11 +16807,23 @@ app.get('/listings', async (request, reply) => {
     conditions.push(`l.brand ILIKE $${args.length + 1}`);
     args.push(`%${params.brand}%`);
   }
-  if (params.size) {
+  const sizesList = params.sizes
+    ? params.sizes.split(',').map((s) => s.trim()).filter(Boolean)
+    : [];
+  if (sizesList.length > 0) {
+    conditions.push(`l.size ILIKE ANY($${args.length + 1})`);
+    args.push(sizesList.map((s) => `%${s}%`));
+  } else if (params.size) {
     conditions.push(`l.size ILIKE $${args.length + 1}`);
     args.push(`%${params.size}%`);
   }
-  if (params.condition) {
+  const conditionsList = params.conditions
+    ? params.conditions.split(',').map((c) => c.trim()).filter(Boolean)
+    : [];
+  if (conditionsList.length > 0) {
+    conditions.push(`l.condition = ANY($${args.length + 1})`);
+    args.push(conditionsList);
+  } else if (params.condition) {
     conditions.push(`l.condition ILIKE $${args.length + 1}`);
     args.push(`%${params.condition}%`);
   }
@@ -16800,6 +16839,11 @@ app.get('/listings', async (request, reply) => {
     // Mirrors the client predicate — grades A/B only.
     conditions.push(`l.sustainability_grade IN ('A', 'B')`);
   }
+
+  // Snapshot the filter conditions before the cursor predicate joins —
+  // pagination narrows a page, never the match total.
+  const countConditions = [...conditions];
+  const countArgs = [...args];
 
   let cursorData: { sortValue: string | number | null; id: string } | null = null;
   if (params.cursor) {
@@ -16865,6 +16909,20 @@ app.get('/listings', async (request, reply) => {
 
   const hasMore = result.rows.length > params.limit;
   const pageRows = hasMore ? result.rows.slice(0, params.limit) : result.rows;
+
+  // Truthful catalogue count for the applied filters — the cursor
+  // predicate is pagination, not a filter, so it stays out.
+  const countResult = await readDb.query<{ total: number }>(
+    `
+      SELECT COUNT(DISTINCT l.id)::int AS total
+      FROM listings l
+      LEFT JOIN users u ON u.id = l.seller_id
+      LEFT JOIN auctions a ON a.listing_id = l.id AND a.status = 'live'
+      WHERE ${countConditions.join(' AND ')}
+        ${reachExcludedSql('u')}
+    `,
+    countArgs
+  );
 
   const listingIds = pageRows.map((r) => r.id);
   const mediaByListing = await loadListingMedia(readDb, listingIds);
@@ -16935,6 +16993,7 @@ app.get('/listings', async (request, reply) => {
       };
     }),
     nextCursor,
+    total: countResult.rows[0]?.total ?? null,
   };
 });
 
@@ -19428,6 +19487,13 @@ app.get('/users/:userId/listings', async (request) => {
   if (status) {
     conditions.push(`status = $${args.length + 1}`);
     args.push(status);
+  }
+
+  // Public-status scope — drafts, paused, deleted and risk-held rows are
+  // owner-only inventory. Without this gate a storefront fetch (or an
+  // explicit `?status=draft`) emitted private rows to any viewer.
+  if (!viewerIsOwner) {
+    conditions.push(`l.status IN ('active', 'reserved', 'sold')`);
   }
 
   // Keyset pagination — the client's cursor contract was previously dropped
@@ -24512,6 +24578,7 @@ app.get('/wallet/1ze/:userId/ledger', async (request, reply) => {
           asset,
           amount::text,
           balance_after::text,
+          currency,
           kind,
           ref_type,
           ref_id,
@@ -37312,6 +37379,20 @@ app.post('/auctions', async (request, reply) => {
     startingBidGbp: z.number().min(0),
     buyNowPriceGbp: z.number().min(0).optional(),
     minIncrementGbp: z.number().min(0).max(1000).optional(),
+    // Reserve — the sweep already reads reserve_price_gbp to decide
+    // awaiting_payment vs reserve_not_met; without this field the column
+    // was write-proof and every auction was effectively reserve-met.
+    reservePriceGbp: z.number().min(0).optional(),
+    // Anti-sniping — product copy advertises a final-window extension
+    // universally, so it defaults on; a seller may opt out or tune it.
+    antiSniping: z
+      .object({
+        enabled: z.boolean().default(true),
+        windowSeconds: z.number().int().min(5).max(3600).default(120),
+        extensionSeconds: z.number().int().min(5).max(3600).default(120),
+        maxExtensions: z.number().int().min(0).max(100).default(10),
+      })
+      .default({ enabled: true, windowSeconds: 120, extensionSeconds: 120, maxExtensions: 10 }),
     idempotencyKey: z.string().min(4).max(140).optional(),
   });
 
@@ -37380,6 +37461,19 @@ app.post('/auctions', async (request, reply) => {
     return { ok: false, error: 'Buy now price must be greater than starting bid' };
   }
 
+  const reservePriceGbp =
+    payload.reservePriceGbp === undefined ? null : roundTo(payload.reservePriceGbp, 2);
+  // A buy-now below reserve would let a buyer bypass the reserve — the
+  // combination is incoherent, so reject it rather than weaken either rule.
+  if (
+    reservePriceGbp !== null &&
+    buyNowPriceGbp !== null &&
+    reservePriceGbp > buyNowPriceGbp
+  ) {
+    reply.code(400);
+    return { ok: false, error: 'Reserve price must not exceed the buy now price' };
+  }
+
   // Transaction: lock the listing row, verify ownership, create auction,
   // and pause the listing atomically. This prevents a race condition
   // where the listing could be sold via direct checkout between the
@@ -37438,9 +37532,14 @@ app.post('/auctions', async (request, reply) => {
           min_increment_gbp,
           bid_count,
           status,
+          reserve_price_gbp,
+          anti_sniping_enabled,
+          anti_sniping_window_seconds,
+          anti_sniping_extension_seconds,
+          anti_sniping_max_extensions,
           idempotency_key
         )
-        VALUES ($1, $2, $3, $4, $5, $6, $6, $7, $8, 0, $9, $10)
+        VALUES ($1, $2, $3, $4, $5, $6, $6, $7, $8, 0, $9, $10, $11, $12, $13, $14, $15)
         RETURNING
           id,
           listing_id,
@@ -37463,6 +37562,11 @@ app.post('/auctions', async (request, reply) => {
         buyNowPriceGbp,
         minIncrementGbp,
         status,
+        reservePriceGbp,
+        payload.antiSniping.enabled,
+        payload.antiSniping.windowSeconds,
+        payload.antiSniping.extensionSeconds,
+        payload.antiSniping.maxExtensions,
         idempotencyKey ?? null,
       ]
     );
@@ -37543,12 +37647,15 @@ app.get('/auctions/:auctionId/bids', async (request, reply) => {
     bidder_id: string;
     amount_gbp: number | string;
     created_at: string;
+    bidder_username: string | null;
   }>(
     `
-      SELECT id, auction_id, bidder_id, amount_gbp, created_at
-      FROM auction_bids
-      WHERE auction_id = $1
-      ORDER BY created_at DESC
+      SELECT ab.id, ab.auction_id, ab.bidder_id, ab.amount_gbp, ab.created_at,
+             u.username AS bidder_username
+      FROM auction_bids ab
+      LEFT JOIN users u ON u.id = ab.bidder_id
+      WHERE ab.auction_id = $1
+      ORDER BY ab.created_at DESC
       LIMIT $2
     `,
     [auctionId, limit]
@@ -37560,6 +37667,9 @@ app.get('/auctions/:auctionId/bids', async (request, reply) => {
       id: row.id,
       auctionId: row.auction_id,
       bidderId: row.bidder_id,
+      // Masked on the client — emitted so bidder identity survives the
+      // bid-list read (detail's bidActivity already carries it).
+      bidderUsername: row.bidder_username ?? 'unknown',
       amountGbp: Number(row.amount_gbp),
       createdAt: row.created_at,
     })),
@@ -37655,6 +37765,11 @@ app.post('/auctions/:auctionId/bids', {
       settled_at: string | null;
       winner_bidder_id: string | null;
       winner_bid_id: number | null;
+      anti_sniping_enabled: boolean | null;
+      anti_sniping_window_seconds: number | null;
+      anti_sniping_extension_seconds: number | null;
+      anti_sniping_max_extensions: number | null;
+      extension_count: number | null;
       listing_title: string | null;
       listing_image_url: string | null;
     }>(
@@ -37663,6 +37778,9 @@ app.post('/auctions/:auctionId/bids', {
                a.current_bid_gbp, a.min_increment_gbp, a.bid_count,
                a.buy_now_price_gbp, a.cancelled_at, a.settled_at,
                a.winner_bidder_id, a.winner_bid_id,
+               a.anti_sniping_enabled, a.anti_sniping_window_seconds,
+               a.anti_sniping_extension_seconds, a.anti_sniping_max_extensions,
+               a.extension_count,
                l.title AS listing_title,
                COALESCE(
                  CASE WHEN cover_media.media_type = 'video' THEN cover_media.poster_url END,
@@ -37900,16 +38018,42 @@ app.post('/auctions/:auctionId/bids', {
 
     const nextBidCount = auction.bid_count + 1;
 
+    // Anti-sniping — a bid landing inside the configured window extends
+    // the close by the configured step, bounded by max_extensions. The
+    // auction row is locked FOR UPDATE, so ends_at/extension_count read
+    // above are transaction-consistent.
+    const antiSnipingWindow = auction.anti_sniping_enabled
+      ? Number(auction.anti_sniping_window_seconds ?? 0)
+      : 0;
+    const antiSnipingExtension = Number(auction.anti_sniping_extension_seconds ?? 0);
+    const maxExtensions = Number(auction.anti_sniping_max_extensions ?? 0);
+    const extensionCount = Number(auction.extension_count ?? 0);
+    const msRemaining = new Date(auction.ends_at).getTime() - Date.now();
+    const closeExtended =
+      antiSnipingWindow > 0 &&
+      antiSnipingExtension > 0 &&
+      msRemaining <= antiSnipingWindow * 1000 &&
+      extensionCount < maxExtensions;
+    const extendedEndsAt = closeExtended
+      ? new Date(
+          new Date(auction.ends_at).getTime() + antiSnipingExtension * 1000,
+        ).toISOString()
+      : null;
+
     await client.query(
       `
         UPDATE auctions
         SET current_bid_gbp = $2,
             bid_count = $3,
-            updated_at = NOW()
+            updated_at = NOW(),
+            ends_at = COALESCE($4::timestamptz, ends_at),
+            extension_count = extension_count + CASE WHEN $4::timestamptz IS NULL THEN 0 ELSE 1 END
         WHERE id = $1
       `,
-      [auctionId, amountGbp, nextBidCount]
+      [auctionId, amountGbp, nextBidCount, extendedEndsAt]
     );
+
+    const effectiveEndsAt = extendedEndsAt ?? auction.ends_at;
 
     if (amlAssessment.shouldCreateAlert) {
       amlAlert = await createAmlAlert(client, {
@@ -37952,6 +38096,8 @@ app.post('/auctions/:auctionId/bids', {
             currentBidGbp: amountGbp,
             bidCount: nextBidCount,
             isBuyNow: false,
+            endsAt: effectiveEndsAt,
+            extended: closeExtended,
           },
           aml: amlAlert
             ? { alertId: amlAlert.alertId, status: amlAlert.status }
@@ -37971,6 +38117,8 @@ app.post('/auctions/:auctionId/bids', {
         amountGbp,
         bidCount: nextBidCount,
         isBuyNow: false,
+        endsAt: effectiveEndsAt,
+        extended: closeExtended,
       },
       // R01: versioned event for forward-compatible client parsing.
       seq: true,
@@ -37985,6 +38133,8 @@ app.post('/auctions/:auctionId/bids', {
         currentBidGbp: amountGbp,
         bidCount: nextBidCount,
         isBuyNow: false,
+        endsAt: effectiveEndsAt,
+        extended: closeExtended,
       },
       seq: true,
       version: 1,
@@ -38070,6 +38220,8 @@ app.post('/auctions/:auctionId/bids', {
         currentBidGbp: amountGbp,
         bidCount: nextBidCount,
         isBuyNow: false,
+        endsAt: effectiveEndsAt,
+        extended: closeExtended,
       },
       aml: amlAlert
         ? {
@@ -38602,6 +38754,15 @@ app.get('/auctions/:auctionId', async (request, reply) => {
     settled_at: string | null;
     cancelled_at: string | null;
     reserve_price_gbp: number | string | null;
+    payment_deadline_at: string | null;
+    second_chance_offered_to: string | null;
+    paid_at: string | null;
+    extension_count: number | null;
+    anti_sniping_enabled: boolean | null;
+    anti_sniping_window_seconds: number | null;
+    anti_sniping_extension_seconds: number | null;
+    anti_sniping_max_extensions: number | null;
+    auction_sequence: number | null;
     created_at: string;
     title: string | null;
     image_url: string | null;
@@ -38634,6 +38795,15 @@ app.get('/auctions/:auctionId', async (request, reply) => {
         a.settled_at,
         a.cancelled_at,
         a.reserve_price_gbp,
+        a.payment_deadline_at,
+        a.second_chance_offered_to,
+        a.paid_at,
+        a.extension_count,
+        a.anti_sniping_enabled,
+        a.anti_sniping_window_seconds,
+        a.anti_sniping_extension_seconds,
+        a.anti_sniping_max_extensions,
+        (SELECT MAX(ab2.auction_sequence) FROM auction_bids ab2 WHERE ab2.auction_id = a.id) AS auction_sequence,
         a.created_at,
         l.title,
         COALESCE(
@@ -38800,11 +38970,29 @@ app.get('/auctions/:auctionId', async (request, reply) => {
       bidCount: row.bid_count,
       lifecycle: computedStatus,
       terminalReason: canonical.terminalReason,
+      // Post-end settlement state — the sweep writes awaiting_payment /
+      // reserve_not_met / payment_expired / second_chance_offered into
+      // auctions.status; emitting it unblocks the winner pay-CTA and the
+      // reserve/deadline grammars both clients already model.
+      status: row.status,
+      paymentDeadlineAt: row.payment_deadline_at,
+      secondChanceOfferedTo: row.second_chance_offered_to,
+      paidAt: row.paid_at,
       viewerState,
+      viewerHighestBid,
       isWatched,
       winnerBidderId: row.winner_bidder_id,
       settledAt: row.settled_at,
       cancelledAt: row.cancelled_at,
+      // Realtime gap-detection + anti-sniping transparency.
+      auctionSequence: row.auction_sequence === null ? null : Number(row.auction_sequence),
+      extensionCount: Number(row.extension_count ?? 0),
+      antiSniping: {
+        enabled: row.anti_sniping_enabled === true,
+        windowSeconds: row.anti_sniping_window_seconds,
+        extensionSeconds: row.anti_sniping_extension_seconds,
+        maxExtensions: row.anti_sniping_max_extensions,
+      },
       createdAt: row.created_at,
       // Per spec 02_AUCTION Â§8: backend-backed fulfilment contract.
       // Null until the auction is terminal and fulfilment data exists.
@@ -39063,7 +39251,10 @@ app.get('/users/me/auction-bids', async (request, reply) => {
 
   const bidderId = request.authUser.userId;
   const querySchema = z.object({
-    status: z.enum(['active', 'won', 'lost', 'all']).default('all'),
+    // 'leading'/'outbid' are the native My Bids Active-tab filters — the
+    // bidState filter below already evaluates them; the enum must accept
+    // them or the request 400s before reaching it.
+    status: z.enum(['active', 'won', 'lost', 'leading', 'outbid', 'all']).default('all'),
     limit: z.coerce.number().int().min(1).max(60).default(30),
     cursor: z.string().optional(),
   });

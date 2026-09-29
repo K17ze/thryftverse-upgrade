@@ -76,7 +76,7 @@ export function ItemStep({
   if (!row) {
     return (
       <div>
-        <h1 className="text-screen-title font-bold text-text-primary">Item not found</h1>
+        <h1 className="text-screen-title text-text-primary">Item not found</h1>
         <p className="mt-2 text-body text-text-secondary">This row is no longer in the import.</p>
         <Button variant="secondary" size="md" className="mt-5" onClick={onBack}>
           Back to review
@@ -139,7 +139,7 @@ export function ItemStep({
     <div>
       {/* Position + item nav — the file's own ordering, nothing hidden. */}
       <div className="flex items-center justify-between">
-        <h1 className="text-screen-title font-bold text-text-primary">
+        <h1 className="text-screen-title text-text-primary">
           Item {index + 1} of {rows.length}
         </h1>
         <div className="flex items-center gap-1">

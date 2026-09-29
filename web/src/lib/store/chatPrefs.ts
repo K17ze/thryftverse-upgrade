@@ -8,11 +8,14 @@
  * These gate real local behaviour where the web surface can prove it:
  * `readReceipts = false` caps every own-message receipt at "delivered" —
  * the viewer's ticks and the inbox row glyph stop claiming a read the
- * setting says not to broadcast (mirrors the mobile flag, which syncs to
- * accountApi.updateChatPrivacy on a signed-in account). The message-scope
- * and in-chat card flags persist for the surfaces that consume them;
- * there is no web edge for who-can-message yet, so it persists locally —
- * the settings page says so.
+ * setting says not to broadcast.
+ *
+ * Live mode syncs the whole slice through GET/PATCH
+ * /users/me/chat-privacy — `whoCanMessage` is the server-enforced DM
+ * gate (wire 'nobody' ↔ local 'none'), readReceiptsEnabled and the two
+ * in-chat card flags land on the same endpoint. This store is the
+ * optimistic mirror and the fixture-mode truth; surfaces reconcile it
+ * via `syncFromServer` when the GET lands.
  */
 
 import { create } from 'zustand';
@@ -36,6 +39,17 @@ interface ChatPrefsState {
   setReadReceipts: (enabled: boolean) => void;
   setOffersInChat: (enabled: boolean) => void;
   setOrderUpdatesInChat: (enabled: boolean) => void;
+  /**
+   * Live-mode reconcile — the GET /users/me/chat-privacy posture lands
+   * verbatim (the wire's 'nobody' keys locally as 'none') so the mirror
+   * can never claim a posture the backend isn't enforcing.
+   */
+  syncFromServer: (server: {
+    allowMessagesFrom: 'everyone' | 'following' | 'nobody';
+    readReceiptsEnabled: boolean;
+    offersInChatEnabled: boolean;
+    orderUpdatesInChatEnabled: boolean;
+  }) => void;
 }
 
 export const useChatPrefs = create<ChatPrefsState>()(
@@ -49,6 +63,14 @@ export const useChatPrefs = create<ChatPrefsState>()(
       setReadReceipts: (enabled) => set({ readReceipts: enabled }),
       setOffersInChat: (enabled) => set({ offersInChat: enabled }),
       setOrderUpdatesInChat: (enabled) => set({ orderUpdatesInChat: enabled }),
+      syncFromServer: (server) =>
+        set({
+          whoCanMessage:
+            server.allowMessagesFrom === 'nobody' ? 'none' : server.allowMessagesFrom,
+          readReceipts: server.readReceiptsEnabled,
+          offersInChat: server.offersInChatEnabled,
+          orderUpdatesInChat: server.orderUpdatesInChatEnabled,
+        }),
     }),
     {
       name: 'thryftverse.web.chat-prefs',

@@ -39,9 +39,10 @@ export const SUPPORT_TICKETS: SupportTicket[] = [
   {
     id: 'tv-48213',
     ref: 'TV-48213',
+    conversationId: null,
     topicId: 'order_issue',
     topicLabel: 'Order issue',
-    orderRef: 'ord-1042',
+    orderId: 'ord-1042',
     contextLinks: [{ kind: 'listing', id: 'l6' }],
     status: 'in_review',
     priority: 'high',
@@ -92,9 +93,10 @@ export const SUPPORT_TICKETS: SupportTicket[] = [
   {
     id: 'tv-47911',
     ref: 'TV-47911',
+    conversationId: null,
     topicId: 'refund',
     topicLabel: 'Refund',
-    orderRef: 'ord-1038',
+    orderId: 'ord-1038',
     contextLinks: [{ kind: 'listing', id: 'l19' }],
     // Two photos attached with the return request — the customer message
     // references them ("Photos attached to the return request").
@@ -141,9 +143,10 @@ export const SUPPORT_TICKETS: SupportTicket[] = [
     // replied yet, so the assistant still owns the conversation).
     id: 'tv-47680',
     ref: 'TV-47680',
+    conversationId: null,
     topicId: 'order_issue',
     topicLabel: 'Order issue',
-    orderRef: 'ord-1053',
+    orderId: 'ord-1053',
     contextLinks: [{ kind: 'listing', id: 'l15' }],
     status: 'open',
     priority: 'normal',
@@ -190,9 +193,10 @@ export const SUPPORT_TICKETS: SupportTicket[] = [
   {
     id: 'tv-48150',
     ref: 'TV-48150',
+    conversationId: null,
     topicId: 'verification',
     topicLabel: 'Verification',
-    orderRef: null,
+    orderId: null,
     status: 'open',
     priority: 'normal',
     messages: [
@@ -222,9 +226,10 @@ export const SUPPORT_TICKETS: SupportTicket[] = [
   {
     id: 'tv-45120',
     ref: 'TV-45120',
+    conversationId: null,
     topicId: 'payments',
     topicLabel: 'Payments & payouts',
-    orderRef: null,
+    orderId: null,
     // The withdrawal the case is about — payout detail lives in Wallet.
     contextLinks: [{ kind: 'payout', id: 'TVP-88231' }],
     status: 'closed',
@@ -257,7 +262,7 @@ export const SUPPORT_TICKETS: SupportTicket[] = [
       disposition: 'Information provided',
       note: 'Payout confirmed settled with the bank on 18 Sep.',
     },
-    csat: { rating: 5, note: 'Sorted in one reply.' },
+    csat: { rating: 'helpful', note: 'Sorted in one reply.' },
     createdAt: '2026-09-18T08:02:00Z',
     updatedAt: '2026-09-19T09:00:00Z',
   },

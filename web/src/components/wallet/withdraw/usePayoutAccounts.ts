@@ -220,10 +220,11 @@ export function usePayoutAccounts(): PayoutAccountsData {
       const accountById = new Map<number, PayoutAccountPayload>(
         liveAccountsList.map((a) => [a.id, a]),
       );
-      const firstActiveId = liveAccountsList.find((a) => a.status === 'active')?.id ?? null;
-      const destinations = liveAccountsList.map((a) =>
-        liveDestination(a, a.id === firstActiveId),
-      );
+      // payout_accounts carries no server-side default flag — every live
+      // destination reports isDefault:false so surfaces never render a
+      // fabricated "Default" badge. The preselect below still falls back
+      // to the first row.
+      const destinations = liveAccountsList.map((a) => liveDestination(a, false));
       const requests = (liveRequests ?? []).map((r) =>
         requestFromApi(r, accountById.get(r.payoutAccountId)),
       );

@@ -51,11 +51,15 @@ import {
   type BulkActionResult,
 } from '@/lib/hooks/seller-queries';
 import type { SellerHubListingEditPatch } from '@/lib/api/services/sellerHub';
+import { DATA_MODE } from '@/lib/api/client';
+import { deleteListing, patchListing } from '@/lib/api/services/listings';
 import { useHydrated, useStore } from '@/lib/store/useStore';
 import { MY_DRAFT_LISTINGS, MY_LISTINGS } from '@/lib/data/fixtures';
 import { bumpListing, setListingStatus } from '@/lib/data/fixtures-commerce';
 import { removeSellerDraft } from '@/lib/data/fixtures-seller';
 import type { Listing } from '@/lib/contracts/domain';
+
+const LIVE = DATA_MODE === 'live';
 
 const EMPTY_COPY: Record<Exclude<ListingStatusFilter, 'all'>, { title: string; subtitle: string }> = {
   active: {
@@ -135,12 +139,16 @@ export default function SellerListingsPage() {
   const [editResult, setEditResult] = useState<BulkActionResult | null>(null);
 
   // Persisted bumps only exist client-side — gate them on hydration.
+  // In live mode drafts arrive inside `data` (owner-scoped
+  // /users/:me/listings returns every status); the fixture shelf merges
+  // only in fixture mode. Imported catalog drafts are session-local in
+  // both modes — they exist only in the browser until published.
   const rows = useMemo(
     () =>
       buildManagedRows(
         data ?? [],
-        MY_DRAFT_LISTINGS,
-        hydrated ? bumps : {},
+        LIVE ? [] : MY_DRAFT_LISTINGS,
+        hydrated && !LIVE ? bumps : {},
         importDrafts.data ?? [],
       ),
     [data, hydrated, bumps, importDrafts.data],
@@ -157,7 +165,7 @@ export default function SellerListingsPage() {
   }, [rows]);
 
   const statusCounts = useMemo(() => {
-    const c = { active: 0, paused: 0, sold: 0, draft: 0 };
+    const c = { active: 0, paused: 0, sold: 0, draft: 0, held: 0 };
     for (const r of rows) c[r.status] += 1;
     return c;
   }, [rows]);
@@ -183,13 +191,18 @@ export default function SellerListingsPage() {
    * and structural sharing keeps it). Push a fresh array into the cache
    * first — the same optimistic-write pattern useMarkPosted relies on —
    * then invalidate so every MY_LISTINGS consumer re-reads the new truth.
+   * Live mode is already server-truth: invalidation refetches.
    */
   const invalidate = () => {
-    qc.setQueryData<Listing[]>(['my-listings'], [...MY_LISTINGS]);
+    if (!LIVE) {
+      qc.setQueryData<Listing[]>(['my-listings'], [...MY_LISTINGS]);
+    }
     void qc.invalidateQueries({ queryKey: ['my-listings'] });
     void qc.invalidateQueries({ queryKey: ['seller'] });
   };
 
+  // Fixture-only mechanic — the backend has no bump endpoint, so the
+  // action isn't rendered in live mode (onBump stays undefined).
   const handleBump = (row: ManagedListingRow) => {
     if (bumpCooldownRemaining(bumps[row.listing.id], Date.now()) > 0) return;
     if (!bumpListing(row.listing.id)) return;
@@ -199,11 +212,24 @@ export default function SellerListingsPage() {
   };
 
   const handleMarkSold = (row: ManagedListingRow) => {
+    if (LIVE) {
+      // Canonical status write — PATCH enforces the same transition table
+      // as the command service, so an ineligible row gets a real 409.
+      void patchListing(row.listing.id, { status: 'sold' })
+        .then(() => {
+          invalidate();
+          show(`“${row.listing.title}” marked as sold`, 'success');
+        })
+        .catch(() => show("Couldn't mark it as sold — try again", 'error'));
+      return;
+    }
     if (!setListingStatus(row.listing.id, 'sold')) return;
     invalidate();
     show(`“${row.listing.title}” marked as sold`, 'success');
   };
 
+  // Fixture-only — 'sold' is terminal in the backend lifecycle table, so
+  // live rows get no relist affordance (onRelist stays undefined).
   const handleRelist = (row: ManagedListingRow) => {
     if (!setListingStatus(row.listing.id, 'active')) return;
     invalidate();
@@ -213,12 +239,14 @@ export default function SellerListingsPage() {
   /**
    * One draft-retire path shared by the row delete and the bulk delete —
    * the record leaves whichever store owns it and a bound composer
-   * snapshot is cleared so autosave can't resurrect it.
+   * snapshot is cleared so autosave can't resurrect it. Live backend
+   * drafts are listings rows, not store entries: they delete through
+   * DELETE /listings/:id (single) or the batch command (bulk).
    */
   const retireDraft = (row: ManagedListingRow) => {
     if (row.imported) {
       removeImportDraft(row.listing.id);
-    } else {
+    } else if (!LIVE) {
       removeSellerDraft(row.listing.id);
       invalidate();
     }
@@ -227,6 +255,16 @@ export default function SellerListingsPage() {
 
   const handleDeleteDraft = (row: ManagedListingRow) => {
     const title = row.listing.title || 'Untitled draft';
+    if (LIVE && !row.imported) {
+      if (loadSellDraft()?.draftId === row.listing.id) clearSellDraft();
+      void deleteListing(row.listing.id)
+        .then(() => {
+          invalidate();
+          show(`Draft “${title}” deleted`, 'success');
+        })
+        .catch(() => show("Couldn't delete that draft — try again", 'error'));
+      return;
+    }
     retireDraft(row);
     show(`Draft “${title}” deleted`, 'success');
   };
@@ -297,26 +335,37 @@ export default function SellerListingsPage() {
   };
 
   /**
-   * Bulk delete — drafts leave through their own stores (the batch
-   * command only manages live listings), live/paused rows go through the
-   * real command. Sold rows were filtered before the confirm sheet.
+   * Bulk delete — imported drafts leave their session store in both
+   * modes. In live mode every other row (backend drafts included — the
+   * lifecycle table allows draft → deleted) goes through the canonical
+   * batch command; held/sold rows that slip through get honest per-item
+   * rejections on the receipt. Fixture mode keeps the old split: drafts
+   * retire through their store, listings through the fixture command.
+   * Sold rows were filtered before the confirm sheet.
    */
   const handleBulkDelete = (target: ManagedListingRow[]) => {
-    const drafts = target.filter((r) => r.status === 'draft');
-    const listings = target.filter((r) => r.status !== 'draft');
-    for (const d of drafts) retireDraft(d);
-    if (!listings.length) {
+    const remote = target.filter((r) => !r.imported && (LIVE || r.status !== 'draft'));
+    const localCount = target.length - remote.length;
+    for (const row of target) {
+      if (row.imported) removeImportDraft(row.listing.id);
+      else if (!LIVE && row.status === 'draft') removeSellerDraft(row.listing.id);
+      if (loadSellDraft()?.draftId === row.listing.id) clearSellDraft();
+    }
+    // Fixture stores mutate in place — the cache push keeps the rows
+    // memo honest even when the batch command also fires below.
+    if (localCount) invalidate();
+    if (!remote.length) {
       setSelectedIds(new Set());
-      show(`Deleted ${drafts.length} draft${drafts.length === 1 ? '' : 's'}`, 'success');
+      show(`Deleted ${localCount} draft${localCount === 1 ? '' : 's'}`, 'success');
       return;
     }
     batch.mutate(
-      { command: 'delete', listingIds: listings.map((r) => r.listing.id) },
+      { command: 'delete', listingIds: remote.map((r) => r.listing.id) },
       {
         onSuccess: (result) => {
           keepRejected(result);
           const deleted =
-            result.results.filter((r) => r.state === 'applied').length + drafts.length;
+            result.results.filter((r) => r.state === 'applied').length + localCount;
           const skipped = result.results.filter((r) => r.state !== 'applied');
           const summary = skipped.length
             ? `Deleted ${deleted} · ${skipped.length} skipped (${[
@@ -331,9 +380,9 @@ export default function SellerListingsPage() {
   };
 
   return (
-    <div className="mx-auto w-full max-w-3xl px-4 pb-16 pt-8 sm:px-6 md:pt-12">
+    <div className="mx-auto w-full max-w-3xl px-4 pb-16 pt-8 sm:px-6 md:pt-12 lg:max-w-[1440px]">
       <div className="flex flex-wrap items-center justify-between gap-3">
-        <h1 className="text-screen-title font-semibold text-text-primary">Listings</h1>
+        <h1 className="text-screen-title text-text-primary">Listings</h1>
         <div className="flex items-center gap-1">
           <Link
             href="/seller-hub/bulk"
@@ -415,7 +464,7 @@ export default function SellerListingsPage() {
             ) : (
               <ListingManagementTable
                 rows={visible}
-                bumps={hydrated ? bumps : {}}
+                bumps={hydrated && !LIVE ? bumps : {}}
                 selectedIds={selectedIds}
                 onToggleSelected={toggleSelected}
                 onToggleSelectAll={toggleSelectAll}
@@ -426,10 +475,13 @@ export default function SellerListingsPage() {
                   setEditResult(null);
                   setEditRows(target);
                 }}
-                onBump={handleBump}
+                // No backend bump endpoint exists — no dead button in live.
+                onBump={LIVE ? undefined : handleBump}
                 onMarkSold={handleMarkSold}
                 onDeleteDraft={handleDeleteDraft}
-                onRelist={handleRelist}
+                // 'sold' is terminal in the lifecycle table — relist is
+                // fixture-mode only.
+                onRelist={LIVE ? undefined : handleRelist}
                 onResume={handleResume}
                 onViewStats={setStatsRow}
               />
@@ -437,8 +489,9 @@ export default function SellerListingsPage() {
           </div>
 
           <p className="mt-3 text-meta text-text-muted">
-            Bump resurfaces a listing — one per item every 24 hours. Demo mode: bumps,
-            pauses and deletes apply on this device only.
+            {LIVE
+              ? 'Changes apply everywhere you’re signed in — this is the same inventory the app manages.'
+              : 'Bump resurfaces a listing — one per item every 24 hours. Demo mode: bumps, pauses and deletes apply on this device only.'}
           </p>
         </>
       )}

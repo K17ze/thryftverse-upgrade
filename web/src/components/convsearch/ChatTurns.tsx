@@ -44,6 +44,18 @@ export interface ChatTurn {
   results?: Listing[];
   /** The user text that produced this turn — feeds the /search hand-off. */
   rawQuery?: string;
+  /**
+   * Where the intent parse came from — 'backend' (POST
+   * /search/conversational), 'fallback' (the local parser after a failed
+   * request — live mode discloses this), 'seed' (intent reconstructed
+   * from the /search params the thread was opened with). Fixture mode
+   * leaves it unset — the whole surface is the local engine and the Demo
+   * badge already says so.
+   */
+  source?: 'backend' | 'fallback' | 'seed';
+  /** The backend's own disclosure string, verbatim — e.g. 'heuristic
+   *  keyword matching, not AI'. */
+  method?: string;
 }
 
 const RAIL_LIMIT = 8;
@@ -62,7 +74,7 @@ export function EmptyThread({ onPick }: { onPick: (prompt: string) => void }) {
         I pull brands, categories, sizes, colours and prices out of plain
         words and match the catalogue — you can remove any keyword I caught.
       </p>
-      <p className="mt-6 text-label font-semibold uppercase tracking-wide text-text-muted">
+      <p className="mt-6 text-label text-text-muted">
         Try
       </p>
       <div className="mt-2.5 flex flex-wrap gap-1.5">
@@ -160,6 +172,18 @@ function AssistantTurn({
               expanded={trust.expanded}
               isDemo={DATA_MODE === 'fixture'}
             />
+            {/* Honest engine labels — the backend's verbatim disclosure on
+                server turns; a fallback note when a live request failed and
+                the local parser answered instead. */}
+            {turn.method ? (
+              <p className="mt-1.5 text-meta text-text-muted">
+                Engine: {turn.method}
+              </p>
+            ) : turn.source === 'fallback' && DATA_MODE === 'live' ? (
+              <p className="mt-1.5 text-meta text-text-muted">
+                Offline fallback — matched on this device.
+              </p>
+            ) : null}
           </div>
         ) : null}
 
@@ -207,7 +231,7 @@ function AssistantTurn({
               <div
                 key={item.id}
                 role="listitem"
-                className="w-[132px] shrink-0 snap-start sm:w-[150px]"
+                className="w-[132px] shrink-0 snap-start sm:w-[150px] lg:w-[168px]"
               >
                 <ProductTile item={item} />
               </div>

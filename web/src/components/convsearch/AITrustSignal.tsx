@@ -68,7 +68,7 @@ export function AITrustSignal({
             {CONFIDENCE_LABEL[confidence]}
           </span>
           {isDemo ? (
-            <span className="ml-1 shrink-0 rounded-full border border-border bg-surface-alt px-1.5 py-px text-micro font-medium uppercase tracking-wide text-text-muted">
+            <span className="ml-1 shrink-0 rounded-full border border-border bg-surface-alt px-1.5 py-px text-micro font-semibold uppercase tracking-[0.08em] text-text-muted">
               Demo
             </span>
           ) : null}

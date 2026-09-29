@@ -6,6 +6,10 @@
 import type {
   AssetLifecycleState,
   CoOwnIssuer,
+  CorporateAction,
+  CorporateActionStatus,
+  Distribution,
+  DistributionStatus,
 } from '@/lib/contracts/coown';
 
 const GBP2 = new Intl.NumberFormat('en-GB', {
@@ -65,6 +69,143 @@ export function verificationLabel(tier: CoOwnIssuer['verificationTier']): string
   if (tier === 'seller') return 'Seller verified';
   if (tier === 'id') return 'ID verified';
   return 'Email verified';
+}
+
+// ── Wire-vocabulary labels ────────────────────────────────────────────
+// Backend statuses and types pass through verbatim — these helpers map
+// the known vocabulary to display text and humanize anything unexpected
+// rather than collapsing it into a friendly-but-wrong label.
+
+function humanizeWire(raw: string): string {
+  return raw
+    .replace(/[_-]+/g, ' ')
+    .replace(/\b\w/g, (c) => c.toUpperCase());
+}
+
+/** Distribution type label — 'revenue_share' is the backend default;
+ *  unrecognised wire types humanize from `rawType` instead of being
+ *  re-labelled as rental income. */
+export function distributionKindLabel(d: Pick<Distribution, 'kind' | 'rawType'>): string {
+  switch (d.kind) {
+    case 'rental_income':
+      return 'Rental income';
+    case 'resale_gain':
+      return 'Resale gain';
+    case 'licensing':
+      return 'Licensing';
+    case 'revenue_share':
+      return 'Revenue share';
+    case 'dividend':
+      return 'Dividend';
+    default:
+      return d.rawType ? humanizeWire(d.rawType) : 'Distribution';
+  }
+}
+
+/** Every status migration 279 permits — 'settled' is the paid-out state. */
+export function distributionStatusLabel(status: DistributionStatus): string {
+  switch (status) {
+    case 'settled':
+      return 'Paid';
+    case 'scheduled':
+      return 'Scheduled';
+    case 'pending':
+      return 'Pending';
+    case 'reversed':
+      return 'Reversed';
+    case 'reinvested':
+      return 'Reinvested';
+    case 'reinvest_failed':
+      return 'Reinvest failed';
+    case 'retained_cash':
+      return 'Retained';
+    default:
+      return humanizeWire(status);
+  }
+}
+
+export function distributionStatusVariant(
+  status: DistributionStatus,
+): 'success' | 'warning' | 'danger' | 'neutral' {
+  switch (status) {
+    case 'settled':
+    case 'paid': // legacy label for settled rows — same truth
+      return 'success';
+    case 'scheduled':
+    case 'pending':
+      return 'warning';
+    case 'reversed':
+    case 'reinvest_failed':
+      return 'danger';
+    default:
+      return 'neutral';
+  }
+}
+
+/** Corporate-action kind label — 'other' humanizes the wire actionType
+ *  so a buyback or split never renders as "Sale offer". */
+export function corporateActionKindLabel(
+  a: Pick<CorporateAction, 'kind' | 'actionType'>,
+): string {
+  switch (a.kind) {
+    case 'sale_vote':
+      return 'Sale offer';
+    case 'insurance_renewal':
+      return 'Insurance renewal';
+    case 'authentication':
+      return 'Authentication';
+    case 'exit':
+      return 'Exit vote';
+    case 'governance':
+      return 'Governance vote';
+    case 'buyback':
+      return 'Buyback';
+    case 'dividend':
+      return 'Dividend';
+    case 'split':
+      return 'Unit split';
+    default:
+      return a.actionType ? humanizeWire(a.actionType) : 'Corporate action';
+  }
+}
+
+/** Full backend status vocabulary — 'announced' is the insert default,
+ *  'executing'/'completed' track a passed resolution in flight/done. */
+export function corporateActionStatusLabel(status: CorporateActionStatus): string {
+  switch (status) {
+    case 'open':
+      return 'Voting open';
+    case 'announced':
+      return 'Announced';
+    case 'passed':
+      return 'Passed';
+    case 'rejected':
+      return 'Rejected';
+    case 'executing':
+      return 'Executing';
+    case 'executed':
+      return 'Executed';
+    case 'completed':
+      return 'Completed';
+    case 'cancelled':
+      return 'Cancelled';
+    default:
+      return humanizeWire(status);
+  }
+}
+
+export function corporateActionStatusVariant(
+  status: CorporateActionStatus,
+): 'success' | 'warning' | 'neutral' {
+  switch (status) {
+    case 'open':
+      return 'success';
+    case 'announced':
+    case 'executing':
+      return 'warning';
+    default:
+      return 'neutral';
+  }
 }
 
 /** AllocationBar palette — quiet, editorial; cycles if there are many positions. */

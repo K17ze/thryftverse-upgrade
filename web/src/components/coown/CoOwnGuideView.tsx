@@ -44,7 +44,7 @@ const SECTIONS: { icon: AppIconName; title: string; body: string }[] = [
 export function CoOwnGuideView() {
   const router = useRouter();
   return (
-    <div className="mx-auto w-full max-w-2xl px-4 pb-20 pt-6 sm:px-6">
+    <div className="mx-auto w-full max-w-2xl px-4 pb-20 pt-6 sm:px-6 lg:max-w-[1100px]">
       <div className="flex items-center gap-1">
         <IconButton
           name="back"
@@ -52,12 +52,12 @@ export function CoOwnGuideView() {
           onClick={() => router.push('/co-own')}
           className="-ml-2"
         />
-        <span className="text-meta font-semibold uppercase tracking-[0.08em] text-text-muted">
+        <span className="text-meta font-semibold uppercase tracking-wide text-text-muted">
           Guide
         </span>
       </div>
 
-      <header className="mt-6">
+      <header className="mt-6 lg:mt-10 lg:max-w-2xl">
         <span className="rounded-full bg-brand-subtle px-2.5 py-1 text-micro font-semibold uppercase tracking-[0.08em] text-brand">
           Co-Own investing
         </span>
@@ -68,18 +68,18 @@ export function CoOwnGuideView() {
         </p>
       </header>
 
-      <ol className="mt-10 space-y-10">
+      <ol className="mt-10 space-y-10 lg:mt-14 lg:grid lg:grid-cols-2 lg:gap-x-14 lg:gap-y-0 lg:space-y-0">
         {SECTIONS.map((s, i) => (
-          <li key={s.title} className="flex gap-4">
+          <li key={s.title} className="flex gap-4 lg:border-t lg:border-border-subtle lg:py-7">
             <div className="flex flex-col items-center">
               <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-surface-alt text-brand">
                 <Icon name={s.icon} size={20} />
               </span>
               {i < SECTIONS.length - 1 ? (
-                <span className="mt-3 w-px flex-1 bg-border-subtle" aria-hidden="true" />
+                <span className="mt-3 w-px flex-1 bg-border-subtle lg:hidden" aria-hidden="true" />
               ) : null}
             </div>
-            <div className="pb-2">
+            <div className="pb-2 lg:pb-0">
               <h2 className="text-body-emphasis font-semibold text-text-primary">{s.title}</h2>
               <p className="mt-1.5 text-body leading-relaxed text-text-secondary">{s.body}</p>
             </div>
@@ -87,10 +87,13 @@ export function CoOwnGuideView() {
         ))}
       </ol>
 
-      <nav aria-label="Start exploring" className="mt-12 divide-y divide-border-subtle border-y border-border-subtle">
+      <nav
+        aria-label="Start exploring"
+        className="mt-12 divide-y divide-border-subtle border-y border-border-subtle lg:mt-16 lg:grid lg:grid-cols-3 lg:divide-x lg:divide-y-0"
+      >
         <Link
           href="/co-own"
-          className="group flex items-center justify-between gap-4 py-4 transition-colors hover:bg-row"
+          className="group flex items-center justify-between gap-4 py-4 transition-colors hover:bg-row lg:px-5 lg:py-6 lg:first:pl-0 lg:last:pr-0"
         >
           <span>
             <span className="block text-body-emphasis font-semibold text-text-primary">Browse markets</span>
@@ -100,7 +103,7 @@ export function CoOwnGuideView() {
         </Link>
         <Link
           href="/co-own/leaderboard"
-          className="group flex items-center justify-between gap-4 py-4 transition-colors hover:bg-row"
+          className="group flex items-center justify-between gap-4 py-4 transition-colors hover:bg-row lg:px-5 lg:py-6 lg:first:pl-0 lg:last:pr-0"
         >
           <span>
             <span className="block text-body-emphasis font-semibold text-text-primary">Leaderboard</span>
@@ -110,7 +113,7 @@ export function CoOwnGuideView() {
         </Link>
         <Link
           href="/co-own/ledger"
-          className="group flex items-center justify-between gap-4 py-4 transition-colors hover:bg-row"
+          className="group flex items-center justify-between gap-4 py-4 transition-colors hover:bg-row lg:px-5 lg:py-6 lg:first:pl-0 lg:last:pr-0"
         >
           <span>
             <span className="block text-body-emphasis font-semibold text-text-primary">Market tape</span>

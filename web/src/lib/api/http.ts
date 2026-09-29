@@ -33,7 +33,7 @@ export interface AuthSessionState {
 
 let authSessionState: AuthSessionState | null = null;
 let authSessionLoaded = false;
-let refreshInFlight: Promise<string | null> | null = null;
+let refreshInFlight: Promise<RefreshOutcome> | null = null;
 let authSessionPersistedAtMs: number | null = null;
 
 function isBrowser(): boolean {
@@ -442,6 +442,7 @@ function hydrateAuthSession() {
             : undefined,
         refreshTokenExpiresAt:
           typeof parsed.refreshTokenExpiresAt === 'string' ? parsed.refreshTokenExpiresAt : undefined,
+        userId: typeof parsed.userId === 'string' ? parsed.userId : undefined,
       };
       return;
     }
@@ -450,6 +451,21 @@ function hydrateAuthSession() {
   }
 
   authSessionState = null;
+}
+
+/**
+ * Cross-tab session sync — the auth session lives in localStorage, shared
+ * by every open tab of the app. When another tab rotates the refresh token
+ * (or signs out), this tab adopts the new state instead of silently holding
+ * a dead token. `storage` events fire only in OTHER documents, so a tab's
+ * own write never echoes back here.
+ */
+if (typeof window !== 'undefined') {
+  window.addEventListener('storage', (event) => {
+    if (event.key !== AUTH_SESSION_STORAGE_KEY) return;
+    authSessionLoaded = false;
+    hydrateAuthSession();
+  });
 }
 
 export async function getAuthSession(): Promise<AuthSessionState | null> {
@@ -470,59 +486,101 @@ export async function clearAuthSession() {
   clearStoredAuthSessionRaw();
 }
 
-async function refreshAccessToken(baseUrl: string): Promise<string | null> {
+/**
+ * Refresh outcome — the caller needs to distinguish three cases:
+ *  - refreshed: new access token in hand
+ *  - rejected:  the server definitively refused (revoked/expired/invalid)
+ *               → the session is dead; clear it and flip to guest
+ *  - transient: network/timeout — the session may still be valid; keep it
+ *               and let the request fail with its own error
+ */
+type RefreshOutcome =
+  | { kind: 'refreshed'; accessToken: string }
+  | { kind: 'rejected' }
+  | { kind: 'transient' };
+
+async function postRefresh(
+  baseUrl: string,
+  refreshToken: string,
+): Promise<RefreshOutcome> {
+  let response: Response;
+  try {
+    response = await fetchWithTimeout(`${baseUrl}/auth/refresh`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ refreshToken }),
+    }, 10000);
+  } catch {
+    // Timeout/network — not an auth verdict. Keep the session.
+    return { kind: 'transient' };
+  }
+
+  if (!response.ok) {
+    return { kind: 'rejected' };
+  }
+
+  let payload: {
+    ok?: boolean;
+    accessToken?: string;
+    refreshToken?: string;
+    accessTokenExpiresInSeconds?: number;
+    refreshTokenExpiresAt?: string;
+  };
+  try {
+    payload = (await response.json()) as typeof payload;
+  } catch {
+    return { kind: 'rejected' };
+  }
+
+  if (
+    payload.ok !== true ||
+    typeof payload.accessToken !== 'string' ||
+    typeof payload.refreshToken !== 'string'
+  ) {
+    return { kind: 'rejected' };
+  }
+
+  await setAuthSession({
+    accessToken: payload.accessToken,
+    refreshToken: payload.refreshToken,
+    accessTokenExpiresInSeconds: payload.accessTokenExpiresInSeconds,
+    refreshTokenExpiresAt: payload.refreshTokenExpiresAt,
+  });
+
+  return { kind: 'refreshed', accessToken: payload.accessToken };
+}
+
+async function refreshAccessToken(baseUrl: string): Promise<RefreshOutcome> {
   hydrateAuthSession();
 
   if (!authSessionState?.refreshToken) {
-    return null;
+    return { kind: 'rejected' };
   }
 
   if (refreshInFlight) {
     return refreshInFlight;
   }
 
-  refreshInFlight = (async () => {
-    try {
-      const response = await fetchWithTimeout(`${baseUrl}/auth/refresh`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ refreshToken: authSessionState?.refreshToken }),
-      }, 10000);
+  refreshInFlight = (async (): Promise<RefreshOutcome> => {
+    const tried = authSessionState?.refreshToken;
+    if (!tried) return { kind: 'rejected' };
 
-      if (!response.ok) {
-        await clearAuthSession();
-        return null;
-      }
+    const first = await postRefresh(baseUrl, tried);
+    if (first.kind !== 'rejected') return first;
 
-      const payload = (await response.json()) as {
-        ok?: boolean;
-        accessToken?: string;
-        refreshToken?: string;
-        accessTokenExpiresInSeconds?: number;
-        refreshTokenExpiresAt?: string;
-      };
-
-      if (
-        payload.ok !== true ||
-        typeof payload.accessToken !== 'string' ||
-        typeof payload.refreshToken !== 'string'
-      ) {
-        await clearAuthSession();
-        return null;
-      }
-
-      await setAuthSession({
-        accessToken: payload.accessToken,
-        refreshToken: payload.refreshToken,
-        accessTokenExpiresInSeconds: payload.accessTokenExpiresInSeconds,
-        refreshTokenExpiresAt: payload.refreshTokenExpiresAt,
-      });
-
-      return payload.accessToken;
-    } catch {
-      await clearAuthSession();
-      return null;
+    // Cross-tab rotation race: another tab may have just rotated this
+    // session's refresh token and written the successor to localStorage.
+    // Re-read the store; if the token changed, retry once with it before
+    // declaring the session dead.
+    authSessionLoaded = false;
+    hydrateAuthSession();
+    const stored = authSessionState?.refreshToken;
+    if (stored && stored !== tried) {
+      return postRefresh(baseUrl, stored);
     }
+
+    await clearAuthSession();
+    return { kind: 'rejected' };
   })();
 
   try {
@@ -656,18 +714,20 @@ export async function fetchJson<T>(
       !shouldSkipTokenRefresh(path) &&
       authSessionState?.refreshToken
     ) {
-      const refreshedAccessToken = await refreshAccessToken(baseUrl);
-      if (refreshedAccessToken) {
+      const refreshOutcome = await refreshAccessToken(baseUrl);
+      if (refreshOutcome.kind === 'refreshed') {
         try {
-          response = await execute(refreshedAccessToken);
+          response = await execute(refreshOutcome.accessToken);
         } catch (error) {
           const errorType = classifyNetworkError(error);
           const label = errorType === 'timeout' ? 'Request timed out' : 'Network request failed';
           throw new ApiRequestError(`${label} for ${url}: ${(error as Error).message}`);
         }
-      } else {
-        // Refresh failed — the session is gone. Emit so SessionProvider can
-        // flip to guest instead of leaving the app on stale auth state.
+      } else if (refreshOutcome.kind === 'rejected') {
+        // The server refused the refresh — the session is gone. Emit so
+        // SessionProvider can flip to guest instead of leaving the app on
+        // stale auth state. Transient failures keep the session: the next
+        // request retries the refresh.
         emitSessionExpired();
       }
     }

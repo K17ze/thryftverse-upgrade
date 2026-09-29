@@ -7,6 +7,9 @@
  */
 
 import type { Conversation, Message } from '@/lib/contracts/domain';
+import { listingById } from '@/lib/data/fixtures';
+import { marketplaceMeta } from '@/lib/api/services/chat';
+import { DATA_MODE } from '@/lib/api/client';
 import { formatPrice } from '@/lib/utils/format';
 import type { MosaicMember } from './GroupAvatarMosaic';
 
@@ -61,6 +64,60 @@ export function senderHandleFor(c: Conversation, senderId: string): string {
   if (p?.displayName) return p.displayName;
   if (p?.username) return `@${p.username}`;
   return senderLabelFor(c, senderId);
+}
+
+/** Avatar + label for a group sender — the cluster-trailing face next to
+ *  an incoming run (mobile ChatMessageItem avatar-recurrence grammar). */
+export function senderAvatarFor(
+  c: Conversation,
+  senderId: string,
+): { name: string; avatar?: string } {
+  const p = c.participantProfiles?.find((x) => x.id === senderId);
+  return {
+    name: p?.displayName ?? p?.username ?? 'Member',
+    avatar: p?.avatar ?? undefined,
+  };
+}
+
+// ── Marketplace role — Buying / Selling segment grammar ──────────────────
+
+/**
+ * The native segment classification (useInboxFilters +
+ * conversationClassification): group threads are their own rail,
+ * marketplace threads split Buying / Selling on the viewer's relation to
+ * the context listing, and plain DMs stay "general" — they only surface
+ * under All, never under a commerce segment.
+ *
+ * Web's proven seller signal, in order: the fixture listing's sellerId
+ * (fixtures resolve through the catalog), then the live payload's
+ * `marketplace.ownerId` (the native `sellerId ?? ownerId` proxy the chat
+ * service attaches). A marketplace thread with no resolvable owner reads
+ * as Buying — the same default native takes when sellerId is absent
+ * (isSelling false → isBuying true). Non-marketplace threads never claim
+ * a side they can't prove.
+ */
+export type ConversationRole = 'buying' | 'selling' | 'group' | 'general';
+
+export function conversationRole(
+  c: Conversation,
+  viewerId: string,
+): ConversationRole {
+  if (isGroupConversation(c)) return 'group';
+  const meta = marketplaceMeta(c);
+  const listingId = c.listing?.id ?? meta.itemId ?? meta.listingId;
+  const isMarketplace = Boolean(listingId);
+  if (!isMarketplace) return 'general';
+  // Fixture catalogue lookups only apply to fixture ids — a live listing
+  // id colliding with a catalogue id would attribute the thread to the
+  // wrong member. Live threads carry the seller proxy on the wire
+  // (marketplace.ownerId); when it's absent the thread stays Buying —
+  // the same default native takes when sellerId is absent.
+  const sellerId =
+    (DATA_MODE === 'fixture' && listingId
+      ? listingById(listingId)?.sellerId
+      : undefined) ?? meta.ownerId;
+  const isSelling = !!sellerId && (sellerId === viewerId || sellerId === 'me');
+  return isSelling ? 'selling' : 'buying';
 }
 
 // ── Last-message preview grammar ─────────────────────────────────────────
@@ -153,22 +210,30 @@ export function lastMessagePreview(c: Conversation): string {
  * through untouched; parseable timestamps (live API ISO strings) render in
  * the same compact grammar: 'now' / 'Nm' / 'Nh' / 'Yesterday' / 'Nd' / short
  * date. Mirrors mobile formatInboxTimestamp — never a raw ISO in the list.
+ *
+ * Day boundaries and the absolute branch are computed in UTC: the server
+ * and the client must agree on the same instant's label or hydration
+ * drifts (their local calendars can differ by a day). Relative minutes
+ * stay epoch arithmetic — timezone-free by construction.
  */
 export function formatInboxTimestamp(value: string): string {
   if (!value) return '';
   const d = new Date(value);
   if (Number.isNaN(d.getTime())) return value;
-  const now = new Date();
-  const diffMin = Math.floor((now.getTime() - d.getTime()) / 60_000);
+  const now = Date.now();
+  const diffMin = Math.floor((now - d.getTime()) / 60_000);
   if (diffMin < 1) return 'now';
   if (diffMin < 60) return `${diffMin}m`;
-  const today = new Date(now.getFullYear(), now.getMonth(), now.getDate());
-  const day = new Date(d.getFullYear(), d.getMonth(), d.getDate());
-  const diffDay = Math.round((today.getTime() - day.getTime()) / 86_400_000);
+  const utcDay = (t: number) => Math.floor(t / 86_400_000);
+  const diffDay = utcDay(now) - utcDay(d.getTime());
   if (diffDay <= 0) return `${Math.floor(diffMin / 60)}h`;
   if (diffDay === 1) return 'Yesterday';
   if (diffDay < 7) return `${diffDay}d`;
-  return d.toLocaleDateString('en-GB', { day: 'numeric', month: 'short' });
+  return d.toLocaleDateString('en-GB', {
+    day: 'numeric',
+    month: 'short',
+    timeZone: 'UTC',
+  });
 }
 
 /**

@@ -9,11 +9,9 @@
  */
 
 import type {
-  AppNotification,
   Conversation,
   DiscoveryFeedUnit,
   Listing,
-  NotificationEntry,
   Order,
   User,
   Review,
@@ -23,7 +21,6 @@ import {
   CONVERSATIONS,
   LISTINGS,
   MY_LISTINGS,
-  NOTIFICATIONS,
   NOTIFICATION_FEED,
   ORDERS,
   STORY_RAIL,
@@ -37,14 +34,27 @@ import {
   REVIEWS,
 } from '@/lib/data/fixtures';
 import * as listingsService from './services/listings';
+import type {
+  ListingFilters,
+  SortKey,
+} from '@/components/filters/filterTypes';
 import * as feedService from './services/feed';
 import * as usersService from './services/users';
 import * as chatService from './services/chat';
 import * as notificationsService from './services/notifications';
 import * as commerceService from './services/commerce';
+import * as socialService from './services/social';
 
-export const DATA_MODE =
-  (process.env.NEXT_PUBLIC_DATA_MODE ?? 'fixture') as 'fixture' | 'live';
+const envDataMode = process.env.NEXT_PUBLIC_DATA_MODE ?? 'fixture';
+// Defensive mirror of the next.config.ts check — this module is also
+// imported outside the Next runtime (tests, scripts), where the config
+// guard never runs.
+if (envDataMode !== 'fixture' && envDataMode !== 'live') {
+  throw new Error(
+    `NEXT_PUBLIC_DATA_MODE must be "fixture" or "live" — got "${envDataMode}".`,
+  );
+}
+export const DATA_MODE = envDataMode as 'fixture' | 'live';
 
 // Fixture latency — keeps skeleton states honest without feeling slow.
 const tick = (ms = 120) => new Promise((r) => setTimeout(r, ms));
@@ -53,6 +63,24 @@ export interface FeedPage {
   units: DiscoveryFeedUnit[];
   nextCursor: string | null;
 }
+
+/** SortKey → wire enum, per endpoint contract. /search/listings ranks by
+ *  `relevance`; /listings' nearest equivalent is `recommended`. */
+const SEARCH_SORT_WIRE: Record<SortKey, string> = {
+  relevance: 'relevance',
+  newest: 'recent',
+  'most-liked': 'most_liked',
+  'price-asc': 'price_asc',
+  'price-desc': 'price_desc',
+};
+
+const BROWSE_SORT_WIRE: Record<SortKey, string> = {
+  relevance: 'recommended',
+  newest: 'newest',
+  'most-liked': 'most_liked',
+  'price-asc': 'price_asc',
+  'price-desc': 'price_desc',
+};
 
 async function fetchFeedFixture(_cursor?: string): Promise<FeedPage> {
   await tick();
@@ -136,8 +164,8 @@ async function fetchFeedFixture(_cursor?: string): Promise<FeedPage> {
   return { units, nextCursor: null };
 }
 
-async function fetchFeedLive(cursor?: string): Promise<FeedPage> {
-  const page = await feedService.fetchHomeFeed(undefined, { cursor: cursor ?? undefined });
+async function fetchFeedLive(cursor?: string, signal?: AbortSignal): Promise<FeedPage> {
+  const page = await feedService.fetchHomeFeed(signal, { cursor: cursor ?? undefined });
   const units: DiscoveryFeedUnit[] = page.units
     .map((u): DiscoveryFeedUnit | null => {
       if (u.kind === 'listing' && u.listing) {
@@ -154,20 +182,22 @@ async function fetchFeedLive(cursor?: string): Promise<FeedPage> {
           lookId: u.look.id,
           coverImageUri: u.look.coverImageUri,
           coverAspectRatio: u.look.coverAspectRatio,
-          creatorUsername: null,
-          creatorAvatarUri: null,
+          creatorUsername: u.look.creatorUsername ?? null,
+          creatorAvatarUri: u.look.creatorAvatar ?? null,
           itemCount: u.look.itemIds.length,
         };
       }
       if (u.kind === 'poster' && u.poster) {
         return {
           type: 'poster' as const,
+          // poster.id IS the story id — the feed service resolves the
+          // frame row to its parent story before it reaches here.
           id: `poster-${u.poster.id}`,
           storyId: u.poster.id,
           coverUri: u.poster.coverUri,
           aspectRatio: u.poster.aspectRatio,
-          authorUsername: null,
-          authorAvatarUri: null,
+          authorUsername: u.poster.authorUsername ?? null,
+          authorAvatarUri: u.poster.authorAvatar ?? null,
         };
       }
       return null;
@@ -177,13 +207,68 @@ async function fetchFeedLive(cursor?: string): Promise<FeedPage> {
 }
 
 export const data = {
-  async listings(category?: string, query?: string): Promise<Listing[]> {
+  /** Catalogue retrieval — one method, two backend contracts:
+   *  - a usable query (≥2 chars) → GET /search/listings (ranked, page-
+   *    based; the service synthesises the cursor contract)
+   *  - browse / category / facets-only / short query → GET /listings
+   *    (cursor pagination, slug-tolerant category).
+   *  `filters`/`sort` are forwarded server-side so refinement, ordering
+   *  and the result count are truthful over the whole catalogue, not the
+   *  first page. Fixture mode applies the same predicates locally. */
+  async listings(
+    params: {
+      category?: string;
+      query?: string;
+      cursor?: string;
+      limit?: number;
+      filters?: ListingFilters;
+      sort?: SortKey;
+      subcategory?: string;
+      signal?: AbortSignal;
+    } = {},
+  ): Promise<listingsService.ListingPage> {
+    const { category, query, cursor, limit, signal, filters, sort, subcategory } = params;
     if (DATA_MODE === 'live') {
-      const page = await listingsService.searchListings({
-        category: category && category !== 'All' ? category : undefined,
-        q: query,
-      });
-      return page.items;
+      const scopedCategory = category && category !== 'All' ? category : undefined;
+      const q = query?.trim();
+      if (q && q.length >= 2) {
+        return listingsService.searchListings(
+          {
+            q,
+            category: scopedCategory,
+            categories: filters?.categories,
+            conditions: filters?.conditions,
+            brands: filters?.brands,
+            sizes: filters?.sizes,
+            priceMin: filters?.priceMin ?? undefined,
+            priceMax: filters?.priceMax ?? undefined,
+            includeSold: filters?.includeSold || undefined,
+            sort: sort ? SEARCH_SORT_WIRE[sort] : undefined,
+            cursor,
+            limit,
+          },
+          signal,
+        );
+      }
+      return listingsService.fetchListings(
+        {
+          // /listings accepts q≥1 — a one-char browse query still narrows.
+          q: q || undefined,
+          category: scopedCategory,
+          categories: filters?.categories,
+          subcategory,
+          brands: filters?.brands,
+          sizes: filters?.sizes,
+          conditions: filters?.conditions,
+          minPrice: filters?.priceMin ?? undefined,
+          maxPrice: filters?.priceMax ?? undefined,
+          includeSold: filters?.includeSold || undefined,
+          sort: sort ? BROWSE_SORT_WIRE[sort] : undefined,
+          cursor,
+          limit,
+        },
+        signal,
+      );
     }
     await tick();
     let out = LISTINGS;
@@ -203,126 +288,150 @@ export const data = {
           l.subcategory?.toLowerCase().includes(q),
       );
     }
-    return out;
+    if (subcategory) {
+      const s = subcategory.toLowerCase();
+      out = out.filter((l) => l.subcategory?.toLowerCase() === s);
+    }
+    // Fixture parity with the live contract — the facet groups the server
+    // narrows by are applied here too (OR within a group, AND across).
+    if (filters) {
+      const cats = filters.categories.map((c) => c.toLowerCase());
+      const brands = filters.brands.map((b) => b.toLowerCase());
+      const sizes = filters.sizes.map((s) => s.toLowerCase());
+      if (!filters.includeSold) {
+        out = out.filter((l) => !l.isSold && l.status !== 'sold');
+      }
+      if (cats.length > 0) out = out.filter((l) => cats.includes(l.category.toLowerCase()));
+      if (filters.conditions.length > 0) {
+        out = out.filter((l) => filters.conditions.includes(l.condition));
+      }
+      if (brands.length > 0) {
+        out = out.filter((l) =>
+          brands.some((b) => (l.brand ?? '').toLowerCase().includes(b)),
+        );
+      }
+      if (sizes.length > 0) {
+        out = out.filter((l) =>
+          sizes.some((s) => (l.size ?? '').toLowerCase().includes(s)),
+        );
+      }
+      if (filters.priceMin != null) out = out.filter((l) => l.price >= filters.priceMin!);
+      if (filters.priceMax != null) out = out.filter((l) => l.price <= filters.priceMax!);
+    }
+    return { items: out, nextCursor: null, total: out.length };
   },
 
-  async feed(cursor?: string): Promise<FeedPage> {
+  async feed(cursor?: string, signal?: AbortSignal): Promise<FeedPage> {
     if (DATA_MODE === 'live') {
-      return fetchFeedLive(cursor);
+      return fetchFeedLive(cursor, signal);
     }
     return fetchFeedFixture(cursor);
   },
 
-  async listing(id: string): Promise<Listing | null> {
+  async listing(id: string, signal?: AbortSignal): Promise<Listing | null> {
     if (DATA_MODE === 'live') {
-      return listingsService.fetchListingById(id);
+      return listingsService.fetchListingById(id, signal);
     }
     await tick();
     return listingById(id) ?? null;
   },
 
-  async sellerListings(sellerId: string): Promise<Listing[]> {
+  async sellerListings(sellerId: string, signal?: AbortSignal): Promise<Listing[]> {
     if (DATA_MODE === 'live') {
-      const page = await listingsService.fetchSellerListings(sellerId);
+      const page = await listingsService.fetchSellerListings(sellerId, {}, signal);
       return page.items;
     }
     await tick();
     return listingsBySeller(sellerId);
   },
 
-  async user(id: string): Promise<User | null> {
+  async user(id: string, signal?: AbortSignal): Promise<User | null> {
     if (DATA_MODE === 'live') {
-      return usersService.fetchUserProfile(id);
+      return usersService.fetchUserProfile(id, signal);
     }
     await tick();
     return userById(id) ?? null;
   },
 
-  async userByUsername(username: string): Promise<User | null> {
+  async userByUsername(username: string, signal?: AbortSignal): Promise<User | null> {
     if (DATA_MODE === 'live') {
-      return usersService.fetchUserByUsername(username);
+      return usersService.fetchUserByUsername(username, signal);
     }
     await tick();
     return USERS.find((u) => u.username === username) ?? null;
   },
 
-  async reviews(userId: string): Promise<Review[]> {
+  async reviews(userId: string, signal?: AbortSignal): Promise<Review[]> {
     if (DATA_MODE === 'live') {
-      return usersService.fetchUserReviews(userId);
+      return usersService.fetchUserReviews(userId, signal);
     }
     await tick();
     return REVIEWS.filter((r) => r.userId === userId);
   },
 
-  async conversations(currentUserId?: string): Promise<Conversation[]> {
+  async conversations(currentUserId?: string, signal?: AbortSignal): Promise<Conversation[]> {
     if (DATA_MODE === 'live') {
-      return chatService.fetchConversations(currentUserId);
+      return chatService.fetchConversations(currentUserId, signal);
     }
     await tick();
     return CONVERSATIONS;
   },
 
-  async conversation(id: string, currentUserId?: string): Promise<Conversation | null> {
+  async conversation(
+    id: string,
+    currentUserId?: string,
+    signal?: AbortSignal,
+  ): Promise<Conversation | null> {
     if (DATA_MODE === 'live') {
-      return chatService.fetchConversation(id, currentUserId);
+      return chatService.fetchConversation(id, currentUserId, signal);
     }
     await tick();
     return CONVERSATIONS.find((c) => c.id === id) ?? null;
   },
 
-  async notifications(): Promise<AppNotification[]> {
+  /** Badge count — the count-only endpoint; the full feed fetch is for
+   *  the /notifications page, not the chrome. */
+  async unreadNotificationCount(signal?: AbortSignal): Promise<number> {
     if (DATA_MODE === 'live') {
-      const page = await notificationsService.fetchNotificationEvents();
-      return page.items;
+      return notificationsService.fetchUnreadNotificationCount(signal);
     }
     await tick();
-    return NOTIFICATIONS;
+    return NOTIFICATION_FEED.filter((n) => n.unread).length;
   },
 
-  /** Structured notification feed — the canonical render contract for
-   * /notifications (kind, text, time, image, href, unread). */
-  async notificationEntries(): Promise<NotificationEntry[]> {
-    if (DATA_MODE === 'live') {
-      const page = await notificationsService.fetchNotificationEvents();
-      return page.entries;
-    }
-    await tick();
-    return NOTIFICATION_FEED;
-  },
-
-  /** Story rail entries — poster stories surfaced on the home feed. */
-  async posterStories(): Promise<
+  /** Story rail entries — GET /poster-stories, the same id namespace the
+   *  /poster/[id] viewer resolves (feed poster units are `posters` rows,
+   *  not stories — deriving the rail from them dead-ends every tap). */
+  async posterStories(signal?: AbortSignal): Promise<
     { id: string; username: string; avatar: string; coverUri: string; seen?: boolean }[]
   > {
     if (DATA_MODE === 'live') {
-      // No dedicated stories endpoint verified — derive from feed poster
-      // units. Author fields the live mapper doesn't carry stay null-safe.
-      const page = await feedService.fetchHomeFeed(undefined, {});
-      return page.units
-        .filter((u) => u.kind === 'poster' && u.poster)
-        .map((u) => ({
-          id: u.poster!.id,
-          username: '',
-          avatar: '',
-          coverUri: u.poster!.coverUri,
-        }));
+      const stories = await socialService.fetchPosterStories(signal);
+      return stories.map((s) => ({
+        id: s.id,
+        username: s.creator.username ?? '',
+        avatar: s.creator.avatar ?? '',
+        // Rail cover = first frame's media (posterUrl for video frames).
+        coverUri: s.frames[0]?.posterUrl ?? s.frames[0]?.mediaUrl ?? '',
+        seen: s.seenByViewer,
+      }));
     }
     await tick();
     return STORY_RAIL;
   },
 
-  async orders(): Promise<Order[]> {
+  async orders(signal?: AbortSignal): Promise<Order[]> {
     if (DATA_MODE === 'live') {
-      const page = await commerceService.fetchOrders();
+      const page = await commerceService.fetchOrders({}, signal);
       return page.baseOrders;
     }
     await tick();
     return ORDERS;
   },
 
-  async myListings(): Promise<Listing[]> {
+  async myListings(signal?: AbortSignal): Promise<Listing[]> {
     if (DATA_MODE === 'live') {
-      const page = await listingsService.fetchMyListings();
+      const page = await listingsService.fetchMyListings({}, signal);
       return page.items;
     }
     await tick();

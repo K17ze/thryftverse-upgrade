@@ -24,6 +24,7 @@ import {
   usePriceHistoryMap,
 } from '@/lib/hooks/coown-queries';
 import type { CandlePoint, CoOwnAsset, PriceWindow } from '@/lib/contracts/coown';
+import { coOwnMarkGbp } from '@/lib/contracts/coown';
 import { formatCount } from '@/lib/utils/format';
 import { AssetThumb } from './AssetThumb';
 import { LifecycleTag } from './LifecycleTag';
@@ -101,7 +102,7 @@ function AllocMeter({ pct }: { pct: number }) {
 
 function LeaderboardSkeleton() {
   return (
-    <div className="mx-auto w-full max-w-5xl px-4 pb-20 pt-8 sm:px-6 md:pt-10" aria-busy="true" aria-label="Loading leaderboard">
+    <div className="mx-auto w-full max-w-5xl px-4 pb-20 pt-8 sm:px-6 md:pt-10 lg:max-w-[1440px]" aria-busy="true" aria-label="Loading leaderboard">
       <Skeleton className="h-9 w-48" />
       <Skeleton className="mt-3 h-4 w-72" />
       <div className="mt-8 flex items-center justify-between border-b border-border-subtle pb-4">
@@ -156,7 +157,7 @@ export function LeaderboardView() {
         case 'name':
           return r.asset.title.toLowerCase();
         case 'price':
-          return r.asset.unitPriceGbp;
+          return coOwnMarkGbp(r.asset);
         case 'move':
           return r.movePct;
         case 'volume':
@@ -226,7 +227,7 @@ export function LeaderboardView() {
   );
 
   return (
-    <div className="mx-auto w-full max-w-5xl px-4 pb-20 pt-8 sm:px-6 md:pt-10">
+    <div className="mx-auto w-full max-w-5xl px-4 pb-20 pt-8 sm:px-6 md:pt-10 lg:max-w-[1440px]">
       <header className="flex flex-wrap items-end justify-between gap-x-6 gap-y-3">
         <div>
           <h1 className="text-editorial-display text-text-primary">Leaderboard</h1>
@@ -309,7 +310,7 @@ export function LeaderboardView() {
                     </div>
                   </div>
                   <p className="text-right text-body-emphasis text-text-primary tnum">
-                    {gbp(asset.unitPriceGbp)}
+                    {gbp(coOwnMarkGbp(asset))}
                   </p>
                   <div className="text-right">
                     <MoveValue pct={row.movePct} />
@@ -364,7 +365,7 @@ export function LeaderboardView() {
                   </div>
                   <div className="shrink-0 text-right">
                     <p className="text-body-emphasis text-text-primary tnum">
-                      {gbp(asset.unitPriceGbp)}
+                      {gbp(coOwnMarkGbp(asset))}
                     </p>
                     <p className="mt-1">
                       <MoveValue pct={row.movePct} />

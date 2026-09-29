@@ -159,7 +159,7 @@ export function creditSyndicateRefund(
       amount: round2(amountGbp),
       status: 'completed',
       date: now,
-      description: `Syndicate commitment returned — ${pool.name}`,
+      description: `Pool commitment returned — ${pool.name}`,
       balance: null,
     };
     return {
@@ -321,7 +321,7 @@ export function useSyndicateActions() {
           amount: -amountGbp,
           status: 'completed',
           date: now,
-          description: `Syndicate commitment — ${target.name}`,
+          description: `Pool commitment — ${target.name}`,
           balance: null,
         };
         return {

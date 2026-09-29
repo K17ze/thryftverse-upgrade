@@ -1,13 +1,20 @@
 'use client';
 
 /**
- * NewTicketForm — the contact CTA's inline form: topic select, optional
- * order reference, message. Creates the case in session state and hands
- * the caller the new ticket for navigation. Outcome preview per topic
- * mirrors OrderSupportScreen's honest expectation-setting.
+ * NewTicketForm — the contact CTA's inline form: topic select, the order
+ * this request is about, message. Creates the case in session state and
+ * hands the caller the new ticket for navigation. Outcome preview per
+ * topic mirrors OrderSupportScreen's honest expectation-setting.
+ *
+ * Live mode POSTs /support/tickets, which is order-bound — the order
+ * picker lists the caller's real orders (GET /users/:id/orders) and the
+ * form cannot submit without one. There is no unbound case-create route;
+ * a user with no orders gets the honest note instead of a dead submit.
+ * Fixture mode keeps the picker optional ("general question").
  */
 
 import { useState } from 'react';
+import { useQuery } from '@tanstack/react-query';
 import { Button } from '@/components/ui/Button';
 import { Icon } from '@/components/ui/Icon';
 import { useToast } from '@/components/ui/Toast';
@@ -16,10 +23,25 @@ import {
   topicById,
   type SupportTopicId,
 } from '@/lib/contracts/support';
+import { DATA_MODE } from '@/lib/api/client';
+import { fetchOrders } from '@/lib/api/services/commerce';
+import { ORDERS } from '@/lib/data/fixtures';
 import { useSupportActions } from './useSupportTickets';
 
 const FIELD_CLASS =
   'w-full rounded-lg border border-border bg-input px-3.5 text-body text-input-text placeholder:text-text-muted focus:border-text-muted focus:outline-none';
+
+interface OrderOption {
+  id: string;
+  label: string;
+}
+
+function orderOption(o: { id: string; status: string }): OrderOption {
+  return {
+    id: o.id,
+    label: `Order ${o.id} · ${o.status}`,
+  };
+}
 
 interface NewTicketFormProps {
   onCreated: (ticketId: string) => void;
@@ -32,13 +54,34 @@ export function NewTicketForm({ onCreated, onCancel, initialTopic }: NewTicketFo
   const { createTicket } = useSupportActions();
   const { show } = useToast();
   const [topicId, setTopicId] = useState<SupportTopicId | ''>(initialTopic ?? '');
-  const [orderRef, setOrderRef] = useState('');
+  const [orderId, setOrderId] = useState('');
   const [message, setMessage] = useState('');
   const [touched, setTouched] = useState(false);
   const [submitting, setSubmitting] = useState(false);
 
+  // Order picker — live: the caller's own orders (buyer + seller roles,
+  // the ticket route accepts either party). Fixture: the catalogue's
+  // session orders.
+  const ordersQuery = useQuery({
+    queryKey: ['support-order-picker'],
+    queryFn: ({ signal }) =>
+      fetchOrders({ role: 'all', limit: 20 }, signal).then((p) => p.items),
+    enabled: DATA_MODE === 'live',
+    staleTime: 60_000,
+  });
+
+  const isLive = DATA_MODE === 'live';
+  const orderOptions: OrderOption[] = isLive
+    ? (ordersQuery.data ?? []).map(orderOption)
+    : ORDERS.map(orderOption);
+  const ordersLoading = isLive && ordersQuery.isLoading;
+  const ordersEmpty = isLive && ordersQuery.isSuccess && orderOptions.length === 0;
+
   const topic = topicId ? topicById(topicId) : undefined;
-  const canSubmit = topicId !== '' && message.trim().length >= 10 && !submitting;
+  // Live tickets are order-bound — the order is required, never faked.
+  const orderOk = isLive ? orderId !== '' : true;
+  const canSubmit =
+    topicId !== '' && orderOk && message.trim().length >= 10 && !submitting && !ordersLoading;
 
   const submit = async () => {
     setTouched(true);
@@ -47,7 +90,7 @@ export function NewTicketForm({ onCreated, onCancel, initialTopic }: NewTicketFo
     try {
       const ticket = await createTicket({
         topicId,
-        orderRef: orderRef.trim() || null,
+        orderRef: orderId || null,
         message: message.trim(),
       });
       onCreated(ticket.id);
@@ -69,7 +112,7 @@ export function NewTicketForm({ onCreated, onCancel, initialTopic }: NewTicketFo
       <div>
         <label
           htmlFor="ticket-topic"
-          className="text-label font-semibold uppercase tracking-wider text-text-muted"
+          className="text-label text-text-muted"
         >
           Topic
         </label>
@@ -100,24 +143,55 @@ export function NewTicketForm({ onCreated, onCancel, initialTopic }: NewTicketFo
       <div>
         <label
           htmlFor="ticket-order"
-          className="text-label font-semibold uppercase tracking-wider text-text-muted"
+          className="text-label text-text-muted"
         >
-          Order reference <span className="normal-case text-text-muted">(optional)</span>
+          Order {isLive ? null : <span className="normal-case text-text-muted">(optional)</span>}
         </label>
-        <input
-          id="ticket-order"
-          type="text"
-          value={orderRef}
-          onChange={(e) => setOrderRef(e.target.value)}
-          placeholder="e.g. ord-1042"
-          className={`tnum mt-1.5 h-11 ${FIELD_CLASS}`}
-        />
+        <div className="relative mt-1.5">
+          <select
+            id="ticket-order"
+            value={orderId}
+            onChange={(e) => setOrderId(e.target.value)}
+            disabled={ordersLoading || ordersEmpty}
+            className={`${FIELD_CLASS} tnum h-11 appearance-none pr-9 disabled:opacity-60`}
+          >
+            <option value="" disabled={isLive}>
+              {ordersLoading
+                ? 'Loading your orders…'
+                : ordersEmpty
+                  ? 'No orders on your account'
+                  : isLive
+                    ? 'Choose the order this is about'
+                    : 'No order — general question'}
+            </option>
+            {orderOptions.map((o) => (
+              <option key={o.id} value={o.id}>
+                {o.label}
+              </option>
+            ))}
+          </select>
+          <Icon
+            name="chevronDown"
+            size={16}
+            className="pointer-events-none absolute right-3.5 top-1/2 -translate-y-1/2 text-text-muted"
+          />
+        </div>
+        {ordersEmpty ? (
+          <p className="mt-1.5 text-caption text-text-muted">
+            Support requests are tied to an order. If your question is about
+            something else, reach out from the order or listing itself.
+          </p>
+        ) : touched && isLive && orderId === '' ? (
+          <p className="mt-1.5 text-caption text-danger-text">
+            Pick the order this request is about.
+          </p>
+        ) : null}
       </div>
 
       <div>
         <label
           htmlFor="ticket-message"
-          className="text-label font-semibold uppercase tracking-wider text-text-muted"
+          className="text-label text-text-muted"
         >
           Message
         </label>

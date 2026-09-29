@@ -11,7 +11,7 @@ import { AppImage } from '@/components/ui/AppImage';
 import { Button } from '@/components/ui/Button';
 import { Icon } from '@/components/ui/Icon';
 import { formatScheduled } from '@/components/live/UpcomingRail';
-import { listingById } from '@/lib/data/fixtures';
+import { useResolvedListings } from '@/lib/hooks/home-modules';
 import { formatPrice } from '@/lib/utils/format';
 import { getListingCoverUri } from '@/lib/utils/media';
 import type { HostStream } from './hostStreams';
@@ -23,12 +23,12 @@ interface HostScheduledRoomProps {
 }
 
 export function HostScheduledRoom({ stream, onGoLive, goingLive }: HostScheduledRoomProps) {
-  const pinned = stream.pinIds
-    .map((id) => listingById(id))
-    .filter((l): l is NonNullable<typeof l> => l != null);
+  // Pinned rows resolve through the shared id resolver — live ids fetch,
+  // misses drop; fixture ids read the bundled catalogue.
+  const { items: pinned } = useResolvedListings(stream.pinIds);
 
   return (
-    <div className="mx-auto w-full max-w-[560px] px-4 pb-16 pt-4 sm:px-6">
+    <div className="mx-auto w-full max-w-[560px] px-4 pb-16 pt-4 sm:px-6 lg:max-w-[1200px]">
       <div className="flex items-center gap-2">
         <Link
           href="/live"
@@ -40,30 +40,36 @@ export function HostScheduledRoom({ stream, onGoLive, goingLive }: HostScheduled
         <h1 className="clamp-1 min-w-0 flex-1 text-section-title font-semibold text-text-primary">
           {stream.session.title}
         </h1>
-        <span className="shrink-0 rounded-md bg-surface-alt px-2 py-1 text-meta font-semibold uppercase tracking-[0.08em] text-text-secondary">
+        <span className="shrink-0 rounded-md bg-surface-alt px-2 py-1 text-meta font-semibold uppercase tracking-wide text-text-secondary">
           Scheduled
         </span>
       </div>
 
-      <div className="relative mt-5 aspect-[16/10] w-full overflow-hidden rounded-xl bg-surface-alt">
-        <AppImage
-          src={stream.session.coverUri}
-          alt={stream.session.title}
-          fill
-          priority
-          className="h-full w-full"
-          sizes="560px"
-        />
-        {stream.session.scheduledAt ? (
-          <span className="absolute left-3 top-3 rounded-md bg-overlay px-2 py-1 text-meta font-semibold text-scrim-text-primary">
-            {formatScheduled(stream.session.scheduledAt)}
-          </span>
-        ) : null}
-      </div>
+      {/* Cover left, prep rail right at lg — a scheduled-show detail
+          surface, not a stacked phone screen. */}
+      <div className="mt-5 lg:grid lg:grid-cols-[minmax(0,1fr)_400px] lg:items-start lg:gap-10">
+        <div className="min-w-0">
+          <div className="relative aspect-[16/10] w-full overflow-hidden rounded-xl bg-surface-alt">
+            <AppImage
+              src={stream.session.coverUri}
+              alt={stream.session.title}
+              fill
+              priority
+              className="h-full w-full"
+              sizes="(max-width: 1024px) 100vw, 760px"
+            />
+            {stream.session.scheduledAt ? (
+              <span className="absolute left-3 top-3 rounded-md bg-overlay px-2 py-1 text-meta font-semibold text-scrim-text-primary">
+                {formatScheduled(stream.session.scheduledAt)}
+              </span>
+            ) : null}
+          </div>
+        </div>
 
+        <div className="min-w-0 lg:sticky lg:top-20">
       {pinned.length > 0 ? (
-        <div className="mt-5">
-          <h2 className="text-label font-semibold uppercase tracking-wide text-text-secondary">
+        <div className="mt-5 lg:mt-0">
+          <h2 className="text-label text-text-secondary">
             Pinned products · {pinned.length}
           </h2>
           <div className="mt-2">
@@ -110,6 +116,8 @@ export function HostScheduledRoom({ stream, onGoLive, goingLive }: HostScheduled
       >
         {goingLive ? 'Going live…' : 'Go live now'}
       </Button>
+        </div>
+      </div>
     </div>
   );
 }

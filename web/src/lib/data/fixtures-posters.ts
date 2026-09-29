@@ -98,7 +98,7 @@ export const POSTER_ARCHIVE: PosterArchiveStory[] = [
     viewCount: 267,
     frames: [
       { id: 'sarc3-f1', mediaUrl: img('photo-1483985988355-763728e1935b'), caption: 'Market morning' },
-      { id: 'sarc3-f2', mediaUrl: img('photo-1523381210434-271e8be1f52b'), caption: 'Denim table, £10 a pair' },
+      { id: 'sarc3-f2', mediaUrl: img('photo-1521093470119-a3acdc43374a'), caption: 'Denim table, £10 a pair' },
       { id: 'sarc3-f3', mediaUrl: img('photo-1520975954732-35dd22299614'), caption: 'Picked four — listing this week' },
     ],
   },
@@ -138,7 +138,7 @@ export interface PosterTag {
 export const POSTER_TAGS: Record<string, PosterTag[]> = {
   p1: [
     { id: 'pt1', listingId: 'l14', label: 'Cashmere crew — £62', x: 0.3, y: 0.58 },
-    { id: 'pt2', listingId: 'l23', label: 'Mohair cardigan — £74', x: 0.68, y: 0.72 },
+    { id: 'pt2', listingId: 'l23', label: 'Mohair crew neck — £74', x: 0.68, y: 0.72 },
   ],
   p2: [
     { id: 'pt3', listingId: 'l9', label: 'Oversized wool coat — £120', x: 0.5, y: 0.6 },
@@ -182,9 +182,9 @@ export const POSTER_HIGHLIGHTS: PosterHighlight[] = [
   {
     id: 'hl-finds',
     title: 'Finds',
-    coverUri: img('photo-1523381210434-271e8be1f52b', 400),
+    coverUri: img('photo-1521093470119-a3acdc43374a', 400),
     frames: [
-      { frameId: 'sarc3-f2', mediaUrl: img('photo-1523381210434-271e8be1f52b'), caption: 'Denim table, £10 a pair' },
+      { frameId: 'sarc3-f2', mediaUrl: img('photo-1521093470119-a3acdc43374a'), caption: 'Denim table, £10 a pair' },
       { frameId: 'sarc2-f1', mediaUrl: img('photo-1469334031218-e382a71b716b'), caption: 'Kilo sale haul' },
     ],
   },

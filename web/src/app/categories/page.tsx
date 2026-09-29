@@ -16,7 +16,7 @@ export default function CategoriesPage() {
 
   return (
     <div className="mx-auto max-w-[1440px] px-4 pb-10 pt-6 sm:px-6">
-      <h1 className="text-screen-title font-bold text-text-primary">
+      <h1 className="text-screen-title text-text-primary">
         Categories
       </h1>
       <p className="mt-1 text-caption text-text-muted">
@@ -27,7 +27,7 @@ export default function CategoriesPage() {
 
       {/* Department tiles — media is the colour, counts are fixture-truth */}
       <div
-        className="mt-4 grid grid-cols-2 gap-2 sm:grid-cols-3 lg:grid-cols-4"
+        className="mt-4 grid grid-cols-2 gap-2 sm:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5"
         role="list"
         aria-label="Departments"
       >
@@ -39,7 +39,7 @@ export default function CategoriesPage() {
             image={cat.image}
             count={cat.count}
             className="aspect-[4/3] w-full"
-            sizes="(max-width: 640px) 50vw, (max-width: 1024px) 33vw, 25vw"
+            sizes="(max-width: 640px) 50vw, (max-width: 1024px) 33vw, (max-width: 1280px) 25vw, 20vw"
             priority={i < 4}
           />
         ))}
@@ -47,7 +47,7 @@ export default function CategoriesPage() {
 
       {/* Expandable index — flat rows, hairline separators */}
       <div className="mt-8">
-        <h2 className="text-label font-semibold uppercase tracking-wide text-text-muted">
+        <h2 className="text-label text-text-muted">
           All categories
         </h2>
         <div className="mt-2.5">

@@ -17,8 +17,8 @@
 
 import { useEffect, useState } from 'react';
 import Link from 'next/link';
-import { listingById, userById } from '@/lib/data/fixtures';
 import { formatDuration } from '@/lib/data/fixtures-auctions';
+import { LiveBadge } from '@/components/live/LiveBadge';
 import type { PulseCardModel, PulseKind } from './pulseModel';
 import { AppImage } from '@/components/ui/AppImage';
 import { Avatar } from '@/components/ui/Avatar';
@@ -28,12 +28,13 @@ import { useToast } from '@/components/ui/Toast';
 import type { SignupAction } from '@/components/auth/SignupWall';
 import { formatCount, formatPrice, timeAgo } from '@/lib/utils/format';
 
-/** Kind chips — mirrors the mobile icon/accent map (flame, bag, trending). */
+/** Kind chips — mirrors the mobile icon/accent map (flame, bag, trending).
+ *  auction_live doesn't appear here: it carries the real LIVE badge —
+ *  the same red presence chip the live hub stamps on streaming rooms. */
 const KIND_META: Record<
-  Exclude<PulseKind, 'creator'>,
+  Exclude<PulseKind, 'creator' | 'auction_live'>,
   { label: string; icon: AppIconName; tone: string }
 > = {
-  auction_live: { label: 'Live auction', icon: 'fire', tone: 'text-danger-text' },
   fresh_drop: { label: 'Fresh drop', icon: 'bag', tone: 'text-scrim-text-primary' },
   price_drop: { label: 'Price drop', icon: 'offer', tone: 'text-warning' },
 };
@@ -41,6 +42,10 @@ const KIND_META: Record<
 interface PulseCardProps {
   card: PulseCardModel;
   priority?: boolean;
+  /** Position in the feed — aria-posinset/aria-setsize on the article so
+   *  the role="feed" container reports real list semantics. */
+  position?: number;
+  total?: number;
   /** Creator ids the session is following — lifted to the feed so the
    *  same seller stays in sync across cards. */
   followed: boolean;
@@ -48,9 +53,9 @@ interface PulseCardProps {
   requireAuth: (action: SignupAction) => boolean;
 }
 
-export function PulseCard({ card, priority, followed, onToggleFollow, requireAuth }: PulseCardProps) {
+export function PulseCard({ card, priority, position, total, followed, onToggleFollow, requireAuth }: PulseCardProps) {
   const { show } = useToast();
-  const creator = userById(card.creatorId);
+  const creator = card.creator;
 
   const hydrated = useHydrated();
   // Commerce cards are about one listing — the heart favourites that
@@ -69,13 +74,15 @@ export function PulseCard({ card, priority, followed, onToggleFollow, requireAut
   const toggleSaved = useStore((s) => s.toggleSaved);
   const liked = hydrated && wishlisted;
   const saved = hydrated && savedStore;
-  const likeCount = card.likeCount + (liked ? 1 : 0);
+  // Absent count stays absent — a card whose source carries no like
+  // metric (live auction rows) shows the heart without a number rather
+  // than a fabricated "0".
+  const likeCount = card.likeCount != null ? card.likeCount + (liked ? 1 : 0) : null;
 
-  const items = card.itemIds
-    .map(listingById)
-    .filter((l): l is NonNullable<typeof l> => l != null);
+  const items = card.items ?? [];
 
-  const kicker = card.kind !== 'creator' ? KIND_META[card.kind] : null;
+  const kicker =
+    card.kind !== 'creator' && card.kind !== 'auction_live' ? KIND_META[card.kind] : null;
 
   // Live auction countdown — ticks against the card's real endsAt so the
   // "Ends in" line stays true while the card is on screen (the built
@@ -95,9 +102,11 @@ export function PulseCard({ card, priority, followed, onToggleFollow, requireAut
     const msLeft = card.endsAt - now;
     if (msLeft > 0) {
       // Mobile metaAccent parity — the countdown warms as the lot closes.
-      meta = `Ends in ${formatDuration(msLeft)} · Current bid ${formatPrice(
+      // The bid count is a real contract field; it only appears when the
+      // auction actually has bids.
+      meta = `Ends in ${formatDuration(msLeft)} · ${formatPrice(
         card.currentBid ?? 0,
-      )}`;
+      )}${card.bidCount ? ` · ${card.bidCount} ${card.bidCount === 1 ? 'bid' : 'bids'}` : ''}`;
       metaTone =
         msLeft < 5 * 60_000
           ? 'text-danger-text'
@@ -113,14 +122,25 @@ export function PulseCard({ card, priority, followed, onToggleFollow, requireAut
   const handleLike = () => {
     if (likeItemId === null) return;
     if (!requireAuth('save_item')) return;
-    toggleWishlist(likeItemId);
-    if (!liked) show('Added to wishlist', 'success');
+    const adding = !liked;
+    void toggleWishlist(likeItemId).then((ok) => {
+      if (ok) {
+        if (adding) show('Added to wishlist', 'success');
+      } else {
+        show('Couldn’t sync — your wishlist was restored', 'error');
+      }
+    });
   };
   const handleSave = () => {
     if (saveId === null) return;
     if (!requireAuth('save_item')) return;
-    toggleSaved(saveId);
-    show(saved ? 'Removed from saved' : 'Saved', 'info');
+    const removing = saved;
+    void toggleSaved(saveId).then((ok) => {
+      show(
+        ok ? (removing ? 'Removed from saved' : 'Saved') : 'Couldn’t sync — saved items restored',
+        ok ? 'info' : 'error',
+      );
+    });
   };
   const handleShare = async () => {
     const url = `${window.location.origin}${card.href}`;
@@ -144,6 +164,8 @@ export function PulseCard({ card, priority, followed, onToggleFollow, requireAut
     <article
       className="relative h-full w-full overflow-hidden bg-surface-alt md:rounded-xl"
       aria-label={card.caption}
+      aria-posinset={position}
+      aria-setsize={total}
     >
       <AppImage
         src={card.mediaUri}
@@ -184,15 +206,31 @@ export function PulseCard({ card, priority, followed, onToggleFollow, requireAut
             aria-pressed={followed}
             className={
               followed
-                ? 'pressable h-8 shrink-0 rounded-full border border-white/50 px-3.5 text-label font-semibold text-scrim-text-primary'
-                : 'pressable h-8 shrink-0 rounded-full bg-white px-3.5 text-label font-semibold text-black'
+                ? 'pressable h-8 shrink-0 rounded-full border border-white/50 px-3.5 text-label text-scrim-text-primary'
+                : 'pressable h-8 shrink-0 rounded-full bg-white px-3.5 text-label text-black'
             }
           >
             {followed ? 'Following' : 'Follow'}
           </button>
         </div>
 
-        {kicker ? (
+        {card.kind === 'auction_live' ? (
+          // Real live state — the red presence badge (not a styled label)
+          // beside the ticking lot meta. One link: the auction room.
+          <Link
+            href={card.href}
+            className="pressable pointer-events-auto mt-3 inline-flex max-w-full items-center gap-2"
+          >
+            <LiveBadge />
+            {meta ? (
+              <span className="inline-flex min-w-0 items-center rounded-full bg-overlay px-3 py-1.5">
+                <span className={`tnum clamp-1 text-meta font-semibold ${metaTone}`}>
+                  {meta}
+                </span>
+              </span>
+            ) : null}
+          </Link>
+        ) : kicker ? (
           <Link
             href={card.href}
             className="pressable pointer-events-auto mt-3 inline-flex items-center gap-1.5 rounded-full bg-overlay px-3 py-1.5"
@@ -226,11 +264,13 @@ export function PulseCard({ card, priority, followed, onToggleFollow, requireAut
                 className={`drop-scrim ${liked ? 'text-danger-text' : 'text-scrim-text-primary'}`}
               />
             </button>
-            <span className="tnum -mt-1 text-meta font-medium text-scrim-text-primary drop-scrim">
-              {formatCount(likeCount)}
-            </span>
+            {likeCount != null ? (
+              <span className="tnum -mt-1 text-meta font-medium text-scrim-text-primary drop-scrim">
+                {formatCount(likeCount)}
+              </span>
+            ) : null}
           </span>
-        ) : (
+        ) : card.likeCount != null ? (
           // Creator posts carry a real like count but no post-like store —
           // a read-only stat, not a dead button.
           <span
@@ -242,7 +282,7 @@ export function PulseCard({ card, priority, followed, onToggleFollow, requireAut
               {formatCount(card.likeCount)}
             </span>
           </span>
-        )}
+        ) : null}
         {saveId !== null ? (
           <button
             type="button"
@@ -285,6 +325,14 @@ export function PulseCard({ card, priority, followed, onToggleFollow, requireAut
             {card.caption}
           </Link>
         )}
+        {/* Real listing context — brand · size · condition, the PDP facts
+            a buyer needs before tapping through. Only rendered when the
+            subject resolved. */}
+        {card.context ? (
+          <p className="clamp-1 mt-1 text-meta text-scrim-text-secondary">
+            {card.context}
+          </p>
+        ) : null}
         {items.length > 0 ? (
           <div className="pointer-events-auto no-scrollbar mt-3 flex gap-2 overflow-x-auto">
             {items.map((item) => (
@@ -294,13 +342,15 @@ export function PulseCard({ card, priority, followed, onToggleFollow, requireAut
                 className="pressable flex min-w-0 max-w-[220px] shrink-0 items-center gap-2 rounded-full bg-overlay py-1 pl-1 pr-3"
                 aria-label={`View ${item.title} — ${formatPrice(item.price)}`}
               >
-                <AppImage
-                  src={item.images[0]}
-                  alt=""
-                  fill
-                  sizes="28px"
-                  className="h-7 w-7 shrink-0 rounded-full"
-                />
+                {item.image ? (
+                  <AppImage
+                    src={item.image}
+                    alt=""
+                    fill
+                    sizes="28px"
+                    className="h-7 w-7 shrink-0 rounded-full"
+                  />
+                ) : null}
                 <span className="clamp-1 min-w-0 text-caption font-medium text-scrim-text-primary">
                   {item.title}
                 </span>

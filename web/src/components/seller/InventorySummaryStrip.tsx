@@ -14,7 +14,7 @@ interface InventorySummaryStripProps {
 }
 
 export function InventorySummaryStrip({ rows }: InventorySummaryStripProps) {
-  const counts = { active: 0, paused: 0, sold: 0, draft: 0 };
+  const counts = { active: 0, paused: 0, sold: 0, draft: 0, held: 0 };
   let value = 0;
   for (const r of rows) {
     counts[r.status] += 1;

@@ -8,7 +8,7 @@
 
 import Link from 'next/link';
 import type { SupportTicket } from '@/lib/contracts/support';
-import { statusMeta } from '@/lib/contracts/support';
+import { caseRefLabel, statusMeta } from '@/lib/contracts/support';
 import { Badge } from '@/components/ui/Badge';
 import { Icon } from '@/components/ui/Icon';
 
@@ -44,11 +44,11 @@ export function TicketListRow({ ticket }: { ticket: SupportTicket }) {
           {ticket.topicLabel}
         </span>
         <span className="mt-0.5 block text-caption text-text-secondary">
-          <span className="tnum">{ticket.ref}</span>
-          {ticket.orderRef ? (
+          <span className="tnum">{caseRefLabel(ticket.ref)}</span>
+          {ticket.orderId ? (
             <>
               <span aria-hidden> · </span>
-              <span className="tnum">Order {ticket.orderRef}</span>
+              <span className="tnum">Order {ticket.orderId}</span>
             </>
           ) : null}
           <span aria-hidden> · </span>

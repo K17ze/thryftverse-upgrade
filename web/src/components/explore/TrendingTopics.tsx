@@ -1,10 +1,15 @@
 'use client';
 
 /**
- * TrendingTopics — pill-free editorial trend row: portrait media tiles
- * with the topic as the only label, deep-linking into taxonomy
+ * TrendingTopics — pill-free editorial themes row: portrait media tiles
+ * with the theme as the only label, deep-linking into taxonomy
  * subcategories and catalogue queries. Snap-scroll rail on mobile,
  * one authored row (or two) on larger screens.
+ *
+ * The title says "Explore themes", not "trending" — these are authored
+ * editorial destinations, and no real topics endpoint exists to back a
+ * trend claim (only trending searches/listings, which are different
+ * signals).
  */
 
 import Link from 'next/link';
@@ -14,18 +19,18 @@ import { TRENDING_TOPICS } from './topics';
 
 export function TrendingTopics() {
   return (
-    <ModuleSection title="Trending topics" href="/search" bordered={false}>
+    <ModuleSection title="Explore themes" href="/search" bordered={false}>
       <div
         className="no-scrollbar flex snap-x snap-mandatory gap-2.5 overflow-x-auto px-4 sm:grid sm:grid-cols-3 sm:overflow-visible sm:px-6 lg:grid-cols-6"
         role="list"
-        aria-label="Trending topics"
+        aria-label="Explore themes"
       >
         {TRENDING_TOPICS.map((topic) => (
           <Link
             key={topic.label}
             href={topic.href}
             role="listitem"
-            aria-label={`${topic.label} — explore the topic`}
+            aria-label={`${topic.label} — explore the theme`}
             className="pressable group relative block w-40 shrink-0 snap-start overflow-hidden rounded-lg sm:w-auto"
           >
             <AppImage

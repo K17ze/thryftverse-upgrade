@@ -10,7 +10,7 @@ import { Skeleton } from '@/components/ui/Skeleton';
 
 export function PdpSkeleton() {
   return (
-    <div className="mx-auto max-w-[1280px]" aria-busy aria-label="Loading item">
+    <div className="mx-auto max-w-[1280px] xl:max-w-[1440px]" aria-busy aria-label="Loading item">
       {/* Breadcrumb — desktop only, like the populated state */}
       <div className="hidden px-4 pt-4 sm:px-6 lg:block">
         <Skeleton className="h-3 w-48" />

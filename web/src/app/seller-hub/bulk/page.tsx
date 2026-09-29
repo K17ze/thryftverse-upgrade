@@ -99,19 +99,34 @@ export default function BulkListPage() {
    *  shelf, PDP and management surfaces all resolve the new rows. */
   const publishOne = async (item: BulkDraftItem): Promise<string> => {
     if (DATA_MODE === 'live' && user) {
-      const imageUrls: string[] = [];
+      // The verified upload pipeline — each staged photo presigns, PUTs
+      // and finalizes; remote URIs can't be re-verified here, so they're
+      // not sent (bulk drafts only stage local file picks anyway).
+      const uploads: { publicUrl: string; finalizationId: string; kind: 'image' | 'video' }[] = [];
       for (const photo of item.images) {
-        if (photo.startsWith('blob:')) {
-          const blob = await (await fetch(photo)).blob();
-          const file = new File([blob], `photo-${imageUrls.length}.jpg`, {
-            type: blob.type || 'image/jpeg',
-          });
-          imageUrls.push(await uploadImageFile(file, 'listing'));
-        } else {
-          imageUrls.push(photo);
-        }
+        if (!photo.startsWith('blob:')) continue;
+        const blob = await (await fetch(photo)).blob();
+        const contentType = blob.type || 'image/jpeg';
+        const file = new File([blob], `photo-${uploads.length}.jpg`, {
+          type: contentType,
+        });
+        const media = await uploadImageFile(file, 'listing');
+        uploads.push({
+          publicUrl: media.publicUrl,
+          finalizationId: media.finalizationId,
+          kind: media.mediaKind === 'video' ? 'video' : 'image',
+        });
       }
-      return listingsService.createListing({
+      const cover = uploads.find((u) => u.kind === 'image');
+      if (!cover) {
+        throw new Error('A verified cover photo is required to publish.');
+      }
+      // tempId is the draft row's stable identity — reusing it as the
+      // listing id makes a retried row an idempotent upsert, never a
+      // duplicate listing.
+      const { listingId, status } = await listingsService.createListing({
+        id: item.tempId,
+        sellerId: user.id,
         title: item.title.trim(),
         description: item.description.trim(),
         priceGbp: item.price,
@@ -119,8 +134,25 @@ export default function BulkListPage() {
         brand: item.brand.trim() || undefined,
         size: item.size.trim() || undefined,
         condition: item.condition,
-        images: imageUrls,
+        imageUrl: cover.publicUrl,
+        coverFinalizationId: cover.finalizationId,
+        status: 'active',
       });
+      // Media writes only land on draft/active rows — a gate-held listing
+      // keeps its cover and reports its held status truthfully.
+      if (status !== 'risk_pending') {
+        for (let i = 0; i < uploads.length; i++) {
+          await listingsService.attachListingImage({
+            id: `${listingId}_att_${i}`,
+            listingId,
+            imageUrl: uploads[i].publicUrl,
+            sortOrder: i,
+            mediaType: uploads[i].kind,
+            finalizationId: uploads[i].finalizationId,
+          });
+        }
+      }
+      return listingId;
     }
     await tick();
     const listing: Listing = recordListing(
@@ -210,9 +242,9 @@ export default function BulkListPage() {
   };
 
   return (
-    <div className="mx-auto w-full max-w-3xl px-4 pb-16 pt-8 sm:px-6 md:pt-12">
+    <div className="mx-auto w-full max-w-3xl px-4 pb-16 pt-8 sm:px-6 md:pt-12 lg:max-w-[1440px]">
       <div className="flex flex-wrap items-center justify-between gap-3">
-        <h1 className="text-screen-title font-semibold text-text-primary">Bulk list</h1>
+        <h1 className="text-screen-title text-text-primary">Bulk list</h1>
         {items.length ? (
           <button
             type="button"

@@ -5,15 +5,20 @@
  * category + subcategory, condition radio cards, size chips, description.
  */
 
-import { CATEGORIES } from '@/lib/data/fixtures';
 import { Chip } from '@/components/ui/Chip';
 import { Icon } from '@/components/ui/Icon';
+import { useTaxonomy } from '@/lib/hooks/sell/useTaxonomy';
+import {
+  allowedConditionsFor,
+  categoryOptions,
+  conditionAllowedFor,
+  subcategoryOptions,
+} from './taxonomy';
 import {
   CONDITION_OPTIONS,
   DESCRIPTION_MAX,
   DESCRIPTION_MIN,
   POPULAR_BRANDS,
-  SUBCATEGORIES,
   SUSTAINABILITY_TAG_OPTIONS,
   isSizelessCategory,
   isSizeRequiredCategory,
@@ -45,12 +50,22 @@ function Chevron() {
 }
 
 export function DetailsSection({ draft, errors, update, clearError }: DetailsSectionProps) {
-  const subcategories = SUBCATEGORIES[draft.category] ?? [];
-  const sizes = sizesForCategory(draft.category);
-  const sizeless = isSizelessCategory(draft.category);
-  // Category policy parity: size is a hard requirement for sneakers
-  // (mobile's shoes policy); recommended elsewhere, hidden when sizeless.
-  const sizeRequired = isSizeRequiredCategory(draft.category);
+  // Canonical picker vocabulary — the taxonomy seed until live /taxonomy
+  // resolves. Category/subcategory selects emit node ids; labels come from
+  // node names.
+  const { taxonomy } = useTaxonomy();
+  const categories = categoryOptions(taxonomy.categories);
+  const subcategories = subcategoryOptions(taxonomy.categories, draft.category);
+  const sizes = sizesForCategory(draft.category, draft.subcategory);
+  const sizeless = isSizelessCategory(draft.category, draft.subcategory);
+  // Category policy parity: size is a hard requirement under the shoes
+  // policy; recommended for apparel/sports, hidden when sizeless.
+  const sizeRequired = isSizeRequiredCategory(draft.category, draft.subcategory);
+  // Condition picker respects the category policy too — 'New with tags'
+  // can't apply where a garment tag can't exist (electronics, cars, yachts).
+  const conditionOptions = CONDITION_OPTIONS.filter((opt) =>
+    allowedConditionsFor(draft.category, draft.subcategory).includes(opt.value),
+  );
 
   return (
     <SellSection id="sell-details" step={2} title="Details" subtitle="The facts buyers filter on.">
@@ -115,7 +130,22 @@ export function DetailsSection({ draft, errors, update, clearError }: DetailsSec
                 id="sell-field-category"
                 value={draft.category}
                 onChange={(e) => {
-                  update({ category: e.target.value, subcategory: '', size: '' });
+                  const category = e.target.value;
+                  const patch: Partial<SellDraft> = {
+                    category,
+                    subcategory: '',
+                    size: '',
+                  };
+                  // A condition the new category's policy disallows (e.g.
+                  // 'New with tags' on electronics) can't ride forward —
+                  // the seller re-picks from the allowed set.
+                  if (
+                    draft.condition &&
+                    !conditionAllowedFor(category, undefined, draft.condition)
+                  ) {
+                    patch.condition = '';
+                  }
+                  update(patch);
                   clearError('category');
                 }}
                 aria-invalid={!!errors.category}
@@ -127,9 +157,9 @@ export function DetailsSection({ draft, errors, update, clearError }: DetailsSec
                 <option value="" disabled>
                   Select category
                 </option>
-                {CATEGORIES.map((c) => (
-                  <option key={c.slug} value={c.slug}>
-                    {c.name}
+                {categories.map((c) => (
+                  <option key={c.value} value={c.value}>
+                    {c.label}
                   </option>
                 ))}
               </select>
@@ -142,7 +172,22 @@ export function DetailsSection({ draft, errors, update, clearError }: DetailsSec
               <select
                 id="sell-field-subcategory"
                 value={draft.subcategory}
-                onChange={(e) => update({ subcategory: e.target.value })}
+                onChange={(e) => {
+                  const subcategory = e.target.value;
+                  const patch: Partial<SellDraft> = { subcategory };
+                  // Leaf switch can retire a size pick (e.g. Clothing →
+                  // Beauty) or a condition the new leaf disallows.
+                  if (isSizelessCategory(draft.category, subcategory)) {
+                    patch.size = '';
+                  }
+                  if (
+                    draft.condition &&
+                    !conditionAllowedFor(draft.category, subcategory, draft.condition)
+                  ) {
+                    patch.condition = '';
+                  }
+                  update(patch);
+                }}
                 disabled={!subcategories.length}
                 className={`${SELECT_CLASS} disabled:opacity-50 ${
                   draft.subcategory ? '' : 'text-text-muted'
@@ -152,8 +197,8 @@ export function DetailsSection({ draft, errors, update, clearError }: DetailsSec
                   {subcategories.length ? 'Select type' : 'Select a category first'}
                 </option>
                 {subcategories.map((s) => (
-                  <option key={s} value={s}>
-                    {s}
+                  <option key={s.value} value={s.value}>
+                    {s.label}
                   </option>
                 ))}
               </select>
@@ -178,7 +223,7 @@ export function DetailsSection({ draft, errors, update, clearError }: DetailsSec
             aria-describedby={errors.condition ? 'sell-field-condition-error' : undefined}
             className="grid gap-2 sm:grid-cols-2"
           >
-            {CONDITION_OPTIONS.map((opt) => {
+            {conditionOptions.map((opt) => {
               const selected = draft.condition === opt.value;
               return (
                 <button

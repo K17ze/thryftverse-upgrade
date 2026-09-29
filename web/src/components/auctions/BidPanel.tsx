@@ -21,7 +21,7 @@ import {
   BID_INCREMENT_RATE,
   type AuctionViewModel,
 } from '@/lib/contracts/auction';
-import type { CommerceOrder, Listing } from '@/lib/contracts/domain';
+import type { Listing } from '@/lib/contracts/domain';
 import { Badge } from '@/components/ui/Badge';
 import { Button } from '@/components/ui/Button';
 import { Sheet } from '@/components/ui/Sheet';
@@ -29,12 +29,11 @@ import { useToast } from '@/components/ui/Toast';
 import { AppImage } from '@/components/ui/AppImage';
 import { Icon } from '@/components/ui/Icon';
 import { AuctionCountdownClock } from '@/components/auctions/AuctionCountdown';
+import { AuctionWatchButton } from '@/components/auctions/AuctionWatchButton';
 import { maskBidder } from '@/components/auctions/BidHistory';
-import { useAuctionWatchlist } from '@/components/auctions/auctionWatchlist';
 import { usePlaceBid, viewerProxyMax } from '@/lib/hooks/auction-queries';
 import { useSession } from '@/lib/session/SessionProvider';
 import { useSignupWall } from '@/components/auth/SignupWall';
-import { useHydrated } from '@/lib/store/useStore';
 import { DATA_MODE } from '@/lib/api/client';
 import * as auctionsService from '@/lib/api/services/auctions';
 import {
@@ -99,6 +98,9 @@ export function BidPanel({ auction, listing, hasListing, viewerMaxBid, topBidder
   // Seller-of-record never bids on their own lot — the composer is
   // replaced by an honest owner note rather than a disabled fake.
   const isSeller = user != null && auction.sellerId === user.id;
+  // Dual-format lot — when a buy-now exists it takes the primary CTA
+  // (eBay grammar) and the bid composer recedes to the secondary path.
+  const hasBuyNow = auction.buyNowPrice != null && !ended && !isSeller;
   // The viewer's proxy ceiling this session — set when they placed a bid
   // with "Set maximum bid" on. Session-scoped; labelled as their ceiling,
   // never implied to be a server-persisted agent in fixture mode.
@@ -196,6 +198,23 @@ export function BidPanel({ auction, listing, hasListing, viewerMaxBid, topBidder
 
   return (
     <div className="flex flex-col gap-5">
+      {/* Desktop Lot Identity Header — anchors the sticky transaction rail */}
+      <div className="hidden lg:flex lg:flex-col gap-1 pb-3 border-b border-border-subtle">
+        <div className="flex items-center justify-between gap-2">
+          <span className="text-meta font-semibold uppercase tracking-wider text-text-muted">
+            {listing?.brand ? listing.brand : 'Curated Lot'} · Lot #{auction.id.slice(-4).toUpperCase()}
+          </span>
+          {listing?.condition ? (
+            <span className="text-caption font-medium text-text-secondary bg-surface-alt px-2 py-0.5 rounded-full border border-border-subtle">
+              {listing.condition}
+            </span>
+          ) : null}
+        </div>
+        <h2 className="text-body-emphasis font-bold text-text-primary clamp-2 leading-snug">
+          {auction.title}
+        </h2>
+      </div>
+
       {/* Lifecycle + countdown */}
       <div className="flex items-center justify-between gap-3">
         <Badge variant={LIFECYCLE_BADGE[auction.lifecycle].variant}>
@@ -217,7 +236,7 @@ export function BidPanel({ auction, listing, hasListing, viewerMaxBid, topBidder
 
       {/* Price lockup — the single source of the number */}
       <div className="flex flex-col gap-1">
-        <span className="text-meta font-medium uppercase tracking-wide text-text-muted">
+        <span className="text-meta font-semibold uppercase tracking-wide text-text-muted">
           {ended
             ? auctionOutcome(auction) === 'sold'
               ? 'Winning bid'
@@ -248,6 +267,43 @@ export function BidPanel({ auction, listing, hasListing, viewerMaxBid, topBidder
         ) : null}
       </div>
 
+      {/* Buy now — the dual-format lot's primary exit (eBay hierarchy:
+          the instant-purchase CTA leads, bidding stays the secondary
+          path). Single-item checkout while the listing exists; the
+          seller can't buy their own lot either. */}
+      {hasBuyNow ? (
+        DATA_MODE === 'live' ? (
+          /* Live: the listing is auction-paused by design — /checkout
+             would 409. The dedicated route ends the auction, binds the
+             win, and provisions the order we navigate to. */
+          <Button
+            size="lg"
+            fullWidth
+            disabled={buyingNow}
+            aria-busy={buyingNow || undefined}
+            onClick={() => void buyNow()}
+          >
+            {buyingNow ? 'Purchasing…' : `Buy now · ${formatPrice(auction.buyNowPrice)}`}
+          </Button>
+        ) : hasListing ? (
+          <Link
+            href={`/checkout?item=${auction.listingId}`}
+            className="pressable flex h-12 items-center justify-center rounded-md bg-brand text-body-emphasis font-semibold text-text-inverse hover:bg-brand-pressed"
+          >
+            Buy now · {formatPrice(auction.buyNowPrice)}
+          </Link>
+        ) : (
+          <div className="flex flex-col gap-1">
+            <Button variant="secondary" size="md" fullWidth disabled>
+              Buy now · {formatPrice(auction.buyNowPrice)}
+            </Button>
+            <p className="text-caption text-text-muted">
+              Unavailable — the listing behind this auction is no longer active.
+            </p>
+          </div>
+        )
+      ) : null}
+
       {ended ? (
         <EndedState
           auction={auction}
@@ -264,6 +320,7 @@ export function BidPanel({ auction, listing, hasListing, viewerMaxBid, topBidder
           ladder={ladder}
           isGuest={isGuest}
           pending={pending}
+          submitVariant={hasBuyNow ? 'secondary' : 'primary'}
           leading={
             auction.lifecycle === 'live' &&
             viewerMaxBid != null &&
@@ -283,42 +340,14 @@ export function BidPanel({ auction, listing, hasListing, viewerMaxBid, topBidder
       )}
 
       {/* Watch — the watchlist is account-bound; guests hit the wall. */}
-      {!ended && !isSeller ? <WatchToggle auctionId={auction.id} /> : null}
-
-      {/* Buy now — single-item checkout while the listing exists; the
-          seller can't buy their own lot either. */}
-      {auction.buyNowPrice != null && !ended && !isSeller ? (
-        DATA_MODE === 'live' ? (
-          /* Live: the listing is auction-paused by design — /checkout
-             would 409. The dedicated route ends the auction, binds the
-             win, and provisions the order we navigate to. */
-          <Button
-            variant="secondary"
-            size="md"
-            fullWidth
-            disabled={buyingNow}
-            aria-busy={buyingNow || undefined}
-            onClick={() => void buyNow()}
-          >
-            {buyingNow ? 'Purchasing…' : `Buy now · ${formatPrice(auction.buyNowPrice)}`}
-          </Button>
-        ) : hasListing ? (
-          <Link
-            href={`/checkout?item=${auction.listingId}`}
-            className="pressable flex h-11 items-center justify-center rounded-md border border-border text-body-emphasis font-semibold text-text-primary hover:border-text-muted"
-          >
-            Buy now · {formatPrice(auction.buyNowPrice)}
-          </Link>
-        ) : (
-          <div className="flex flex-col gap-1">
-            <Button variant="secondary" size="md" fullWidth disabled>
-              Buy now · {formatPrice(auction.buyNowPrice)}
-            </Button>
-            <p className="text-caption text-text-muted">
-              Unavailable — the listing behind this auction is no longer active.
-            </p>
+      {!ended && !isSeller ? (
+        <div className="flex flex-col gap-2.5">
+          <AuctionWatchButton auctionId={auction.id} variant="block" />
+          <div className="flex items-center justify-center gap-1.5 text-caption text-text-muted">
+            <Icon name="verified" size={13} className="text-commerce-trust shrink-0" />
+            <span>Buyer Protection Guarantee · Funds released 48h post-delivery</span>
           </div>
-        )
+        </div>
       ) : null}
 
       {/* Confirm before the hammer — the exact amount, the exact item. */}
@@ -351,7 +380,7 @@ export function BidPanel({ auction, listing, hasListing, viewerMaxBid, topBidder
           </div>
 
           <div className="border-y border-border-subtle py-4">
-            <p className="text-meta font-medium uppercase tracking-wide text-text-muted">
+            <p className="text-meta font-semibold uppercase tracking-wide text-text-muted">
               Your bid
             </p>
             <p className="tnum mt-1 text-price-hero font-bold text-text-primary">
@@ -428,6 +457,7 @@ function BidComposer({
   ladder,
   isGuest,
   pending,
+  submitVariant,
   leading,
   outbid,
   proxyMax,
@@ -442,6 +472,8 @@ function BidComposer({
   ladder: number[];
   isGuest: boolean;
   pending: boolean;
+  /** Dual-format lots demote the bid CTA under Buy now (eBay grammar). */
+  submitVariant: 'primary' | 'secondary';
   /** Viewer's bid is the current top bid — the lead state. */
   leading: boolean;
   /** Viewer's bid is on the ledger but no longer on top. */
@@ -625,7 +657,13 @@ function BidComposer({
           </>
         )}
 
-        <Button type="submit" size="lg" fullWidth disabled={upcoming || pending || maxInvalid}>
+        <Button
+          type="submit"
+          variant={submitVariant}
+          size="lg"
+          fullWidth
+          disabled={upcoming || pending || maxInvalid}
+        >
           {isGuest
             ? 'Sign in to bid'
             : pending
@@ -685,39 +723,6 @@ function SellerNote() {
         Open seller board
       </Link>
     </div>
-  );
-}
-
-/** Watch/unwatch — the persisted watchlist toggle. Quiet secondary row;
- *  set state reads as set (brand-subtle + filled bookmark). */
-function WatchToggle({ auctionId }: { auctionId: string }) {
-  const { show } = useToast();
-  const { requireAuth, wall } = useSignupWall();
-  const hydrated = useHydrated();
-  const { watched, toggle } = useAuctionWatchlist();
-  const isWatched = hydrated && watched.has(auctionId);
-
-  return (
-    <>
-      <button
-        type="button"
-        aria-pressed={isWatched}
-        onClick={() => {
-          if (!requireAuth('save_item')) return;
-          const on = toggle(auctionId);
-          show(on ? 'Watching — you can find it in your watchlist' : 'Removed from watchlist', 'info');
-        }}
-        className={`pressable flex h-11 items-center justify-center gap-2 rounded-md border text-body-emphasis font-semibold ${
-          isWatched
-            ? 'border-border bg-brand-subtle text-text-primary'
-            : 'border-border text-text-primary hover:border-text-muted'
-        }`}
-      >
-        <Icon name="bookmark" size={18} filled={isWatched} />
-        {isWatched ? 'Watching' : 'Watch this auction'}
-      </button>
-      {wall}
-    </>
   );
 }
 
@@ -948,9 +953,9 @@ function EndedState({
       // shelf price; protection fee recomputes off the honest amount.
       if (!hammerListing) throw new Error('Listing unavailable');
       const orders = recordOrder([hammerListing]);
-      qc.setQueryData<CommerceOrder[]>(['orders', 'commerce'], (old) =>
-        old ? [...old, ...orders] : old,
-      );
+      // Paginated orders cache — recordOrder mutated the fixture store, so
+      // the invalidate refetches the composed page (never splice a bare
+      // array into the InfiniteData shape).
       void qc.invalidateQueries({ queryKey: ['orders'] });
       void qc.invalidateQueries({ queryKey: ['listing', auction.listingId] });
       router.push(`/orders/${orders[0]?.id ?? ''}`);

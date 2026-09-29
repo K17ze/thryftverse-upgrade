@@ -14,9 +14,11 @@
  *
  * - Untranslated keys fall back to en, then to the raw key (never blank).
  * - `setLocale` persists under LOCALE_STORAGE_KEY; PlatformRuntime mirrors
- *   it onto `<html lang dir>` and the pre-paint script restores it.
- * - `locales` is the picker source for the settings Language control
- *   (owned by another agent — wire `onSelect` to `setLocale`).
+ *   it onto `<html lang dir>` and the pre-paint script restores it. In
+ *   live mode with a session it also mirrors the choice to
+ *   PATCH /users/me/locale — fire-and-forget, the device pick never
+ *   waits on the wire.
+ * - `locales` is the picker source for the settings Language control.
  *
  * SSR: the store hydrates synchronously from localStorage on the client,
  * so the first client render already reflects the stored locale.
@@ -24,6 +26,9 @@
 import { useCallback } from 'react';
 import { create } from 'zustand';
 import { persist, createJSONStorage } from 'zustand/middleware';
+import { DATA_MODE } from '@/lib/api/client';
+import { getAuthSession } from '@/lib/api/http';
+import { updateMyLocale } from '@/lib/api/services/users';
 import {
   DEFAULT_LOCALE,
   LOCALE_STORAGE_KEY,
@@ -48,6 +53,18 @@ export const useLocaleStore = create<LocaleState>()(
       setLocale: (locale) => {
         if (!isLocale(locale)) return;
         set({ locale });
+        // Account mirror — best-effort so the UI never blocks on the wire.
+        // The write only flies when a live session actually exists; the
+        // local choice stands either way (other devices adopt it on
+        // their own hydrate).
+        if (DATA_MODE === 'live') {
+          void getAuthSession().then((session) => {
+            if (!session) return;
+            return updateMyLocale({ locale }).catch(() => {
+              /* mirror-only write — a failure keeps the device choice */
+            });
+          });
+        }
       },
     }),
     {

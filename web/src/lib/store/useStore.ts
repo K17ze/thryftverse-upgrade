@@ -2,8 +2,14 @@
 
 /**
  * Client state — mirrors the mobile app's useStore slices the web needs:
- * wishlist (favourites), saved products, bag, and session identity.
- * Persisted to localStorage so state survives reloads.
+ * wishlist (favourites), saved products, bag, look engagement, and
+ * session identity. Persisted to localStorage so state survives reloads.
+ *
+ * Live-mode writes are optimistic with revert-on-failure: a failed POST
+ * snaps the list back and raises `savedSyncError` so surfaces can say the
+ * sync failed instead of quietly diverging. `hydrateSavedLists` writes are
+ * sequenced by the session epoch — a resolution that lands after an
+ * identity change is dropped, never written onto the new account.
  */
 
 import { useEffect, useState } from 'react';
@@ -11,31 +17,119 @@ import { create } from 'zustand';
 import { persist, createJSONStorage } from 'zustand/middleware';
 import { DATA_MODE } from '@/lib/api/client';
 import { fetchSavedList, writeSavedList } from '@/lib/api/services/saved';
+import { setLookLiked, setLookSaved } from '@/lib/api/services/social';
+import { sessionEpoch, sessionIdentityIsCurrent } from '@/lib/session/identityEpoch';
 
 interface BagItem {
   listingId: string;
   addedAt: string;
 }
 
-/** POST the toggle to the server in live mode — fire-and-forget; the local
- *  store is the optimistic mirror, same as the mobile savedLists slice. */
-function writeThroughSavedList(list: 'wishlist' | 'saved', listingId: string, nowHas: boolean) {
-  if (DATA_MODE !== 'live') return;
-  void writeSavedList(list, listingId, nowHas ? 'add' : 'remove').catch(() => {
-    // A failed write leaves the optimistic state — the next hydrate re-syncs.
-  });
+/**
+ * Latest-write-wins per (scope, item): a response is stale when a newer
+ * op for the same item started after it. Stale resolutions are ignored —
+ * the newest in-flight op owns the final state and the error channel —
+ * so rapid toggles can't resurrect a reverted state or hide a failure.
+ */
+const writeSeq = new Map<string, number>();
+
+/**
+ * POST the toggle to the server in live mode — optimistic mirror with
+ * item-scoped rollback: a failed write reverts only that id (sibling
+ * toggles keep their state) and raises `savedSyncError`. Resolves the
+ * caller's promise with the persisted outcome so toasts can defer to
+ * truth instead of claiming success at press time.
+ */
+function writeThroughSavedList(
+  list: 'wishlist' | 'saved',
+  listingId: string,
+  nowHas: boolean,
+): Promise<boolean> {
+  if (DATA_MODE !== 'live') return Promise.resolve(true);
+  const key = `${list}:${listingId}`;
+  const seq = (writeSeq.get(key) ?? 0) + 1;
+  writeSeq.set(key, seq);
+  return writeSavedList(list, listingId, nowHas ? 'add' : 'remove')
+    .then(() => {
+      if (writeSeq.get(key) !== seq) return true;
+      writeSeq.delete(key);
+      useStore.setState({ savedSyncError: null });
+      return true;
+    })
+    .catch(() => {
+      if (writeSeq.get(key) !== seq) return true;
+      writeSeq.delete(key);
+      useStore.setState((s) => {
+        const cur = s[list];
+        const reverted = nowHas
+          ? cur.filter((x) => x !== listingId)
+          : cur.includes(listingId)
+            ? cur
+            : [...cur, listingId];
+        return list === 'wishlist' ? { wishlist: reverted } : { saved: reverted };
+      });
+      useStore.setState({ savedSyncError: list });
+      return false;
+    });
+}
+
+/** Same optimistic+revert grammar for the look-scoped edges (like/save) —
+ *  looks are a different domain than saved listings, so they get their
+ *  own endpoint and their own slice. */
+function writeThroughLook(
+  edge: 'like' | 'save',
+  lookId: string,
+  on: boolean,
+): Promise<boolean> {
+  if (DATA_MODE !== 'live') return Promise.resolve(true);
+  const key = `look-${edge}:${lookId}`;
+  const seq = (writeSeq.get(key) ?? 0) + 1;
+  writeSeq.set(key, seq);
+  const write = edge === 'like' ? setLookLiked(lookId, on) : setLookSaved(lookId, on);
+  return write
+    .then(() => {
+      if (writeSeq.get(key) !== seq) return true;
+      writeSeq.delete(key);
+      useStore.setState({ savedSyncError: null });
+      return true;
+    })
+    .catch(() => {
+      if (writeSeq.get(key) !== seq) return true;
+      writeSeq.delete(key);
+      useStore.setState((s) => {
+        const cur = edge === 'like' ? s.likedLooks : s.savedLooks;
+        const reverted = on
+          ? cur.filter((x) => x !== lookId)
+          : cur.includes(lookId)
+            ? cur
+            : [...cur, lookId];
+        return edge === 'like' ? { likedLooks: reverted } : { savedLooks: reverted };
+      });
+      useStore.setState({ savedSyncError: edge === 'like' ? 'like' : 'save' });
+      return false;
+    });
 }
 
 interface AppState {
   // Wishlist (favourites)
   wishlist: string[];
-  toggleWishlist: (id: string) => void;
+  /** Optimistic toggle — resolves true once the state is durable
+   *  (fixture: immediately; live: after the write lands). False means
+   *  the write failed and the local change was rolled back. */
+  toggleWishlist: (id: string) => Promise<boolean>;
   isWishlisted: (id: string) => boolean;
 
   // Saved products (bookmark to collections)
   saved: string[];
-  toggleSaved: (id: string) => void;
+  toggleSaved: (id: string) => Promise<boolean>;
   isSaved: (id: string) => boolean;
+
+  // Saved looks — a separate domain from `saved` (listings). Posting a
+  // look id to the saved-listings endpoint was the old lie; look saves
+  // go through /looks/:id/save in live mode.
+  savedLooks: string[];
+  toggleSavedLook: (id: string) => Promise<boolean>;
+  isLookSaved: (id: string) => boolean;
 
   // Bag / bundle
   bag: BagItem[];
@@ -46,14 +140,23 @@ interface AppState {
   clearBag: () => void;
   isInBag: (id: string) => boolean;
 
-  // Feed engagement
+  // Feed engagement — look likes write through to /looks/:id/like with
+  // revert-on-failure (same pattern as the follows store).
   likedLooks: string[];
-  toggleLikedLook: (id: string) => void;
+  toggleLikedLook: (id: string) => Promise<boolean>;
 
   // Listing management — last-bump timestamps per listing id. Persisted so
   // the 1-per-24h cooldown survives reloads; the fixtures do the data write.
   listingBumps: Record<string, string>;
   recordListingBump: (id: string) => void;
+
+  // Sync honesty channels (runtime state — never persisted):
+  /** Set when a live write failed after rollback ('wishlist' | 'saved' |
+   *  'like' | 'save'); cleared on the next successful write. */
+  savedSyncError: string | null;
+  /** True when the live hydrate failed — the local lists may be stale
+   *  relative to the server; cleared on a successful hydrate. */
+  savedListsStale: boolean;
 
   // Session flags
   hasSeenOnboarding: boolean;
@@ -69,7 +172,7 @@ export const useStore = create<AppState>()(
         set((s) => ({
           wishlist: next ? [...s.wishlist, id] : s.wishlist.filter((x) => x !== id),
         }));
-        writeThroughSavedList('wishlist', id, next);
+        return writeThroughSavedList('wishlist', id, next);
       },
       isWishlisted: (id) => get().wishlist.includes(id),
 
@@ -79,9 +182,21 @@ export const useStore = create<AppState>()(
         set((s) => ({
           saved: next ? [...s.saved, id] : s.saved.filter((x) => x !== id),
         }));
-        writeThroughSavedList('saved', id, next);
+        return writeThroughSavedList('saved', id, next);
       },
       isSaved: (id) => get().saved.includes(id),
+
+      savedLooks: [],
+      toggleSavedLook: (id) => {
+        const next = !get().savedLooks.includes(id);
+        set((s) => ({
+          savedLooks: next
+            ? [...s.savedLooks, id]
+            : s.savedLooks.filter((x) => x !== id),
+        }));
+        return writeThroughLook('save', id, next);
+      },
+      isLookSaved: (id) => get().savedLooks.includes(id),
 
       bag: [],
       addToBag: (id) =>
@@ -106,18 +221,24 @@ export const useStore = create<AppState>()(
       isInBag: (id) => get().bag.some((b) => b.listingId === id),
 
       likedLooks: [],
-      toggleLikedLook: (id) =>
+      toggleLikedLook: (id) => {
+        const next = !get().likedLooks.includes(id);
         set((s) => ({
-          likedLooks: s.likedLooks.includes(id)
-            ? s.likedLooks.filter((x) => x !== id)
-            : [...s.likedLooks, id],
-        })),
+          likedLooks: next
+            ? [...s.likedLooks, id]
+            : s.likedLooks.filter((x) => x !== id),
+        }));
+        return writeThroughLook('like', id, next);
+      },
 
       listingBumps: {},
       recordListingBump: (id) =>
         set((s) => ({
           listingBumps: { ...s.listingBumps, [id]: new Date().toISOString() },
         })),
+
+      savedSyncError: null,
+      savedListsStale: false,
 
       hasSeenOnboarding: false,
       markOnboardingSeen: () => set({ hasSeenOnboarding: true }),
@@ -128,6 +249,7 @@ export const useStore = create<AppState>()(
       partialize: (s) => ({
         wishlist: s.wishlist,
         saved: s.saved,
+        savedLooks: s.savedLooks,
         bag: s.bag,
         likedLooks: s.likedLooks,
         listingBumps: s.listingBumps,
@@ -152,16 +274,33 @@ export function useHydrated(): boolean {
  * Live mode: pull the server-authoritative wishlist/saved lists into the
  * store once the session resolves. Call this from the session provider —
  * it no-ops in fixture mode.
+ *
+ * `forUserId` pins the write to the identity that requested it: if the
+ * session moved on (logout, expiry, a different account) before the read
+ * resolved, the lists are dropped instead of landing on the wrong account.
+ * A failed read flags the store stale — the local lists are kept (better
+ * than empty) but never silently trusted.
  */
-export async function hydrateSavedLists(): Promise<void> {
+export async function hydrateSavedLists(forUserId?: string): Promise<void> {
   if (DATA_MODE !== 'live') return;
+  const epoch = sessionEpoch();
+  const stillCurrent = () =>
+    !forUserId || sessionIdentityIsCurrent(forUserId, epoch);
   try {
     const [wishlist, saved] = await Promise.all([
       fetchSavedList('wishlist'),
       fetchSavedList('saved'),
     ]);
-    useStore.setState({ wishlist: wishlist.itemIds, saved: saved.itemIds });
+    if (!stillCurrent()) return;
+    useStore.setState({
+      wishlist: wishlist.itemIds,
+      saved: saved.itemIds,
+      savedListsStale: false,
+      savedSyncError: null,
+    });
   } catch {
-    // Guest or offline — keep the local lists.
+    // Guest or offline — keep the local lists, but flag them stale so a
+    // surface can say so instead of presenting them as server truth.
+    if (stillCurrent()) useStore.setState({ savedListsStale: true });
   }
 }

@@ -32,6 +32,7 @@ import {
   MARKET_LEDGER,
 } from '@/lib/data/fixtures-coown';
 import { DATA_MODE } from '@/lib/api/client';
+import { ApiRequestError } from '@/lib/api/http';
 import * as coownService from '@/lib/api/services/coown';
 import { useSession } from '@/lib/session/SessionProvider';
 import type { WalletData } from '@/components/wallet/useWalletData';
@@ -82,6 +83,23 @@ export interface PlaceOrderResult {
   plan: ExecutionPlan | null;
 }
 
+/**
+ * Live-mode pre-commit context: the server preview + the reservation the
+ * order must be committed against. Reservations hold the order's full
+ * obligation (units × bound + fee) for ~60s — `validUntilMs` is the
+ * earlier of the preview's validity and the reservation expiry, i.e. the
+ * real commit deadline the review UI counts down to.
+ */
+export interface PreparedLiveOrder {
+  /** The exact command preview + reserve ran against — the commit must
+   *  reuse it verbatim or the server-side idempotency/reservation hash
+   *  rejects it as a different order. */
+  command: coownService.CoOwnOrderCommand;
+  preview: coownService.CoOwnOrderPreview;
+  reservation: coownService.CoOwnOrderReservation;
+  validUntilMs: number;
+}
+
 export function usePlaceCoOwnOrder() {
   const queryClient = useQueryClient();
   const { user } = useSession();
@@ -106,45 +124,137 @@ export function usePlaceCoOwnOrder() {
     }
   };
 
-  const placeOrder = async (input: PlaceOrderInput): Promise<PlaceOrderResult> => {
+  /**
+   * Convert the composer's order type into the only two the ingest schema
+   * accepts. A UI 'market' order becomes protected_market bounded at the
+   * worst price the displayed fill plan walked — "everything the book
+   * shows" is a bound, not an uncapped sweep — and it can never rest.
+   * 'protected_market' bounds at the plan's ±1.5% protection cap; 'limit'
+   * passes the limit price through untouched.
+   */
+  const buildWireCommand = (
+    input: PlaceOrderInput,
+    userId: string,
+    plan: ExecutionPlan,
+  ): coownService.CoOwnOrderCommand => {
+    const { side, orderType, units, limitPriceGbp } = input;
+    if (orderType === 'limit') {
+      return {
+        userId,
+        side,
+        units,
+        orderType: 'limit',
+        limitPriceGbp: limitPriceGbp ?? undefined,
+      };
+    }
+    const boundGbp =
+      orderType === 'protected_market'
+        ? plan.capPriceGbp
+        : (plan.worstFillPriceGbp ?? plan.referencePriceGbp);
+    if (boundGbp == null || !(boundGbp > 0)) {
+      // The bound is the money-truth the reservation prices against —
+      // refuse rather than let the wire call 400 on a missing price.
+      throw new ApiRequestError(
+        'No live price available to bound this order — wait for the book to refresh.',
+        undefined,
+        { code: 'NO_BOUND_PRICE' },
+      );
+    }
+    return {
+      userId,
+      side,
+      units,
+      orderType: 'protected_market',
+      ...(side === 'buy' ? { maxPriceGbp: boundGbp } : { minPriceGbp: boundGbp }),
+    };
+  };
+
+  /**
+   * Live pre-commit — the web port of the mobile TradeScreen submit:
+   * POST /orders/preview for the server's fee/fill estimate and the
+   * per-notional eligibility verdict, then POST /orders/reserve to hold
+   * the full obligation (~60s TTL). placeOrder commits against the
+   * returned reservation; the review surface counts down to
+   * `validUntilMs` and releases the reservation on abandon. Fixture mode
+   * returns null — there is no server reservation to hold.
+   */
+  const prepareOrder = async (input: PlaceOrderInput): Promise<PreparedLiveOrder | null> => {
+    if (DATA_MODE !== 'live') return null;
+    if (!user) throw new Error('auth_required');
+    const plan = planExecution({
+      side: input.side,
+      orderType: input.orderType,
+      units: input.units,
+      limitPriceGbp: input.limitPriceGbp,
+      bids: input.bids,
+      asks: input.asks,
+    });
+    const command = buildWireCommand(input, user.id, plan);
+    const preview = await coownService.previewCoOwnOrder(input.asset.id, command);
+    if (!preview.eligibility.allowed) {
+      // The preview's verdict is the same evaluateMarketEligibility the
+      // commit re-runs — surface its message verbatim, don't place anyway.
+      throw new ApiRequestError(
+        preview.eligibility.message || 'This order is not available for your account',
+        403,
+        { code: preview.eligibility.code ?? 'ORDER_NOT_ELIGIBLE' },
+      );
+    }
+    const reservation = await coownService.reserveCoOwnOrder(input.asset.id, {
+      ...command,
+      idempotencyKey: coownService.newCoOwnReserveAttemptKey(),
+    });
+    return {
+      command,
+      preview,
+      reservation,
+      validUntilMs: Math.min(
+        Date.parse(preview.validUntil),
+        Date.parse(reservation.expiresAt),
+      ),
+    };
+  };
+
+  const placeOrder = async (
+    input: PlaceOrderInput & { prepared?: PreparedLiveOrder | null },
+  ): Promise<PlaceOrderResult> => {
     const { asset, side, orderType, units, limitPriceGbp } = input;
     // Duration is only meaningful when part of the order can rest.
     const duration = orderType === 'limit' ? (input.duration ?? 'gtc') : undefined;
-    const plan = planExecution({ side, orderType, units, limitPriceGbp, bids: input.bids, asks: input.asks });
 
     // Ledger-level enforcement — the composer gate is UX; the write path
     // re-checks whatever state it settles against so a stale UI can't
     // push an order the ledger wouldn't honour.
     if (!user) throw new Error('auth_required');
-    if (DATA_MODE !== 'live') {
-      // Every order settles against the 1ZE pocket — if the wallet entry
-      // or its pocket isn't in the cache there's nothing truthful to
-      // debit/credit.
-      const wallet = queryClient.getQueryData<WalletData>(walletKeys.all(user.id));
-      if (!wallet?.ize) throw new Error('wallet_unavailable');
-      if (side === 'sell') {
-        const positions =
-          queryClient.getQueryData<CoOwnPosition[]>([...POSITIONS_KEY]) ?? CO_OWN_POSITIONS;
-        const held = positions.find((p) => p.assetId === asset.id)?.units ?? 0;
-        if (units > held) throw new Error('insufficient_units');
-      } else {
-        const availableIze = round2(wallet.ize.settled - wallet.ize.reserved);
-        if (gbpToIze(plan.requiredGbp) > availableIze + 0.005) {
-          throw new Error('insufficient_funds');
-        }
-      }
-    }
 
     if (DATA_MODE === 'live') {
+      const prepared = input.prepared;
+      if (!prepared) {
+        // The backend rejects a placement with no reservation — refuse
+        // early instead of shipping an order that can't execute.
+        throw new ApiRequestError(
+          'This order needs a fresh reservation — review it again.',
+          undefined,
+          { code: 'RESERVATION_REQUIRED' },
+        );
+      }
+      if (
+        prepared.command.side !== side ||
+        prepared.command.units !== units ||
+        prepared.command.userId !== user.id
+      ) {
+        // The reservation hash covers side/units/prices — a composer edit
+        // after review must re-prepare, not commit against a stale hold.
+        throw new ApiRequestError(
+          'The order changed since it was reserved — review it again.',
+          undefined,
+          { code: 'RESERVATION_MISMATCH' },
+        );
+      }
       const order = await coownService.placeCoOwnOrder({
         assetId: asset.id,
-        side,
-        orderType,
-        units,
-        limitPriceGbp: limitPriceGbp ?? undefined,
-        // The plan's cap IS the protection price for protected orders.
-        protectionPriceGbp:
-          orderType === 'protected_market' ? plan.capPriceGbp ?? undefined : undefined,
+        ...prepared.command,
+        reservationId: prepared.reservation.id,
         timeInForce: duration === 'day' ? 'GFD' : duration === 'gtc' ? 'GTC90' : undefined,
         // Missing keys fail closed — a real money command without a
         // dedupe key is refused rather than sent unreconcilable.
@@ -168,6 +278,25 @@ export function usePlaceCoOwnOrder() {
         void queryClient.invalidateQueries({ queryKey: [...key] });
       }
       return { order, plan: null };
+    }
+
+    const plan = planExecution({ side, orderType, units, limitPriceGbp, bids: input.bids, asks: input.asks });
+
+    // Every order settles against the 1ZE pocket — if the wallet entry
+    // or its pocket isn't in the cache there's nothing truthful to
+    // debit/credit.
+    const wallet = queryClient.getQueryData<WalletData>(walletKeys.all(user.id));
+    if (!wallet?.ize) throw new Error('wallet_unavailable');
+    if (side === 'sell') {
+      const positions =
+        queryClient.getQueryData<CoOwnPosition[]>([...POSITIONS_KEY]) ?? CO_OWN_POSITIONS;
+      const held = positions.find((p) => p.assetId === asset.id)?.units ?? 0;
+      if (units > held) throw new Error('insufficient_units');
+    } else {
+      const availableIze = round2(wallet.ize.settled - wallet.ize.reserved);
+      if (gbpToIze(plan.requiredGbp) > availableIze + 0.005) {
+        throw new Error('insufficient_funds');
+      }
     }
 
     const now = new Date().toISOString();
@@ -248,7 +377,7 @@ export function usePlaceCoOwnOrder() {
           ...p,
           units: Math.max(0, p.units - units),
           realizedProfitGbp: round2(
-            p.realizedProfitGbp + plan.fillGrossGbp - plan.fillFeeGbp - costBasisGbp,
+            (p.realizedProfitGbp ?? 0) + plan.fillGrossGbp - plan.fillFeeGbp - costBasisGbp,
           ),
         };
       });
@@ -282,6 +411,9 @@ export function usePlaceCoOwnOrder() {
         units: f.units,
         unitPriceGbp: f.priceGbp,
         executedAt: now,
+        // Session fills settle inline — mark them so they render as
+        // cleared money, the same state the wire emits.
+        settlementStatus: 'settled',
       }));
       queryClient.setQueryData<TradeLedgerEntry[]>(LEDGER_KEY(asset.id), (old) => [
         ...prints,
@@ -355,7 +487,7 @@ export function usePlaceCoOwnOrder() {
     return { order, plan };
   };
 
-  return { placeOrder };
+  return { prepareOrder, placeOrder };
 }
 
 /**
@@ -376,11 +508,18 @@ export function useCancelCoOwnOrder() {
     }
 
     if (DATA_MODE === 'live') {
-      try {
-        await coownService.cancelCoOwnOrder(orderId);
-      } catch {
-        return false;
+      // The cancel route is asset-scoped and requires the authenticated
+      // user's id in the body (it must match the session — a mismatch
+      // 403s server-side). A refused cancel throws so the caller shows
+      // the server's own error text instead of a generic failure.
+      if (!user) {
+        throw new ApiRequestError('Sign in to cancel orders', 401, { code: 'AUTH_REQUIRED' });
       }
+      await coownService.cancelCoOwnOrder({
+        assetId: order.assetId,
+        orderId: order.id,
+        userId: user.id,
+      });
     }
 
     const unfilled = order.units - order.filledUnits;

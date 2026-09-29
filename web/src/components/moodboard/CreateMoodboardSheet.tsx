@@ -9,13 +9,20 @@
 
 import { useState } from 'react';
 import { useRouter } from 'next/navigation';
+import { useQueryClient } from '@tanstack/react-query';
 import { Button } from '@/components/ui/Button';
 import { Sheet } from '@/components/ui/Sheet';
 import { useToast } from '@/components/ui/Toast';
+import { useSignupWall } from '@/components/auth/SignupWall';
+import { DATA_MODE } from '@/lib/api/client';
+import { parseApiError } from '@/lib/api/http';
+import { createMoodboard } from '@/lib/api/services/social';
 import { MOODBOARD_THEMES, DEFAULT_MOODBOARD_THEME } from '@/lib/data/fixtures-content';
 import { useBoardPrefs } from '@/components/profile/boardPrefs';
 import { useMoodboardEdits } from '@/lib/store/moodboards';
 import { useSession } from '@/lib/session/SessionProvider';
+
+const LIVE = DATA_MODE === 'live';
 
 interface CreateMoodboardSheetProps {
   open: boolean;
@@ -26,14 +33,46 @@ export function CreateMoodboardSheet({ open, onClose }: CreateMoodboardSheetProp
   const router = useRouter();
   const { show } = useToast();
   const { user } = useSession();
+  const { requireAuth, wall } = useSignupWall();
+  const queryClient = useQueryClient();
   const addMoodboard = useBoardPrefs((s) => s.addMoodboard);
   const setBoardTheme = useMoodboardEdits((s) => s.setBoardTheme);
   const [name, setName] = useState('');
   const [themeId, setThemeId] = useState(DEFAULT_MOODBOARD_THEME.id);
+  const [creating, setCreating] = useState(false);
 
-  const create = () => {
+  const create = async () => {
     const title = name.trim();
-    if (!title) return;
+    if (!title || creating) return;
+
+    if (LIVE) {
+      // Live create is a real POST /moodboards — the board exists on the
+      // server and opens through the live detail fetch. Guests hit the
+      // signup wall; a failed write surfaces an error, never a fake board.
+      if (!requireAuth('create_board')) return;
+      setCreating(true);
+      try {
+        const { id } = await createMoodboard({
+          title,
+          visibility: 'private',
+          theme: themeId,
+        });
+        if (!id) throw new Error('Missing board id');
+        setName('');
+        setThemeId(DEFAULT_MOODBOARD_THEME.id);
+        onClose();
+        void queryClient.invalidateQueries({ queryKey: ['moodboards'] });
+        void queryClient.invalidateQueries({ queryKey: ['home', 'member-edits'] });
+        show('Moodboard created', 'success');
+        router.push(`/moodboard/${id}`);
+      } catch (err) {
+        show(parseApiError(err).message ?? 'Couldn’t create the board — try again.', 'error');
+      } finally {
+        setCreating(false);
+      }
+      return;
+    }
+
     const id = `mb-local-${Date.now().toString(36)}`;
     addMoodboard({
       id,
@@ -53,13 +92,14 @@ export function CreateMoodboardSheet({ open, onClose }: CreateMoodboardSheetProp
   };
 
   return (
+    <>
     <Sheet open={open} onClose={onClose} title="New moodboard" maxWidth={440}>
       <div className="px-5 pb-5">
         <input
           value={name}
           onChange={(e) => setName(e.target.value)}
           onKeyDown={(e) => {
-            if (e.key === 'Enter') create();
+            if (e.key === 'Enter') void create();
           }}
           placeholder="Name this board"
           aria-label="Moodboard name"
@@ -105,13 +145,15 @@ export function CreateMoodboardSheet({ open, onClose }: CreateMoodboardSheetProp
           variant="primary"
           size="md"
           fullWidth
-          disabled={!name.trim()}
-          onClick={create}
+          disabled={!name.trim() || creating}
+          onClick={() => void create()}
           className="mt-5"
         >
-          Create moodboard
+          {creating ? 'Creating…' : 'Create moodboard'}
         </Button>
       </div>
     </Sheet>
+    {wall}
+    </>
   );
 }

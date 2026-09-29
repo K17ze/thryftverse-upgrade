@@ -24,7 +24,7 @@ export function SummaryStep({ outcome, onReviewDrafts, onRestart }: SummaryStepP
 
   return (
     <div>
-      <h1 className="text-screen-title font-bold text-text-primary">
+      <h1 className="text-screen-title text-text-primary">
         {nothingImported ? 'Nothing was imported' : 'Import complete'}
       </h1>
       <p className="mt-2 max-w-md text-body text-text-secondary">
@@ -61,7 +61,7 @@ export function SummaryStep({ outcome, onReviewDrafts, onRestart }: SummaryStepP
       {/* ── Skip reasons — the seller sees exactly what didn't make it ── */}
       {outcome.skipped.length > 0 ? (
         <section className="mt-8" aria-label="Skipped rows">
-          <h2 className="text-label font-semibold uppercase tracking-wider text-text-muted">
+          <h2 className="text-label text-text-muted">
             Skipped
           </h2>
           <ul className="mt-2 divide-y divide-border-subtle border-y border-border-subtle">

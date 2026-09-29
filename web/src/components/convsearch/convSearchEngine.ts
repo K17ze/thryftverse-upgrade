@@ -342,6 +342,73 @@ function consume(scratch: string, phrase: string): { scratch: string; found: boo
  * phrases first, then dictionary terms longest-first, leftovers become
  * free-text keywords. Honest port of mobile extractFilters().
  */
+/** Top-level slugs the backend's `categories` filter can name — the rest
+ *  of its CATEGORY_KEYWORDS are item-level terms, not departments. */
+const API_CATEGORY_SLUGS = new Set(['women', 'men', 'sneakers', 'bags', 'accessories']);
+
+/** Wire shape of POST /search/conversational's `parsedFilters` — camelCase
+ *  and `colors` (not `colours`). Same keyword-rule contract as the local
+ *  parser; the UI labels both identically ("matched keywords"). */
+export interface ApiParsedFilters {
+  brands?: string[];
+  categories?: string[];
+  sizes?: string[];
+  conditions?: string[];
+  priceRange?: { min?: number; max?: number };
+  colors?: string[];
+  styles?: string[];
+  sustainableOnly?: boolean;
+}
+
+/**
+ * Backend parsedFilters → ParsedIntent. Wire `categories` are item-level
+ * keywords (denim, sneakers…): a value matching a real department slug
+ * scopes the search, anything else lands on itemTerms. Conditions keep
+ * only values in the real condition vocabulary; colours resolve to their
+ * canonical COLOR_VOCAB names (a name the facet system doesn't know is
+ * kept as written — it narrows nothing but still shows what was caught).
+ */
+export function intentFromApiFilters(raw: ApiParsedFilters): ParsedIntent {
+  const intent = newIntent();
+  const pushUnique = (list: string[], value: string) => {
+    const v = value.trim();
+    if (v && !list.some((x) => x.toLowerCase() === v.toLowerCase())) list.push(v);
+  };
+  for (const b of raw.brands ?? []) pushUnique(intent.brands, b);
+  for (const c of raw.categories ?? []) {
+    const norm = normalize(c);
+    if (!norm) continue;
+    if (API_CATEGORY_SLUGS.has(norm)) {
+      if (!intent.categorySlugs.includes(norm)) intent.categorySlugs.push(norm);
+    } else {
+      pushUnique(intent.itemTerms, c);
+    }
+  }
+  for (const s of raw.sizes ?? []) pushUnique(intent.sizes, s);
+  for (const c of raw.conditions ?? []) {
+    if ((CONDITION_OPTIONS as string[]).includes(c)) {
+      const cond = c as ListingCondition;
+      if (!intent.conditions.includes(cond)) intent.conditions.push(cond);
+    }
+  }
+  if (raw.priceRange) {
+    if (typeof raw.priceRange.min === 'number') intent.priceMin = raw.priceRange.min;
+    if (typeof raw.priceRange.max === 'number') intent.priceMax = raw.priceRange.max;
+  }
+  for (const c of raw.colors ?? []) {
+    const norm = normalize(c);
+    if (!norm) continue;
+    const canonical =
+      COLOR_VOCAB.find(
+        (v) => v.name.toLowerCase() === norm || v.aliases.includes(norm),
+      )?.name ?? c.trim();
+    pushUnique(intent.colours, canonical);
+  }
+  for (const s of raw.styles ?? []) pushUnique(intent.styles, s);
+  intent.sustainable = raw.sustainableOnly === true;
+  return intent;
+}
+
 export function parseIntent(query: string): ParsedIntent {
   const text = normalize(query);
   let scratch = text;

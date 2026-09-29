@@ -61,11 +61,14 @@ export async function createCollection(input: {
   return res.collection;
 }
 
+/** PATCH /collections/:id — the wire acknowledges with {ok, collectionId}
+ *  only (no updated row), so callers must let the invalidated list read
+ *  own truth rather than expecting a collection payload back. */
 export async function updateCollection(
   collectionId: string,
   patch: { name?: string; description?: string | null; isPrivate?: boolean },
-): Promise<ApiCollection> {
-  const res = await fetchJson<{ ok: true; collection: ApiCollection }>(
+): Promise<void> {
+  await fetchJson<{ ok: true; collectionId: string }>(
     `/collections/${encodeURIComponent(collectionId)}`,
     {
       method: 'PATCH',
@@ -73,7 +76,6 @@ export async function updateCollection(
       body: JSON.stringify(patch),
     },
   );
-  return res.collection;
 }
 
 export async function deleteCollection(collectionId: string): Promise<void> {

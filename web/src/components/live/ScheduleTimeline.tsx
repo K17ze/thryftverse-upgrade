@@ -9,7 +9,7 @@
  */
 
 import type { LiveSession } from '@/lib/data/fixtures-media';
-import { userById } from '@/lib/data/fixtures';
+import { liveSellerOf } from './useLiveSessions';
 import { ReminderToggle } from './ReminderToggle';
 
 /** "19:45" — the schedule column reads as a timetable, tnum aligned. */
@@ -36,7 +36,7 @@ export function ScheduleTimeline({ sessions }: ScheduleTimelineProps) {
   return (
     <ul className="divide-y divide-border-subtle border-y border-border-subtle">
       {sessions.map((s) => {
-        const seller = userById(s.sellerId);
+        const seller = liveSellerOf(s);
         return (
           <li key={s.id} className="flex items-center gap-4 py-3">
             <time
@@ -47,9 +47,9 @@ export function ScheduleTimeline({ sessions }: ScheduleTimelineProps) {
             </time>
             <div className="min-w-0 flex-1">
               <p className="clamp-1 text-body-emphasis text-text-primary">{s.title}</p>
-              <p className="mt-0.5 text-meta text-text-muted">
-                @{seller?.username ?? 'seller'}
-              </p>
+              {seller?.username ? (
+                <p className="mt-0.5 text-meta text-text-muted">@{seller.username}</p>
+              ) : null}
             </div>
             <ReminderToggle session={s} />
           </li>

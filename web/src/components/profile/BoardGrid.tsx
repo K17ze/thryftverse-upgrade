@@ -40,7 +40,7 @@ export function BoardCard({ href, title, thumbs, count, ownerName, isPrivate }: 
                     src={cells[i]}
                     alt=""
                     fill
-                    sizes="(max-width: 640px) 25vw, 15vw"
+                    sizes="(max-width: 640px) 25vw, (max-width: 1280px) 15vw, 118px"
                     className="h-full w-full transition-transform duration-300 group-hover:scale-105"
                   />
                 ) : (
@@ -54,7 +54,7 @@ export function BoardCard({ href, title, thumbs, count, ownerName, isPrivate }: 
             src={cells[0]}
             alt={title}
             fill
-            sizes="(max-width: 640px) 50vw, 25vw"
+            sizes="(max-width: 640px) 50vw, (max-width: 1280px) 25vw, 236px"
             className="h-full w-full transition-transform duration-300 group-hover:scale-105"
             fallbackIcon="layers"
           />
@@ -81,7 +81,7 @@ export function BoardCard({ href, title, thumbs, count, ownerName, isPrivate }: 
 
 export function BoardGrid({ children }: { children: React.ReactNode }) {
   return (
-    <div className="grid grid-cols-2 gap-3 px-4 sm:grid-cols-3 sm:px-6 lg:grid-cols-4">
+    <div className="grid grid-cols-2 gap-3 px-4 sm:grid-cols-3 sm:px-6 lg:grid-cols-4 xl:grid-cols-5">
       {children}
     </div>
   );

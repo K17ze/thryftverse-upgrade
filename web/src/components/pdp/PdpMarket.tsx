@@ -166,7 +166,7 @@ export function PdpMarket({ listing }: PdpMarketProps) {
 
       {compItems.length >= 2 ? (
         <div className="mt-5">
-          <h3 className="mb-3 text-label font-semibold uppercase tracking-wide text-text-secondary">
+          <h3 className="mb-3 text-label text-text-secondary">
             Similar sold items
           </h3>
           <div

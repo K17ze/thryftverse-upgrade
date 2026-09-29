@@ -11,17 +11,21 @@
  */
 
 import { useMemo, useState } from 'react';
+import Link from 'next/link';
 import { SellerSectionNav } from '@/components/seller/SellerSectionNav';
 import { MetricDelta } from '@/components/seller/MetricDelta';
 import { BarChart } from '@/components/charts/BarChart';
 import { LineChart } from '@/components/charts/LineChart';
+import { AppImage } from '@/components/ui/AppImage';
 import { Button } from '@/components/ui/Button';
 import { Chip } from '@/components/ui/Chip';
 import { EmptyState } from '@/components/ui/EmptyState';
+import { Icon } from '@/components/ui/Icon';
 import { Sheet } from '@/components/ui/Sheet';
 import { Skeleton } from '@/components/ui/Skeleton';
 import {
   useFulfilmentCounts,
+  useNeedsAttention,
   useSellerAnalytics,
   type SellerAnalyticsRange,
 } from '@/lib/hooks/seller-queries';
@@ -101,6 +105,9 @@ export default function SellerAnalyticsPage() {
     [preset, customRange],
   );
   const analytics = useSellerAnalytics(range);
+  // Under-reach list — the server's analytics/attention verdict read
+  // against this exact window (custom ranges ride as startDate/endDate).
+  const attention = useNeedsAttention(range);
 
   const applyCustom = () => {
     const { from, to } = customDraft;
@@ -126,8 +133,8 @@ export default function SellerAnalyticsPage() {
       : null;
 
   return (
-    <div className="mx-auto w-full max-w-3xl px-4 pb-16 pt-8 sm:px-6 md:pt-12">
-      <h1 className="text-screen-title font-semibold text-text-primary">Analytics</h1>
+    <div className="mx-auto w-full max-w-3xl px-4 pb-16 pt-8 sm:px-6 md:pt-12 lg:max-w-[1440px]">
+      <h1 className="text-screen-title text-text-primary">Analytics</h1>
       <SellerSectionNav toPost={counts.toPost} posted={counts.posted} />
 
       {/* Range selector — presets are exact windows; custom opens a
@@ -170,8 +177,10 @@ export default function SellerAnalyticsPage() {
         />
       ) : a ? (
         <>
-          {/* Revenue — the dominant read. */}
-          <section className="mt-8" aria-labelledby="analytics-revenue">
+          {/* Revenue + demand funnel — the two demand reads sit
+              side-by-side at lg (chart dominant, funnel the ledger). */}
+          <div className="mt-8 lg:grid lg:grid-cols-2 lg:items-start lg:gap-10 xl:gap-16">
+          <section aria-labelledby="analytics-revenue">
             <div className="flex items-baseline justify-between gap-3">
               <SectionTitle>Revenue</SectionTitle>
               <span className="tnum flex items-baseline gap-2">
@@ -222,7 +231,7 @@ export default function SellerAnalyticsPage() {
 
           {/* Demand funnel — each stage is a real count; the bar width is
               relative to views, step % is stage-over-stage. */}
-          <section className="mt-10" aria-labelledby="analytics-funnel">
+          <section className="mt-10 lg:mt-0" aria-labelledby="analytics-funnel">
             <SectionTitle>Demand funnel</SectionTitle>
             {funnelBase ? (
               <ul className="mt-4 space-y-3">
@@ -254,7 +263,11 @@ export default function SellerAnalyticsPage() {
               </p>
             )}
           </section>
+          </div>
 
+          {/* Category mix + repeat buyers — the secondary reads pair up
+              at lg rather than stacking full-width. */}
+          <div className="lg:grid lg:grid-cols-2 lg:items-start lg:gap-10 xl:gap-16">
           {/* Category mix — real inventory grouped by category. The live
               contract doesn't carry it, so live mode says so rather than
               faking a split. */}
@@ -322,6 +335,70 @@ export default function SellerAnalyticsPage() {
               )}
             </div>
           </section>
+          </div>
+
+          {/* Needs attention — listings under the view floor in the
+              selected range (the server's attention verdict; priority is
+              its call, not ours). Rows land on the listing's manage
+              surface; a fetch failure renders nothing rather than an
+              error block inside a supplementary read. */}
+          {attention.isLoading ? (
+            <div
+              className="mt-10 space-y-3"
+              aria-busy
+              aria-label="Loading listings needing attention"
+            >
+              <Skeleton className="h-4 w-32" />
+              <Skeleton className="h-12 w-full" />
+              <Skeleton className="h-12 w-full" />
+            </div>
+          ) : attention.data && attention.data.length > 0 ? (
+            <section aria-label="Needs attention" className="mt-10">
+              <div className="flex items-baseline justify-between gap-3">
+                <SectionTitle>Needs attention</SectionTitle>
+                <span className="tnum text-meta text-text-muted">
+                  {attention.data.length} listing{attention.data.length === 1 ? '' : 's'}
+                </span>
+              </div>
+              <p className="mt-1 text-meta text-text-muted">
+                Active listings under the view floor in this range.
+              </p>
+              <ul className="mt-3 divide-y divide-border-subtle border-y border-border-subtle">
+                {attention.data.map((row) => (
+                  <li key={row.listingId}>
+                    <Link
+                      href={`/seller-hub/listings/${row.listingId}`}
+                      className="pressable flex items-center gap-3.5 py-3"
+                    >
+                      <span className="relative h-12 w-12 shrink-0 overflow-hidden rounded-md bg-surface-alt">
+                        <AppImage
+                          src={row.imageUrl}
+                          alt={row.title}
+                          fill
+                          sizes="48px"
+                          fallbackIcon="tag"
+                        />
+                      </span>
+                      <span className="min-w-0 flex-1">
+                        <span className="clamp-1 block text-body-emphasis font-medium text-text-primary">
+                          {row.title}
+                        </span>
+                        <span
+                          className={`tnum mt-0.5 block text-meta ${
+                            row.priority === 'high' ? 'text-warning-text' : 'text-text-muted'
+                          }`}
+                        >
+                          {formatCount(row.views)} views · {formatCount(row.likes)} likes
+                          {row.offers > 0 ? ` · ${formatCount(row.offers)} offers` : ''}
+                        </span>
+                      </span>
+                      <Icon name="forward" size={16} className="shrink-0 text-text-muted" />
+                    </Link>
+                  </li>
+                ))}
+              </ul>
+            </section>
+          ) : null}
 
           {a.demo ? (
             <p className="mt-8 text-meta text-text-muted">

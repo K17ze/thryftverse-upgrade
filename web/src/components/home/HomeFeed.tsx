@@ -196,14 +196,19 @@ export function HomeFeed({
         <RefreshErrorBanner onRetry={onRefreshRetry} />
       ) : null}
       <RecentlyViewedRail />
-      <FreshDropsRail />
+      <FreshDropsRail units={units} />
       {chunks.map((chunk, i) => {
         const band = i < MODULE_BANDS.length ? MODULE_BANDS[i] : null;
         const showBand = band !== null && units.length > band.after;
         if (chunk.length === 0 && !showBand) return null;
         return (
           <Fragment key={i}>
-            {chunk.length > 0 ? <MasonryGrid units={chunk} columns={columns} /> : null}
+            {chunk.length > 0 ? (
+              // Priority budget: exactly one preloaded image per page —
+              // the first cell of the first chunk's grid. Later chunks
+              // (and every module rail) leave the budget untouched.
+              <MasonryGrid units={chunk} columns={columns} prioritizeFirst={i === 0} />
+            ) : null}
             {showBand ? <band.Module /> : null}
           </Fragment>
         );

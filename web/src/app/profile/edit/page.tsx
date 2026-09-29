@@ -1,5 +1,6 @@
 'use client';
 
+import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import { useEffect, useState } from 'react';
 import { AppImage } from '@/components/ui/AppImage';
@@ -10,7 +11,8 @@ import { INPUT_CLASS, SellField } from '@/components/sell/SellField';
 import { useToast } from '@/components/ui/Toast';
 import { useSession } from '@/lib/session/SessionProvider';
 import { useHydrated } from '@/lib/store/useStore';
-import { useProfileEdit } from '@/lib/store/profileEdit';
+import { saveProfileLive, useProfileEdit } from '@/lib/store/profileEdit';
+import { DATA_MODE } from '@/lib/api/client';
 
 /**
  * /profile/edit — the mobile EditProfileScreen's web counterpart. Writes
@@ -43,9 +45,10 @@ function fileToDataUrl(file: File, maxDim: number): Promise<string> {
 export default function EditProfilePage() {
   const router = useRouter();
   const toast = useToast();
-  const { user, isGuest } = useSession();
+  const { user, isGuest, refreshSession } = useSession();
   const hydrated = useHydrated();
   const saveOverlay = useProfileEdit((s) => s.saveOverlay);
+  const [saving, setSaving] = useState(false);
 
   const [form, setForm] = useState({
     username: '',
@@ -110,20 +113,46 @@ export default function EditProfilePage() {
 
   const usernameOk = /^[a-z0-9_.]{3,20}$/i.test(form.username.trim());
 
-  const save = () => {
-    if (!usernameOk) return;
-    saveOverlay({
-      username: form.username.trim(),
-      // Picked files arrive as downscaled data URLs — persistable as-is.
-      avatar: form.avatar || undefined,
-      coverPhoto: form.coverPhoto || undefined,
-      bio: form.bio.trim() || undefined,
-      location: form.location.trim() || undefined,
-      website: form.website.trim() || undefined,
-      pronouns: form.pronouns.trim() || undefined,
-    });
-    toast.show('Profile updated');
-    router.push('/profile');
+  /** Save — live mode PATCHes /users/me (the server is the single source;
+   *  the overlay is not merged) and re-pulls the session so every
+   *  self-facing surface re-renders from the wire. Fixture mode keeps the
+   *  persisted overlay write. A failed save toasts the error — never a
+   *  fake success. */
+  const save = async () => {
+    if (!usernameOk || saving) return;
+    setSaving(true);
+    try {
+      // No-ops in fixture mode; the overlay write below is mode-gated.
+      await saveProfileLive({
+        username: form.username.trim(),
+        bio: form.bio.trim(),
+        location: form.location.trim(),
+        website: form.website.trim(),
+        pronouns: form.pronouns.trim(),
+        avatar: form.avatar || null,
+        coverPhoto: form.coverPhoto || null,
+      });
+      if (DATA_MODE === 'live') {
+        await refreshSession();
+      } else {
+        saveOverlay({
+          username: form.username.trim(),
+          // Picked files arrive as downscaled data URLs — persistable as-is.
+          avatar: form.avatar || undefined,
+          coverPhoto: form.coverPhoto || undefined,
+          bio: form.bio.trim() || undefined,
+          location: form.location.trim() || undefined,
+          website: form.website.trim() || undefined,
+          pronouns: form.pronouns.trim() || undefined,
+        });
+      }
+      toast.show('Profile updated');
+      router.push('/profile');
+    } catch {
+      toast.show("Couldn't save your profile — try again", 'error');
+    } finally {
+      setSaving(false);
+    }
   };
 
   if (isGuest) return null;
@@ -132,9 +161,9 @@ export default function EditProfilePage() {
   // the inputs would render empty (and the username error would flash).
   if (!hydrated || !seeded) {
     return (
-      <div className="mx-auto w-full max-w-xl" aria-busy aria-label="Loading profile editor">
+      <div className="mx-auto w-full max-w-xl lg:max-w-[720px]" aria-busy aria-label="Loading profile editor">
         <BackBar />
-        <div className="px-4 pb-24 pt-4 sm:px-0">
+        <div className="px-4 pb-24 pt-4 sm:px-6">
           <Skeleton className="h-8 w-40" />
           <Skeleton className="mt-5 h-28 w-full rounded-xl" />
           <div className="mt-5 flex items-center gap-4">
@@ -152,10 +181,22 @@ export default function EditProfilePage() {
   }
 
   return (
-    <div className="mx-auto w-full max-w-xl">
-      <BackBar />
-      <div className="px-4 pb-24 pt-4 sm:px-0">
-        <h1 className="text-screen-title font-bold text-text-primary">Edit profile</h1>
+    // One focused editing column — the Vinted/IG settings grammar: the
+    // media pickers and fields are the live surface, and /profile is the
+    // published truth the header links back to. No mirrored preview.
+    <div className="mx-auto w-full max-w-xl lg:max-w-[720px]">
+      <BackBar
+        actions={
+          <Link
+            href="/profile"
+            className="pressable rounded-md px-2 py-1.5 text-caption font-medium text-text-muted transition-colors hover:text-text-primary"
+          >
+            View profile
+          </Link>
+        }
+      />
+      <div className="px-4 pb-24 pt-4 sm:px-6">
+        <h1 className="text-screen-title text-text-primary">Edit profile</h1>
 
         {/* Cover — the hero's media band. Same pick grammar as avatar. */}
         <div className="mt-5">
@@ -164,7 +205,7 @@ export default function EditProfilePage() {
               src={form.coverPhoto}
               alt="Your cover"
               fill
-              sizes="(max-width: 640px) 100vw, 576px"
+              sizes="(max-width: 640px) 100vw, 672px"
               className="h-full w-full"
               fallbackIcon="image"
             />
@@ -192,7 +233,8 @@ export default function EditProfilePage() {
           </div>
         </div>
 
-        <div className="mt-6 space-y-5">
+        {/* Fields — short inputs pair two-up on ≥sm; bio takes the row. */}
+        <div className="mt-8 grid gap-5 border-t border-border-subtle pt-6 sm:grid-cols-2">
           <SellField
             label="Username"
             id="pf-username"
@@ -204,6 +246,15 @@ export default function EditProfilePage() {
               value={form.username}
               onChange={set('username')}
               autoComplete="username"
+            />
+          </SellField>
+          <SellField label="Pronouns" id="pf-pronouns">
+            <input
+              id="pf-pronouns"
+              className={INPUT_CLASS}
+              value={form.pronouns}
+              onChange={set('pronouns')}
+              placeholder="she/her · he/him · they/them"
             />
           </SellField>
           <SellField label="Location" id="pf-location">
@@ -225,38 +276,41 @@ export default function EditProfilePage() {
               inputMode="url"
             />
           </SellField>
-          <SellField label="Pronouns" id="pf-pronouns">
-            <input
-              id="pf-pronouns"
-              className={INPUT_CLASS}
-              value={form.pronouns}
-              onChange={set('pronouns')}
-              placeholder="she/her · he/him · they/them"
-            />
-          </SellField>
-          <SellField label="Bio" id="pf-bio" hint={`${form.bio.length}/160`}>
-            <textarea
-              id="pf-bio"
-              className={`${INPUT_CLASS} h-auto resize-none py-2.5`}
-              rows={3}
-              maxLength={160}
-              value={form.bio}
-              onChange={set('bio')}
-              placeholder="A line about what you buy and sell"
-            />
-          </SellField>
+          <div className="sm:col-span-2">
+            <SellField label="Bio" id="pf-bio" hint={`${form.bio.length}/160`}>
+              <textarea
+                id="pf-bio"
+                className={`${INPUT_CLASS} h-auto resize-none py-2.5`}
+                rows={3}
+                maxLength={160}
+                value={form.bio}
+                onChange={set('bio')}
+                placeholder="A line about what you buy and sell"
+              />
+            </SellField>
+          </div>
         </div>
 
-        <p className="mt-5 text-meta text-text-muted">
-          Changes save to this device and update your profile everywhere in this build.
-        </p>
-        <div className="mt-4 flex gap-2">
-          <Button variant="primary" className="flex-1" disabled={!usernameOk} onClick={save}>
-            Save
-          </Button>
-          <Button variant="secondary" onClick={() => router.back()}>
-            Cancel
-          </Button>
+        {/* Commit — hairline footer, primary action flush right on ≥sm. */}
+        <div className="mt-8 border-t border-border-subtle pt-6">
+          <div className="flex gap-2 sm:flex-row-reverse sm:justify-end">
+            <Button
+              variant="primary"
+              className="flex-1 sm:flex-none sm:px-8"
+              disabled={!usernameOk || saving}
+              onClick={() => void save()}
+            >
+              {saving ? 'Saving…' : 'Save'}
+            </Button>
+            <Button variant="secondary" onClick={() => router.back()}>
+              Cancel
+            </Button>
+          </div>
+          <p className="mt-3 text-meta text-text-muted sm:text-right">
+            {DATA_MODE === 'live'
+              ? 'Changes save to your account and update your profile everywhere.'
+              : 'Changes save to this device and update your profile everywhere in this build.'}
+          </p>
         </div>
       </div>
     </div>

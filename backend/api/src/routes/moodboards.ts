@@ -812,7 +812,13 @@ export function registerMoodboardRoutes({
       }
 
       const moodboard = result.rows[0];
-      if (moodboard.visibility === 'private' && moodboard.creator_id !== viewerUserId) {
+      // Private boards are readable by the creator and active members —
+      // an accepted editor/commenter invite must not 404 on its own board.
+      if (
+        moodboard.visibility === 'private' &&
+        moodboard.creator_id !== viewerUserId &&
+        !moodboard.viewer_role
+      ) {
         reply.code(404);
         return { ok: false, error: 'Moodboard not found' };
       }

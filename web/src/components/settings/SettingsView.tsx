@@ -13,7 +13,7 @@
 
 import { useEffect, useState } from 'react';
 import Link from 'next/link';
-import { useRouter } from 'next/navigation';
+import { useRouter, useSearchParams } from 'next/navigation';
 import { SettingsSection } from './SettingsSection';
 import { SettingsRow } from './SettingsRow';
 import { Switch } from './Switch';
@@ -23,6 +23,7 @@ import { DeleteAccountRow } from './DataView';
 import { SettingsSearch } from './SettingsSearch';
 import { PickerSheet } from './PickerSheet';
 import type { SettingsDestination, SettingsSheetId } from './settingsDestinations';
+import { isSettingsSheetId } from './settingsDestinations';
 import { Avatar } from '@/components/ui/Avatar';
 import { Icon } from '@/components/ui/Icon';
 import { useSession } from '@/lib/session/SessionProvider';
@@ -53,6 +54,7 @@ type SheetId = SettingsSheetId | null;
 
 export function SettingsView() {
   const router = useRouter();
+  const searchParams = useSearchParams();
   const { user, signOut, isGuest } = useSession();
   const { show } = useToast();
   const [sheet, setSheet] = useState<SheetId>(null);
@@ -75,6 +77,21 @@ export function SettingsView() {
     const current = document.documentElement.dataset.theme;
     if (current === 'light' || current === 'dark') setTheme(current);
   }, []);
+
+  // Desktop-rail deep links — sheet-backed destinations (language, accent,
+  // density, …) arrive as /settings?sheet=… and open the matching index
+  // sheet. The param is validated against the known sheet ids.
+  const sheetParam = searchParams.get('sheet');
+  useEffect(() => {
+    if (isSettingsSheetId(sheetParam)) setSheet(sheetParam);
+  }, [sheetParam]);
+
+  /** Closing a sheet that was opened via ?sheet= also drops the param so
+   *  the same rail link (or another sheet link) can open it again. */
+  const closeSheet = () => {
+    setSheet(null);
+    if (sheetParam) router.replace('/settings', { scroll: false });
+  };
 
   const setThemeMode = (dark: boolean) => {
     const next = dark ? 'dark' : 'light';
@@ -184,7 +201,7 @@ export function SettingsView() {
         <SettingsRow
           icon="settings"
           label="Account control"
-          subtitle="Status, export, deactivate and delete"
+          subtitle="Restrict, export and delete"
           href="/settings/security/control"
         />
         <SettingsRow
@@ -355,13 +372,13 @@ export function SettingsView() {
         onDismiss={() => setSignOutConfirm(false)}
       />
 
-      <LanguageSheet open={sheet === 'language'} onClose={() => setSheet(null)} />
-      <VerificationSheet open={sheet === 'verification'} onClose={() => setSheet(null)} />
-      <ReportSheet open={sheet === 'report'} onClose={() => setSheet(null)} />
-      <AgeConfirmationSheet open={sheet === 'age'} onClose={() => setSheet(null)} />
+      <LanguageSheet open={sheet === 'language'} onClose={closeSheet} />
+      <VerificationSheet open={sheet === 'verification'} onClose={closeSheet} />
+      <ReportSheet open={sheet === 'report'} onClose={closeSheet} />
+      <AgeConfirmationSheet open={sheet === 'age'} onClose={closeSheet} />
       <PickerSheet
         open={sheet === 'accent'}
-        onClose={() => setSheet(null)}
+        onClose={closeSheet}
         title="Accent colour"
         options={ACCENT_PRESETS.map((p) => ({
           value: p.id,
@@ -374,7 +391,7 @@ export function SettingsView() {
       />
       <PickerSheet
         open={sheet === 'density'}
-        onClose={() => setSheet(null)}
+        onClose={closeSheet}
         title="Density"
         options={DENSITY_OPTIONS.map((d) => ({
           value: d.value,

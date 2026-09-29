@@ -112,16 +112,26 @@ function LabelSheet() {
   const stillToPost = job?.stage === 'to-post';
   const markThisPosted = () => {
     if (!jobId) return;
-    markPosted.mutate(jobId, {
-      onSuccess: (posted) =>
-        show(
-          posted?.trackingNumber
-            ? `Marked posted — tracking ${posted.trackingNumber}`
-            : 'Marked posted',
-          'success',
-        ),
-      onError: () => show('Could not mark posted — try again', 'error'),
-    });
+    // The label IS the tracking artifact — post with the reference it
+    // minted (live: the server label; fixture: the same number the queue
+    // keeps) so shipOrder never fires bare and 422s.
+    markPosted.mutate(
+      {
+        jobId,
+        trackingNumber: label.trackingNumber || undefined,
+        carrier: job?.service || label.service,
+      },
+      {
+        onSuccess: (posted) =>
+          show(
+            posted?.trackingNumber
+              ? `Marked posted — tracking ${posted.trackingNumber}`
+              : 'Marked posted',
+            'success',
+          ),
+        onError: () => show('Could not mark posted — try again', 'error'),
+      },
+    );
   };
 
   const rows: [string, string][] = [
@@ -177,7 +187,7 @@ function LabelSheet() {
       <div data-print-label className="mt-6 rounded-lg border border-border p-6 sm:p-8">
         <div className="flex items-start justify-between gap-4">
           <div>
-            <p className="text-label font-semibold uppercase tracking-wider text-text-muted">
+            <p className="text-label text-text-muted">
               Shipping label
             </p>
             <p className="mt-1 text-item-title font-semibold text-text-primary">
@@ -188,7 +198,7 @@ function LabelSheet() {
         </div>
 
         <div className="mt-6 border-y border-border-subtle py-5">
-          <p className="text-label font-semibold uppercase tracking-wider text-text-muted">
+          <p className="text-label text-text-muted">
             Tracking number
           </p>
           <p className="tnum mt-1.5 text-display font-bold tracking-wide text-text-primary">

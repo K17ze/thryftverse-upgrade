@@ -42,11 +42,17 @@ export async function writeSavedList(
 }
 
 // ── Saved searches ────────────────────────────────────────────────────────────
+// Mirrors frontend/src/services/savedSearchesApi.ts — the backend
+// `saved_searches` rows are what the server-side matcher watches; the
+// `alertsEnabled` flag on the row is what actually gates
+// saved_search_match notifications.
 
 export interface SavedSearch {
   id: string;
   query: string;
   filters?: Record<string, unknown> | null;
+  /** Server flag that gates match notifications — absent on older rows. */
+  alertsEnabled?: boolean;
   createdAt?: string;
 }
 
@@ -59,9 +65,17 @@ export async function fetchSavedSearches(signal?: AbortSignal): Promise<SavedSea
   return res.items ?? res.searches ?? [];
 }
 
+/**
+ * Create (or upsert) a saved search. The server dedupes on
+ * (user, normalized query + filters) and returns the canonical row —
+ * callers should adopt `search.id` when it differs from the id they sent.
+ * `alertsEnabled` persists the alert toggle atomically with the save.
+ */
 export async function createSavedSearch(input: {
+  id?: string;
   query: string;
   filters?: Record<string, unknown>;
+  alertsEnabled?: boolean;
 }): Promise<SavedSearch> {
   const res = await fetchJson<{ ok: boolean; search?: SavedSearch }>(
     '/users/me/saved-searches',
@@ -72,6 +86,23 @@ export async function createSavedSearch(input: {
     },
   );
   if (!res.ok || !res.search) throw new Error('Saved search was not created');
+  return res.search;
+}
+
+/** PATCH /users/me/saved-searches/:id — toggle the server-side matcher. */
+export async function setSavedSearchAlerts(
+  id: string,
+  alertsEnabled: boolean,
+): Promise<SavedSearch> {
+  const res = await fetchJson<{ ok: boolean; search?: SavedSearch }>(
+    `/users/me/saved-searches/${encodeURIComponent(id)}`,
+    {
+      method: 'PATCH',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ alertsEnabled }),
+    },
+  );
+  if (!res.ok || !res.search) throw new Error('Saved search was not updated');
   return res.search;
 }
 

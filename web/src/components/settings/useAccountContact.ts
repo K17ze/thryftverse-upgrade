@@ -32,7 +32,10 @@ interface ContactOverlayState {
   setPhone: (phone: string | null) => void;
 }
 
-const useContactOverlay = create<ContactOverlayState>()(
+/** Exported for the session-identity reset — the overlay is account
+ *  truth (a real person's contact phone), so it clears on identity change
+ *  like every other account slice. */
+export const useContactOverlay = create<ContactOverlayState>()(
   persist(
     (set) => ({
       phone: null,

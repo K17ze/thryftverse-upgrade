@@ -9,7 +9,7 @@
  */
 
 import type { AppNotification, NotificationEntry, NotificationKind } from '@/lib/contracts/domain';
-import { LISTINGS, MY_LISTINGS, USERS } from '@/lib/data/fixtures';
+import { LISTINGS, MY_LISTINGS } from '@/lib/data/fixtures';
 import type { AppIconName } from '@/components/ui/Icon';
 
 /** Unified row model rendered by NotificationRow. */
@@ -22,8 +22,22 @@ export interface NotificationRowModel {
   isActor: boolean;
   href?: string;
   unread: boolean;
-  /** Resolved actor id for follow rows — powers the in-row Follow back. */
+  /** Actor id from the wire on follow rows — powers the in-row
+   *  Follow back. */
   actorId?: string;
+  /** Action-required event (mobile requiresAction) — feeds the "Needs
+   *  attention" section ahead of the day buckets. */
+  requiresAction?: boolean;
+  /** Quiet in-row affordance label ("Review offer", "Dispatch now") —
+   *  present only when the event's route resolved. */
+  actionLabel?: string;
+  /** Member event ids behind an aggregated card — dismiss fans out to
+   *  these; the `agg:` render id is not a server-resolvable event id. */
+  aggregatedIds?: string[];
+  /** Members unread at build time — mark-read fans out to these only. */
+  aggregatedUnreadIds?: string[];
+  /** Group size behind an aggregated card — drives the "+N" badge. */
+  aggregatedCount?: number;
 }
 
 export type NotificationFilter =
@@ -137,20 +151,19 @@ export function fromLegacyNotification(n: AppNotification): NotificationRowModel
     isActor: n.type === 'follow',
     href,
     unread: false, // legacy rows carry no read cursor — treat as read
-    // Same actor resolution as feed rows — legacy follow rows get the
-    // in-row Follow back too, when the username resolves to a member.
-    actorId: n.type === 'follow' ? actorIdForHref(href) : undefined,
+    // No Follow back: AppNotification carries no actor id, and resolving
+    // one through the fixture directory was a live-mode lie.
   };
 }
 
-/** "/u/{username}" → the actor's user id, when the member exists. */
-function actorIdForHref(href: string | undefined): string | undefined {
-  const username = href?.startsWith('/u/') ? href.slice(3) : null;
-  return username ? USERS.find((u) => u.username === username)?.id : undefined;
-}
-
-/** Adapt a NotificationEntry (already in row shape). */
+/** Adapt a NotificationEntry (already in row shape). The service may
+ *  attach actionability meta (NotificationEntryWithAction) — read it
+ *  through the declared optional fields, never fabricate it. */
 export function fromNotificationEntry(n: NotificationEntry): NotificationRowModel {
+  const actioned = n as NotificationEntry & {
+    requiresAction?: boolean;
+    actionLabel?: string;
+  };
   return {
     id: n.id,
     kind: n.kind,
@@ -160,19 +173,163 @@ export function fromNotificationEntry(n: NotificationEntry): NotificationRowMode
     isActor: n.isActor === true,
     href: n.href,
     unread: n.unread === true,
-    actorId: n.kind === 'follow' ? actorIdForHref(n.href) : undefined,
+    // Wire actorUserId — never a fixture lookup; absent means the event
+    // carried no actor and the Follow back stays hidden.
+    actorId: n.kind === 'follow' ? n.actorUserId : undefined,
+    requiresAction: actioned.requiresAction === true,
+    actionLabel: actioned.actionLabel,
+    aggregatedIds: n.aggregatedIds,
+    aggregatedUnreadIds: n.aggregatedUnreadIds,
+    aggregatedCount: n.aggregatedCount,
   };
+}
+
+/**
+ * Aggregation — port of native aggregateNotifications
+ * (frontend/src/components/notifications/notificationViewModels.ts).
+ * Like/price-drop/new-item events on the same entity within a 24h
+ * window collapse into one card ("X and N others liked your item").
+ * Orders, resolutions, auctions and follows never aggregate — each is
+ * unique or actor-scoped. The grouped card takes the newest member's
+ * feed position and fans mutations out to every member id.
+ */
+
+/** Kinds that collapse, keyed by the group copy's action verb. The kind
+ *  set mirrors native AGGREGATABLE_TYPES by card type — saved-search
+ *  matches file under 'new_item' cards natively, so they join here. */
+const AGGREGATED_ACTION: Partial<Record<NotificationKind, string>> = {
+  like: 'liked',
+  price_drop: 'dropped the price on',
+  new_item: 'listed',
+  saved_search_match: 'listed',
+};
+
+/** Card-type prefix for the legacy fallback key (native `${type}:${id}`
+ *  — kind → native card type). */
+const AGGREGATION_TYPE_PREFIX: Partial<Record<NotificationKind, string>> = {
+  like: 'like',
+  price_drop: 'price',
+  new_item: 'new_item',
+  saved_search_match: 'new_item',
+};
+
+const AGGREGATION_WINDOW_MS = 24 * 3_600_000;
+
+/** 24h window membership — prefers the real event timestamp; fixture
+ *  rows carry only the relative label, where 'now'/s/m/h units are
+ *  always <24h (24h+ renders as Yesterday/Nd). */
+function entryWithinWindow(n: NotificationEntry, now: number): boolean {
+  const created = n.createdAt ? Date.parse(n.createdAt) : NaN;
+  if (!Number.isNaN(created)) return now - created <= AGGREGATION_WINDOW_MS;
+  const t = n.time.trim().toLowerCase();
+  if (t === 'now' || t === 'just now') return true;
+  return /^\d+\s*[smh]$/.test(t);
+}
+
+/** Group key — the wire's `aggregationKey` first, then the native legacy
+ *  fallback `type:entityId`. A keyless event (no registry key, no
+ *  objectRef entity) stays standalone: there is no shared object to
+ *  prove the events refer to the same entity. */
+function aggregationGroupKey(n: NotificationEntry): string | null {
+  if (n.aggregationKey) return n.aggregationKey;
+  const prefix = AGGREGATION_TYPE_PREFIX[n.kind];
+  const entityId = n.objectRef?.id;
+  return prefix && entityId ? `${prefix}:${entityId}` : null;
+}
+
+/** Member recency — the group primary is the newest member. Feed order
+ *  is already newest-first, so a missing timestamp keeps encounter order. */
+function entryTimeMs(n: NotificationEntry): number {
+  const t = n.createdAt ? Date.parse(n.createdAt) : NaN;
+  return Number.isNaN(t) ? 0 : t;
+}
+
+/** Compose the grouped card — "X and N others {verb} {object}", the
+ *  native copy grammar verbatim. */
+function composeAggregatedEntry(members: NotificationEntry[]): NotificationEntry {
+  const sorted = [...members].sort((a, b) => entryTimeMs(b) - entryTimeMs(a));
+  const primary = sorted[0];
+  // Actor names read newest-first — the lead name is the most recent
+  // actor, matching the native sort-then-name ordering.
+  const actorNames = sorted
+    .map((n) => n.actorDisplayName || n.actorUsername)
+    .filter((name): name is string => Boolean(name));
+  const uniqueActorNames = [...new Set(actorNames)];
+  const count = members.length;
+  const othersCount = count - 1;
+  const firstActor = uniqueActorNames[0] || 'Someone';
+  const action = AGGREGATED_ACTION[primary.kind] ?? 'interacted with';
+  const object = primary.objectRef?.label ?? 'your item';
+  return {
+    ...primary,
+    id: `agg:${primary.id}`,
+    text: `${firstActor} and ${othersCount} other${othersCount === 1 ? '' : 's'} ${action} ${object}`,
+    aggregatedCount: count,
+    aggregatedIds: members.map((n) => n.id),
+    aggregatedUnreadIds: members.filter((n) => n.unread).map((n) => n.id),
+    unread: members.some((n) => n.unread),
+  };
+}
+
+/**
+ * Collapse eligible entries into grouped cards. Input is expected in
+ * feed order (newest first) with the read/dismiss overlays already
+ * applied — `aggregatedUnreadIds` then describes the members a mark-read
+ * actually needs to write. A group card claims its newest member's slot;
+ * a group of one returns the member untouched.
+ */
+export function aggregateNotificationEntries(
+  entries: NotificationEntry[],
+): NotificationEntry[] {
+  const now = Date.now();
+  const groups = new Map<string, NotificationEntry[]>();
+  const slots = new Map<string, number>();
+  const result: (NotificationEntry | null)[] = [];
+
+  for (const entry of entries) {
+    const key = AGGREGATED_ACTION[entry.kind] ? aggregationGroupKey(entry) : null;
+    if (!key || !entryWithinWindow(entry, now)) {
+      result.push(entry);
+      continue;
+    }
+    const group = groups.get(key);
+    if (group) {
+      group.push(entry);
+    } else {
+      groups.set(key, [entry]);
+      slots.set(key, result.length);
+      result.push(null);
+    }
+  }
+
+  for (const [key, group] of groups) {
+    const slot = slots.get(key);
+    if (slot !== undefined) {
+      result[slot] = group.length > 1 ? composeAggregatedEntry(group) : group[0];
+    }
+  }
+
+  return result.filter((e): e is NotificationEntry => e !== null);
 }
 
 export interface NotificationSection {
   label: string;
   items: NotificationRowModel[];
   unreadCount: number;
+  /** The "Needs attention" bucket — leads the feed when action-required
+   *  events exist (mobile attention-first grammar). */
+  attention?: boolean;
 }
 
 /**
  * Day bucketing — 's/m/h/now' → Today, 'Yesterday'/'1d' → Yesterday,
  * everything older → Earlier. Mirrors the mobile grouping contract.
+ *
+ * Hydration-safe by construction: inputs are relative labels or ISO
+ * strings, and the day-diff branch is pure epoch arithmetic (UTC ms —
+ * no local calendar, no runtime timezone). It also only runs once the
+ * feed query has resolved client-side, so no SSR render ever produces
+ * these labels.
  */
 function bucketLabel(time: string): string {
   const t = time.trim().toLowerCase();
@@ -211,31 +368,27 @@ export function groupNotifications(items: NotificationRowModel[]): NotificationS
 }
 
 /**
- * Type sections — Instagram's activity grammar. When the feed is long
- * enough that scanning by kind beats scanning by recency (>6 rows), rows
- * group under micro-caps section headers: Follows, Orders, Offers, then
- * everything else as Activity. Small sets keep the day buckets.
+ * Section grammar — the mobile contract (notificationViewModels
+ * groupNotifications): a "Needs attention" bucket of action-required
+ * events leads, then the day buckets Today / Yesterday / Earlier. The
+ * earlier type-section experiment (Follows/Orders/Offers/Activity past
+ * six rows) was a deviation — filtering by kind already lives in the
+ * chips and the overflow sheet.
  */
-const TYPE_SECTIONS: { label: string; kinds: NotificationKind[] }[] = [
-  { label: 'Follows', kinds: ['follow'] },
-  { label: 'Orders', kinds: ['order'] },
-  { label: 'Offers', kinds: ['offer'] },
-  {
-    label: 'Activity',
-    kinds: ['like', 'review', 'price_drop', 'new_item', 'saved_search_match', 'auction', 'system'],
-  },
-];
-
-export function groupNotificationsByType(items: NotificationRowModel[]): NotificationSection[] {
-  return TYPE_SECTIONS.map(({ label, kinds }) => {
-    const section = items.filter((i) => kinds.includes(i.kind));
-    return { label, items: section, unreadCount: section.filter((i) => i.unread).length };
-  }).filter((s) => s.items.length > 0);
-}
-
-/** Group for render — type sections past 6 rows, day sections below. */
 export function groupNotificationsAuto(items: NotificationRowModel[]): NotificationSection[] {
-  return items.length > 6 ? groupNotificationsByType(items) : groupNotifications(items);
+  const attention = items.filter((i) => i.requiresAction);
+  const rest = items.filter((i) => !i.requiresAction);
+  const daySections = groupNotifications(rest);
+  if (!attention.length) return daySections;
+  return [
+    {
+      label: 'Needs attention',
+      items: attention,
+      unreadCount: attention.filter((i) => i.unread).length,
+      attention: true,
+    },
+    ...daySections,
+  ];
 }
 
 /**
@@ -281,6 +434,99 @@ export function notificationFilterCounts(
     counts[f.key] = filterNotifications(items, f.key).length;
   }
   return counts;
+}
+
+/**
+ * Filter key → the event types it covers, sent to `/notifications/events`
+ * as `eventType` so the server filters the page itself instead of the
+ * client filtering a ≤30-row window (native FILTER_EVENT_TYPES port).
+ * 'all' and 'unread' are not listed — 'all' sends no filter; 'unread'
+ * uses the `unread` flag.
+ */
+export const NOTIFICATION_FILTER_EVENT_TYPES: Record<
+  Exclude<NotificationFilter, 'all' | 'unread'>,
+  readonly string[]
+> = {
+  orders: [
+    'order_created',
+    'order_paid',
+    'order_cancelled',
+    'order_dispatched',
+    'order_in_transit',
+    'order_out_for_delivery',
+    'order_delivered',
+    'order_refunded',
+    'order_dispatch_sla_breach',
+    'order_delivery_failed',
+    'order_parcel_lost',
+    'order_parcel_damaged',
+    'payout_processed',
+    'refund_completed',
+    'payment_failed',
+    'dispatch_extension_proposed',
+    'dispatch_extension_responded',
+    'offer_created',
+    'offer_countered',
+    'offer_accepted',
+    'offer_declined',
+    'offer_expired',
+    'offer_cancelled',
+    'smart_sell_decision',
+    // Co-own financial events render as 'order' rows — the commerce
+    // bucket is the filter grouping they belong to (no co-own filter
+    // exists).
+    'coown_buyout_accepted',
+    'coown_verification_responded',
+    'coown_price_alert_triggered',
+    'coown_drip_receipt',
+  ],
+  items: ['new_listing_from_followed_seller', 'saved_search_match', 'live_started'],
+  reviews: ['review_received', 'review_response_received', 'review_moderated'],
+  prices: ['price_drop'],
+  auctions: [
+    'auction_outbid',
+    'auction_won',
+    'auction_ending_soon',
+    'auction_bid',
+    'auction_cancelled',
+    'auction_reserve_not_met',
+    'auction_sold_awaiting_payment',
+    'auction_payment_expired',
+    'auction_sold',
+  ],
+};
+
+/** Server `filterCounts` buckets → web filter keys. The backend emits the
+ *  native names (order/new_item/review/price/auction); the sheet and tabs
+ *  consume the pluralised web keys. */
+const SERVER_FILTER_KEY: Record<string, NotificationFilter> = {
+  all: 'all',
+  unread: 'unread',
+  order: 'orders',
+  new_item: 'items',
+  review: 'reviews',
+  price: 'prices',
+  auction: 'auctions',
+};
+
+/**
+ * Server-side per-filter totals → web-keyed counts. These describe the
+ * user's whole non-suppressed set, not the loaded page, so badges stay
+ * truthful while paginating. Returns undefined when the response carried
+ * no counts (fixture mode / older backends) — the caller falls back to
+ * the local derivation.
+ */
+export function serverNotificationFilterCounts(
+  counts: Record<string, number> | undefined,
+): Record<NotificationFilter, number> | undefined {
+  if (!counts) return undefined;
+  const out = {} as Record<NotificationFilter, number>;
+  for (const f of NOTIFICATION_OVERFLOW_FILTERS) out[f.key] = 0;
+  for (const [key, value] of Object.entries(counts)) {
+    const filter = SERVER_FILTER_KEY[key];
+    if (filter && typeof value === 'number') out[filter] = value;
+  }
+  return out;
 }
 
 /** Empty-state copy for a filtered feed — label-aware, never generic. */

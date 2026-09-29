@@ -11,12 +11,16 @@ import { Skeleton } from '@/components/ui/Skeleton';
 
 export function OrderDetailSkeleton() {
   return (
-    <div className="mx-auto max-w-[720px] px-4 py-8 sm:px-6" aria-busy aria-label="Loading order">
+    <div className="mx-auto max-w-[720px] px-4 py-8 sm:px-6 lg:max-w-[1100px]" aria-busy aria-label="Loading order">
       {/* Header */}
       <Skeleton className="h-5 w-40" />
       <Skeleton className="mt-3 h-8 w-56" />
       <Skeleton className="mt-2 h-4 w-32" />
 
+      {/* Two-pane at lg — narrative left, instrument/action rail right,
+          mirroring the composed page. */}
+      <div className="lg:grid lg:grid-cols-[minmax(0,1fr)_340px] lg:gap-x-10">
+      <div className="min-w-0">
       {/* Purchase summary — item row, fee lines, order-number row */}
       <div className="mt-6 border-y border-border-subtle py-4">
         <Skeleton className="h-4 w-36" />
@@ -51,6 +55,25 @@ export function OrderDetailSkeleton() {
         <Skeleton className="h-14 rounded-lg" />
         <Skeleton className="h-44 rounded-lg" />
         <Skeleton className="h-16 rounded-md" />
+      </div>
+      </div>
+
+      {/* Rail — the action pair + instrument facts, as composed at lg. */}
+      <div className="mt-6 hidden flex-col gap-2 lg:flex">
+        <Skeleton className="h-12 rounded-md" />
+        <Skeleton className="h-10 rounded-md" />
+        <div className="mt-3 border-y border-border-subtle py-4">
+          <Skeleton className="h-4 w-28" />
+          <div className="mt-3 flex flex-col gap-2">
+            {Array.from({ length: 2 }).map((_, i) => (
+              <div key={i} className="flex justify-between">
+                <Skeleton className="h-3 w-20" />
+                <Skeleton className="h-3 w-24" />
+              </div>
+            ))}
+          </div>
+        </div>
+      </div>
       </div>
     </div>
   );

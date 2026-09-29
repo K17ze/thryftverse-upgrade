@@ -76,7 +76,7 @@ export function AuctionAttentionStrip({ kind, auction, myBid }: AuctionAttention
           />
         </span>
         <span className="min-w-0 flex-1">
-          <span className={`block text-meta font-semibold uppercase tracking-[0.08em] ${k.text}`}>
+          <span className={`block text-meta font-semibold uppercase tracking-wide ${k.text}`}>
             {k.label}
             {kind === 'outbid' && myBid != null ? (
               <span className="tnum font-normal normal-case tracking-normal text-text-muted">

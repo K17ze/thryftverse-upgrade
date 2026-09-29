@@ -212,45 +212,63 @@ export async function fetchConversationMessages(
   return page.messages;
 }
 
+/** POST /chat/dm — native grammar: { recipientUserId, itemId? }. The
+ *  response is a conversation summary (id/type/participants), so the full
+ *  payload is refetched for the mapped Conversation. `itemId` binds the
+ *  marketplace context — without it the thread can never show the
+ *  listing bar. */
 export async function createDmConversation(
   participantId: string,
+  options?: { itemId?: string },
   currentUserId?: string,
 ): Promise<Conversation> {
   const payload = await fetchJson<{
     ok: boolean;
-    conversation?: ApiConversationPayload;
-  }>('/chat/conversations', {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ type: 'dm', participantId }),
-  });
-  if (!payload.ok || !payload.conversation) {
-    throw new Error('Failed to create conversation');
-  }
-  return attachMarketplaceMeta(mapApiConversationToWeb(payload.conversation, currentUserId), payload.conversation);
-}
-
-export async function createGroupConversation(
-  input: { title: string; participantIds: string[]; description?: string },
-  currentUserId?: string,
-): Promise<Conversation> {
-  const payload = await fetchJson<{
-    ok: boolean;
-    conversation?: ApiConversationPayload;
-  }>('/chat/conversations', {
+    conversation?: { id: string };
+  }>('/chat/dm', {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({
-      type: 'group',
-      title: input.title,
-      participantIds: input.participantIds,
-      description: input.description,
+      recipientUserId: participantId,
+      ...(options?.itemId ? { itemId: options.itemId } : {}),
     }),
   });
-  if (!payload.ok || !payload.conversation) {
+  if (!payload.ok || !payload.conversation?.id) {
+    throw new Error('Failed to create conversation');
+  }
+  const full = await fetchConversation(payload.conversation.id, currentUserId);
+  if (!full) throw new Error('Failed to load conversation');
+  return full;
+}
+
+export async function createGroupConversation(
+  input: {
+    title: string;
+    participantIds: string[];
+    description?: string;
+    itemId?: string;
+  },
+  currentUserId?: string,
+): Promise<Conversation> {
+  const payload = await fetchJson<{
+    ok: boolean;
+    conversation?: { id: string };
+  }>('/chat/groups', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({
+      title: input.title,
+      memberIds: input.participantIds,
+      description: input.description,
+      ...(input.itemId ? { itemId: input.itemId } : {}),
+    }),
+  });
+  if (!payload.ok || !payload.conversation?.id) {
     throw new Error('Failed to create group');
   }
-  return attachMarketplaceMeta(mapApiConversationToWeb(payload.conversation, currentUserId), payload.conversation);
+  const full = await fetchConversation(payload.conversation.id, currentUserId);
+  if (!full) throw new Error('Failed to load group');
+  return full;
 }
 
 export interface SendChatMessageApiInput {
@@ -320,6 +338,54 @@ export async function markConversationRead(conversationId: string): Promise<void
   await fetchJson(`/chat/conversations/${encodeURIComponent(conversationId)}/read`, {
     method: 'POST',
   });
+}
+
+// ── Typing + dyad presence ────────────────────────────────────────────────
+// Both mirror the mobile chatApi edges (setTypingStatus /
+// fetchConversationPresenceFromApi). Typing is ephemeral realtime-only —
+// the backend fans `chat.typing.update` onto the conversation topic and
+// keeps no REST state, so there is nothing to map.
+
+/** POST /chat/conversations/:id/typing — publish the composer's typing
+ *  state to other participants. Fire-and-forget for callers; failures are
+ *  the caller's to swallow (an indicator is never worth a toast). */
+export async function setTypingStatus(
+  conversationId: string,
+  isTyping: boolean,
+): Promise<void> {
+  await fetchJson<{ ok: boolean }>(
+    `/chat/conversations/${encodeURIComponent(conversationId)}/typing`,
+    {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ isTyping }),
+    },
+  );
+}
+
+/** Dyad presence snapshot — GET /chat/conversations/:id/presence. The
+ *  backend returns `presence: null` for groups and for peers whose
+ *  activity-status privacy setting hides them; callers render nothing in
+ *  that case rather than fabricating a status. */
+export interface ConversationPresence {
+  userId: string;
+  isOnline: boolean;
+  lastSeenAt: string | null;
+}
+
+export async function fetchConversationPresence(
+  conversationId: string,
+  signal?: AbortSignal,
+): Promise<ConversationPresence | null> {
+  const payload = await fetchJson<{
+    ok: boolean;
+    presence?: ConversationPresence | null;
+  }>(
+    `/chat/conversations/${encodeURIComponent(conversationId)}/presence`,
+    undefined,
+    { signal },
+  );
+  return payload.presence ?? null;
 }
 
 /** Per-viewer conversation mute — POST mutes, DELETE restores. */
@@ -550,6 +616,71 @@ export async function unpinChatMessage(
 ): Promise<void> {
   await fetchJson(
     `/chat/conversations/${encodeURIComponent(conversationId)}/messages/${encodeURIComponent(messageId)}/pin`,
+    { method: 'DELETE' },
+  );
+}
+
+// ── Quick replies — GET/POST/PUT/DELETE /chat/quick-replies ─────────────────
+// The mobile chatApi quick-reply edges, verbatim: per-user canned replies
+// scoped by role (buyer/seller), title ≤ 40 chars, body ≤ 200 — the backend
+// enforces the caps; the client never pads or truncates silently.
+
+export interface ApiQuickReply {
+  id: string;
+  role: 'buyer' | 'seller';
+  title: string;
+  body: string;
+  sortOrder: number;
+  createdAt?: string;
+  updatedAt?: string;
+}
+
+export async function fetchQuickReplies(
+  role?: 'buyer' | 'seller',
+  signal?: AbortSignal,
+): Promise<ApiQuickReply[]> {
+  const payload = await fetchJson<{ ok: boolean; items: ApiQuickReply[] }>(
+    `/chat/quick-replies${role ? `?role=${role}` : ''}`,
+    undefined,
+    { signal },
+  );
+  return payload.items ?? [];
+}
+
+export async function createQuickReply(input: {
+  role: 'buyer' | 'seller';
+  title: string;
+  body: string;
+  sortOrder?: number;
+}): Promise<ApiQuickReply> {
+  const payload = await fetchJson<{ ok: boolean; quickReply: ApiQuickReply }>(
+    '/chat/quick-replies',
+    {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(input),
+    },
+  );
+  return payload.quickReply;
+}
+
+export async function updateQuickReply(
+  replyId: string,
+  updates: { title?: string; body?: string; sortOrder?: number },
+): Promise<void> {
+  await fetchJson<{ ok: boolean }>(
+    `/chat/quick-replies/${encodeURIComponent(replyId)}`,
+    {
+      method: 'PUT',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(updates),
+    },
+  );
+}
+
+export async function deleteQuickReply(replyId: string): Promise<void> {
+  await fetchJson<{ ok: boolean }>(
+    `/chat/quick-replies/${encodeURIComponent(replyId)}`,
     { method: 'DELETE' },
   );
 }

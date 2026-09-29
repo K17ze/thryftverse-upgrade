@@ -243,7 +243,7 @@ export function BundleBuilder({ username }: { username: string }) {
     <div className="mx-auto max-w-[1100px]">
       <div className="px-4 pt-6 sm:px-6">
         <div className="flex items-center justify-between gap-4">
-          <h1 className="text-screen-title font-bold text-text-primary">Build a bundle</h1>
+          <h1 className="text-screen-title text-text-primary">Build a bundle</h1>
           <span className="shrink-0 rounded-full bg-brand-subtle px-2.5 py-1 text-meta font-medium text-text-primary">
             {BUNDLE_RULE_LABEL}
           </span>
@@ -260,7 +260,7 @@ export function BundleBuilder({ username }: { username: string }) {
             <span className="flex items-center gap-1 text-body-emphasis text-text-primary">
               <span className="clamp-1">@{user.username}</span>
               {user.isVerified ? (
-                <Icon name="verified" size={13} className="shrink-0 text-success-text" />
+                <Icon name="verified" size={13} className="shrink-0 text-commerce-trust" />
               ) : null}
             </span>
             <span className="mt-0.5 flex items-center gap-1 text-meta text-text-secondary">

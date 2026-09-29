@@ -133,7 +133,7 @@ export function OfferToLikersSheet({
 
         {/* Discount presets */}
         <div>
-          <span className="text-label font-semibold uppercase tracking-wide text-text-secondary">
+          <span className="text-label text-text-secondary">
             Discount
           </span>
           <div className="mt-2 grid grid-cols-2 gap-1.5">
@@ -225,7 +225,7 @@ export function OfferToLikersSheet({
 
         {/* Expiry */}
         <div>
-          <span className="text-label font-semibold uppercase tracking-wide text-text-secondary">
+          <span className="text-label text-text-secondary">
             Offer valid for
           </span>
           <div className="mt-2 flex gap-1.5">

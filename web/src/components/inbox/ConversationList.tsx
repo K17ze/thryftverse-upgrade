@@ -7,7 +7,7 @@
  * Accept / Decline actions — resolved locally against fixture state.
  */
 
-import { Suspense, useCallback, useEffect, useMemo, useState } from 'react';
+import { Suspense, useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import Link from 'next/link';
 import { useRouter, useSearchParams } from 'next/navigation';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
@@ -19,25 +19,60 @@ import { useSession } from '@/lib/session/SessionProvider';
 import { useInboxPrefs } from '@/lib/store/inboxPrefs';
 import { useSettingsPrefs } from '@/lib/store/settingsPrefs';
 import { useToast } from '@/components/ui/Toast';
-import { SegmentedControl } from '@/components/feed/SegmentedControl';
+import { Tabs } from '@/components/ui/Tabs';
 import { Avatar } from '@/components/ui/Avatar';
 import { Button } from '@/components/ui/Button';
+import { Chip } from '@/components/ui/Chip';
 import { EmptyState } from '@/components/ui/EmptyState';
 import { Icon } from '@/components/ui/Icon';
 import { IconButton } from '@/components/ui/IconButton';
 import { Skeleton } from '@/components/ui/Skeleton';
 import { StateGate } from '@/components/flagship/StateGate';
 import { ConversationRow } from './ConversationRow';
-import { ConversationRowMenu } from './ConversationRowMenu';
+import { ConversationRowMenu, type ConversationRowMenuHandle } from './ConversationRowMenu';
 import { NewMessageSheet } from './NewMessageSheet';
 import { ConfirmSheet } from './ConfirmSheet';
 import { acceptFixtureRequest, liveConversationApi } from './groupAdmin';
 import { useInboxSafety } from './inboxSafety';
-import { conversationTitle, formatInboxTimestamp, lastMessagePreview } from './inboxModel';
+import { useChatDrafts } from './useChatDrafts';
+import {
+  conversationRole,
+  conversationTitle,
+  formatInboxTimestamp,
+  isGroupConversation,
+  lastMessagePreview,
+} from './inboxModel';
 import { useConversationPrefs } from './useConversationPrefs';
 
-type Tab = 'all' | 'unread' | 'requests' | 'muted' | 'archived';
-const TABS: Tab[] = ['all', 'unread', 'requests', 'muted', 'archived'];
+// The mobile rail grammar (InboxFilters): All / Buying / Selling /
+// Requests lead; Unread / Groups / Muted / Archived sit behind the
+// filter affordance so the first viewport stays calm.
+type Tab =
+  | 'all'
+  | 'buying'
+  | 'selling'
+  | 'requests'
+  | 'unread'
+  | 'groups'
+  | 'muted'
+  | 'archived';
+const TABS: Tab[] = [
+  'all',
+  'buying',
+  'selling',
+  'requests',
+  'unread',
+  'groups',
+  'muted',
+  'archived',
+];
+const SECONDARY_TABS: Tab[] = ['unread', 'groups', 'muted', 'archived'];
+const SECONDARY_LABELS: Record<'unread' | 'groups' | 'muted' | 'archived', string> = {
+  unread: 'Unread',
+  groups: 'Groups',
+  muted: 'Muted',
+  archived: 'Archived',
+};
 function isTab(value: string | null): value is Tab {
   return !!value && (TABS as string[]).includes(value);
 }
@@ -87,6 +122,13 @@ export function ConversationListPane({
   const toast = useToast();
   const [tab, setTab] = useState<Tab>('all');
   const [q, setQ] = useState('');
+  // Secondary filter rail — collapsed until the filter affordance (the
+  // mobile filterExpanded grammar); stays open while a secondary tab is
+  // active so the selection is never invisible.
+  const [secondaryOpen, setSecondaryOpen] = useState(false);
+  const viewerId = user?.id ?? 'me';
+  const drafts = useChatDrafts((s) => s.drafts);
+  const listRef = useRef<HTMLDivElement>(null);
   // Request resolution persists in inboxPrefs — fixtures have no
   // request-response endpoint, so a declined request stays declined
   // across remounts (accept promotes to All). Live mode posts the
@@ -140,6 +182,26 @@ export function ConversationListPane({
     () => regular.filter((c) => rawUnreadById.get(c.id)?.unread),
     [regular, rawUnreadById],
   );
+  // Marketplace split — the mobile Buying / Selling segments, classified
+  // on the viewer's relation to the thread's listing (inboxModel's port
+  // of conversationClassification). Groups get their own secondary tab.
+  const buying = useMemo(
+    () => regular.filter((c) => conversationRole(c, viewerId) === 'buying'),
+    [regular, viewerId],
+  );
+  const selling = useMemo(
+    () => regular.filter((c) => conversationRole(c, viewerId) === 'selling'),
+    [regular, viewerId],
+  );
+  const groupThreads = useMemo(
+    () => regular.filter((c) => isGroupConversation(c)),
+    [regular],
+  );
+  const unreadOf = useCallback(
+    (rows: Conversation[]) =>
+      rows.filter((c) => rawUnreadById.get(c.id)?.unread).length,
+    [rawUnreadById],
+  );
 
   const query = q.trim().toLowerCase();
   const matches = useCallback(
@@ -160,16 +222,34 @@ export function ConversationListPane({
     const rows = (
       tab === 'all'
         ? regular
-        : tab === 'unread'
-          ? unreadThreads
-          : tab === 'requests'
-            ? requests
-            : tab === 'muted'
-              ? muted
-              : archived
+        : tab === 'buying'
+          ? buying
+          : tab === 'selling'
+            ? selling
+            : tab === 'unread'
+              ? unreadThreads
+              : tab === 'requests'
+                ? requests
+                : tab === 'groups'
+                  ? groupThreads
+                  : tab === 'muted'
+                    ? muted
+                    : archived
     ).filter(matches);
     return [...rows].sort((a, b) => Number(isPinned(b)) - Number(isPinned(a)));
-  }, [tab, regular, unreadThreads, requests, muted, archived, matches, isPinned]);
+  }, [
+    tab,
+    regular,
+    buying,
+    selling,
+    unreadThreads,
+    requests,
+    groupThreads,
+    muted,
+    archived,
+    matches,
+    isPinned,
+  ]);
 
   const acceptRequest = (c: Conversation) => {
     setRequestResolution(c.id, 'accepted');
@@ -234,12 +314,46 @@ export function ConversationListPane({
       });
   };
 
+  /**
+   * Roving keyboard nav — the desktop list grammar (Messenger/WhatsApp
+   * web): ArrowUp/ArrowDown move through rows, Home/End jump the ends,
+   * Enter follows the focused link natively. Focus starting outside the
+   * list begins at the open conversation, else the first row.
+   */
+  const onListKeyDown = (e: React.KeyboardEvent) => {
+    if (
+      e.key !== 'ArrowDown' &&
+      e.key !== 'ArrowUp' &&
+      e.key !== 'Home' &&
+      e.key !== 'End'
+    )
+      return;
+    const rows = Array.from(
+      listRef.current?.querySelectorAll<HTMLElement>('[data-conversation-row]') ?? [],
+    );
+    if (!rows.length) return;
+    e.preventDefault();
+    const at = rows.indexOf(document.activeElement as HTMLElement);
+    let next: number;
+    if (e.key === 'Home') next = 0;
+    else if (e.key === 'End') next = rows.length - 1;
+    else if (at === -1) {
+      const activeIdx = rows.findIndex(
+        (r) => r.getAttribute('aria-current') === 'page',
+      );
+      next = activeIdx >= 0 ? activeIdx : 0;
+    } else {
+      next = e.key === 'ArrowDown' ? Math.min(rows.length - 1, at + 1) : Math.max(0, at - 1);
+    }
+    rows[next]?.focus();
+  };
+
   // The inbox is account-bound — a guest gets the sign-in surface, never
   // the fixture 'me' mailbox.
   if (isGuest) {
     return (
       <aside
-        className={`flex w-full flex-col md:h-full md:w-[340px] md:shrink-0 md:border-r md:border-border-subtle ${className}`}
+        className={`flex w-full flex-col md:h-full md:w-[340px] md:shrink-0 md:border-r md:border-border-subtle lg:w-[380px] ${className}`}
         aria-label="Conversations"
       >
         <EmptyState
@@ -256,15 +370,17 @@ export function ConversationListPane({
 
   return (
     <aside
-      className={`flex w-full flex-col md:h-full md:w-[340px] md:shrink-0 md:border-r md:border-border-subtle ${className}`}
+      className={`flex w-full flex-col md:h-full md:w-[340px] md:shrink-0 md:border-r md:border-border-subtle lg:w-[380px] ${className}`}
       aria-label="Conversations"
     >
       <div className="shrink-0 px-4 pb-3 pt-5">
         <div className="flex items-center justify-between">
-          <h1 className="text-screen-title font-bold text-text-primary">Messages</h1>
+          <h1 className="text-screen-title text-text-primary">Messages</h1>
           <IconButton
             name="edit"
             aria-label="New message"
+            aria-haspopup="dialog"
+            aria-expanded={composeOpen}
             onClick={() => setComposeOpen(true)}
             className="-mr-2"
           />
@@ -277,33 +393,91 @@ export function ConversationListPane({
             type="search"
             value={q}
             onChange={(e) => setQ(e.target.value)}
+            onKeyDown={(e) => {
+              // Escape clears a live query, then releases the field —
+              // the desktop search grammar.
+              if (e.key === 'Escape') {
+                e.preventDefault();
+                if (q) setQ('');
+                else e.currentTarget.blur();
+              }
+            }}
             placeholder="Search messages"
             aria-label="Search messages"
             className="h-9 w-full rounded-full border border-transparent bg-surface-alt pl-9 pr-3 text-body text-input-text placeholder:text-text-muted focus:border-border focus:outline-none"
           />
         </label>
-        <div className="mt-3 overflow-x-auto">
-          <SegmentedControl<Tab>
-            options={[
-              { value: 'all', label: 'All' },
-              { value: 'unread', label: 'Unread', count: unreadThreads.length },
+        {/* Segment rail — the mobile primary grammar (All / Buying /
+            Selling / Requests, badges = unread counts) as text tabs on
+            one hairline baseline; the secondary filters sit behind the
+            funnel affordance as subordinate chips. */}
+        <div className="mt-3 -mx-4 flex items-center border-b border-border-subtle pl-1 pr-4">
+          <Tabs<Tab>
+            hairline={false}
+            className="min-w-0 flex-1"
+            tabs={[
+              { key: 'all', label: 'All' },
+              { key: 'buying', label: 'Buying', count: unreadOf(buying) },
+              { key: 'selling', label: 'Selling', count: unreadOf(selling) },
               {
-                value: 'requests',
-                label: requests.length ? `Requests · ${requests.length}` : 'Requests',
+                key: 'requests',
+                label: 'Requests',
+                count: requests.length,
               },
-              {
-                value: 'muted',
-                label: muted.length ? `Muted · ${muted.length}` : 'Muted',
-              },
-              { value: 'archived', label: 'Archived' },
             ]}
-            value={tab}
+            // A secondary-tab selection lights no primary segment —
+            // the rail honestly shows nothing selected.
+            active={tab}
             onChange={setTab}
+            ariaLabel="Inbox sections"
+          />
+          <IconButton
+            name="filter"
+            size={16}
+            aria-label={
+              secondaryOpen ? 'Hide inbox filters' : 'Show inbox filters'
+            }
+            aria-expanded={secondaryOpen || SECONDARY_TABS.includes(tab)}
+            onClick={() => setSecondaryOpen((o) => !o)}
+            className={`shrink-0 ${SECONDARY_TABS.includes(tab) ? 'text-brand' : ''}`}
           />
         </div>
+        {secondaryOpen || SECONDARY_TABS.includes(tab) ? (
+          <div
+            className="mt-2 flex gap-1.5 overflow-x-auto pb-0.5"
+            role="group"
+            aria-label="More inbox filters"
+          >
+            {SECONDARY_TABS.map((key) => (
+              <Chip
+                key={key}
+                selected={tab === key}
+                onClick={() => {
+                  // Picking the active chip again returns to All — the
+                  // chip is a toggle, not a one-way door.
+                  setTab(tab === key ? 'all' : key);
+                  setSecondaryOpen(false);
+                }}
+              >
+                {SECONDARY_LABELS[key as keyof typeof SECONDARY_LABELS]}
+                {key === 'unread' && unreadThreads.length > 0
+                  ? ` · ${unreadThreads.length}`
+                  : key === 'groups' && groupThreads.length > 0
+                    ? ` · ${groupThreads.length}`
+                    : key === 'muted' && muted.length > 0
+                      ? ` · ${muted.length}`
+                      : ''}
+              </Chip>
+            ))}
+          </div>
+        ) : null}
       </div>
 
-      <div className="min-h-0 flex-1 md:overflow-y-auto">
+      <div
+        ref={listRef}
+        onKeyDown={onListKeyDown}
+        className="min-h-0 flex-1 md:overflow-y-auto"
+      >
         {/* Registry states via StateGate — offline resolves to the
             conversations offline copy instead of a generic failure; the
             per-tab/query empties stay bespoke below. */}
@@ -326,11 +500,17 @@ export function ConversationListPane({
                   ? 'All caught up'
                   : tab === 'requests'
                     ? 'No requests'
-                    : tab === 'muted'
-                      ? 'No muted conversations'
-                      : tab === 'archived'
-                        ? 'Nothing archived'
-                        : 'No messages yet'
+                    : tab === 'buying'
+                      ? 'Nothing you’re buying'
+                      : tab === 'selling'
+                        ? 'Nothing you’re selling'
+                        : tab === 'groups'
+                          ? 'No group chats'
+                          : tab === 'muted'
+                            ? 'No muted conversations'
+                            : tab === 'archived'
+                              ? 'Nothing archived'
+                              : 'No messages yet'
             }
             subtitle={
               query
@@ -339,11 +519,17 @@ export function ConversationListPane({
                   ? 'Threads with unread messages appear here.'
                   : tab === 'requests'
                     ? 'Message requests from people you don\u2019t follow appear here.'
-                    : tab === 'muted'
-                      ? 'Muted threads stay quiet — mute any conversation from its ··· menu.'
-                      : tab === 'archived'
-                        ? 'Archived threads live here — use the ··· menu on any conversation.'
-                        : 'When you message buyers or sellers, conversations appear here.'
+                    : tab === 'buying'
+                      ? 'Conversations about items you’re buying appear here.'
+                      : tab === 'selling'
+                        ? 'Conversations about your listings appear here.'
+                        : tab === 'groups'
+                          ? 'Group conversations appear here.'
+                          : tab === 'muted'
+                            ? 'Muted threads stay quiet — mute any conversation from its ··· menu.'
+                            : tab === 'archived'
+                              ? 'Archived threads live here — use the ··· menu on any conversation.'
+                              : 'When you message buyers or sellers, conversations appear here.'
             }
           />
         ) : (
@@ -358,14 +544,13 @@ export function ConversationListPane({
                   onBlock={() => setBlockTarget(c)}
                 />
               ) : (
-                <div key={c.id} className="group relative">
-                  <ConversationRow
-                    conversation={c}
-                    active={c.id === activeId}
-                    rawUnread={rawUnreadById.get(c.id)}
-                  />
-                  <ConversationRowMenu conversation={c} />
-                </div>
+                <ConversationRowItem
+                  key={c.id}
+                  conversation={c}
+                  active={c.id === activeId}
+                  rawUnread={rawUnreadById.get(c.id)}
+                  draft={hydrated ? drafts[c.id] : undefined}
+                />
               ),
             )}
           </div>
@@ -395,6 +580,43 @@ export function ConversationListPane({
   );
 }
 
+/**
+ * Conversation row + its contextual menu — one wrapper so the row's
+ * right-click (contextmenu) opens the same menu the hover kebab does,
+ * anchored at the pointer. The desktop analogue of the mobile
+ * long-press sheet.
+ */
+function ConversationRowItem({
+  conversation: c,
+  active,
+  rawUnread,
+  draft,
+}: {
+  conversation: Conversation;
+  active: boolean;
+  rawUnread?: { unread: boolean; count: number };
+  draft?: string;
+}) {
+  const menuRef = useRef<ConversationRowMenuHandle>(null);
+  return (
+    <div
+      className="group relative"
+      onContextMenu={(e) => {
+        e.preventDefault();
+        menuRef.current?.openAt(e.clientX, e.clientY);
+      }}
+    >
+      <ConversationRow
+        conversation={c}
+        active={active}
+        rawUnread={rawUnread}
+        draft={draft}
+      />
+      <ConversationRowMenu conversation={c} ref={menuRef} />
+    </div>
+  );
+}
+
 /** Request row — brand accent edge, listing context, inline actions. */
 function RequestRow({
   conversation: c,
@@ -412,8 +634,9 @@ function RequestRow({
       <div className="relative rounded-lg border-l-2 border-brand bg-brand-subtle">
         <Link
           href={`/inbox/${c.id}`}
+          data-conversation-row
           aria-label={`Open message request from ${c.participantName}`}
-          className="absolute inset-0 rounded-lg"
+          className="absolute inset-0 rounded-lg focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand"
         />
         <div className="flex gap-3 p-3">
           <Avatar src={c.participantAvatar} name={c.participantName} size={40} />
@@ -432,7 +655,7 @@ function RequestRow({
                 {c.listing.title}
               </p>
             ) : null}
-            <div className="relative z-10 mt-2.5 flex items-center gap-2">
+            <div className="relative z-elevated mt-2.5 flex items-center gap-2">
               <Button variant="outline" size="sm" fullWidth onClick={onDecline}>
                 Decline
               </Button>

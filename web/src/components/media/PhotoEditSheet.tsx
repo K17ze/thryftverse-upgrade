@@ -391,8 +391,11 @@ export function PhotoEditSheet({
           </div>
         ) : null}
 
-        {/* Tool tabs — one chip grammar. */}
-        <div className="mt-2 flex gap-2" role="tablist" aria-label="Edit tools">
+        {/* Tool switcher — one chip grammar, the same aria-pressed toggle
+            group the aspect presets and the auction duration picker use.
+            A mode selector, not document tabs: no tablist/tabpanel roles,
+            every button stays tabbable. */}
+        <div className="mt-2 flex gap-2" role="group" aria-label="Edit tools">
           {(
             [
               { id: 'crop', label: 'Crop & rotate' },
@@ -403,8 +406,7 @@ export function PhotoEditSheet({
             <button
               key={t.id}
               type="button"
-              role="tab"
-              aria-selected={tab === t.id}
+              aria-pressed={tab === t.id}
               onClick={() => setTab(t.id)}
               className={`pressable h-9 rounded-full px-4 text-body font-medium ${
                 tab === t.id
@@ -419,7 +421,7 @@ export function PhotoEditSheet({
 
         {/* ── Crop & rotate ── */}
         {tab === 'crop' ? (
-          <div className="mt-4 space-y-4" role="tabpanel">
+          <div className="mt-4 space-y-4">
             <div className="flex flex-wrap gap-2" role="group" aria-label="Aspect ratio">
               {ASPECT_PRESETS.map((p) => (
                 <button
@@ -476,7 +478,7 @@ export function PhotoEditSheet({
 
         {/* ── Adjust — honest local pixel adjustments ── */}
         {tab === 'adjust' ? (
-          <div className="mt-4 space-y-4" role="tabpanel">
+          <div className="mt-4 space-y-4">
             {(
               [
                 { id: 'brightness', label: 'Brightness', min: 50, max: 150 },
@@ -548,7 +550,7 @@ export function PhotoEditSheet({
 
         {/* ── Enhance — AI capability, fail-closed ── */}
         {tab === 'enhance' ? (
-          <div className="mt-4 space-y-4" role="tabpanel">
+          <div className="mt-4 space-y-4">
             {aiPhase === 'checking' || aiPhase === 'idle' ? (
               <p className="text-caption text-text-secondary">Checking availability…</p>
             ) : null}

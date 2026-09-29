@@ -16,6 +16,7 @@ import { EmptyState } from '@/components/ui/EmptyState';
 import { Icon, type AppIconName } from '@/components/ui/Icon';
 import { Skeleton } from '@/components/ui/Skeleton';
 import { useToast } from '@/components/ui/Toast';
+import { focusAdjacentGroupControl } from '@/lib/a11y/focus';
 import { useStore } from '@/lib/store/useStore';
 import { formatCount, formatPrice } from '@/lib/utils/format';
 import { getCategoryFocalPoint, getListingCoverUri } from '@/lib/utils/media';
@@ -37,14 +38,14 @@ export function ClosetTile({ item, priority }: { item: Listing; priority?: boole
           aspectRatio={0.75}
           focalPoint={getCategoryFocalPoint(item.category)}
           priority={priority}
-          sizes="(max-width: 640px) 50vw, (max-width: 1024px) 33vw, 288px"
+          sizes="(max-width: 640px) 50vw, (max-width: 1024px) 33vw, (max-width: 1280px) 19vw, 185px"
           className="media-zoom"
         />
         {/* Price drop — the contract's originalPrice is the only honest
             signal (mobile ClosetMediaMosaic badge parity). Sold tiles keep
             the sold treatment instead. */}
         {hasPriceDrop ? (
-          <span className="tnum absolute left-1.5 top-1.5 z-10 rounded-md bg-overlay px-1.5 py-0.5 text-meta font-semibold text-scrim-text-primary">
+          <span className="tnum absolute left-1.5 top-1.5 z-elevated rounded-md bg-overlay px-1.5 py-0.5 text-meta font-semibold text-scrim-text-primary">
             −{priceDropPercent(item)}%
           </span>
         ) : null}
@@ -75,8 +76,12 @@ export function ClosetTile({ item, priority }: { item: Listing; priority?: boole
       </div>
       <div className="px-0.5 pt-1.5">
         <p className="tnum text-caption font-bold text-text-primary">{formatPrice(item.price)}</p>
-        {item.brand ? (
-          <p className="clamp-1 text-meta text-text-secondary">{item.brand}</p>
+        {item.brand || item.size ? (
+          <p className="clamp-1 text-meta text-text-secondary">
+            {item.brand ? <span>{item.brand}</span> : null}
+            {item.brand && item.size ? <span> · </span> : null}
+            {item.size ? <span>{item.size}</span> : null}
+          </p>
         ) : null}
       </div>
     </Link>
@@ -104,14 +109,27 @@ function SavedTile({
   const toggleWishlist = useStore((s) => s.toggleWishlist);
   const { show } = useToast();
 
-  const remove = () => {
-    if (kind === 'saved') {
-      toggleSaved(item.id);
-      show('Removed from saved', 'info');
-    } else {
-      toggleWishlist(item.id);
-      show('Removed from favourites', 'info');
+  const remove = (e: React.MouseEvent<HTMLButtonElement>) => {
+    // The store write unmounts this tile while the button may hold focus —
+    // park focus on a sibling tile's link first so it isn't stranded on a
+    // detached node (drops to <body>, keyboard place lost).
+    if (
+      !focusAdjacentGroupControl(e.currentTarget, '[data-saved-tile]', 'a')
+    ) {
+      // Last tile in the grid — land on the page landmark rather than
+      // letting focus drop to <body>.
+      document.getElementById('main-content')?.focus({ preventScroll: true });
     }
+    const label = kind === 'saved' ? 'saved' : 'favourites';
+    const write = kind === 'saved' ? toggleSaved : toggleWishlist;
+    // Remove stays optimistic (the tile unmounts); if the write fails the
+    // item returns to the list and the toast says the sync didn't land.
+    void write(item.id).then((ok) => {
+      show(
+        ok ? `Removed from ${label}` : 'Couldn’t sync — the item is still here',
+        ok ? 'info' : 'error',
+      );
+    });
   };
 
   /* top-N is per-button — the file affordance slides below the price-drop
@@ -120,7 +138,7 @@ function SavedTile({
     'pressable absolute flex h-11 w-11 items-center justify-center transition-opacity [@media(hover:hover)]:focus-visible:opacity-100 [@media(hover:hover)]:group-focus-within:opacity-100 [@media(hover:hover)]:group-hover:opacity-100 [@media(hover:hover)]:opacity-0';
 
   return (
-    <div className="group relative">
+    <div className="group relative" data-saved-tile>
       <ClosetTile item={item} priority={priority} />
       {onFile ? (
         <button
@@ -154,7 +172,7 @@ function SavedTile({
 export function ClosetGridSkeleton({ count = 10 }: { count?: number }) {
   return (
     <div
-      className="grid grid-cols-2 gap-[max(4px,var(--density-row-gap))] px-4 sm:grid-cols-3 sm:px-6 lg:grid-cols-4"
+      className="grid grid-cols-2 gap-[max(4px,var(--density-row-gap))] px-4 sm:grid-cols-3 sm:px-6 lg:grid-cols-5 xl:grid-cols-6"
       aria-busy
       aria-label="Loading items"
     >
@@ -209,18 +227,17 @@ export function ClosetGrid({
   return (
     // Tile gutter tracks the density preference — 4px floor so compact
     // never welds media together.
-    <div className="grid grid-cols-2 gap-[max(4px,var(--density-row-gap))] px-4 sm:grid-cols-3 sm:px-6 lg:grid-cols-4">
-      {items.map((item, i) =>
+    <div className="grid grid-cols-2 gap-[max(4px,var(--density-row-gap))] px-4 sm:grid-cols-3 sm:px-6 lg:grid-cols-5 xl:grid-cols-6">
+      {items.map((item) =>
         unsave ? (
           <SavedTile
             key={item.id}
             item={item}
             kind={unsave}
-            priority={i < 4}
             onFile={onFileItem}
           />
         ) : (
-          <ClosetTile key={item.id} item={item} priority={i < 4} />
+          <ClosetTile key={item.id} item={item} />
         ),
       )}
     </div>

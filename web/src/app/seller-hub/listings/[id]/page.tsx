@@ -58,11 +58,33 @@ function toRow(listing: Listing): ManagedListingRow {
   };
 }
 
-function MetricCell({ label, value }: { label: string; value: string }) {
+function MetricCell({
+  label,
+  value,
+  href,
+}: {
+  label: string;
+  value: string;
+  /** Optional destination — rendered as a stretched link so the whole
+   *  cell navigates without breaking the dl > div > dt/dd grammar a
+   *  wrapping anchor would. */
+  href?: string;
+}) {
   return (
-    <div className="px-3 py-2.5 first:pl-0">
+    <div
+      className={`relative px-3 py-2.5 first:pl-0 ${
+        href ? 'transition-colors hover:bg-surface-alt' : ''
+      }`}
+    >
       <dt className="text-meta text-text-muted">{label}</dt>
       <dd className="tnum mt-0.5 text-body-emphasis font-semibold text-text-primary">{value}</dd>
+      {href ? (
+        <Link
+          href={href}
+          aria-label={`View ${label.toLowerCase()} for this listing`}
+          className="absolute inset-0"
+        />
+      ) : null}
     </div>
   );
 }
@@ -189,7 +211,7 @@ export default function ManageListingPage({
   const likerCount = listing?.likes ?? 0;
 
   return (
-    <div className="mx-auto w-full max-w-3xl px-4 pb-16 pt-8 sm:px-6 md:pt-12">
+    <div className="mx-auto w-full max-w-3xl px-4 pb-16 pt-8 sm:px-6 md:pt-12 lg:max-w-[1440px]">
       <div className="flex items-center gap-3">
         <Link
           href="/seller-hub/listings"
@@ -198,7 +220,7 @@ export default function ManageListingPage({
         >
           <Icon name="back" size={20} />
         </Link>
-        <h1 className="text-screen-title font-semibold text-text-primary">Manage listing</h1>
+        <h1 className="text-screen-title text-text-primary">Manage listing</h1>
       </div>
       <SellerSectionNav toPost={counts.toPost} posted={counts.posted} />
 
@@ -230,9 +252,13 @@ export default function ManageListingPage({
         />
       ) : (
         <>
+        {/* At lg the identity pane takes the lead column and the command
+            verbs pin to a right rail — DOM order unchanged. */}
+        <div className="lg:mt-6 lg:grid lg:grid-cols-[minmax(0,1fr)_360px] lg:items-start lg:gap-12">
+        <div>
           {/* Media rail — real thumbs, first is the cover. */}
           {listing.images.length ? (
-            <ul className="mt-6 flex gap-2 overflow-x-auto pb-1" aria-label="Listing photos">
+            <ul className="mt-6 flex gap-2 overflow-x-auto pb-1 lg:mt-0" aria-label="Listing photos">
               {listing.images.map((uri, i) => (
                 <li key={uri} className="relative h-36 w-28 shrink-0">
                   <AppImage
@@ -299,11 +325,16 @@ export default function ManageListingPage({
             <MetricCell
               label="Offers"
               value={stats.data ? formatCount(stats.data.offers) : '—'}
+              // Deep link into the scoped offers view — mobile
+              // ManageListing "View offers" parity.
+              href={`/offers?listing=${listing.id}`}
             />
           </dl>
+        </div>
 
+        <div>
           {/* Primary cluster — share / preview / edit as quiet icon row. */}
-          <div className="mt-4 flex items-center gap-1">
+          <div className="mt-4 flex items-center gap-1 lg:mt-0 lg:border-b lg:border-border-subtle lg:pb-4">
             <Button variant="secondary" size="sm" icon="share" onClick={() => void share()}>
               Share
             </Button>
@@ -444,6 +475,8 @@ export default function ManageListingPage({
               </li>
             ) : null}
           </ul>
+        </div>
+        </div>
         </>
       )}
 
@@ -467,6 +500,7 @@ export default function ManageListingPage({
         open={pending != null}
         onClose={() => setPending(null)}
         title={pending ? confirmCopy[pending.kind].title : undefined}
+        ariaLabel="Confirm listing action"
         maxWidth={420}
       >
         <div className="px-5 py-5">

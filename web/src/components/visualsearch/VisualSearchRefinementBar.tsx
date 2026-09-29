@@ -42,7 +42,7 @@ export function VisualSearchRefinementBar({
   return (
     <div>
       <div className="flex items-center justify-between">
-        <h2 className="text-label font-semibold uppercase tracking-wide text-text-muted">
+        <h2 className="text-label text-text-muted">
           Detected in your photo
         </h2>
         {removedCount > 0 ? (

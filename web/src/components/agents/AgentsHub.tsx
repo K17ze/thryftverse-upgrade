@@ -1,10 +1,12 @@
 'use client';
 
 /**
- * AgentsHub — the /agents surface: your installed assistants with run
- * toggles, then the community/stock directory behind a category filter,
- * then the ledger + algorithm links. Flat canvas, hairline sections —
- * honest automation copy, no AI theatre.
+ * AgentsHub — the /agents surface. "Your agents" holds the caller's own
+ * custom bots (live) or the fixture's installed assistants, each with the
+ * status toggle the owner can actually write. The directory is the public
+ * system-bot catalog — capability cards, no install affordance (live bots
+ * deploy into conversations, never into the account). Flat canvas,
+ * hairline sections, honest copy.
  */
 
 import { useMemo, useState } from 'react';
@@ -16,9 +18,11 @@ import { Icon } from '@/components/ui/Icon';
 import { IconButton } from '@/components/ui/IconButton';
 import { Skeleton } from '@/components/ui/Skeleton';
 import { useToast } from '@/components/ui/Toast';
-import type { AgentCategory } from '@/lib/contracts/agents';
+import type { AgentBot, AgentCategory } from '@/lib/contracts/agents';
 import { AGENT_CATEGORIES } from '@/lib/contracts/agents';
+import { parseApiError } from '@/lib/api/http';
 import { useAgentActions, useAgentBots } from '@/lib/hooks/agents-queries';
+import { AgentsSignInWall, useAgentsAccess } from './AgentsGate';
 import { BotRow } from './BotRows';
 
 type CategoryFilter = 'all' | AgentCategory;
@@ -91,29 +95,52 @@ function LinkRow({
 export function AgentsHub() {
   const router = useRouter();
   const { show } = useToast();
-  const { data: bots, isLoading, isError, refetch } = useAgentBots();
+  const { data: bots, isLoading, isError, error, refetch } = useAgentBots();
   const { setEnabled } = useAgentActions();
+  const access = useAgentsAccess(error);
   const [filter, setFilter] = useState<CategoryFilter>('all');
 
-  const installed = useMemo(() => (bots ?? []).filter((b) => b.installed), [bots]);
+  // "Your agents" = bots the caller owns (live) plus fixture session
+  // installs. The directory is everything else — read-only in live mode.
+  const yours = useMemo(
+    () => (bots ?? []).filter((b) => b.origin === 'own' || b.installed === true),
+    [bots],
+  );
   const directory = useMemo(
     () =>
       (bots ?? []).filter(
-        (b) => b.origin !== 'own' && (filter === 'all' || b.category === filter),
+        (b) =>
+          b.origin !== 'own' &&
+          b.installed !== true &&
+          (filter === 'all' || b.category === filter),
       ),
     [bots, filter],
   );
 
-  const handleToggle = (botId: string, name: string) => (enabled: boolean) => {
-    setEnabled(botId, enabled);
-    show(enabled ? `${name} resumed` : `${name} paused`, 'info');
+  const handleToggle = (bot: AgentBot) => async (enabled: boolean) => {
+    try {
+      await setEnabled(bot.id, enabled);
+      show(enabled ? `${bot.name} resumed` : `${bot.name} paused`, 'info');
+    } catch (err) {
+      // The optimistic cache already reverted — report the server's answer.
+      show(parseApiError(err, `Couldn't update ${bot.name}`).message, 'error');
+    }
   };
 
-  if (isLoading) {
+  if (access === 'loading' || isLoading) {
     return (
       <>
         <HubHeader onCreate={() => router.push('/agents/builder')} />
         <HubSkeleton />
+      </>
+    );
+  }
+
+  if (access === 'blocked') {
+    return (
+      <>
+        <HubHeader onCreate={() => router.push('/agents/builder')} />
+        <AgentsSignInWall />
       </>
     );
   }
@@ -125,7 +152,7 @@ export function AgentsHub() {
         <EmptyState
           icon="inbox"
           title="Couldn't load agents"
-          subtitle="Check your connection and try again."
+          subtitle={parseApiError(error, 'Check your connection and try again.').message}
           actionLabel="Try again"
           onAction={() => void refetch()}
         />
@@ -134,93 +161,102 @@ export function AgentsHub() {
   }
 
   return (
-    <div className="pb-16">
-      <HubHeader onCreate={() => router.push('/agents/builder')} />
-      <p className="mt-1 px-4 text-caption text-text-secondary sm:px-6">
-        Automation assistants that work on rules you set. Every run is recorded.
-      </p>
+    <div className="pb-16 lg:grid lg:grid-cols-[minmax(0,1fr)_300px] lg:gap-x-12">
+      <div className="min-w-0">
+        <HubHeader onCreate={() => router.push('/agents/builder')} />
+        <p className="mt-1 px-4 text-caption text-text-secondary sm:px-6">
+          Assistants that reply in your conversations. Every run is recorded
+          in the ledger.
+        </p>
 
-      {/* Your agents — installed bots with run toggles */}
-      <section aria-label="Your agents" className="mt-8">
-        <div className="flex items-baseline justify-between px-4 sm:px-6">
-          <h2 className="text-section-title font-semibold text-text-primary">Your agents</h2>
-          {installed.length > 0 ? (
-            <p className="tnum text-caption text-text-muted">
-              {installed.filter((b) => b.enabled).length} of {installed.length} running
-            </p>
-          ) : null}
-        </div>
-        <div className="mt-3 divide-y divide-border-subtle border-y border-border-subtle">
-          {installed.length > 0 ? (
-            installed.map((bot) => (
-              <BotRow
-                key={bot.id}
-                bot={bot}
-                variant="installed"
-                onToggle={handleToggle(bot.id, bot.name)}
-              />
-            ))
-          ) : (
-            <div className="px-4 py-8 text-center sm:px-6">
-              <p className="text-body text-text-secondary">No agents installed yet.</p>
-              <p className="mt-1 text-caption text-text-muted">
-                Install one from the directory below, or{' '}
-                <Link href="/agents/builder" className="text-text-primary underline underline-offset-2">
-                  build your own
-                </Link>
-                .
+        {/* Your agents — owned bots (and fixture installs) with the
+            status toggle the wire actually supports. */}
+        <section aria-label="Your agents" className="mt-8">
+          <div className="flex items-baseline justify-between px-4 sm:px-6">
+            <h2 className="text-section-title font-semibold text-text-primary">Your agents</h2>
+            {yours.length > 0 ? (
+              <p className="tnum text-caption text-text-muted">
+                {yours.filter((b) => b.enabled).length} of {yours.length} enabled
               </p>
-            </div>
-          )}
-        </div>
-      </section>
+            ) : null}
+          </div>
+          <div className="mt-3 divide-y divide-border-subtle border-y border-border-subtle xl:grid xl:grid-cols-2 xl:gap-x-8">
+            {yours.length > 0 ? (
+              yours.map((bot) => (
+                <BotRow
+                  key={bot.id}
+                  bot={bot}
+                  variant="installed"
+                  onToggle={handleToggle(bot)}
+                />
+              ))
+            ) : (
+              <div className="px-4 py-8 text-center sm:px-6 xl:col-span-2">
+                <p className="text-body text-text-secondary">No agents of your own yet.</p>
+                <p className="mt-1 text-caption text-text-muted">
+                  <Link href="/agents/builder" className="text-text-primary underline underline-offset-2">
+                    Build your own
+                  </Link>
+                  {' '}— the directory below is what ThryftVerse ships.
+                </p>
+              </div>
+            )}
+          </div>
+        </section>
 
-      {/* Directory — stock + community assistants */}
-      <section aria-label="Agent directory" className="mt-10">
-        <h2 className="px-4 text-section-title font-semibold text-text-primary sm:px-6">
-          Directory
-        </h2>
-        <div className="no-scrollbar mt-3 flex gap-2 overflow-x-auto px-4 sm:px-6">
-          {FILTERS.map((f) => (
-            <Chip key={f.value} selected={filter === f.value} onClick={() => setFilter(f.value)}>
-              {f.label}
-            </Chip>
-          ))}
-        </div>
-        <div className="mt-2 divide-y divide-border-subtle border-y border-border-subtle">
-          {directory.length > 0 ? (
-            directory.map((bot) => <BotRow key={bot.id} bot={bot} variant="directory" />)
-          ) : (
-            <p className="px-4 py-8 text-center text-body text-text-muted sm:px-6">
-              No agents in this specialty yet.
-            </p>
-          )}
-        </div>
-      </section>
+        {/* Directory — stock + community assistants */}
+        <section aria-label="Agent directory" className="mt-10">
+          <h2 className="px-4 text-section-title font-semibold text-text-primary sm:px-6">
+            Directory
+          </h2>
+          <div className="no-scrollbar mt-3 flex gap-2 overflow-x-auto px-4 sm:px-6">
+            {FILTERS.map((f) => (
+              <Chip key={f.value} selected={filter === f.value} onClick={() => setFilter(f.value)}>
+                {f.label}
+              </Chip>
+            ))}
+          </div>
+          <div className="mt-2 divide-y divide-border-subtle border-y border-border-subtle xl:grid xl:grid-cols-2 xl:gap-x-8">
+            {directory.length > 0 ? (
+              directory.map((bot) => <BotRow key={bot.id} bot={bot} variant="directory" />)
+            ) : (
+              <p className="px-4 py-8 text-center text-body text-text-muted sm:px-6 xl:col-span-2">
+                No agents in this specialty yet.
+              </p>
+            )}
+          </div>
+        </section>
+      </div>
 
-      {/* Oversight — ledger + feed tuning */}
-      <section aria-label="Oversight" className="mt-10">
-        <div className="divide-y divide-border-subtle border-y border-border-subtle">
-          <LinkRow
-            href="/agents/ledger"
-            icon="receipt"
-            label="Agent ledger"
-            detail="Every action your agents have taken"
-          />
-          <LinkRow
-            href="/agents/memory"
-            icon="bookmark"
-            label="Agent memory"
-            detail="See and forget what your agents remember"
-          />
-          <LinkRow
-            href="/agents/algorithm"
-            icon="trending"
-            label="Your algorithm"
-            detail="Tune what your home feed favours"
-          />
-        </div>
-      </section>
+      {/* Oversight — ledger + feed tuning; a sticky rail at lg, in-flow on
+          mobile where the section order is unchanged. */}
+      <aside className="lg:sticky lg:top-24 lg:self-start">
+        <section aria-label="Oversight" className="mt-10 lg:mt-0">
+          <h2 className="hidden px-4 pb-2 text-label text-text-muted lg:block lg:px-5">
+            Oversight
+          </h2>
+          <div className="divide-y divide-border-subtle border-y border-border-subtle">
+            <LinkRow
+              href="/agents/ledger"
+              icon="receipt"
+              label="Agent ledger"
+              detail="Every action your agents have taken"
+            />
+            <LinkRow
+              href="/agents/memory"
+              icon="bookmark"
+              label="Agent memory"
+              detail="See and forget what your agents remember"
+            />
+            <LinkRow
+              href="/agents/algorithm"
+              icon="trending"
+              label="Your algorithm"
+              detail="Tune what your home feed favours"
+            />
+          </div>
+        </section>
+      </aside>
     </div>
   );
 }
@@ -230,7 +266,7 @@ function HubHeader({ onCreate }: { onCreate: () => void }) {
   return (
     <div className="flex items-center gap-1 px-2 pt-1 sm:px-4">
       <IconButton name="back" aria-label="Back" onClick={() => router.back()} />
-      <h1 className="flex-1 text-screen-title font-semibold text-text-primary">Agents</h1>
+      <h1 className="flex-1 text-screen-title text-text-primary">Agents</h1>
       <IconButton name="plus" aria-label="Create an agent" onClick={onCreate} />
     </div>
   );

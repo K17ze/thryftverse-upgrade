@@ -16,7 +16,7 @@ export function GalleriaSectionHeader({ eyebrow, title, aside }: GalleriaSection
   return (
     <header className="flex items-baseline justify-between gap-4 border-b border-border-subtle pb-4">
       <div className="flex items-baseline gap-3">
-        <span className="text-label font-semibold uppercase tracking-[0.14em] text-text-muted">
+        <span className="text-label text-text-muted">
           {eyebrow}
         </span>
         <h2 className="text-section-title font-semibold text-text-primary">{title}</h2>

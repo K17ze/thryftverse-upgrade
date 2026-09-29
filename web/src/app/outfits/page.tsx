@@ -51,7 +51,7 @@ export default function OutfitsPage() {
   return (
     <div className="mx-auto max-w-[1200px]">
       <div className="flex items-center justify-between gap-3 px-4 pt-5 sm:px-6">
-        <h1 className="text-screen-title font-bold text-text-primary">
+        <h1 className="text-screen-title text-text-primary">
           Your outfits
         </h1>
         <Button
@@ -67,7 +67,7 @@ export default function OutfitsPage() {
 
       <div className="py-4">
         {!hydrated ? (
-          <div className="grid grid-cols-2 gap-3 px-4 sm:grid-cols-3 sm:px-6 lg:grid-cols-4">
+          <div className="grid grid-cols-2 gap-3 px-4 sm:grid-cols-3 sm:px-6 lg:grid-cols-4 xl:grid-cols-5">
             {Array.from({ length: 4 }).map((_, i) => (
               <Skeleton key={i} className="aspect-[0.72] rounded-xl" />
             ))}
@@ -81,7 +81,7 @@ export default function OutfitsPage() {
             onAction={requestCreate}
           />
         ) : (
-          <div className="grid grid-cols-2 gap-3 px-4 sm:grid-cols-3 sm:px-6 lg:grid-cols-4">
+          <div className="grid grid-cols-2 gap-3 px-4 sm:grid-cols-3 sm:px-6 lg:grid-cols-4 xl:grid-cols-5">
             {sorted.map((outfit) => (
               <OutfitCard
                 key={outfit.id}

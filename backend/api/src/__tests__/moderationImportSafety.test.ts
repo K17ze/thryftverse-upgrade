@@ -473,7 +473,12 @@ describe('B2 — publish-path wiring holds unreviewed listings', () => {
 
 describe('B2 — listing Q&A gate holds unmoderated public UGC', () => {
   const here = dirname(fileURLToPath(import.meta.url));
-  const indexSource = readFileSync(join(here, '..', 'index.ts'), 'utf8');
+  // Normalize CRLF — editors on Windows may save the source with \r\n and
+  // the assertions below match statement shapes, not line endings.
+  const indexSource = readFileSync(join(here, '..', 'index.ts'), 'utf8').replace(
+    /\r\n/g,
+    '\n',
+  );
 
   it('the shared gate action drives the question and answer call sites', () => {
     const callSites = indexSource.match(/listingTextGateAction\(/g) ?? [];

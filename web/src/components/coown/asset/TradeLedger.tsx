@@ -23,6 +23,12 @@ function tapeTime(iso: string): string {
 /**
  * TradeTape — the row set, unwrapped. Reused inside the order-book
  * panel's Trades view; TradeLedger adds the section chrome around it.
+ *
+ * Print grammar: an authored `side` (fixtures/session writes) labels
+ * Buy/Sell; live wire prints carry no aggressor side, so they render the
+ * mobile tape's tick — price direction vs the previous (older) print.
+ * A print whose settlement didn't clear ('failed'/'reversed' on the
+ * wire) is marked and dimmed rather than passed off as settled money.
  */
 export function TradeTape({
   entries,
@@ -34,26 +40,57 @@ export function TradeTape({
   const rows = limit != null ? entries.slice(0, limit) : entries;
   return (
     <ul className="divide-y divide-border-subtle">
-      {rows.map((t) => (
-        <li key={t.id} className="flex items-baseline gap-4 py-2.5">
-          <time
-            dateTime={t.executedAt}
-            className="w-20 shrink-0 text-meta text-text-muted tnum"
+      {rows.map((t, i) => {
+        const prev = rows[i + 1] ?? null;
+        const tick =
+          prev == null || t.unitPriceGbp === prev.unitPriceGbp
+            ? 'flat'
+            : t.unitPriceGbp > prev.unitPriceGbp
+              ? 'up'
+              : 'down';
+        const tone =
+          t.side === 'buy' || (t.side == null && tick === 'up')
+            ? 'text-coown-up'
+            : t.side === 'sell' || (t.side == null && tick === 'down')
+              ? 'text-coown-down'
+              : 'text-text-primary';
+        const uncleared =
+          t.settlementStatus != null && t.settlementStatus !== 'settled';
+        return (
+          <li
+            key={t.id}
+            className={`flex items-baseline gap-4 py-2.5${uncleared ? ' opacity-60' : ''}`}
+            title={t.failureReason ?? undefined}
           >
-            {tapeTime(t.executedAt)}
-          </time>
-          <span
-            className={`min-w-0 flex-1 text-body font-medium tnum ${
-              t.side === 'buy' ? 'text-coown-up' : 'text-coown-down'
-            }`}
-          >
-            {t.side === 'buy' ? 'Buy' : 'Sell'} {gbp(t.unitPriceGbp)}
-          </span>
-          <span className="shrink-0 text-right text-meta text-text-secondary tnum">
-            {t.units} {t.units === 1 ? 'unit' : 'units'}
-          </span>
-        </li>
-      ))}
+            <time
+              dateTime={t.executedAt}
+              className="w-20 shrink-0 text-meta text-text-muted tnum"
+            >
+              {tapeTime(t.executedAt)}
+            </time>
+            <span className={`min-w-0 flex-1 text-body font-medium tnum ${tone}`}>
+              {t.side === 'buy'
+                ? 'Buy '
+                : t.side === 'sell'
+                  ? 'Sell '
+                  : tick === 'up'
+                    ? '▲ '
+                    : tick === 'down'
+                      ? '▼ '
+                      : ''}
+              {gbp(t.unitPriceGbp)}
+              {uncleared ? (
+                <span className="ml-2 text-meta font-normal text-text-muted">
+                  · {t.settlementStatus}
+                </span>
+              ) : null}
+            </span>
+            <span className="shrink-0 text-right text-meta text-text-secondary tnum">
+              {t.units} {t.units === 1 ? 'unit' : 'units'}
+            </span>
+          </li>
+        );
+      })}
     </ul>
   );
 }

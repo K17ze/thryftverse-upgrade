@@ -8,20 +8,35 @@
  */
 
 import Link from 'next/link';
+import { useMemo } from 'react';
 import { ProductTile } from '@/components/cards/ProductTile';
 import { AppImage } from '@/components/ui/AppImage';
 import { Chip } from '@/components/ui/Chip';
 import { Icon } from '@/components/ui/Icon';
-import { mapListingToDiscoverySummary } from '@/lib/contracts/domain';
-import { LISTINGS } from '@/lib/data/fixtures';
+import {
+  mapListingToDiscoverySummary,
+  type DiscoveryListingSummary,
+} from '@/lib/contracts/domain';
+import { DATA_MODE } from '@/lib/api/client';
+import { CATEGORIES, LISTINGS } from '@/lib/data/fixtures';
 import { GALLERIA_HERO } from '@/lib/data/fixtures-media';
+import { useGalleriaCover } from '@/lib/hooks/galleria-queries';
+import {
+  coversByCategory,
+  rankBrands,
+  useTrendingListings,
+  useTrendingSearches,
+} from '@/lib/hooks/search-queries';
 import {
   CATEGORY_DIRECTORY,
   POPULAR_BRANDS,
   TRENDING_SEARCHES,
+  type CategoryDirectoryEntry,
 } from './taxonomy';
 
-/** The week's most-liked live pieces — filter copies before sorting. */
+const LIVE = DATA_MODE === 'live';
+
+/** Fixture-mode: the week's most-liked live pieces — filter copies before sorting. */
 const TRENDING_ITEMS = LISTINGS.filter((l) => !l.isSold)
   .sort((a, b) => b.likes - a.likes)
   .slice(0, 8)
@@ -36,7 +51,7 @@ interface SearchLandingProps {
 
 function SectionLabel({ children }: { children: React.ReactNode }) {
   return (
-    <h2 className="text-label font-semibold uppercase tracking-wide text-text-muted">
+    <h2 className="text-label text-text-muted">
       {children}
     </h2>
   );
@@ -50,20 +65,32 @@ function SectionTitle({ children }: { children: React.ReactNode }) {
   );
 }
 
-/** Slim editorial banner — media left, serif title, chevron right. */
+/** Slim editorial banner — media left, serif title, chevron right.
+ *  Live mode renders only when a real published editorial exists;
+ *  nothing is shown while it loads or when the Galleria has no issues. */
 function GalleriaBanner() {
+  const { cover } = useGalleriaCover();
+  // Fixture mode renders the bundled hero; live renders only a real
+  // editorial — guests, errors and empty issues show nothing.
+  if (LIVE && !cover) return null;
+  const mediaUri = cover?.heroUri ?? GALLERIA_HERO.mediaUri;
+  const focalPoint = cover?.focalPoint ?? GALLERIA_HERO.focalPoint;
+  const label = cover
+    ? `The Galleria — ${cover.issueLabel}`
+    : GALLERIA_HERO.kicker;
+  const subline = cover?.dek ?? GALLERIA_HERO.subline;
   return (
     <Link
       href="/galleria"
-      aria-label="The Galleria — Issue 04"
+      aria-label={label}
       className="pressable group mt-8 flex h-28 items-stretch overflow-hidden rounded-xl border border-border-subtle sm:h-[120px]"
     >
       <div className="relative h-full w-28 shrink-0 sm:w-44">
         <AppImage
-          src={GALLERIA_HERO.mediaUri}
+          src={mediaUri}
           alt=""
           fill
-          focalPoint={GALLERIA_HERO.focalPoint}
+          focalPoint={focalPoint}
           sizes="(max-width: 640px) 112px, 176px"
           className="h-full w-full"
           imgClassName="transition-transform duration-300 group-hover:scale-105"
@@ -72,10 +99,10 @@ function GalleriaBanner() {
       <div className="flex min-w-0 flex-1 items-center gap-3 py-4 pl-4 pr-2 sm:pl-5">
         <div className="min-w-0 flex-1">
           <h3 className="clamp-1 text-editorial-title text-text-primary">
-            The Galleria — Issue 04
+            {label}
           </h3>
           <p className="clamp-1 mt-0.5 text-caption text-text-secondary">
-            Worn well, worn again — the seasonal edit.
+            {subline}
           </p>
         </div>
         <Icon
@@ -113,7 +140,7 @@ function CategoryCard({
           src={image}
           alt={name}
           fill
-          sizes="(max-width: 640px) 50vw, 25vw"
+          sizes="(max-width: 640px) 50vw, (max-width: 1280px) 25vw, 12.5vw"
           className="h-full w-full"
           imgClassName="transition-transform duration-300 group-hover:scale-105"
         />
@@ -138,6 +165,33 @@ export function SearchLanding({
   onClearRecent,
   onRemoveRecent,
 }: SearchLandingProps) {
+  const trending = useTrendingListings();
+  const searches = useTrendingSearches();
+
+  const trendingItems: DiscoveryListingSummary[] = useMemo(
+    () => (LIVE ? trending.items.slice(0, 8) : TRENDING_ITEMS),
+    [trending.items],
+  );
+  const trendingSearches = LIVE ? searches.terms : TRENDING_SEARCHES;
+  const brands = useMemo(
+    () => (LIVE ? rankBrands(trending.listings) : POPULAR_BRANDS),
+    [trending.listings],
+  );
+  const directory: CategoryDirectoryEntry[] = useMemo(() => {
+    if (!LIVE) return CATEGORY_DIRECTORY;
+    const covers = coversByCategory(trending.listings);
+    // Live: departments without real inventory-carrying listings get no
+    // cover art and are hidden rather than shown as grey placeholders.
+    return CATEGORIES.filter((c) => covers.has(c.slug.toLowerCase())).map(
+      (c) => ({
+        slug: c.slug,
+        name: c.name,
+        image: covers.get(c.slug.toLowerCase()) ?? '',
+        count: 0,
+      }),
+    );
+  }, [trending.listings]);
+
   return (
     <div className="px-4 pb-10 sm:px-6">
       {/* Photo-driven discovery — the visual-search entry point. */}
@@ -201,68 +255,76 @@ export function SearchLanding({
         </section>
       ) : null}
 
-      <section className="mt-6">
-        <SectionLabel>Trending</SectionLabel>
-        <div className="mt-2.5 flex flex-wrap gap-1.5">
-          {TRENDING_SEARCHES.map((term) => (
-            <Chip key={term} icon="trending" onClick={() => onSelect(term)}>
-              {term}
-            </Chip>
-          ))}
-        </div>
-      </section>
+      {trendingSearches.length > 0 ? (
+        <section className="mt-6">
+          <SectionLabel>Trending</SectionLabel>
+          <div className="mt-2.5 flex flex-wrap gap-1.5">
+            {trendingSearches.map((term) => (
+              <Chip key={term} icon="trending" onClick={() => onSelect(term)}>
+                {term}
+              </Chip>
+            ))}
+          </div>
+        </section>
+      ) : null}
 
-      <section className="mt-6">
-        <SectionLabel>Popular brands</SectionLabel>
-        <div className="mt-2.5 flex flex-wrap gap-1.5">
-          {POPULAR_BRANDS.map((brand) => (
-            <Chip key={brand} onClick={() => onSelect(brand)}>
-              {brand}
-            </Chip>
-          ))}
-        </div>
-      </section>
+      {brands.length > 0 ? (
+        <section className="mt-6">
+          <SectionLabel>Popular brands</SectionLabel>
+          <div className="mt-2.5 flex flex-wrap gap-1.5">
+            {brands.map((brand) => (
+              <Chip key={brand} onClick={() => onSelect(brand)}>
+                {brand}
+              </Chip>
+            ))}
+          </div>
+        </section>
+      ) : null}
 
       <GalleriaBanner />
 
-      <section className="mt-9">
-        <SectionTitle>Trending this week</SectionTitle>
-        <div
-          className="no-scrollbar -mx-4 mt-3 flex snap-x snap-mandatory gap-3 overflow-x-auto px-4 sm:-mx-6 sm:px-6"
-          role="list"
-          aria-label="Most-liked items this week"
-        >
-          {TRENDING_ITEMS.map((item, i) => (
+      {trendingItems.length > 0 ? (
+        <section className="mt-9">
+          <SectionTitle>Trending this week</SectionTitle>
+          <div
+            className="no-scrollbar -mx-4 mt-3 flex snap-x snap-mandatory gap-3 overflow-x-auto px-4 sm:-mx-6 sm:px-6 lg:gap-4"
+            role="list"
+            aria-label="Most-liked items this week"
+          >
+            {trendingItems.map((item, i) => (
             <div
               key={item.id}
               role="listitem"
-              className="w-[150px] shrink-0 snap-start sm:w-[180px]"
+              className="w-[150px] shrink-0 snap-start sm:w-[180px] lg:w-[200px]"
             >
               <ProductTile item={item} priority={i < 2} />
             </div>
           ))}
-        </div>
-      </section>
+          </div>
+        </section>
+      ) : null}
 
-      <section className="mt-9">
-        <SectionTitle>Shop by category</SectionTitle>
-        <div
-          className="mt-3 grid grid-cols-2 gap-x-3 gap-y-6 sm:grid-cols-4"
-          role="list"
-          aria-label="Categories"
-        >
-          {CATEGORY_DIRECTORY.map((cat) => (
-            <div key={cat.slug} role="listitem">
-              <CategoryCard
-                slug={cat.slug}
-                name={cat.name}
-                image={cat.image}
-                count={cat.count}
-              />
-            </div>
-          ))}
-        </div>
-      </section>
+      {directory.length > 0 ? (
+        <section className="mt-9">
+          <SectionTitle>Shop by category</SectionTitle>
+          <div
+            className="mt-3 grid grid-cols-2 gap-x-3 gap-y-6 sm:grid-cols-4 xl:grid-cols-8"
+            role="list"
+            aria-label="Categories"
+          >
+            {directory.map((cat) => (
+              <div key={cat.slug} role="listitem">
+                <CategoryCard
+                  slug={cat.slug}
+                  name={cat.name}
+                  image={cat.image || undefined}
+                  count={cat.count}
+                />
+              </div>
+            ))}
+          </div>
+        </section>
+      ) : null}
     </div>
   );
 }

@@ -237,11 +237,11 @@ export const PROFILE_HIGHLIGHTS: Record<string, PosterHighlight[]> = {
     {
       id: 'hl-u5-denim',
       title: 'Denim',
-      coverUri: hlImg('photo-1523381210434-271e8be1f52b'),
+      coverUri: hlImg('photo-1521093470119-a3acdc43374a'),
       frames: [
         {
           frameId: 'hl-u5-f3',
-          mediaUrl: hlImg('photo-1523381210434-271e8be1f52b'),
+          mediaUrl: hlImg('photo-1521093470119-a3acdc43374a'),
           caption: 'Selvedge week — four pairs up now',
         },
       ],

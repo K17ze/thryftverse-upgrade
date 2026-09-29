@@ -16,16 +16,34 @@ import { parsePriceInput, type SellDraft } from './constants';
 interface SellPreviewCardProps {
   draft: SellDraft;
   seller: User;
+  /** Staged-media lookup — a video slot's tile shows its poster still. */
+  mediaOf?: (src: string) => { kind?: 'image' | 'video'; poster?: string | null } | undefined;
 }
 
-export function SellPreviewCard({ draft, seller }: SellPreviewCardProps) {
+export function SellPreviewCard({ draft, seller, mediaOf }: SellPreviewCardProps) {
   const price = parsePriceInput(draft.price);
+  // Cover = the first image-kind slot (the publish contract's rule — a
+  // leading video never serves as the still cover); an all-video draft
+  // falls back to the first video's poster still, never a raw video uri
+  // into an <img>.
+  const coverSrc = (() => {
+    let firstPoster: string | null = null;
+    for (const src of draft.photos) {
+      const m = mediaOf?.(src);
+      if (m?.kind === 'video') {
+        firstPoster = firstPoster ?? m.poster ?? null;
+        continue;
+      }
+      return src;
+    }
+    return firstPoster ?? draft.photos[0] ?? null;
+  })();
 
   return (
     <article className="w-full max-w-[300px]">
       <div className="relative overflow-hidden rounded-lg bg-surface-alt">
         <AppImage
-          src={draft.photos[0] ?? null}
+          src={coverSrc}
           alt={draft.title.trim() || 'Listing photo'}
           aspectRatio={0.8}
           sizes="300px"
@@ -40,7 +58,7 @@ export function SellPreviewCard({ draft, seller }: SellPreviewCardProps) {
 
       <div className="flex flex-col gap-1 px-1 pt-2">
         {draft.brand.trim() ? (
-          <span className="clamp-1 text-label font-semibold uppercase tracking-wide text-text-secondary">
+          <span className="clamp-1 text-label text-text-secondary">
             {draft.brand.trim()}
           </span>
         ) : null}
@@ -56,7 +74,7 @@ export function SellPreviewCard({ draft, seller }: SellPreviewCardProps) {
           <Avatar src={seller.avatar} name={seller.username} size={20} />
           <span className="clamp-1 text-meta font-medium">@{seller.username}</span>
           {seller.isVerified ? (
-            <Icon name="verified" size={11} className="text-success-text" />
+            <Icon name="verified" size={11} className="text-commerce-trust" />
           ) : null}
         </span>
       </div>

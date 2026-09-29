@@ -277,9 +277,9 @@ export function ClosetListingsSection({
           compact
         />
       ) : editable ? (
-        <div className="grid grid-cols-2 gap-2 px-4 sm:grid-cols-3 sm:px-6 lg:grid-cols-4">
-          {filtered.map((item, i) => (
-            <EditableClosetTile key={item.id} item={item} priority={i < 4} />
+        <div className="grid grid-cols-2 gap-2 px-4 sm:grid-cols-3 sm:px-6 lg:grid-cols-5 xl:grid-cols-6">
+          {filtered.map((item) => (
+            <EditableClosetTile key={item.id} item={item} />
           ))}
         </div>
       ) : (

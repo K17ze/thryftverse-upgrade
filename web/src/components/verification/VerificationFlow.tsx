@@ -8,6 +8,10 @@
  * Fixture mode is honest throughout: the review is simulated, the document
  * never leaves the tab, and the persisted store only remembers the outcome
  * and the entered details — so /settings and /profile read the same status.
+ *
+ * Live mode mounts LiveVerificationFlow instead: status comes from
+ * /compliance/kyc-status and capture happens on the provider's hosted page
+ * — nothing in this component can approve a real account.
  */
 
 import { useCallback, useEffect, useRef, useState } from 'react';
@@ -33,6 +37,8 @@ import { ReviewStep } from './ReviewStep';
 import { StatusView } from './StatusView';
 import { DemandsEntryRow } from './DemandList';
 import { Dac7Section } from './Dac7Section';
+import { LiveVerificationFlow } from './LiveVerificationFlow';
+import { DATA_MODE } from '@/lib/api/client';
 
 const EMPTY_FIELDS: KycIdentityFields = {
   fullName: '',
@@ -210,10 +216,29 @@ export function VerificationFlow() {
 
   if (isGuest || !user) return null;
 
+  // Live mode — real KYC: backend status + provider-hosted capture. The
+  // staged flow below is fixture-only.
+  if (DATA_MODE === 'live') {
+    return (
+      <>
+        <header className="pb-2 pt-8">
+          <h1 className="text-screen-title text-text-primary">Identity verification</h1>
+        </header>
+        <LiveVerificationFlow userId={user.id} />
+        {hydrated ? (
+          <div className="mt-4">
+            <DemandsEntryRow />
+            <Dac7Section />
+          </div>
+        ) : null}
+      </>
+    );
+  }
+
   return (
     <>
       <header className="pb-2 pt-8">
-        <h1 className="text-screen-title font-bold text-text-primary">Identity verification</h1>
+        <h1 className="text-screen-title text-text-primary">Identity verification</h1>
       </header>
 
       {!hydrated ? (

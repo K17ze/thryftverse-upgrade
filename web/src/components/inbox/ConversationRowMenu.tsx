@@ -1,22 +1,26 @@
 'use client';
 
 /**
- * ConversationRowMenu — hover-revealed kebab on a list row. The mobile
- * grammar union: the long-press action sheet (Mute, Pin, Delete) plus the
- * swipe actions (Mark read/unread, Archive). Writes go through
- * useConversationPrefs / the mark-read mutation so live mode posts the
- * server edges and reverts on failure; fixture mode mutates the module
- * dataset. Floats above the row's stretched link — pointer events land
- * here first.
+ * ConversationRowMenu — the row's contextual menu, reachable two ways:
+ * the hover-revealed kebab (touch + mouse) and a right-click anywhere on
+ * the row (the desktop analogue of the mobile long-press sheet —
+ * Messenger/WhatsApp-web grammar). The kebab anchors the menu under the
+ * button; a context-menu press anchors it at the cursor, clamped inside
+ * the viewport. The menu grammar is the mobile union: the long-press
+ * sheet (Pin, Mute, Delete) plus the swipe actions (Mark read/unread,
+ * Archive). Writes go through useConversationPrefs / the mark-read
+ * mutation so live mode posts the server edges and reverts on failure;
+ * fixture mode mutates the module dataset.
  */
 
-import { useEffect, useRef, useState } from 'react';
+import { useEffect, useId, useImperativeHandle, useRef, useState } from 'react';
 import { useQueryClient } from '@tanstack/react-query';
 import { IconButton } from '@/components/ui/IconButton';
 import { Icon } from '@/components/ui/Icon';
 import { useToast } from '@/components/ui/Toast';
 import type { Conversation } from '@/lib/contracts/domain';
 import { DATA_MODE } from '@/lib/api/client';
+import { focusAdjacentMatch } from '@/lib/a11y/focus';
 import { useMarkConversationRead } from '@/lib/hooks/queries';
 import { useConversationPrefs } from './useConversationPrefs';
 import { useConversationAdmin } from './useConversationAdmin';
@@ -24,15 +28,46 @@ import {
   liveConversationApi,
   markFixtureConversationUnread,
 } from './groupAdmin';
+import { conversationTitle } from './inboxModel';
 import { CLOSED_CONFIRM, ConfirmSheet, type ConfirmSheetState } from './ConfirmSheet';
 
-export function ConversationRowMenu({ conversation }: { conversation: Conversation }) {
+/** Selector matching every conversation row link — used to park focus on
+ *  a stable sibling before an action (archive, delete) unmounts this row. */
+const ROW_SELECTOR = '[data-conversation-row]';
+
+/** Menu placement — kebab anchors under the button; a right-click opens
+ *  the same menu fixed at the pointer (viewport-clamped on mount). */
+type MenuAnchor = { kind: 'kebab' } | { kind: 'pointer'; x: number; y: number };
+
+export interface ConversationRowMenuHandle {
+  /** Open the menu anchored at a pointer position (row right-click). */
+  openAt: (x: number, y: number) => void;
+}
+
+export function ConversationRowMenu({
+  conversation,
+  ref,
+}: {
+  conversation: Conversation;
+  /** Imperative handle for the row's contextmenu press. */
+  ref?: React.Ref<ConversationRowMenuHandle>;
+}) {
   const qc = useQueryClient();
   const toast = useToast();
-  const [open, setOpen] = useState(false);
+  const [anchor, setAnchor] = useState<MenuAnchor | null>(null);
+  const open = anchor !== null;
   const [confirm, setConfirm] = useState<ConfirmSheetState>(CLOSED_CONFIRM);
   const wrapRef = useRef<HTMLDivElement>(null);
+  const kebabRef = useRef<HTMLButtonElement>(null);
   const menuRef = useRef<HTMLDivElement>(null);
+  const menuId = useId();
+  const [menuPos, setMenuPos] = useState<{ left: number; top: number } | null>(null);
+  /** Kebab-anchored menus flip above the row when the measured rect would
+   *  clear the viewport bottom — the same clamp the pointer path gets. */
+  const [openUp, setOpenUp] = useState(false);
+  /** Set by deliberate dismissal (Escape, item activation); passive
+   *  closes (outside press, scroll, Tab continuing) leave it false. */
+  const restoreFocus = useRef(false);
   const { isMuted, isArchived, isPinned, setMuted, setArchived, setPinned } =
     useConversationPrefs();
   const markConversationRead = useMarkConversationRead();
@@ -43,16 +78,88 @@ export function ConversationRowMenu({ conversation }: { conversation: Conversati
   const pinned = isPinned(conversation);
   const unread = conversation.unread || (conversation.unreadCount ?? 0) > 0;
 
-  // Close on pointer-down outside; move focus into the menu on open.
+  // Row right-click — the same menu the kebab opens, anchored at the
+  // pointer. Exposed as an imperative handle so the row wrapper's
+  // contextmenu press can reach it.
+  useImperativeHandle(ref, () => ({
+    openAt: (x, y) => setAnchor({ kind: 'pointer', x, y }),
+  }));
+
+  /** The row this menu belongs to — the wrapper sits beside the row link
+   *  inside the item group, so walk up to the group and back down. */
+  const hostRow = () =>
+    (wrapRef.current?.closest('.group') ?? wrapRef.current?.parentElement)
+      ?.querySelector<HTMLElement>(ROW_SELECTOR) ?? null;
+
+  /** Deliberate close returns focus to the control that opened the menu —
+   *  the kebab for the button path, the right-clicked row link for the
+   *  pointer path. */
+  const focusTrigger = (kind: MenuAnchor['kind'] | undefined) => {
+    const trigger = kind === 'pointer' ? hostRow() : kebabRef.current;
+    if (trigger?.isConnected) trigger.focus({ preventScroll: true });
+  };
+
+  /** An action that removes this row (archive, delete) would strand focus
+   *  on a detached node — park it on the next/previous row first, falling
+   *  back to the main landmark when no sibling row exists. */
+  const parkFocusBeforeUnmount = () => {
+    if (focusAdjacentMatch(hostRow(), ROW_SELECTOR)) return;
+    document.getElementById('main-content')?.focus({ preventScroll: true });
+  };
+
+  // Pointer-anchored menus clamp into the viewport once the menu mounts
+  // and its real size is measurable — measure-once, position-stays.
+  useEffect(() => {
+    if (anchor?.kind !== 'pointer') {
+      setMenuPos(null);
+      return;
+    }
+    const el = menuRef.current;
+    if (!el) return;
+    const rect = el.getBoundingClientRect();
+    setMenuPos({
+      left: Math.max(8, Math.min(anchor.x, window.innerWidth - rect.width - 8)),
+      top: Math.max(8, Math.min(anchor.y, window.innerHeight - rect.height - 8)),
+    });
+  }, [anchor]);
+
+  // Kebab-anchored menus get the vertical half of that clamp: the measured
+  // rect clears the bottom edge → the menu flips above the trigger rather
+  // than bleeding off-viewport.
+  useEffect(() => {
+    if (anchor?.kind !== 'kebab') {
+      setOpenUp(false);
+      return;
+    }
+    const el = menuRef.current;
+    if (!el) return;
+    const rect = el.getBoundingClientRect();
+    setOpenUp(rect.bottom > window.innerHeight - 8);
+  }, [anchor]);
+
+  // Close on pointer-down outside; a pointer-anchored menu also closes on
+  // scroll (a fixed menu would detach from its row). Focus moves into the
+  // menu on open and returns to the trigger on deliberate dismissal —
+  // activating an item unmounts the focused menuitem, so without the
+  // restore it would drop to <body>.
   useEffect(() => {
     if (!open) return;
+    const kind = anchor?.kind;
+    restoreFocus.current = false;
     const onDoc = (e: MouseEvent) => {
-      if (wrapRef.current && !wrapRef.current.contains(e.target as Node)) setOpen(false);
+      if (wrapRef.current && !wrapRef.current.contains(e.target as Node)) setAnchor(null);
     };
+    const onScroll = () => setAnchor(null);
     document.addEventListener('mousedown', onDoc);
+    if (kind === 'pointer') window.addEventListener('scroll', onScroll, true);
     menuRef.current?.querySelector<HTMLElement>('[role="menuitem"]')?.focus();
-    return () => document.removeEventListener('mousedown', onDoc);
-  }, [open]);
+    return () => {
+      document.removeEventListener('mousedown', onDoc);
+      window.removeEventListener('scroll', onScroll, true);
+      if (restoreFocus.current) focusTrigger(kind);
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- focusTrigger reads refs/DOM, not reactive state
+  }, [open, anchor?.kind]);
 
   // Menu keyboard grammar — Escape closes and returns focus to the
   // trigger; arrows/Home/End traverse the items (the AccountMenu pattern).
@@ -63,16 +170,16 @@ export function ConversationRowMenu({ conversation }: { conversation: Conversati
     if (e.key === 'Escape') {
       e.preventDefault();
       e.stopPropagation();
-      setOpen(false);
-      wrapRef.current?.querySelector<HTMLButtonElement>('button')?.focus();
+      restoreFocus.current = true;
+      setAnchor(null);
       return;
     }
     if (e.key === 'Tab') {
       // Menu grammar (the FeedItemMenu fix): close, return focus to the
       // trigger, then let the browser's default tab step continue from
       // it — an open menu left past its Tab position strands the order.
-      setOpen(false);
-      wrapRef.current?.querySelector<HTMLButtonElement>('button')?.focus();
+      setAnchor(null);
+      focusTrigger(anchor?.kind);
       return;
     }
     if (!items.length) return;
@@ -156,70 +263,93 @@ export function ConversationRowMenu({ conversation }: { conversation: Conversati
       },
     });
 
+  const close = () => setAnchor(null);
+
+  /** Item activation — the focused menuitem unmounts with the menu, so a
+   *  deliberate close flags focus restore to the trigger (or parks it on
+   *  an adjacent row when the action removes this row from the list). */
+  const activate = (action: () => void, removesRow = false) => {
+    if (removesRow) {
+      parkFocusBeforeUnmount();
+    } else {
+      restoreFocus.current = true;
+    }
+    close();
+    action();
+  };
+
   return (
     <div
       ref={wrapRef}
-      className="absolute right-2 top-1/2 z-10 -translate-y-1/2"
+      className="absolute right-2 top-1/2 z-elevated -translate-y-1/2"
       onKeyDown={onMenuKeyDown}
     >
       <IconButton
+        ref={kebabRef}
         name="more"
-        aria-label={`Options for this conversation`}
+        aria-label={`Options for ${conversationTitle(conversation)}`}
         aria-expanded={open}
         aria-haspopup="menu"
-        onClick={() => setOpen((o) => !o)}
-        className="opacity-0 transition-opacity focus-visible:opacity-100 group-hover:opacity-100 data-[open=true]:opacity-100"
+        aria-controls={open ? menuId : undefined}
+        onClick={() => setAnchor((a) => (a ? null : { kind: 'kebab' }))}
+        className="opacity-0 transition-opacity focus-visible:opacity-100 group-hover:opacity-100 data-[open=true]:opacity-100 [@media(hover:none)]:opacity-100"
         data-open={open}
       />
       {open ? (
         <div
           ref={menuRef}
+          id={menuId}
           role="menu"
-          className="absolute right-0 top-full mt-1 w-48 overflow-hidden rounded-lg border border-border bg-surface py-1 shadow-lg"
+          aria-label={`Options for ${conversationTitle(conversation)}`}
+          className={`w-48 overflow-hidden rounded-lg border border-border bg-surface py-1 shadow-floating ${
+            anchor?.kind === 'pointer'
+              ? 'fixed z-dropdown'
+              : `absolute right-0 ${openUp ? 'bottom-full mb-1' : 'top-full mt-1'}`
+          }`}
+          style={
+            anchor?.kind === 'pointer'
+              ? menuPos
+                ? { left: menuPos.left, top: menuPos.top }
+                : // Pre-measure: render off-viewport for one frame rather
+                  // than flash at the raw cursor and jump.
+                  { left: anchor.x, top: anchor.y, visibility: 'hidden' }
+              : undefined
+          }
         >
           <MenuItem
             icon="pin"
             filled={pinned}
             label={pinned ? 'Unpin' : 'Pin'}
-            onClick={() => {
-              setPinned(conversation, !pinned);
-              setOpen(false);
-            }}
+            onClick={() => activate(() => setPinned(conversation, !pinned))}
           />
           <MenuItem
             icon={muted ? 'notifications' : 'notificationsOff'}
             label={muted ? 'Unmute' : 'Mute notifications'}
-            onClick={() => {
-              setMuted(conversation, !muted);
-              setOpen(false);
-            }}
+            onClick={() => activate(() => setMuted(conversation, !muted))}
           />
           <MenuItem
             icon={unread ? 'mail' : 'mailUnread'}
             label={unread ? 'Mark as read' : 'Mark as unread'}
-            onClick={() => {
-              if (unread) markRead();
-              else markUnread();
-              setOpen(false);
-            }}
+            onClick={() =>
+              activate(() => (unread ? markRead() : markUnread()))
+            }
           />
+          {/* Archive/unarchive pulls the row out of the visible list —
+              park focus on a sibling row before the write unmounts it. */}
           <MenuItem
             icon={archived ? 'mail' : 'folder'}
             label={archived ? 'Move back to inbox' : 'Archive'}
-            onClick={() => {
-              setArchived(conversation, !archived);
-              setOpen(false);
-            }}
+            onClick={() => activate(() => setArchived(conversation, !archived), true)}
           />
           <div className="my-1 border-t border-border-subtle" aria-hidden />
+          {/* Delete routes through the confirm sheet — parking focus on a
+              sibling row first means the sheet's own focus-restore lands
+              somewhere stable even if the row is gone by then. */}
           <MenuItem
             icon="trash"
             label="Delete"
             danger
-            onClick={() => {
-              setOpen(false);
-              confirmDelete();
-            }}
+            onClick={() => activate(confirmDelete, true)}
           />
         </div>
       ) : null}

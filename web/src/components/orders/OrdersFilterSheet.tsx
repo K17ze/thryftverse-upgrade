@@ -102,7 +102,7 @@ export function OrdersFilterSheet({
   return (
     <Sheet open={open} onClose={onClose} title="Filter orders">
       <div className="px-5 pb-5">
-        <p className="text-label font-medium uppercase tracking-wide text-text-muted">Role</p>
+        <p className="text-label text-text-muted">Role</p>
         <div className="flex flex-col">
           {ROLE_OPTIONS.map((opt) => (
             <OptionRow
@@ -116,7 +116,7 @@ export function OrdersFilterSheet({
 
         {statusOptions.length > 0 ? (
           <>
-            <p className="mt-4 text-label font-medium uppercase tracking-wide text-text-muted">
+            <p className="mt-4 text-label text-text-muted">
               Status
             </p>
             <div className="flex flex-col">
@@ -134,7 +134,7 @@ export function OrdersFilterSheet({
 
         {availableYears.length > 0 ? (
           <>
-            <p className="mt-4 text-label font-medium uppercase tracking-wide text-text-muted">
+            <p className="mt-4 text-label text-text-muted">
               Year
             </p>
             <div className="flex flex-col">

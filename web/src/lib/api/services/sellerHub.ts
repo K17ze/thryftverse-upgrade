@@ -242,6 +242,55 @@ export async function fetchSellerListingAnalytics(
   return res.analytics;
 }
 
+// ── Needs attention (mobile commerceApi.fetchNeedsAttention) ────────────────
+// GET /sellers/:sellerId/analytics/attention — active listings under the
+// view floor in the window (<10 qualified views), lowest reach first. The
+// server computes the verdict; the client only carries it.
+
+export interface SellerNeedsAttentionItem {
+  listingId: string;
+  title: string;
+  coverImageUrl: string | null;
+  status: string;
+  priceGbp: number;
+  category: string | null;
+  brand: string | null;
+  createdAt: string;
+  views: number;
+  likes: number;
+  offerCount: number;
+  reason: string;
+  priority: 'high' | 'medium';
+}
+
+export async function fetchNeedsAttention(
+  sellerId: string,
+  options: {
+    limit?: number;
+    /** Preset window, or an exact startDate+endDate pair (both required
+     *  together — the backend rejects a lone bound). */
+    period?: '7d' | '30d' | '90d';
+    startDate?: string;
+    endDate?: string;
+  } = {},
+  signal?: AbortSignal,
+): Promise<SellerNeedsAttentionItem[]> {
+  const params = new URLSearchParams();
+  params.set('limit', String(options.limit ?? 10));
+  if (options.startDate && options.endDate) {
+    params.set('startDate', options.startDate);
+    params.set('endDate', options.endDate);
+  } else {
+    params.set('period', options.period ?? '30d');
+  }
+  const res = await fetchJson<{ ok: boolean; items: SellerNeedsAttentionItem[] }>(
+    `/sellers/${encodeURIComponent(sellerId)}/analytics/attention?${params.toString()}`,
+    undefined,
+    { signal },
+  );
+  return res.items;
+}
+
 // ── Seller standards (mobile sellerStandardsApi.ts) ─────────────────────────
 // GET /sellers/:sellerId/standards — recomputed operational metrics, program
 // tier and per-criterion defects. Verbatim projection, never recomputed here.
@@ -287,6 +336,45 @@ export async function fetchSellerStandards(
     defects: res.defects,
     appealsAvailable: res.appealsAvailable,
   };
+}
+
+// POST /sellers/:sellerId/standards/appeal — file an appeal against a defect
+// (mobile sellerStandardsApi.submitStandardsAppeal). Creates a review record;
+// it never mutates the tier. The backend dedupes on (seller, defect metric)
+// while an appeal is open — `alreadyOpen` marks that idempotent replay.
+
+export type StandardsAppealGrounds =
+  | 'factual_error'
+  | 'carrier_delay'
+  | 'system_error'
+  | 'mitigating_circumstance';
+
+export interface SubmitStandardsAppealInput {
+  /** One of SellerStandardsDefect.metric — the criterion being appealed. */
+  defectMetric: string;
+  grounds: StandardsAppealGrounds;
+  details: string;
+  evidenceUrls?: string[];
+}
+
+export async function submitStandardsAppeal(
+  sellerId: string,
+  input: SubmitStandardsAppealInput,
+): Promise<{ appealId: string; alreadyOpen: boolean }> {
+  const res = await fetchJson<{ ok: boolean; appealId: string; alreadyOpen?: boolean }>(
+    `/sellers/${encodeURIComponent(sellerId)}/standards/appeal`,
+    {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        defectMetric: input.defectMetric,
+        grounds: input.grounds,
+        details: input.details,
+        evidenceUrls: input.evidenceUrls,
+      }),
+    },
+  );
+  return { appealId: res.appealId, alreadyOpen: res.alreadyOpen === true };
 }
 
 // ── Batch command (mobile sellerHubApi.submitSellerHubBatchCommand) ─────────

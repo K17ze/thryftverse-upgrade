@@ -4,6 +4,7 @@
 
 import Link from 'next/link';
 import type { CoOwnAsset } from '@/lib/contracts/coown';
+import { coOwnMarkGbp } from '@/lib/contracts/coown';
 import { gbp } from '../format';
 import { AssetThumb } from '../AssetThumb';
 import { MovePill } from '../MovePill';
@@ -37,7 +38,7 @@ export function RelatedAssets({ assets, currentId }: { assets: CoOwnAsset[]; cur
                   {a.title}
                 </span>
                 <span className="mt-1 flex items-center gap-2">
-                  <span className="text-body text-text-primary tnum">{gbp(a.unitPriceGbp)}</span>
+                  <span className="text-body text-text-primary tnum">{gbp(coOwnMarkGbp(a))}</span>
                   <MovePill pct={a.marketMovePct24h} />
                 </span>
               </span>

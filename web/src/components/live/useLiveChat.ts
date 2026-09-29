@@ -1,13 +1,14 @@
 'use client';
 
 /**
- * useLiveChat — the overlay's chat feed. Fixture mode streams the recorded
- * transcript in on a seeded tick (deterministic rhythm per session — the
- * same lines arrive in the same order every open) behind a "Simulated
- * preview" system line so nobody mistakes it for real room traffic; replays
- * render the recorded transcript in full, read-only. Live mode has no chat
- * socket — nothing streams, the composer stays hidden rather than echoing
- * a message nowhere.
+ * useLiveChat — the overlay's chat feed for fixture sessions: the recorded
+ * transcript streams in on a seeded tick (deterministic rhythm per session
+ * — the same lines arrive in the same order every open) behind a
+ * "Simulated preview" system line so nobody mistakes it for real room
+ * traffic; replays render the recorded transcript in full, read-only.
+ * Live-mode chat is real now and lives in useLiveRoom (REST history +
+ * the session's realtime topic) — this hook returns nothing there so the
+ * two feeds can never double-render.
  */
 
 import { useEffect, useRef, useState } from 'react';
@@ -28,6 +29,9 @@ export interface LiveChatMessage {
   seller?: boolean;
   /** Posted by the viewer locally this session. */
   mine?: boolean;
+  /** Author's backend user id — live mode only; the host moderation
+   *  panel needs it to target mute/kick. Absent on fixture lines. */
+  userId?: string;
 }
 
 function toMessage(line: LiveChatLine): LiveChatMessage {
@@ -57,25 +61,15 @@ export function useLiveChat(session: LiveSession | null): {
       return;
     }
 
-    const sellerName = userById(session.sellerId)?.username ?? 'seller';
+    // Host name: live sessions carry the room's own projection; fixture
+    // sessions resolve through USERS.
+    const sellerName =
+      session.sellerName || userById(session.sellerId)?.username || 'seller';
 
-    // Live mode — there is no chat socket in this build, so nothing is
-    // scripted in: the viewer's own join line plus an honest note.
+    // Live mode — real chat (history + realtime appends + sends) is owned
+    // by useLiveRoom; this hook stays inert so the feeds never double.
     if (DATA_MODE === 'live') {
-      setMessages([
-        {
-          id: `${session.id}-join`,
-          user: '',
-          text: `You joined @${sellerName}’s show`,
-          kind: 'system',
-        },
-        {
-          id: `${session.id}-chat-off`,
-          user: '',
-          text: 'Live chat isn’t connected in this build',
-          kind: 'system',
-        },
-      ]);
+      setMessages([]);
       return;
     }
 

@@ -9,9 +9,15 @@
  * sizes, brands, members) as sheet radios, and a quiet reset. Everything
  * persists through settingsPrefs; the audience selection also feeds the
  * local feed ranking via personalisationRankingSignals.
+ *
+ * Live + signed-in sessions sync through GET/PATCH /users/me/personalisation:
+ * the store is the optimistic mirror hydrated from server truth and a
+ * failed write restores the pre-write posture. Guest and fixture sessions
+ * keep the device-local path and the copy says so.
  */
 
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
+import { useQuery } from '@tanstack/react-query';
 import { SettingsSection } from './SettingsSection';
 import { SettingsRow } from './SettingsRow';
 import { PickerSheet } from './PickerSheet';
@@ -20,13 +26,21 @@ import { Skeleton } from '@/components/ui/Skeleton';
 import { ConfirmSheet } from '@/components/orders/ConfirmSheet';
 import { useToast } from '@/components/ui/Toast';
 import { useHydrated } from '@/lib/store/useStore';
+import { useSession } from '@/lib/session/SessionProvider';
 import { useSettingsPrefs } from '@/lib/store/settingsPrefs';
+import { DATA_MODE } from '@/lib/api/client';
+import { parseApiError } from '@/lib/api/http';
+import * as usersService from '@/lib/api/services/users';
 import {
   AUDIENCE_OPTIONS,
   BRAND_OPTIONS,
   CATEGORY_SIZE_OPTIONS,
+  DEFAULT_PERSONALISATION,
   MEMBER_OPTIONS,
+  type PersonalisationPreferences,
 } from '@/lib/contracts/settings';
+
+const isLive = DATA_MODE === 'live';
 
 const AUDIENCE_META: Record<(typeof AUDIENCE_OPTIONS)[number], { subtitle: string }> = {
   Women: { subtitle: 'Womenswear and accessories' },
@@ -49,26 +63,66 @@ const PICKER_CONFIG: Record<
 export function PersonalisationView() {
   const { show } = useToast();
   const hydrated = useHydrated();
+  const { isGuest, sessionLoading } = useSession();
   const prefs = useSettingsPrefs((s) => s.personalisation);
   const setPersonalisation = useSettingsPrefs((s) => s.setPersonalisation);
-  const resetPersonalisation = useSettingsPrefs((s) => s.resetPersonalisation);
   const [pickerMode, setPickerMode] = useState<PickerMode>(null);
   const [resetOpen, setResetOpen] = useState(false);
 
-  const genderFilter = hydrated ? prefs.genderFilter : [];
+  // The account wire only exists for an authed live session — guests and
+  // fixture mode keep the device-local mirror.
+  const syncs = isLive && !isGuest;
+  const livePrefs = useQuery({
+    queryKey: ['users', 'me', 'personalisation'],
+    queryFn: ({ signal }) => usersService.fetchMyPersonalisation(signal),
+    enabled: syncs,
+    staleTime: 30_000,
+  });
+
+  // Reconcile server truth into the mirror whenever the read lands — the
+  // service emits only well-typed fields, so a merge lands them verbatim.
+  useEffect(() => {
+    if (livePrefs.data) setPersonalisation(livePrefs.data);
+  }, [livePrefs.data, setPersonalisation]);
+
+  // Network/server failures carry no user-facing detail beyond "it didn't
+  // save" — the offline classifier is the only message worth surfacing.
+  const syncError = (error: unknown, fallback: string) => {
+    const parsed = parseApiError(error);
+    show(parsed.isNetworkError ? parsed.message : fallback, 'error');
+  };
+
+  /** Optimistic patch → PATCH the touched fields; a failed write restores
+   *  the exact pre-write object (a full restore — merge semantics make it
+   *  atomic for the keys it touched). */
+  const syncPatch = (patch: Partial<PersonalisationPreferences>) => {
+    const before = useSettingsPrefs.getState().personalisation;
+    setPersonalisation(patch);
+    if (!syncs) return;
+    void usersService.updateMyPersonalisation(patch).catch((error) => {
+      setPersonalisation(before);
+      syncError(error, 'Couldn’t save — the preference was restored');
+    });
+  };
+
+  // The mirror is the optimistic layer — show it only once persisted
+  // state, the session, and the account read have all resolved.
+  const ready = hydrated && !(isLive && sessionLoading) && !(syncs && livePrefs.isLoading);
+
+  const genderFilter = ready ? prefs.genderFilter : [];
 
   // Mirror of mobile handleSelectGender: 'All' is exclusive; removing the
   // last specific selection collapses back to 'All'.
   const selectAudience = (gender: string) => {
     if (gender === 'All') {
-      setPersonalisation({ genderFilter: ['All'] });
+      syncPatch({ genderFilter: ['All'] });
       return;
     }
     const withoutAll = genderFilter.filter((g) => g !== 'All');
     const next = withoutAll.includes(gender)
       ? withoutAll.filter((g) => g !== gender)
       : [...withoutAll, gender];
-    setPersonalisation({ genderFilter: next.length === 0 ? ['All'] : next });
+    syncPatch({ genderFilter: next.length === 0 ? ['All'] : next });
   };
 
   const pickerValue =
@@ -82,13 +136,13 @@ export function PersonalisationView() {
 
   const selectPreference = (value: string) => {
     if (pickerMode === 'categories') {
-      setPersonalisation({ categoriesAndSizesPref: value });
+      syncPatch({ categoriesAndSizesPref: value });
       show('Size preference updated', 'success');
     } else if (pickerMode === 'brands') {
-      setPersonalisation({ brandsPref: value });
+      syncPatch({ brandsPref: value });
       show('Brand preference updated', 'success');
     } else if (pickerMode === 'members') {
-      setPersonalisation({ membersPref: value });
+      syncPatch({ membersPref: value });
       show('Member preference updated', 'success');
     }
   };
@@ -98,7 +152,7 @@ export function PersonalisationView() {
       {/* Shop for — visual multi-select, mirrors AudiencePreferenceGrid. */}
       <SettingsSection title="Shop for">
         <div className="px-4 py-4 sm:px-5">
-          {hydrated ? (
+          {ready ? (
             <div className="grid grid-cols-2 gap-2">
               {AUDIENCE_OPTIONS.map((key) => {
                 const selected = genderFilter.includes(key);
@@ -144,7 +198,7 @@ export function PersonalisationView() {
       </SettingsSection>
 
       <SettingsSection title="Discovery preferences">
-        {hydrated ? (
+        {ready ? (
           <>
             <SettingsRow
               icon="options"
@@ -177,7 +231,7 @@ export function PersonalisationView() {
         )}
       </SettingsSection>
 
-      {hydrated ? (
+      {ready ? (
         <div className="px-4 pt-2 sm:px-5">
           <button
             type="button"
@@ -191,8 +245,11 @@ export function PersonalisationView() {
       ) : null}
 
       <p className="px-4 pt-4 text-caption text-text-muted sm:px-5">
-        Saved on this device and applied to how your feed is ordered. In a
-        signed-in production build the same choices sync to your account.
+        {syncs
+          ? 'Synced to your account and applied to how your feed is ordered.'
+          : isLive
+            ? 'Stored on this device and applied to how your feed is ordered — sign in to sync these choices to your account.'
+            : 'In this preview, choices are stored on this device and applied to how the demo feed is ordered.'}
       </p>
 
       <PickerSheet
@@ -216,7 +273,9 @@ export function PersonalisationView() {
                 confirmLabel: 'Reset',
                 onConfirm: () => {
                   setResetOpen(false);
-                  resetPersonalisation();
+                  // Defaults cover every field, so the same syncPatch path
+                  // writes the reset through to the account.
+                  syncPatch({ ...DEFAULT_PERSONALISATION });
                   show('Preferences reset to defaults', 'success');
                 },
               }

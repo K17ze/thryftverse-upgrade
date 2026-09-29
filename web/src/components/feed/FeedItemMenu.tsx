@@ -177,7 +177,7 @@ export function FeedItemMenu({ item }: { item: DiscoveryListingSummary }) {
           // leaving it orphaned.
           if (open && e.key === 'Tab') setOpen(false);
         }}
-        aria-label="More options for this item"
+        aria-label={`More options for ${item.title}`}
         aria-haspopup="menu"
         aria-expanded={open}
         aria-controls={open ? menuId : undefined}

@@ -14,26 +14,29 @@ import { Icon, type AppIconName } from '@/components/ui/Icon';
 import type {
   ActivityEvent,
   CorporateAction,
-  Distribution,
   TradeLedgerEntry,
 } from '@/lib/contracts/coown';
+import type { CoOwnDistributionsPage } from '@/lib/api/services/coown';
 import { formatDate, timeAgo } from '@/lib/utils/format';
-import { gbp } from '../format';
+import {
+  corporateActionKindLabel,
+  corporateActionStatusLabel,
+  corporateActionStatusVariant,
+  distributionKindLabel,
+  distributionStatusLabel,
+  distributionStatusVariant,
+  gbp,
+} from '../format';
 import { TradeLedger } from './TradeLedger';
 
 const KIND_ICON: Record<ActivityEvent['kind'], AppIconName> = {
   buy: 'arrowUp',
   sell: 'tag',
+  trade: 'arrowUp',
   listing: 'layers',
   distribution: 'payout',
   corporate_action: 'document',
 };
-
-const DIST_LABEL = {
-  rental_income: 'Rental income',
-  resale_gain: 'Resale gain',
-  licensing: 'Licensing',
-} as const;
 
 function shortDate(iso: string): string {
   return new Date(iso).toLocaleDateString('en-GB', { day: 'numeric', month: 'short' });
@@ -46,6 +49,13 @@ function eventTitle(e: ActivityEvent): string {
       return e.actorUsername
         ? `@${e.actorUsername} ${e.kind === 'buy' ? 'bought' : 'sold'}${e.units != null ? ` ${e.units}` : ''}${e.unitPriceGbp != null ? ` @ ${gbp(e.unitPriceGbp)}` : ''}`
         : e.note ?? 'Trade';
+    case 'trade':
+      // A settled print whose aggressor side the wire didn't carry —
+      // name it for what it is, never "bought"/"sold".
+      return (
+        e.note ??
+        `Trade${e.units != null ? ` — ${e.units} ${e.units === 1 ? 'unit' : 'units'}` : ''}${e.unitPriceGbp != null ? ` @ ${gbp(e.unitPriceGbp)}` : ''}`
+      );
     case 'listing':
       return e.note ?? (e.units != null ? `${e.units} units listed` : 'Tranche listed');
     case 'distribution':
@@ -63,11 +73,15 @@ export function ActivityTab({
 }: {
   events: ActivityEvent[] | undefined;
   ledger: TradeLedgerEntry[] | undefined;
-  distributions: Distribution[] | undefined;
+  distributions: CoOwnDistributionsPage | undefined;
   actions: CorporateAction[] | undefined;
 }) {
-  // Trades live in the ledger; the notices list keeps everything else.
-  const notices = events?.filter((e) => e.kind !== 'buy' && e.kind !== 'sell');
+  // Trades live in the ledger; the notices list keeps everything else —
+  // including sideless prints when a feed carries them (kind 'trade'
+  // renders in the ledger via its own label, not duplicated here).
+  const notices = events?.filter(
+    (e) => e.kind !== 'buy' && e.kind !== 'sell' && e.kind !== 'trade',
+  );
 
   return (
     <div className="grid gap-12 lg:grid-cols-2">
@@ -84,16 +98,43 @@ export function ActivityTab({
                 <div key={i} className="skeleton h-9 rounded-sm" />
               ))}
             </div>
-          ) : distributions.length === 0 ? (
+          ) : distributions.items.length === 0 && distributions.aggregates.length === 0 ? (
             <p className="mt-3 text-body text-text-secondary">
               No distributions yet — income lands here when the asset pays out.
             </p>
+          ) : distributions.items.length === 0 ? (
+            // Anonymous read — the wire gives public per-asset aggregates
+            // in place of per-recipient rows; show exactly that.
+            <ul className="mt-1 divide-y divide-border-subtle border-y border-border-subtle">
+              {distributions.aggregates.map((a) => (
+                <li key={a.assetId} className="flex items-center justify-between gap-3 py-3">
+                  <div className="min-w-0">
+                    <p className="text-body text-text-primary">Distributed to date</p>
+                    <p className="mt-0.5 text-meta text-text-muted tnum">
+                      {a.distributionCount}{' '}
+                      {a.distributionCount === 1 ? 'payout' : 'payouts'}
+                      {a.latestDistributionAt ? ` · last ${formatDate(a.latestDistributionAt)}` : ''}
+                    </p>
+                  </div>
+                  <div className="shrink-0 text-right">
+                    <p className="text-body-emphasis font-semibold text-text-primary tnum">
+                      {gbp(a.totalDistributedGbp)}
+                    </p>
+                    {a.latestPerUnitGbp != null ? (
+                      <p className="mt-0.5 text-meta text-text-muted tnum">
+                        {gbp(a.latestPerUnitGbp)}/unit last
+                      </p>
+                    ) : null}
+                  </div>
+                </li>
+              ))}
+            </ul>
           ) : (
             <ul className="mt-1 divide-y divide-border-subtle border-y border-border-subtle">
-              {distributions.map((d) => (
+              {distributions.items.map((d) => (
                 <li key={d.id} className="flex items-center justify-between gap-3 py-3">
                   <div className="min-w-0">
-                    <p className="text-body text-text-primary">{DIST_LABEL[d.kind]}</p>
+                    <p className="text-body text-text-primary">{distributionKindLabel(d)}</p>
                     <p className="mt-0.5 text-meta text-text-muted tnum">
                       {formatDate(d.paidAt ?? d.scheduledFor)}
                     </p>
@@ -103,8 +144,8 @@ export function ActivityTab({
                       {gbp(d.amountPerUnitGbp)}
                       <span className="ml-1 text-meta font-normal text-text-secondary">/unit</span>
                     </p>
-                    <Badge variant={d.status === 'paid' ? 'success' : 'warning'} className="mt-1">
-                      {d.status === 'paid' ? 'Paid' : 'Scheduled'}
+                    <Badge variant={distributionStatusVariant(d.status)} className="mt-1">
+                      {distributionStatusLabel(d.status)}
                     </Badge>
                   </div>
                 </li>
@@ -168,13 +209,6 @@ export function ActivityTab({
   );
 }
 
-const ACTION_STATUS: Record<CorporateAction['status'], { label: string; variant: 'success' | 'neutral' | 'warning' }> = {
-  open: { label: 'Voting open', variant: 'success' },
-  passed: { label: 'Passed', variant: 'neutral' },
-  rejected: { label: 'Rejected', variant: 'neutral' },
-  pending_tally: { label: 'Tally pending', variant: 'warning' },
-};
-
 /**
  * One corporate action — a compact record row that links to the dedicated
  * detail route, where the tally, quorum and ballot live. `action` arrives
@@ -183,12 +217,17 @@ const ACTION_STATUS: Record<CorporateAction['status'], { label: string; variant:
  */
 function CorporateActionRow({ action }: { action: CorporateAction }) {
   const closesMs = Date.parse(action.closesAt);
+  // Only 'open' ballots count down to a deadline — announced actions
+  // haven't opened and terminal states are already resolved.
   const closed =
     action.status !== 'open' ||
     (Number.isFinite(closesMs) && closesMs <= Date.now());
   const status = closed && action.status === 'open'
     ? { label: 'Voting closed', variant: 'neutral' as const }
-    : ACTION_STATUS[action.status];
+    : {
+        label: corporateActionStatusLabel(action.status),
+        variant: corporateActionStatusVariant(action.status),
+      };
 
   return (
     <li>
@@ -202,6 +241,7 @@ function CorporateActionRow({ action }: { action: CorporateAction }) {
           </p>
           <Badge variant={status.variant}>{status.label}</Badge>
         </div>
+        <p className="mt-0.5 text-meta text-text-muted">{corporateActionKindLabel(action)}</p>
         <p className="mt-1 flex flex-wrap items-center gap-x-2 gap-y-0.5 text-meta text-text-secondary">
           <span className="tnum">
             {action.votesFor.toLocaleString()} for ·{' '}

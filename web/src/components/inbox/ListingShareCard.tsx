@@ -11,9 +11,12 @@
 import Link from 'next/link';
 import type { Message } from '@/lib/contracts/domain';
 import { AppImage } from '@/components/ui/AppImage';
+import { Avatar } from '@/components/ui/Avatar';
 import { Badge } from '@/components/ui/Badge';
+import { ClientTime } from '@/components/ui/ClientTime';
 import { Icon } from '@/components/ui/Icon';
 import { formatPrice } from '@/lib/utils/format';
+import { useResolvedUsers } from '@/lib/hooks/home-modules';
 import { MessageActions, MessageReceipt, formatMessageTime } from './MessageBubble';
 
 interface ListingShareCardProps {
@@ -29,16 +32,32 @@ interface ListingShareCardProps {
   onReact?: (anchor: { x: number; y: number }) => void;
   /** Clustered run member — 2px gap instead of the section gap. */
   tight?: boolean;
+  /** Buyer-seat offer affordance — the caller gates it (not sold, viewer
+   *  isn't the seller); the card only renders what it's handed. */
+  onMakeOffer?: () => void;
 }
 
-export function ListingShareCard({ message: m, mine, showSeen, senderLabel, onReply, onReact, tight }: ListingShareCardProps) {
+export function ListingShareCard({ message: m, mine, showSeen, senderLabel, onReply, onReact, tight, onMakeOffer }: ListingShareCardProps) {
   const listing = m.listing;
   const image = listing?.image ?? listing?.images?.[0] ?? m.itemImage;
-  const time = formatMessageTime(m.timestamp);
   const href = listing?.id ? `/item/${listing.id}` : null;
+  // Seller identity — the payload's sellerUsername is the wire truth;
+  // sellerId resolves the avatar through the shared user-id resolver
+  // (live profiles fetch, fixtures read the bundled users — a miss
+  // degrades to the Avatar's initial fallback, never a ghost image).
+  const { items: sellerProfiles } = useResolvedUsers(
+    listing?.sellerId ? [listing.sellerId] : [],
+  );
+  const seller = listing?.sellerId
+    ? sellerProfiles.find((u) => u.id === listing.sellerId)
+    : undefined;
+  const sellerUsername =
+    listing?.sellerUsername ?? (seller?.username ? seller.username : undefined);
+  const sellerHref = sellerUsername ? `/u/${sellerUsername}` : null;
+  const offerable = !!onMakeOffer && listing?.isSold !== true;
 
   const tile = (
-    <div className="flex items-center gap-3 rounded-xl border border-border-subtle bg-surface p-3">
+    <div className="flex items-center gap-3 p-3">
       {image ? (
         <AppImage
           src={image}
@@ -84,24 +103,66 @@ export function ListingShareCard({ message: m, mine, showSeen, senderLabel, onRe
             {senderLabel}
           </p>
         ) : null}
-        {href ? (
-          <Link
-            href={href}
-            aria-label={`View listing ${listing?.title ?? ''}`.trim()}
-            className="pressable block"
-          >
-            {tile}
-          </Link>
-        ) : (
-          tile
-        )}
+        <div className="overflow-hidden rounded-xl border border-border-subtle bg-surface">
+          {href ? (
+            <Link
+              href={href}
+              aria-label={`View listing ${listing?.title ?? ''}`.trim()}
+              className="pressable block"
+            >
+              {tile}
+            </Link>
+          ) : (
+            tile
+          )}
+          {/* Seller + offer dock — the native share card's trust row
+              (@handle deep-links to the profile) and buyer-seat Make
+              offer, on one hairline under the product tile. */}
+          {sellerUsername || offerable ? (
+            <div className="flex items-center gap-2 border-t border-border-subtle px-3 py-2">
+              {sellerHref ? (
+                <Link
+                  href={sellerHref}
+                  aria-label={`View @${sellerUsername}'s profile`}
+                  className="pressable flex min-w-0 items-center gap-1.5"
+                >
+                  <Avatar src={seller?.avatar ?? ''} name={sellerUsername} size={18} />
+                  <span className="clamp-1 text-meta text-text-secondary">
+                    @{sellerUsername}
+                  </span>
+                </Link>
+              ) : sellerUsername ? (
+                <span className="flex min-w-0 items-center gap-1.5">
+                  <Avatar src={seller?.avatar ?? ''} name={sellerUsername} size={18} />
+                  <span className="clamp-1 text-meta text-text-secondary">
+                    @{sellerUsername}
+                  </span>
+                </span>
+              ) : null}
+              <span className="flex-1" aria-hidden />
+              {offerable ? (
+                <button
+                  type="button"
+                  onClick={onMakeOffer}
+                  className="pressable shrink-0 text-meta font-semibold text-brand"
+                >
+                  Make offer
+                </button>
+              ) : null}
+            </div>
+          ) : null}
+        </div>
         {m.text ? (
           <p className="mt-1 px-1 text-meta text-text-muted">{m.text}</p>
         ) : null}
-        {time || mine ? (
+        {mine ? (
           <div className="mt-1 flex items-center justify-end gap-1 px-1 text-text-muted">
-            {time ? <span className="tnum text-micro">{time}</span> : null}
-            {mine ? <MessageReceipt status={m.readStatus} readClassName="text-brand" /> : null}
+            <ClientTime
+              iso={m.timestamp}
+              format={formatMessageTime}
+              className="tnum text-micro"
+            />
+            <MessageReceipt status={m.readStatus} readClassName="text-brand" />
           </div>
         ) : null}
         {mine && showSeen ? (

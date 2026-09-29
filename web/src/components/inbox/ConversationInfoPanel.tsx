@@ -606,7 +606,7 @@ export function ConversationInfoPanel({ conversationId }: { conversationId: stri
                 ) : null}
               </div>
               <div className="mt-2 flex max-w-full items-center gap-1.5">
-                <h1 className="clamp-1 text-screen-title font-bold text-text-primary">
+                <h1 className="clamp-1 text-screen-title text-text-primary">
                   {counterpartyName}
                 </h1>
                 {conversation.participantVerified ? (

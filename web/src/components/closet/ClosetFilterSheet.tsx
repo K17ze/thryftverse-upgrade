@@ -31,7 +31,7 @@ interface ClosetFilterSheetProps {
 
 function SectionLabel({ children }: { children: React.ReactNode }) {
   return (
-    <h3 className="text-label font-semibold uppercase tracking-wide text-text-muted">
+    <h3 className="text-label text-text-muted">
       {children}
     </h3>
   );

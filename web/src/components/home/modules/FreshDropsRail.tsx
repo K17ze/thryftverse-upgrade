@@ -4,23 +4,33 @@
  * FreshDropsRail — "Fresh drops" module that leads the home feed: the
  * newest listings by createdAt, presented as the same snap-scroll shelf
  * grammar used by every other module band.
+ *
+ * Items derive from the feed units already on screen, not a bundled
+ * dataset — in live mode the rail shows the freshest real listings the
+ * feed returned, never fixture inventory.
  */
 
-import type { DiscoveryListingSummary } from '@/lib/contracts/domain';
-import { mapListingToDiscoverySummary } from '@/lib/contracts/domain';
-import { LISTINGS } from '@/lib/data/fixtures';
+import type { DiscoveryFeedUnit, DiscoveryListingSummary } from '@/lib/contracts/domain';
 import { ModuleSection } from './ModuleSection';
 import { ListingRail } from './ListingRail';
 
-const FRESH_ITEMS: DiscoveryListingSummary[] = LISTINGS.filter((l) => !l.isSold)
-  .sort((a, b) => (b.createdAt ?? '').localeCompare(a.createdAt ?? ''))
-  .slice(0, 8)
-  .map(mapListingToDiscoverySummary);
+const MAX_ITEMS = 8;
 
-export function FreshDropsRail() {
+function freshItems(units: DiscoveryFeedUnit[]): DiscoveryListingSummary[] {
+  return units
+    .filter((u): u is Extract<DiscoveryFeedUnit, { type: 'listing' }> => u.type === 'listing')
+    .map((u) => u.listing)
+    .filter((l) => !l.isSold)
+    .sort((a, b) => (b.createdAt ?? '').localeCompare(a.createdAt ?? ''))
+    .slice(0, MAX_ITEMS);
+}
+
+export function FreshDropsRail({ units }: { units: DiscoveryFeedUnit[] }) {
+  const items = freshItems(units);
+  if (items.length === 0) return null;
   return (
-    <ModuleSection title="Fresh drops" href="/explore" bordered={false}>
-      <ListingRail items={FRESH_ITEMS} label="Fresh drops" />
+    <ModuleSection title="Fresh drops" href="/explore" bordered={false} moduleId="fresh-drops">
+      <ListingRail items={items} label="Fresh drops" />
     </ModuleSection>
   );
 }

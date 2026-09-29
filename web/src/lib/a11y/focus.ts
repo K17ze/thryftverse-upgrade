@@ -55,6 +55,30 @@ export function trapTabKey(e: KeyboardEvent, container: HTMLElement): void {
   }
 }
 
+/** Park focus on the primary control of the next/previous sibling group
+ *  before the focused element's own group unmounts — for rows whose
+ *  group root isn't itself focusable (a dismiss/remove button inside a
+ *  tile, the row link a sibling). `controlSelector` picks the group's
+ *  tabbable landmark (its stretched link, the tile's anchor). Returns
+ *  false when no sibling group or control exists — callers decide the
+ *  document-level fallback. */
+export function focusAdjacentGroupControl(
+  current: Element | null,
+  groupSelector: string,
+  controlSelector: string,
+): boolean {
+  const group = current?.closest?.(groupSelector);
+  if (!group) return false;
+  const groups = Array.from(document.querySelectorAll<HTMLElement>(groupSelector));
+  const index = groups.indexOf(group as HTMLElement);
+  if (index === -1) return false;
+  const target = groups[index + 1] ?? groups[index - 1];
+  const control = target?.querySelector<HTMLElement>(controlSelector);
+  if (!control) return false;
+  control.focus();
+  return true;
+}
+
 /** Move focus to the next element matching `selector` in DOM order —
  *  or the previous one when the current match is last. Used before an
  *  action unmounts the focused control (e.g. a feed menu's "Not

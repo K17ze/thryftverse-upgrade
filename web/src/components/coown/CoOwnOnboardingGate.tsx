@@ -25,7 +25,7 @@ const SLIDES: { icon: AppIconName; title: string; body: string }[] = [
   {
     icon: 'cart',
     title: 'Buy units at your own pace',
-    body: 'Browse available items, see the unit price, and buy as many units as you want. Settlement is in GBP — a 1% fee applies.',
+    body: 'Browse available items, see the unit price, and buy as many units as you want. Settlement is in 1ZE — a 1% fee applies.',
   },
   {
     icon: 'repeat',
@@ -169,7 +169,7 @@ export function CoOwnOnboardingGate() {
 
         {index === 0 ? (
           <ul className="mt-7 w-full max-w-sm space-y-2.5 rounded-md border border-border-subtle p-4">
-            <li className="text-meta font-semibold uppercase tracking-[0.08em] text-text-muted">
+            <li className="text-meta font-semibold uppercase tracking-wide text-text-muted">
               What you&apos;ll learn
             </li>
             {CHECKLIST.map((item) => (

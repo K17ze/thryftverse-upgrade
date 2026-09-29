@@ -43,7 +43,7 @@ export function ConsentStep({ source, fileName, onContinue }: ConsentStepProps) 
 
   return (
     <div>
-      <h1 className="text-screen-title font-bold text-text-primary">Send your catalogue</h1>
+      <h1 className="text-screen-title text-text-primary">Send your catalogue</h1>
       <p className="mt-2 max-w-md text-body text-text-secondary">
         We&apos;ll prepare private drafts{origin}. Nothing goes live until you approve it.
       </p>

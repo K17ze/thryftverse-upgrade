@@ -5,7 +5,7 @@
  * Scrim + focus trap + Escape, mirrors BottomSheet.tsx behaviour.
  */
 
-import { useEffect, useRef, useState } from 'react';
+import { useEffect, useId, useRef, useState } from 'react';
 import { createPortal } from 'react-dom';
 import { IconButton } from './IconButton';
 import { lockBodyScroll } from '@/lib/a11y/scrollLock';
@@ -15,20 +15,26 @@ import { trapTabKey } from '@/lib/a11y/focus';
  *  sheet snaps back. Roughly a confident thumb pull, not a scroll graze. */
 const DRAG_DISMISS_PX = 96;
 
-interface SheetProps {
+interface SheetBaseProps {
   open: boolean;
   onClose: () => void;
-  title?: string;
-  /** Accessible name when no visible title is rendered (dialog must always
-   *  have a name — pass this instead of title). */
-  ariaLabel?: string;
   children: React.ReactNode;
   /** Max width for the dialog variant. */
   maxWidth?: number;
 }
 
+/** A dialog must always have an accessible name — either the visible
+ *  `title` (wired to the header via aria-labelledby) or an `ariaLabel`
+ *  for header-less sheets. The union makes one of them required. */
+type SheetProps = SheetBaseProps &
+  (
+    | { title: string; ariaLabel?: string }
+    | { title?: string; ariaLabel: string }
+  );
+
 export function Sheet({ open, onClose, title, ariaLabel, children, maxWidth = 560 }: SheetProps) {
   const ref = useRef<HTMLDivElement>(null);
+  const titleId = useId();
   // Drag-to-dismiss state — the mobile grab handle is a real gesture
   // target, not decoration. Pointer-captured so the drag survives the
   // finger leaving the handle strip.
@@ -126,7 +132,11 @@ export function Sheet({ open, onClose, title, ariaLabel, children, maxWidth = 56
         ref={ref}
         role="dialog"
         aria-modal="true"
-        aria-label={title ?? ariaLabel}
+        // A visible title names the dialog by reference (aria-labelledby)
+        // so the h2 isn't duplicated as an aria-label string; header-less
+        // sheets name it directly via ariaLabel.
+        aria-labelledby={title ? titleId : undefined}
+        aria-label={title ? undefined : ariaLabel}
         tabIndex={-1}
         className="flex max-h-[88dvh] flex-col rounded-t-sheet bg-surface shadow-modal outline-none sm:max-h-[85dvh] sm:rounded-lg sm:border sm:border-border"
         style={{
@@ -152,7 +162,7 @@ export function Sheet({ open, onClose, title, ariaLabel, children, maxWidth = 56
         </div>
         {title ? (
           <div className="flex items-center justify-between border-b border-border-subtle px-5 py-4">
-            <h2 className="text-section-title font-semibold text-text-primary">{title}</h2>
+            <h2 id={titleId} className="text-section-title font-semibold text-text-primary">{title}</h2>
             {/* IconButton keeps its own 44px target — only the glyph size
                 is dialled down; never shrink the hit area. */}
             <IconButton name="close" aria-label="Close" onClick={onClose} className="-mr-2" size={20} />

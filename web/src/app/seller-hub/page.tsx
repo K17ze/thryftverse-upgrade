@@ -106,8 +106,8 @@ export default function SellerHubPage() {
     setSort((s) => (s.key === key ? { key, dir: s.dir === 'desc' ? 'asc' : 'desc' } : { key, dir: 'desc' }));
 
   return (
-    <div className="mx-auto w-full max-w-3xl px-4 pb-16 pt-8 sm:px-6 md:pt-12">
-      <h1 className="text-screen-title font-semibold text-text-primary">Seller hub</h1>
+    <div className="mx-auto w-full max-w-3xl px-4 pb-16 pt-8 sm:px-6 md:pt-12 lg:max-w-[1440px]">
+      <h1 className="text-screen-title text-text-primary">Seller hub</h1>
       <SellerSectionNav toPost={counts.toPost} posted={counts.posted} />
 
       {isLoading ? (
@@ -129,7 +129,7 @@ export default function SellerHubPage() {
           <section aria-label="Earnings" className="mt-8">
             <div className="flex flex-wrap items-end justify-between gap-4">
               <div>
-                <p className="text-label font-semibold uppercase tracking-wider text-text-muted">
+                <p className="text-label text-text-muted">
                   Available to withdraw
                 </p>
                 <p className="tnum mt-2 text-display font-bold tracking-tight text-text-primary">
@@ -145,6 +145,16 @@ export default function SellerHubPage() {
                   </span>{' '}
                   lifetime sales
                 </p>
+                {/* Withdraw — the real wallet flow owns amount/method;
+                    the hub label promised an action that never existed. */}
+                <Link
+                  href="/wallet/withdraw"
+                  className="pressable mt-2 inline-flex items-center gap-1.5 text-caption font-semibold text-text-primary hover:text-text-secondary"
+                >
+                  <Icon name="payout" size={14} className="text-text-muted" />
+                  Withdraw
+                  <Icon name="forward" size={12} className="text-text-muted" />
+                </Link>
                 {/* Payout schedule — the ledger's own next-amount/date, not
                     a restated balance. Links through to the full earnings
                     breakdown rather than duplicating it. */}
@@ -185,9 +195,19 @@ export default function SellerHubPage() {
             </div>
           </section>
 
+          {/* ── Ops band — at lg the chart takes the lead column and the
+              to-do radar becomes the right rail (Linear/Shopify grammar);
+              stacked DOM order on mobile is unchanged. ── */}
+          <div
+            className={
+              todos.data && todos.data.length > 0
+                ? 'lg:grid lg:grid-cols-[minmax(0,1fr)_380px] lg:items-start lg:gap-12'
+                : undefined
+            }
+          >
           {/* ── To-do radar — one list, not three boxes ── */}
           {todos.data && todos.data.length > 0 ? (
-            <nav aria-label="To do" className="mt-8">
+            <nav aria-label="To do" className="mt-8 lg:order-2 lg:mt-10">
               <ul className="divide-y divide-border-subtle border-y border-border-subtle">
                 {todos.data.map((t) => (
                   <li key={t.id}>
@@ -225,7 +245,7 @@ export default function SellerHubPage() {
           ) : null}
 
           {/* ── Revenue trajectory ── */}
-          <section aria-label="Revenue" className="mt-10">
+          <section aria-label="Revenue" className="mt-10 lg:order-1">
             <div className="flex flex-wrap items-baseline justify-between gap-2">
               <h2 className="text-section-title font-semibold text-text-primary">Revenue</h2>
               <p className="tnum text-meta text-text-muted">
@@ -240,13 +260,14 @@ export default function SellerHubPage() {
               />
             </div>
           </section>
+          </div>
 
           {/* ── Metric grid — flat cells, hairline dividers ── */}
           <section aria-label="Performance metrics" className="mt-10">
             <div className="grid grid-cols-2 gap-px bg-border-subtle sm:grid-cols-5">
               {overview.data!.metrics.map((m) => (
                 <div key={m.key} className="bg-background p-4">
-                  <p className="text-label font-semibold uppercase tracking-wider text-text-muted">
+                  <p className="text-label text-text-muted">
                     {m.label}
                     {m.estimated ? (
                       <span className="ml-1 normal-case tracking-normal">· est.</span>
@@ -333,7 +354,7 @@ export default function SellerHubPage() {
                           </span>
                         </span>
                         <Badge variant={sold ? 'neutral' : 'success'}>{sold ? 'Sold' : 'Active'}</Badge>
-                        <span className="tnum w-16 shrink-0 text-right text-body-emphasis font-semibold text-text-primary">
+                        <span className="tnum w-16 shrink-0 text-right text-body-emphasis font-semibold text-text-primary lg:w-24">
                           {formatPrice(row.listing.price, overview.data!.currency)}
                         </span>
                       </Link>
@@ -352,6 +373,55 @@ export default function SellerHubPage() {
               />
             )}
           </section>
+
+          {/* ── Opportunities — the overview's near-winners rail (mobile
+              SellerOpportunitiesModule parity): active listings earning
+              real 30-day views with no sale. Null/empty renders nothing —
+              never an empty-state lecture. ── */}
+          {overview.data!.opportunities && overview.data!.opportunities.length > 0 ? (
+            <section aria-label="Views, no sales yet" className="mt-10">
+              <div className="flex items-baseline justify-between gap-2">
+                <h2 className="text-section-title font-semibold text-text-primary">
+                  Views, no sales yet
+                </h2>
+                <Link
+                  href="/seller-hub/listings"
+                  className="pressable text-caption font-semibold text-text-secondary hover:text-text-primary"
+                >
+                  View all
+                </Link>
+              </div>
+              <ul className="no-scrollbar -mx-4 mt-3 flex gap-4 overflow-x-auto px-4 sm:-mx-6 sm:px-6">
+                {overview.data!.opportunities.map((o) => (
+                  <li key={o.listingId} className="w-28 shrink-0">
+                    <Link
+                      href={`/seller-hub/listings/${o.listingId}`}
+                      className="pressable block rounded-md focus-visible:outline-2 focus-visible:outline-text-primary"
+                      aria-label={`${o.title} — ${o.views30d} views in 30 days, no sales`}
+                    >
+                      <AppImage
+                        src={o.imageUrl}
+                        alt={o.title}
+                        aspectRatio={1}
+                        className="rounded-md"
+                        sizes="112px"
+                        fallbackIcon="tag"
+                      />
+                      <span className="clamp-1 mt-2 block text-caption font-medium text-text-primary">
+                        {o.title}
+                      </span>
+                      <span className="tnum mt-0.5 block text-meta text-text-muted">
+                        {o.priceGbp != null
+                          ? `${formatPrice(o.priceGbp, overview.data!.currency)} · `
+                          : ''}
+                        {o.views30d} views
+                      </span>
+                    </Link>
+                  </li>
+                ))}
+              </ul>
+            </section>
+          ) : null}
 
           {/* ── Quick actions — quiet rail ── */}
           <nav aria-label="Seller actions" className="no-scrollbar -mx-4 mt-10 flex gap-2 overflow-x-auto px-4 sm:-mx-6 sm:px-6">

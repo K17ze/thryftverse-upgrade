@@ -11,6 +11,8 @@
  * 3. Onfido (fallback for EU/UK)
  */
 
+import { createHmac, timingSafeEqual } from 'node:crypto';
+
 export type KycProvider = 'stripe_identity' | 'persona' | 'onfido';
 
 export type KycStatus = 'pending' | 'in_review' | 'approved' | 'declined' | 'expired';
@@ -175,16 +177,14 @@ export function verifyPersonaWebhook(input: {
   webhookSecret: string;
 }): boolean {
   // Persona uses HMAC-SHA256 with the webhook secret
-  const crypto = require('node:crypto');
-  const expected = crypto
-    .createHmac('sha256', input.webhookSecret)
+  const expected = createHmac('sha256', input.webhookSecret)
     .update(input.payload)
     .digest('hex');
   const expectedBuffer = Buffer.from(expected, 'hex');
   const providedBuffer = Buffer.from(input.signature, 'hex');
   return (
     expectedBuffer.length === providedBuffer.length
-    && crypto.timingSafeEqual(expectedBuffer, providedBuffer)
+    && timingSafeEqual(expectedBuffer, providedBuffer)
   );
 }
 
@@ -195,12 +195,11 @@ export function verifyOnfidoWebhook(input: {
   token: string;
   expectedToken: string;
 }): boolean {
-  const crypto = require('node:crypto');
   const expectedBuffer = Buffer.from(input.expectedToken, 'utf8');
   const providedBuffer = Buffer.from(input.token, 'utf8');
   return (
     expectedBuffer.length === providedBuffer.length
-    && crypto.timingSafeEqual(expectedBuffer, providedBuffer)
+    && timingSafeEqual(expectedBuffer, providedBuffer)
   );
 }
 

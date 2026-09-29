@@ -15,11 +15,15 @@ import { EmptyState } from '@/components/ui/EmptyState';
 import { Icon } from '@/components/ui/Icon';
 import { Sheet } from '@/components/ui/Sheet';
 import { useToast } from '@/components/ui/Toast';
+import { useSignupWall } from '@/components/auth/SignupWall';
 import { Switch } from '@/components/settings/Switch';
 import { useCoOwnAssets } from '@/lib/hooks/coown-queries';
-import { useHydrated } from '@/lib/store/useStore';
 import { formatDate } from '@/lib/utils/format';
-import { useCoOwnAlerts, useEvaluateCoOwnAlerts, type CoOwnAlert } from './alertStore';
+import {
+  useCoOwnAlertsApi,
+  useEvaluateCoOwnAlerts,
+  type CoOwnAlert,
+} from './alertStore';
 import { gbp } from './format';
 
 function AlertRow({
@@ -95,17 +99,15 @@ function AlertRow({
 export function PriceAlertsView() {
   const router = useRouter();
   const assetsQ = useCoOwnAssets();
-  const hydrated = useHydrated();
-  // SSR + the first client render agree on empty; persisted truth takes
-  // over after mount (persisted reads differ for returning sessions).
-  const stored = useCoOwnAlerts((s) => s.alerts);
-  const alerts = hydrated ? stored : [];
-  const toggleAlert = useCoOwnAlerts((s) => s.toggleAlert);
-  const removeAlert = useCoOwnAlerts((s) => s.removeAlert);
+  // One API for both backends — server-persisted in live mode, the
+  // device store in fixture mode. `ready` is the authoritative-source
+  // equivalent of hydration.
+  const { alerts, ready, source, requiresAuth, toggleAlert, removeAlert } =
+    useCoOwnAlertsApi();
   const { show } = useToast();
+  const { requireAuth, wall } = useSignupWall();
   const [pendingDelete, setPendingDelete] = useState<CoOwnAlert | null>(null);
-  // Real evaluation: every assets snapshot re-checks armed alerts and a
-  // session fill can fire one the moment it lands.
+  // Fixture-mode evaluator — no-op when the server owns evaluation.
   useEvaluateCoOwnAlerts();
 
   const titleFor = (assetId: string) =>
@@ -116,9 +118,9 @@ export function PriceAlertsView() {
   const fired = alerts.filter(isFired);
   const paused = alerts.filter((a) => !a.active && !isFired(a));
 
-  if (assetsQ.isLoading) {
+  if (assetsQ.isLoading || !ready) {
     return (
-      <div className="mx-auto w-full max-w-3xl px-4 pb-20 pt-8 sm:px-6 md:pt-10">
+      <div className="mx-auto w-full max-w-3xl px-4 pb-20 pt-8 sm:px-6 md:pt-10 lg:max-w-[1440px]">
         <div className="skeleton h-8 w-44 rounded-sm" aria-hidden="true" />
         <div className="mt-8 space-y-1.5" aria-hidden="true">
           {[0, 1, 2].map((i) => (
@@ -133,7 +135,7 @@ export function PriceAlertsView() {
   // surface the failure with retry instead of degrading silently.
   if (assetsQ.isError || !assetsQ.data) {
     return (
-      <div className="mx-auto w-full max-w-3xl px-4 pb-20 pt-8 sm:px-6 md:pt-10">
+      <div className="mx-auto w-full max-w-3xl px-4 pb-20 pt-8 sm:px-6 md:pt-10 lg:max-w-[1440px]">
         <h1 className="text-editorial-display text-text-primary">Price alerts</h1>
         <EmptyState
           icon="notifications"
@@ -147,7 +149,7 @@ export function PriceAlertsView() {
   }
 
   return (
-    <div className="mx-auto w-full max-w-3xl px-4 pb-20 pt-8 sm:px-6 md:pt-10">
+    <div className="mx-auto w-full max-w-3xl px-4 pb-20 pt-8 sm:px-6 md:pt-10 lg:max-w-[1440px]">
       <header className="flex flex-wrap items-end justify-between gap-x-6 gap-y-3">
         <div>
           <h1 className="text-editorial-display text-text-primary">Price alerts</h1>
@@ -167,7 +169,17 @@ export function PriceAlertsView() {
         </nav>
       </header>
 
-      {alerts.length === 0 ? (
+      {requiresAuth ? (
+        <div className="mt-8 border-t border-border-subtle">
+          <EmptyState
+            icon="notifications"
+            title="Sign in for alerts"
+            subtitle="Price alerts are saved to your account and fire server-side — sign in to set and manage them."
+            actionLabel="Sign in"
+            onAction={() => requireAuth('purchase')}
+          />
+        </div>
+      ) : alerts.length === 0 ? (
         <div className="mt-8 border-t border-border-subtle">
           <EmptyState
             icon="notifications"
@@ -181,8 +193,9 @@ export function PriceAlertsView() {
         <>
           <p className="mt-6 flex items-start gap-2 border-b border-border-subtle pb-5 text-meta text-text-secondary">
             <Icon name="info" size={14} className="mt-0.5 shrink-0 text-text-muted" />
-            Alerts evaluate against last-trade prices on this device while you browse.
-            There&rsquo;s no push delivery — fired alerts land under Triggered below.
+            {source === 'server'
+              ? 'Alerts evaluate server-side against live last-trade prices — a fired alert notifies you and lands under Triggered below.'
+              : 'Alerts evaluate against last-trade prices on this device while you browse. There\u2019s no push delivery — fired alerts land under Triggered below.'}
           </p>
 
           {active.length > 0 ? (
@@ -202,7 +215,7 @@ export function PriceAlertsView() {
                     paused={false}
                     fired={false}
                     onToggle={() => {
-                      toggleAlert(a.id);
+                      toggleAlert(a);
                       show('Alert paused', 'info');
                     }}
                     onDelete={() => setPendingDelete(a)}
@@ -253,7 +266,7 @@ export function PriceAlertsView() {
                     paused
                     fired={false}
                     onToggle={() => {
-                      toggleAlert(a.id);
+                      toggleAlert(a);
                       show('Alert enabled', 'info');
                     }}
                     onDelete={() => setPendingDelete(a)}
@@ -297,6 +310,7 @@ export function PriceAlertsView() {
           </div>
         </div>
       </Sheet>
+      {wall}
     </div>
   );
 }

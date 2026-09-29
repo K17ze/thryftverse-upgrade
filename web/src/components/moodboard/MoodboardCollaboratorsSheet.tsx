@@ -6,12 +6,15 @@
  * invites, and invite creation. Roles mirror the mobile contract
  * (editor / commenter / viewer); the owner row is fixed.
  *
- * No live collaborator contract exists on web — fixture rows are the base,
- * member writes persist in the moodboardCollab overlay (invite links are
- * generated client-side and shown once, mirroring the mobile token flow).
+ * Live mode reads the real /moodboards/:id/members + /invites thread and
+ * writes through the same endpoints the mobile app uses (role change,
+ * removal, invite create/revoke — owner capabilities the backend
+ * enforces). The invite token comes back exactly once; only its hash is
+ * stored server-side. Fixture mode keeps the overlay posture.
  */
 
 import { useMemo, useState } from 'react';
+import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { Avatar } from '@/components/ui/Avatar';
 import { Button } from '@/components/ui/Button';
 import { Icon } from '@/components/ui/Icon';
@@ -24,9 +27,23 @@ import {
   type MoodboardRole,
 } from '@/lib/data/fixtures-content';
 import { USERS } from '@/lib/data/fixtures';
+import { DATA_MODE } from '@/lib/api/client';
+import { parseApiError } from '@/lib/api/http';
+import {
+  createBoardInvite,
+  fetchBoardInvites,
+  fetchBoardMembers,
+  removeBoardMember,
+  revokeBoardInvite,
+  setBoardMemberRole,
+  type BoardInvite,
+  type BoardMember,
+} from '@/lib/api/services/social';
 import { useMoodboardCollab } from '@/lib/store/moodboardCollab';
 import { useHydrated } from '@/lib/store/useStore';
 import { timeAgo } from '@/lib/utils/format';
+
+const LIVE = DATA_MODE === 'live';
 
 const ROLE_LABELS: Record<MoodboardRole, string> = {
   owner: 'Owner',
@@ -41,14 +58,21 @@ const INVITE_ROLES: Exclude<MoodboardRole, 'owner'>[] = [
   'viewer',
 ];
 
-interface MemberRow {
+/** Normalized member row — fixture rows resolve through USERS, live rows
+ *  carry the backend's member projection. */
+interface RenderMember {
   userId: string;
+  name: string | null;
+  avatar: string | null;
   role: MoodboardRole;
   joinedAt: string;
 }
 
-interface InviteView extends MoodboardInviteRow {
-  /** Session-created invites carry their link token (shown once). */
+interface InviteView {
+  id: string;
+  role: MoodboardRole;
+  expiresAt: string;
+  /** Live invites carry their link token (shown once at creation). */
   token?: string;
 }
 
@@ -74,28 +98,99 @@ export function MoodboardCollaboratorsSheet({
   const revokeInvite = useMoodboardCollab((s) => s.revokeInvite);
   const [inviteRole, setInviteRole] =
     useState<Exclude<MoodboardRole, 'owner'>>('editor');
+  const [busy, setBusy] = useState(false);
+  const qc = useQueryClient();
 
-  const members = useMemo<MemberRow[]>(() => {
+  // Live reads — members for any signed-in viewer with board access;
+  // invites are owner-only server-side, so only the owner fetches them.
+  const membersQuery = useQuery({
+    queryKey: ['moodboard-members', boardId],
+    queryFn: ({ signal }) => fetchBoardMembers(boardId, signal),
+    enabled: LIVE && open,
+    staleTime: 30_000,
+  });
+  const invitesQuery = useQuery({
+    queryKey: ['moodboard-invites', boardId],
+    queryFn: ({ signal }) => fetchBoardInvites(boardId, signal),
+    enabled: LIVE && open && isOwner,
+    staleTime: 30_000,
+  });
+
+  const members = useMemo<RenderMember[]>(() => {
+    if (LIVE) {
+      return (membersQuery.data ?? [])
+        .filter((m) => m.state === 'active')
+        .map((m: BoardMember) => ({
+          userId: m.userId,
+          name: m.displayName,
+          avatar: m.avatar,
+          role: m.role,
+          joinedAt: m.joinedAt,
+        }))
+        .sort((a, b) => (a.role === 'owner' ? -1 : b.role === 'owner' ? 1 : 0));
+    }
     const overlay = hydrated ? collab : undefined;
     return MOODBOARD_MEMBERS.filter((m) => m.boardId === boardId)
       .filter((m) => !overlay?.removedMemberIds.includes(m.userId))
-      .map((m) => ({ ...m, role: overlay?.memberRoles[m.userId] ?? m.role }))
+      .map((m) => {
+        const user = USERS.find((u) => u.id === m.userId);
+        return {
+          userId: m.userId,
+          name: user?.username ?? null,
+          avatar: user?.avatar ?? null,
+          role: overlay?.memberRoles[m.userId] ?? m.role,
+          joinedAt: m.joinedAt,
+        };
+      })
       .sort((a, b) => (a.role === 'owner' ? -1 : b.role === 'owner' ? 1 : 0));
-  }, [boardId, collab, hydrated]);
+  }, [membersQuery.data, boardId, collab, hydrated]);
 
   const invites = useMemo<InviteView[]>(() => {
+    if (LIVE) {
+      return (invitesQuery.data ?? [])
+        .filter((i) => i.state === 'pending')
+        .map((i: BoardInvite) => ({
+          id: i.id,
+          role: i.role,
+          expiresAt: i.expiresAt,
+        }));
+    }
     const overlay = hydrated ? collab : undefined;
     const base = MOODBOARD_INVITES.filter(
       (i) => i.boardId === boardId && i.state === 'pending',
     );
-    const pending = [...base, ...(overlay?.addedInvites ?? [])]
-      .filter((i) => !overlay?.removedInviteIds.includes(i.id));
-    return pending;
-  }, [boardId, collab, hydrated]);
+    return [...base, ...(overlay?.addedInvites ?? [])].filter(
+      (i) => !overlay?.removedInviteIds.includes(i.id),
+    );
+  }, [invitesQuery.data, boardId, collab, hydrated]);
 
-  const createInvite = () => {
+  const invalidateCollab = () => {
+    void qc.invalidateQueries({ queryKey: ['moodboard-members', boardId] });
+    void qc.invalidateQueries({ queryKey: ['moodboard-invites', boardId] });
+  };
+
+  const createInvite = async () => {
+    if (busy) return;
+    if (LIVE) {
+      setBusy(true);
+      try {
+        const invite = await createBoardInvite(boardId, inviteRole);
+        if (!invite) throw new Error('Invite not created');
+        const url = `${window.location.origin}/moodboard/${boardId}?invite=${invite.token}`;
+        void navigator.clipboard
+          ?.writeText(url)
+          .then(() => show('Invite link copied', 'success'))
+          .catch(() => show('Invite created', 'success'));
+        invalidateCollab();
+      } catch (err) {
+        show(parseApiError(err).message ?? "Couldn't create the invite — try again", 'error');
+      } finally {
+        setBusy(false);
+      }
+      return;
+    }
     const token = Math.random().toString(36).slice(2, 10);
-    const invite: InviteView = {
+    const invite: MoodboardInviteRow & { token?: string } = {
       id: `mbi-local-${Date.now()}`,
       boardId,
       role: inviteRole,
@@ -112,69 +207,126 @@ export function MoodboardCollaboratorsSheet({
       .catch(() => show('Invite created', 'success'));
   };
 
+  const changeRole = async (m: RenderMember, role: Exclude<MoodboardRole, 'owner'>) => {
+    if (LIVE) {
+      setBusy(true);
+      try {
+        await setBoardMemberRole(boardId, m.userId, role);
+        invalidateCollab();
+      } catch (err) {
+        show(parseApiError(err).message ?? "Couldn't change the role — try again", 'error');
+      } finally {
+        setBusy(false);
+      }
+      return;
+    }
+    setMemberRole(boardId, m.userId, role);
+  };
+
+  const removeMemberRow = async (m: RenderMember) => {
+    if (LIVE) {
+      setBusy(true);
+      try {
+        await removeBoardMember(boardId, m.userId);
+        invalidateCollab();
+        show(`Removed @${m.name ?? m.userId}`, 'info');
+      } catch (err) {
+        show(parseApiError(err).message ?? "Couldn't remove them — try again", 'error');
+      } finally {
+        setBusy(false);
+      }
+      return;
+    }
+    removeMember(boardId, m.userId);
+    show(`Removed @${m.name ?? m.userId}`, 'info');
+  };
+
+  const revoke = async (inv: InviteView) => {
+    if (LIVE) {
+      setBusy(true);
+      try {
+        await revokeBoardInvite(boardId, inv.id);
+        invalidateCollab();
+        show('Invite revoked', 'info');
+      } catch (err) {
+        show(parseApiError(err).message ?? "Couldn't revoke — try again", 'error');
+      } finally {
+        setBusy(false);
+      }
+      return;
+    }
+    revokeInvite(boardId, inv.id);
+    show('Invite revoked', 'info');
+  };
+
+  const loading = LIVE && (membersQuery.isLoading || (isOwner && invitesQuery.isLoading));
+
   return (
     <Sheet open={open} onClose={onClose} title="Collaborators" maxWidth={480}>
       <div className="px-5 pb-5">
         {/* Members */}
-        <ul className="divide-y divide-border-subtle" aria-label="Board members">
-          {members.map((m) => {
-            const user = USERS.find((u) => u.id === m.userId);
-            const isOwnerRow = m.role === 'owner';
-            return (
-              <li key={m.userId} className="flex items-center gap-3 py-3">
-                <Avatar src={user?.avatar} name={user?.username ?? m.userId} size={38} />
-                <div className="min-w-0 flex-1">
-                  <p className="clamp-1 text-body font-medium text-text-primary">
-                    @{user?.username ?? m.userId}
-                  </p>
-                  <p className="text-meta text-text-muted">
-                    Joined {timeAgo(m.joinedAt)}
-                  </p>
-                </div>
-                {isOwnerRow || !isOwner ? (
-                  <span className="text-meta font-medium text-text-secondary">
-                    {ROLE_LABELS[m.role]}
-                  </span>
-                ) : (
-                  <div className="flex items-center gap-1">
-                    <label className="sr-only" htmlFor={`role-${m.userId}`}>
-                      Role for @{user?.username ?? m.userId}
-                    </label>
-                    <select
-                      id={`role-${m.userId}`}
-                      value={m.role}
-                      onChange={(e) =>
-                        setMemberRole(
-                          boardId,
-                          m.userId,
-                          e.target.value as Exclude<MoodboardRole, 'owner'>,
-                        )
-                      }
-                      className="h-9 rounded-md bg-surface-alt px-2 text-meta font-medium text-text-primary outline-none focus:ring-1 focus:ring-brand"
-                    >
-                      {INVITE_ROLES.map((r) => (
-                        <option key={r} value={r}>
-                          {ROLE_LABELS[r]}
-                        </option>
-                      ))}
-                    </select>
-                    <button
-                      type="button"
-                      onClick={() => {
-                        removeMember(boardId, m.userId);
-                        show(`Removed @${user?.username ?? m.userId}`, 'info');
-                      }}
-                      aria-label={`Remove @${user?.username ?? m.userId}`}
-                      className="pressable flex h-9 w-9 items-center justify-center rounded-md text-text-muted hover:text-danger-text"
-                    >
-                      <Icon name="personRemove" size={17} />
-                    </button>
+        {loading ? (
+          <p className="py-6 text-center text-body text-text-muted" aria-busy>
+            Loading collaborators…
+          </p>
+        ) : (
+          <ul className="divide-y divide-border-subtle" aria-label="Board members">
+            {members.map((m) => {
+              const isOwnerRow = m.role === 'owner';
+              return (
+                <li key={m.userId} className="flex items-center gap-3 py-3">
+                  <Avatar src={m.avatar} name={m.name ?? m.userId} size={38} />
+                  <div className="min-w-0 flex-1">
+                    <p className="clamp-1 text-body font-medium text-text-primary">
+                      @{m.name ?? m.userId}
+                    </p>
+                    <p className="text-meta text-text-muted">
+                      Joined {timeAgo(m.joinedAt)}
+                    </p>
                   </div>
-                )}
-              </li>
-            );
-          })}
-        </ul>
+                  {isOwnerRow || !isOwner ? (
+                    <span className="text-meta font-medium text-text-secondary">
+                      {ROLE_LABELS[m.role]}
+                    </span>
+                  ) : (
+                    <div className="flex items-center gap-1">
+                      <label className="sr-only" htmlFor={`role-${m.userId}`}>
+                        Role for @{m.name ?? m.userId}
+                      </label>
+                      <select
+                        id={`role-${m.userId}`}
+                        value={m.role}
+                        disabled={busy}
+                        onChange={(e) =>
+                          void changeRole(
+                            m,
+                            e.target.value as Exclude<MoodboardRole, 'owner'>,
+                          )
+                        }
+                        className="h-9 rounded-md bg-surface-alt px-2 text-meta font-medium text-text-primary outline-none focus:ring-1 focus:ring-brand"
+                      >
+                        {INVITE_ROLES.map((r) => (
+                          <option key={r} value={r}>
+                            {ROLE_LABELS[r]}
+                          </option>
+                        ))}
+                      </select>
+                      <button
+                        type="button"
+                        disabled={busy}
+                        onClick={() => void removeMemberRow(m)}
+                        aria-label={`Remove @${m.name ?? m.userId}`}
+                        className="pressable flex h-9 w-9 items-center justify-center rounded-md text-text-muted hover:text-danger-text disabled:opacity-50"
+                      >
+                        <Icon name="personRemove" size={17} />
+                      </button>
+                    </div>
+                  )}
+                </li>
+              );
+            })}
+          </ul>
+        )}
 
         {/* Pending invites */}
         {invites.length > 0 ? (
@@ -215,11 +367,9 @@ export function MoodboardCollaboratorsSheet({
                   {isOwner ? (
                     <button
                       type="button"
-                      onClick={() => {
-                        revokeInvite(boardId, inv.id);
-                        show('Invite revoked', 'info');
-                      }}
-                      className="pressable flex h-9 w-9 items-center justify-center rounded-md text-text-muted hover:text-danger-text"
+                      disabled={busy}
+                      onClick={() => void revoke(inv)}
+                      className="pressable flex h-9 w-9 items-center justify-center rounded-md text-text-muted hover:text-danger-text disabled:opacity-50"
                       aria-label="Revoke invite"
                     >
                       <Icon name="trash" size={16} />
@@ -257,7 +407,13 @@ export function MoodboardCollaboratorsSheet({
                   </button>
                 ))}
               </div>
-              <Button variant="secondary" size="sm" icon="link" onClick={createInvite}>
+              <Button
+                variant="secondary"
+                size="sm"
+                icon="link"
+                disabled={busy}
+                onClick={() => void createInvite()}
+              >
                 Copy invite
               </Button>
             </div>

@@ -26,6 +26,11 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import type { Listing, ListingCondition, User } from '@/lib/contracts/domain';
 import { EMPTY_DRAFT, parsePriceInput, type SellDraft } from '@/components/sell/constants';
+import {
+  canonicalCategoryId,
+  canonicalCondition,
+  canonicalSubcategoryId,
+} from '@/components/sell/taxonomy';
 
 export const SELL_DRAFT_STORAGE_KEY = 'thryftverse.sell-draft';
 
@@ -94,14 +99,19 @@ export function toPersistedDraft(
 }
 
 export function draftFromPersisted(record: PersistedSellDraft): SellDraft {
+  // Taxonomy values restore through the canonicalisers — a draft saved
+  // before the canonical vocabulary shipped may carry fixture slugs or
+  // display-name subcategories; they normalise to canonical ids or clear
+  // for an explicit re-pick rather than republish unrecognisable data.
+  const category = canonicalCategoryId(record.category);
   return {
     ...EMPTY_DRAFT,
     photos: record.photos ?? [],
     title: record.title ?? '',
     brand: record.brand ?? '',
-    category: record.category ?? '',
-    subcategory: record.subcategory ?? '',
-    condition: (record.condition || '') as ListingCondition | '',
+    category,
+    subcategory: canonicalSubcategoryId(category, record.subcategory),
+    condition: canonicalCondition(record.condition),
     size: record.size ?? '',
     description: record.description ?? '',
     tags: record.tags ?? [],

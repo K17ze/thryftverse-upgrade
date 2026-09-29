@@ -7,7 +7,10 @@
  * map.
  */
 
+import { useMemo } from 'react';
 import type { Listing } from '@/lib/contracts/domain';
+import { DATA_MODE } from '@/lib/api/client';
+import { useListingIds } from '@/lib/hooks/listing-resolution';
 import { listingById } from '@/lib/data/fixtures';
 import { getListingCoverUri } from '@/lib/utils/media';
 import {
@@ -95,7 +98,9 @@ export function inferListingSlot(
   return 'top';
 }
 
-/** Resolve a saved outfit's slot→id map into slot→Listing, dropping dead ids. */
+/** Resolve a saved outfit's slot→id map into slot→Listing, dropping dead ids.
+ *  Fixture-mode resolver — live surfaces use `useOutfitListings`, which
+ *  fetches the real listings instead of silently rendering catalogue ghosts. */
 export function outfitListings(
   outfit: SavedOutfit,
 ): Partial<Record<OutfitSlot, Listing>> {
@@ -107,6 +112,33 @@ export function outfitListings(
     if (listing) out[slot] = listing;
   }
   return out;
+}
+
+/**
+ * Live-aware outfit resolution — the slot ids go through `useListingIds`
+ * (live: GET /listings/:id per id, misses dropped; fixture: the catalogue)
+ * and map back into the slot shape. While live fetches are in flight the
+ * resolved set is partial — callers render what resolved and the count
+ * stays honest.
+ */
+export function useOutfitListings(
+  outfit: SavedOutfit,
+): Partial<Record<OutfitSlot, Listing>> {
+  const slotIds = OUTFIT_SLOTS.map((s) => outfit.items[s]).filter(
+    (id): id is string => Boolean(id),
+  );
+  const { byId } = useListingIds(slotIds);
+  return useMemo(() => {
+    if (DATA_MODE !== 'live') return outfitListings(outfit);
+    const out: Partial<Record<OutfitSlot, Listing>> = {};
+    for (const slot of OUTFIT_SLOTS) {
+      const id = outfit.items[slot];
+      if (!id) continue;
+      const listing = byId.get(id);
+      if (listing) out[slot] = listing;
+    }
+    return out;
+  }, [outfit, byId]);
 }
 
 /** Slot-ordered items actually present — for counts, lists, collages. */

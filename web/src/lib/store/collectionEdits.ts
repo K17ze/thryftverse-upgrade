@@ -11,6 +11,7 @@
 
 import { create } from 'zustand';
 import { persist, createJSONStorage } from 'zustand/middleware';
+import { DATA_MODE } from '@/lib/api/client';
 
 export interface CollectionOverlay {
   /** Effective ordered listing ids once edited; absent = fixture order. */
@@ -64,3 +65,17 @@ export {
   itemMovedBefore,
   withItemsAdded,
 } from './moodboards';
+
+/**
+ * Fixture-scoped overlay read — in live mode `/collections` is the truth
+ * and membership/meta writes go through `useCollectionActions` (real
+ * endpoints with revert), so the persisted overlay must never override a
+ * live collection. Use this instead of `s.boards[id]` at merge sites.
+ */
+export function useCollectionOverlay(
+  collectionId: string | null | undefined,
+): CollectionOverlay | undefined {
+  return useCollectionEdits((s) =>
+    DATA_MODE === 'live' || !collectionId ? undefined : s.boards[collectionId],
+  );
+}

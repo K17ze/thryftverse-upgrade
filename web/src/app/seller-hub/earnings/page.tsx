@@ -7,9 +7,11 @@
  * an honest local export, no server claims.
  */
 
+import Link from 'next/link';
 import { SellerSectionNav } from '@/components/seller/SellerSectionNav';
 import { Button } from '@/components/ui/Button';
 import { EmptyState } from '@/components/ui/EmptyState';
+import { Icon } from '@/components/ui/Icon';
 import { Skeleton } from '@/components/ui/Skeleton';
 import { useToast } from '@/components/ui/Toast';
 import { useSellerEarnings, useFulfilmentCounts } from '@/lib/hooks/seller-queries';
@@ -34,11 +36,11 @@ export default function EarningsPage() {
       [
         e.orderId,
         e.title,
-        formatDate(e.soldAt),
+        e.soldAt ? formatDate(e.soldAt) : '—',
         formatPrice(e.itemPrice),
         e.protectionFee != null ? formatPrice(e.protectionFee) : '—',
         e.net != null ? formatPrice(e.net) : '—',
-        formatDate(e.releaseAt),
+        e.releaseAt ? formatDate(e.releaseAt) : '—',
       ]
         .map(csvCell)
         .join(','),
@@ -71,6 +73,12 @@ export default function EarningsPage() {
         .join(','),
       ['Available', formatPrice(data.schedule.available)].map(csvCell).join(','),
       ['Pending clearance', formatPrice(data.schedule.pendingTotal)].map(csvCell).join(','),
+      [
+        'In reserve',
+        data.heldInReserve != null ? formatPrice(data.heldInReserve) : '—',
+      ]
+        .map(csvCell)
+        .join(','),
     ];
     const csv = [header, ...rows, '', ...monthly, '', ...payout].join('\n');
     // BOM keeps £ rendering correctly in Excel/Numbers.
@@ -87,8 +95,8 @@ export default function EarningsPage() {
   };
 
   return (
-    <div className="mx-auto w-full max-w-3xl px-4 pb-16 pt-8 sm:px-6 md:pt-12">
-      <h1 className="text-screen-title font-semibold text-text-primary">Earnings</h1>
+    <div className="mx-auto w-full max-w-3xl px-4 pb-16 pt-8 sm:px-6 md:pt-12 lg:max-w-[1440px]">
+      <h1 className="text-screen-title text-text-primary">Earnings</h1>
       <SellerSectionNav toPost={counts.toPost} posted={counts.posted} />
 
       {isLoading ? (
@@ -111,11 +119,16 @@ export default function EarningsPage() {
         />
       ) : (
         <>
+          {/* At lg the schedule + balances pin to a left rail and the
+              ledger (breakdown, monthly) takes the working column —
+              Shopify payout grammar, DOM order unchanged. */}
+          <div className="lg:grid lg:grid-cols-[minmax(0,380px)_minmax(0,1fr)] lg:items-start lg:gap-16">
+          <div>
           {/* Next payout — the dominant figure, flat. Live mode may know
               the scheduled date without the amount (or nothing at all) —
               render exactly what the server said, never an invented £0. */}
           <section aria-label="Next payout" className="mt-8">
-            <p className="text-label font-semibold uppercase tracking-wider text-text-muted">
+            <p className="text-label text-text-muted">
               Next payout
             </p>
             {data.schedule.nextAmount != null ? (
@@ -176,11 +189,32 @@ export default function EarningsPage() {
                   {formatPrice(data.schedule.pendingTotal)}
                 </dd>
               </div>
+              {/* Rolling reserve is distinct money — holds have no order
+                  row, so they get their own line and the clearance
+                  breakdown below still reconciles to Pending clearance. */}
+              <div className="flex items-center justify-between py-3">
+                <dt className="text-body text-text-secondary">In reserve</dt>
+                <dd className="tnum text-body-emphasis font-semibold text-text-primary">
+                  {data.heldInReserve != null ? formatPrice(data.heldInReserve) : '—'}
+                </dd>
+              </div>
             </dl>
+            {/* Withdraw runs on the real /wallet/withdraw flow — the same
+                balance this row shows; the destination screen owns amount,
+                method and honest failure states. */}
+            <Link
+              href="/wallet/withdraw"
+              className="pressable mt-3 inline-flex items-center gap-1.5 text-caption font-semibold text-text-primary hover:text-text-secondary"
+            >
+              Withdraw available balance
+              <Icon name="forward" size={12} className="text-text-muted" />
+            </Link>
           </section>
+          </div>
 
+          <div>
           {/* Per-order breakdown */}
-          <section aria-label="Earnings breakdown" className="mt-10">
+          <section aria-label="Earnings breakdown" className="mt-10 lg:mt-8">
             <h2 className="text-section-title font-semibold text-text-primary">
               Earnings breakdown
             </h2>
@@ -196,11 +230,11 @@ export default function EarningsPage() {
                           {e.title}
                         </p>
                         <p className="tnum mt-0.5 text-meta text-text-muted">
-                          Sold {formatDate(e.soldAt)}
+                          Sold {e.soldAt ? formatDate(e.soldAt) : '—'}
                           {e.protectionFee != null
                             ? ` · protection −${formatPrice(e.protectionFee)}`
                             : ''}{' '}
-                          · releases {formatDate(e.releaseAt)}
+                          · releases {e.releaseAt ? formatDate(e.releaseAt) : '—'}
                         </p>
                       </div>
                       <div className="shrink-0 text-right">
@@ -246,6 +280,8 @@ export default function EarningsPage() {
               ))}
             </ul>
           </section>
+          </div>
+          </div>
         </>
       )}
     </div>

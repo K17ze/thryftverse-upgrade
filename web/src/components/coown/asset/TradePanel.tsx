@@ -25,8 +25,17 @@ import type {
   OrderType,
   TradeSide,
 } from '@/lib/contracts/coown';
+import { coOwnMarkGbp } from '@/lib/contracts/coown';
 import { useSession } from '@/lib/session/SessionProvider';
 import { DATA_MODE } from '@/lib/api/client';
+import { useOnlineStatus } from '@/lib/offline';
+import {
+  useCoOwnEligibility,
+  useCoOwnPolicy,
+  useRiskDisclosure,
+} from '@/lib/hooks/coown-queries';
+import * as coownService from '@/lib/api/services/coown';
+import { useQueryClient } from '@tanstack/react-query';
 import { useWalletData } from '@/components/wallet/useWalletData';
 import {
   GBP_PER_USD,
@@ -40,6 +49,7 @@ import {
 import {
   usePlaceCoOwnOrder,
   type PlaceOrderResult,
+  type PreparedLiveOrder,
 } from '@/components/trading/useCoOwnTrading';
 import { gbp, signedGbp, signedPct } from '../format';
 
@@ -86,11 +96,22 @@ export function TradePanel({
   position: { units: number; avgEntryPriceGbp: number } | null;
   prefill?: TradePrefill | null;
 }) {
-  const { isGuest } = useSession();
+  const { isGuest, user } = useSession();
   const { requireAuth, wall } = useSignupWall();
   const { data: wallet } = useWalletData();
-  const { placeOrder } = usePlaceCoOwnOrder();
+  const { prepareOrder, placeOrder } = usePlaceCoOwnOrder();
+  const queryClient = useQueryClient();
   const { show } = useToast();
+  // Server advisory verdict — live mode only; the backend re-checks
+  // transactionally at order time, so this only shapes the disabled UI.
+  const { data: eligibility } = useCoOwnEligibility(asset.id);
+  // The versioned server caps — the composer enforces the same
+  // maxOrderUnits the ingest schema will, not a local constant.
+  const { data: policy } = useCoOwnPolicy();
+  const maxOrderUnits =
+    DATA_MODE === 'live' ? (policy?.maxOrderUnits ?? CO_OWN_MAX_UNITS) : CO_OWN_MAX_UNITS;
+  const { data: riskDisclosure } = useRiskDisclosure();
+  const { isOffline } = useOnlineStatus();
 
   const [side, setSide] = useState<TradeSide>('buy');
   const [orderType, setOrderType] = useState<OrderType>('market');
@@ -100,7 +121,16 @@ export function TradePanel({
   const [duration, setDuration] = useState<OrderDuration>('gtc');
   const [reviewing, setReviewing] = useState(false);
   const [submitting, setSubmitting] = useState(false);
+  // Live mode: the review step runs on a real reservation — the server
+  // preview + the held funds/units. Null in fixture mode (no reservation).
+  const [preparing, setPreparing] = useState(false);
+  const [prepared, setPrepared] = useState<PreparedLiveOrder | null>(null);
+  // Ref mirror so unmount/back cleanup can release the live reservation.
+  const preparedRef = useRef<PreparedLiveOrder | null>(null);
   const [receipt, setReceipt] = useState<PlaceOrderResult | null>(null);
+  // Risk-disclosure acceptance is a server-side consent record — ticked
+  // on the review step, then recorded before the order writes.
+  const [riskAccepted, setRiskAccepted] = useState(false);
   const appliedSeq = useRef(-1);
   // One idempotency key per confirm attempt — minted when the review
   // sheet opens and reused across retries so an ambiguous failure
@@ -109,6 +139,20 @@ export function TradePanel({
 
   const bestAsk = asks[0]?.unitPriceGbp ?? null;
   const bestBid = bids[0]?.unitPriceGbp ?? null;
+
+  // Server-computed market capabilities (list/detail wire) — where they
+  // exist they gate the side picker early (pre_market takes buys but no
+  // sells). Absent capabilities gate nothing: lifecycle state already
+  // covers paused/closed upstream, and the endpoints re-check anyway.
+  const canBuy = asset.capabilities?.buy !== false;
+  const canSell = asset.capabilities?.sell !== false;
+
+  // Coerce the side back to something the market accepts — e.g. a sell
+  // prefill that arrived before a pre_market capabilities read landed.
+  useEffect(() => {
+    if (side === 'sell' && !canSell && canBuy) setSide('buy');
+    else if (side === 'buy' && !canBuy && canSell) setSide('sell');
+  }, [side, canBuy, canSell]);
 
   // Book-row picks land here: switch to limit and prefill the price.
   useEffect(() => {
@@ -127,9 +171,27 @@ export function TradePanel({
     if (ref != null) setLimitText(ref.toFixed(2));
   }, [orderType, side, bestAsk, bestBid, limitTouched]);
 
-  const units = Math.min(CO_OWN_MAX_UNITS, Math.max(0, Math.round(Number(unitsText)) || 0));
+  const units = Math.min(maxOrderUnits, Math.max(0, Math.round(Number(unitsText)) || 0));
   const limitPriceGbp =
     orderType === 'limit' && Number(limitText) > 0 ? Number(limitText) : null;
+
+  // Live buys can also draw the primary pool — the issuer's unsold units
+  // settle at the reference price when the protection bound reaches it
+  // (backend preview/matcher apply the same rule). Fold it into the asks
+  // the local plan walks so the gate and the wire bound don't refuse a
+  // fill the server would satisfy from issuance.
+  const effectiveAsks = useMemo<OrderBookLevel[]>(() => {
+    if (DATA_MODE !== 'live' || side !== 'buy' || asset.availableUnits <= 0) return asks;
+    const poolUnits = asset.availableUnits;
+    const poolPrice = asset.unitPriceGbp;
+    const merged = asks.map((l) =>
+      l.unitPriceGbp === poolPrice ? { ...l, units: l.units + poolUnits } : l,
+    );
+    if (!asks.some((l) => l.unitPriceGbp === poolPrice)) {
+      merged.push({ side: 'sell', unitPriceGbp: poolPrice, units: poolUnits, orderCount: 1 });
+    }
+    return merged.sort((a, b) => a.unitPriceGbp - b.unitPriceGbp);
+  }, [asks, side, asset.availableUnits, asset.unitPriceGbp]);
 
   const plan = useMemo<ExecutionPlan>(
     () =>
@@ -139,9 +201,9 @@ export function TradePanel({
         units,
         limitPriceGbp,
         bids,
-        asks,
+        asks: effectiveAsks,
       }),
-    [side, orderType, units, limitPriceGbp, bids, asks],
+    [side, orderType, units, limitPriceGbp, bids, effectiveAsks],
   );
 
   // The quote card shows the full-order obligation: fills at book prices
@@ -179,10 +241,16 @@ export function TradePanel({
   let reason: string | null = null;
   if (!Number.isInteger(units) || units <= 0) {
     reason = 'Enter a whole number of units';
-  } else if (units > CO_OWN_MAX_UNITS) {
-    reason = `Maximum ${CO_OWN_MAX_UNITS} units per order`;
+  } else if (units > maxOrderUnits) {
+    reason = `Maximum ${maxOrderUnits} units per order`;
   } else if (orderType === 'limit' && (limitPriceGbp == null || limitPriceGbp <= 0)) {
     reason = 'Set a limit price';
+  } else if (isOffline) {
+    reason = "You're offline — orders can't be placed until you reconnect";
+  } else if (eligibility && !eligibility.eligible) {
+    // Server advisory verdict — the authoritative check still runs
+    // inside the placement transaction; this only gates the UI early.
+    reason = eligibility.reason ?? "This order isn't available for your account";
   } else if (isGuest) {
     // Guests can always reach the signup wall — ledger gates run after auth.
     canSubmit = true;
@@ -229,23 +297,93 @@ export function TradePanel({
     : 'High-value order — press and hold to confirm.';
 
   const bump = (delta: number) =>
-    setUnitsText(String(Math.min(CO_OWN_MAX_UNITS, Math.max(1, units + delta))));
+    setUnitsText(String(Math.min(maxOrderUnits, Math.max(1, units + delta))));
+
+  /** Release a live reservation without consuming it (back, expiry,
+   *  unmount). A 404 just means the server already released/expired it. */
+  const releasePrepared = () => {
+    const p = preparedRef.current;
+    preparedRef.current = null;
+    setPrepared(null);
+    if (p) {
+      void coownService.releaseCoOwnReservation(asset.id, p.reservation.id).catch(() => {});
+    }
+  };
+
+  // If the panel unmounts mid-review, don't leave the 60s hold stranded.
+  useEffect(
+    () => () => {
+      const p = preparedRef.current;
+      if (p) {
+        void coownService.releaseCoOwnReservation(asset.id, p.reservation.id).catch(() => {});
+      }
+    },
+    [asset.id],
+  );
 
   // Step one — the compose form asks for review. Auth runs here so a
   // guest hits the signup wall before the review step, not after it.
-  const openReview = (e: React.FormEvent) => {
+  // Live mode then runs preview → reserve up front: the review shows the
+  // server's quote and a real commit deadline, not a local estimate.
+  const openReview = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!canSubmit || submitting) return;
+    if (!canSubmit || submitting || preparing) return;
     if (!requireAuth('purchase')) return;
-    attemptKey.current = `web-coown-${crypto.randomUUID()}`;
-    setReviewing(true);
+    attemptKey.current = coownService.newCoOwnOrderAttemptKey();
+    if (DATA_MODE !== 'live') {
+      setReviewing(true);
+      return;
+    }
+    setPreparing(true);
+    try {
+      const p = await prepareOrder({
+        asset,
+        side,
+        orderType,
+        units,
+        limitPriceGbp,
+        duration,
+        bids,
+        asks: effectiveAsks,
+      });
+      preparedRef.current = p;
+      setPrepared(p);
+      setReviewing(true);
+    } catch (err) {
+      // Verbatim server refusal (eligibility, validation, balance).
+      show(err instanceof Error ? err.message : 'Could not prepare this order', 'error');
+    } finally {
+      setPreparing(false);
+    }
   };
+
+  // Risk disclosure — an unaccepted live document gates the confirm,
+  // not the compose form (the checkbox lives on the review step).
+  const riskDoc = riskDisclosure?.document ?? null;
+  const riskNeeded =
+    DATA_MODE === 'live' && riskDoc != null && riskDisclosure?.accepted === false;
 
   // Step two — review confirmed; the write path settles the order.
   const confirm = async () => {
-    if (submitting) return;
+    if (submitting || (riskNeeded && !riskAccepted)) return;
     setSubmitting(true);
     try {
+      if (riskNeeded && riskDoc && user) {
+        // Record consent first — the order only proceeds when the
+        // disclosure acceptance is persisted server-side.
+        await coownService.acceptRiskDisclosure(user.id, riskDoc.id, {
+          assetId: asset.id,
+          surface: 'coown_trade_review',
+        });
+        // Consent is a RISK_DISCLOSURE gate input — drop both caches so
+        // the advisory verdict and the review step reflect acceptance.
+        void queryClient.invalidateQueries({
+          queryKey: ['compliance', 'risk-disclosure'],
+        });
+        void queryClient.invalidateQueries({
+          queryKey: ['coown', 'eligibility'],
+        });
+      }
       const result = await placeOrder({
         asset,
         side,
@@ -254,17 +392,29 @@ export function TradePanel({
         limitPriceGbp,
         duration,
         bids,
-        asks,
+        asks: effectiveAsks,
+        prepared,
         idempotencyKey:
-          attemptKey.current ?? `web-coown-${crypto.randomUUID()}`,
+          attemptKey.current ?? coownService.newCoOwnOrderAttemptKey(),
       });
+      // The reservation was consumed by the commit — drop the handle.
+      preparedRef.current = null;
+      setPrepared(null);
       setReceipt(result);
-    } catch {
-      // The ledger refused the write — no receipt, nothing recorded.
+    } catch (err) {
+      // Surface the server's refusal verbatim — no receipt, nothing
+      // recorded. If the hold meanwhile lapsed, drop it so a retry
+      // re-reserves instead of committing against an expired reservation.
+      if (preparedRef.current && Date.now() >= preparedRef.current.validUntilMs) {
+        preparedRef.current = null;
+        setPrepared(null);
+      }
       show(
-        side === 'sell'
-          ? 'Order refused — check your holdings and try again'
-          : 'Order refused — check your 1ZE balance and try again',
+        err instanceof Error
+          ? err.message
+          : side === 'sell'
+            ? 'Order refused — check your holdings and try again'
+            : 'Order refused — check your 1ZE balance and try again',
         'error',
       );
     } finally {
@@ -272,15 +422,26 @@ export function TradePanel({
     }
   };
 
+  // The review's reservation lapsed — the hold is gone server-side, so
+  // drop back to the composer where a fresh review re-reserves.
+  const onReservationExpired = () => {
+    releasePrepared();
+    setReviewing(false);
+    show('That quote expired — review the order again', 'info');
+  };
+
   // A fully-closed position (0 units left after a sell) is not a holding
   // — the row only renders while units remain.
   const held = position && position.units > 0 ? position : null;
-  const marketValue = held ? held.units * asset.unitPriceGbp : 0;
+  // Position worth marks at the last settled trade once the market has
+  // printed — not the issuance price.
+  const mark = coOwnMarkGbp(asset);
+  const marketValue = held ? held.units * mark : 0;
   const unrealised = held
-    ? (asset.unitPriceGbp - held.avgEntryPriceGbp) * held.units
+    ? (mark - held.avgEntryPriceGbp) * held.units
     : 0;
   const unrealisedPct = held && held.avgEntryPriceGbp > 0
-    ? (asset.unitPriceGbp / held.avgEntryPriceGbp - 1) * 100
+    ? (mark / held.avgEntryPriceGbp - 1) * 100
     : null;
 
   return (
@@ -323,15 +484,30 @@ export function TradePanel({
           limitPriceGbp={limitPriceGbp}
           duration={duration}
           quote={quote}
+          prepared={prepared}
+          onExpire={onReservationExpired}
           maxReservedLabel={
-            side === 'buy'
-              ? `${formatIze(requiredIze)} 1ZE`
-              : `${units} ${units === 1 ? 'unit' : 'units'}`
+            prepared
+              ? // Server-quoted hold — the real reserved figure.
+                prepared.reservation.side === 'buy'
+                ? `${formatIze(prepared.reservation.reserved1zeUnits / 1000)} 1ZE`
+                : `${prepared.reservation.reservedUnits} ${
+                    prepared.reservation.reservedUnits === 1 ? 'unit' : 'units'
+                  }`
+              : side === 'buy'
+                ? `${formatIze(requiredIze)} 1ZE`
+                : `${units} ${units === 1 ? 'unit' : 'units'}`
           }
           requireHold={requireHold}
           holdReason={holdReason}
           submitting={submitting}
-          onBack={() => setReviewing(false)}
+          riskDocument={riskNeeded ? riskDoc : null}
+          riskAccepted={riskAccepted}
+          onRiskAcceptedChange={setRiskAccepted}
+          onBack={() => {
+            releasePrepared();
+            setReviewing(false);
+          }}
           onConfirm={confirm}
         />
       ) : (
@@ -341,23 +517,34 @@ export function TradePanel({
               Side
             </legend>
             <div className="mt-2 grid grid-cols-2 gap-2" role="group">
-              {(['buy', 'sell'] as const).map((s) => (
-                <button
-                  key={s}
-                  type="button"
-                  aria-pressed={side === s}
-                  onClick={() => setSide(s)}
-                  className={`pressable h-11 rounded-md border text-body-emphasis font-semibold ${
-                    side === s
-                      ? s === 'buy'
-                        ? 'border-coown-up/40 bg-coown-up-subtle text-coown-up'
-                        : 'border-coown-down/40 bg-coown-down-subtle text-coown-down'
-                      : 'border-border-subtle text-text-secondary hover:text-text-primary'
-                  }`}
-                >
-                  {SIDE_LABEL[s]}
-                </button>
-              ))}
+              {(['buy', 'sell'] as const).map((s) => {
+                const allowed = s === 'buy' ? canBuy : canSell;
+                return (
+                  <button
+                    key={s}
+                    type="button"
+                    aria-pressed={side === s}
+                    disabled={!allowed}
+                    title={
+                      !allowed
+                        ? `${SIDE_LABEL[s]} isn't available while this market is ${asset.marketStatus.replace('_', ' ')}`
+                        : undefined
+                    }
+                    onClick={() => setSide(s)}
+                    className={`pressable h-11 rounded-md border text-body-emphasis font-semibold ${
+                      !allowed
+                        ? 'cursor-not-allowed border-border-subtle text-text-muted opacity-50'
+                        : side === s
+                          ? s === 'buy'
+                            ? 'border-coown-up/40 bg-coown-up-subtle text-coown-up'
+                            : 'border-coown-down/40 bg-coown-down-subtle text-coown-down'
+                          : 'border-border-subtle text-text-secondary hover:text-text-primary'
+                    }`}
+                  >
+                    {SIDE_LABEL[s]}
+                  </button>
+                );
+              })}
             </div>
           </fieldset>
 
@@ -396,7 +583,7 @@ export function TradePanel({
                 type="number"
                 inputMode="numeric"
                 min={1}
-                max={CO_OWN_MAX_UNITS}
+                max={maxOrderUnits}
                 step={1}
                 value={unitsText}
                 onChange={(e) => setUnitsText(e.target.value)}
@@ -467,10 +654,12 @@ export function TradePanel({
             </p>
           ) : null}
 
-          <Button type="submit" size="lg" fullWidth disabled={!canSubmit || submitting} className="mt-4">
+          <Button type="submit" size="lg" fullWidth disabled={!canSubmit || submitting || preparing} className="mt-4">
             {isGuest
               ? 'Sign in to trade'
-              : `Review ${SIDE_LABEL[side].toLowerCase()} order`}
+              : preparing
+                ? 'Getting a quote…'
+                : `Review ${SIDE_LABEL[side].toLowerCase()} order`}
           </Button>
           {!canSubmit && reason ? (
             <p className="mt-2 text-meta text-text-muted" role="status">
@@ -552,6 +741,18 @@ function QuoteCard({ quote }: { quote: QuoteDisplay }) {
  * touched. Above the hold thresholds the commit is a press-and-hold —
  * the only money-moving action.
  */
+/** Wall-clock ticker for the reservation countdown — 1s resolution is
+ *  enough for a ~60s hold. */
+function useNow(active: boolean): number {
+  const [now, setNow] = useState(() => Date.now());
+  useEffect(() => {
+    if (!active) return;
+    const t = setInterval(() => setNow(Date.now()), 1000);
+    return () => clearInterval(t);
+  }, [active]);
+  return now;
+}
+
 function ReviewCard({
   asset,
   side,
@@ -560,10 +761,15 @@ function ReviewCard({
   limitPriceGbp,
   duration,
   quote,
+  prepared,
+  onExpire,
   maxReservedLabel,
   requireHold,
   holdReason,
   submitting,
+  riskDocument,
+  riskAccepted,
+  onRiskAcceptedChange,
   onBack,
   onConfirm,
 }: {
@@ -574,14 +780,38 @@ function ReviewCard({
   limitPriceGbp: number | null;
   duration: OrderDuration;
   quote: QuoteDisplay;
+  /** Live mode: the server preview + reservation this review is bound
+   *  to. Null in fixture mode, where the local quote is the display. */
+  prepared: PreparedLiveOrder | null;
+  /** Fired once when the reservation's commit deadline passes. */
+  onExpire: () => void;
   /** Full obligation — 1ZE locked for buys, units committed for sells. */
   maxReservedLabel: string;
   requireHold: boolean;
   holdReason: string;
   submitting: boolean;
+  /** Non-null when the live risk disclosure hasn't been accepted yet —
+   *  the confirm stays disabled until the checkbox is ticked. */
+  riskDocument: { id: string; version: string; title: string; contentUrl: string | null } | null;
+  riskAccepted: boolean;
+  onRiskAcceptedChange: (accepted: boolean) => void;
   onBack: () => void;
   onConfirm: () => void;
 }) {
+  // Countdown to the real commit deadline — the earlier of the preview's
+  // validity and the reservation expiry.
+  const now = useNow(prepared != null);
+  const secondsLeft =
+    prepared != null ? Math.max(0, Math.ceil((prepared.validUntilMs - now) / 1000)) : null;
+  const expired = secondsLeft === 0;
+  const expireFired = useRef(false);
+  useEffect(() => {
+    if (expired && !expireFired.current) {
+      expireFired.current = true;
+      onExpire();
+    }
+  }, [expired, onExpire]);
+
   return (
     <div className="mt-4">
       <h3 className="text-micro font-semibold uppercase tracking-[0.08em] text-text-muted">
@@ -617,22 +847,120 @@ function ReviewCard({
           </>
         ) : null}
       </dl>
-      <QuoteCard quote={quote} />
+      {prepared ? (
+        // Server quote — the preview's own fill walk, fee and total.
+        // Nothing here is computed locally.
+        <dl className="mt-5 space-y-2 border-t border-border-subtle pt-4 text-body">
+          {prepared.preview.estimatedFill.filledUnits > 0 ? (
+            <>
+              <div className="flex items-baseline justify-between">
+                <dt className="text-text-secondary">Est. fill</dt>
+                <dd className="text-text-primary tnum">
+                  {prepared.preview.estimatedFill.filledUnits} units @{' '}
+                  {gbp(prepared.preview.estimatedFill.avgFillPrice)}
+                </dd>
+              </div>
+              <div className="flex items-baseline justify-between">
+                <dt className="text-text-secondary">Worst price</dt>
+                <dd className="text-text-primary tnum">
+                  {gbp(prepared.preview.estimatedFill.worstPrice)}
+                </dd>
+              </div>
+            </>
+          ) : null}
+          {prepared.preview.estimatedFill.remainingUnits > 0 ? (
+            <div className="flex items-baseline justify-between">
+              <dt className="text-text-secondary">
+                {prepared.preview.orderType === 'limit' ? 'Resting' : 'Beyond depth'}
+              </dt>
+              <dd className="text-text-primary tnum">
+                {prepared.preview.orderType === 'limit'
+                  ? `${prepared.preview.estimatedFill.remainingUnits} units on the book`
+                  : `${prepared.preview.estimatedFill.remainingUnits} units won't fill`}
+              </dd>
+            </div>
+          ) : null}
+          <div className="flex items-baseline justify-between">
+            <dt className="text-text-secondary">
+              Fee ({(prepared.preview.feeRate * 100).toFixed(0)}%)
+            </dt>
+            <dd className="text-text-primary tnum">{gbp(prepared.preview.fee)}</dd>
+          </div>
+          <div className="flex items-baseline justify-between border-t border-border-subtle pt-2.5">
+            <dt className="text-body-emphasis font-semibold text-text-primary">Total</dt>
+            <dd
+              className="text-body-emphasis font-semibold text-text-primary tnum"
+              aria-live="polite"
+            >
+              {gbp(prepared.preview.total)}
+            </dd>
+          </div>
+        </dl>
+      ) : (
+        <QuoteCard quote={quote} />
+      )}
       <dl className="mt-3 space-y-2 text-body">
         <div className="flex items-baseline justify-between">
           <dt className="text-text-secondary">Max reserved</dt>
           <dd className="text-text-primary tnum">{maxReservedLabel}</dd>
         </div>
+        {prepared ? (
+          <div className="flex items-baseline justify-between">
+            <dt className="text-text-secondary">Reserved for</dt>
+            <dd
+              className={`tnum ${
+                secondsLeft != null && secondsLeft <= 15
+                  ? 'font-semibold text-danger-text'
+                  : 'text-text-primary'
+              }`}
+            >
+              {secondsLeft != null
+                ? `${Math.floor(secondsLeft / 60)}:${String(secondsLeft % 60).padStart(2, '0')}`
+                : '—'}
+            </dd>
+          </div>
+        ) : null}
       </dl>
       <p className="mt-3 flex items-start gap-1.5 text-caption text-text-muted">
         <Icon name="info" size={13} className="mt-px shrink-0" />
         Orders settle in 1ZE — buyer funds are held in escrow until the
         trade settles, and seller proceeds release after settlement.
       </p>
+      {riskDocument ? (
+        <label className="mt-4 flex cursor-pointer items-start gap-2.5 border-t border-border-subtle pt-4">
+          <input
+            type="checkbox"
+            checked={riskAccepted}
+            onChange={(e) => onRiskAcceptedChange(e.target.checked)}
+            className="mt-0.5 h-4 w-4 shrink-0 accent-brand"
+          />
+          <span className="text-meta text-text-secondary">
+            I&rsquo;ve read and accept the{' '}
+            {riskDocument.contentUrl ? (
+              <a
+                href={riskDocument.contentUrl}
+                target="_blank"
+                rel="noreferrer"
+                className="font-medium text-text-primary underline underline-offset-4"
+              >
+                {riskDocument.title} (v{riskDocument.version})
+              </a>
+            ) : (
+              `${riskDocument.title} (v${riskDocument.version})`
+            )}
+            . Fractional ownership can lose value and liquidity is not guaranteed.
+          </span>
+        </label>
+      ) : null}
       <div className="mt-5 flex flex-col gap-2">
         <HoldToConfirmButton
           requireHold={requireHold}
-          disabled={submitting}
+          disabled={
+            submitting ||
+            expired ||
+            (DATA_MODE === 'live' && prepared == null) ||
+            (riskDocument != null && !riskAccepted)
+          }
           onSubmit={onConfirm}
           label={
             submitting

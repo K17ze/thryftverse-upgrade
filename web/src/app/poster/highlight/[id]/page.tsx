@@ -16,6 +16,9 @@ import {
   type PosterHighlight,
 } from '@/lib/data/fixtures-posters';
 import { PROFILE_HIGHLIGHTS } from '@/components/profile/fixtures';
+import { DATA_MODE } from '@/lib/api/client';
+import * as socialService from '@/lib/api/services/social';
+import { useSession } from '@/lib/session/SessionProvider';
 import { usePosterArchive } from '@/lib/store/posterArchive';
 import { useHydrated } from '@/lib/store/useStore';
 import { AppImage } from '@/components/ui/AppImage';
@@ -36,11 +39,20 @@ export default function PosterHighlightPage({
   const { id } = use(params);
   const router = useRouter();
   const hydrated = useHydrated();
+  const { user, sessionLoading } = useSession();
   const createdHighlights = usePosterArchive((s) => s.highlights);
 
   const { data: highlight, isLoading, isError, refetch } = useQuery<PosterHighlight | null>({
-    queryKey: ['poster-highlight', id, hydrated],
+    queryKey: ['poster-highlight', id, hydrated, DATA_MODE, user?.id ?? 'guest'],
+    enabled: DATA_MODE !== 'live' || !!user,
     queryFn: async () => {
+      if (DATA_MODE === 'live') {
+        // No GET /poster-highlights/:id on the wire — highlights resolve
+        // through the owner's list (the archive is the entry point, so
+        // the viewer is always the owner here).
+        const items = await socialService.fetchPosterHighlights(user!.id);
+        return items.find((h) => h.id === id) ?? null;
+      }
       await tick();
       // Sources: the member's session-created highlights, the archive seed
       // (POSTER_HIGHLIGHTS, also surfaced as PROFILE_HIGHLIGHTS.me), and the
@@ -136,14 +148,17 @@ export default function PosterHighlightPage({
     advance();
   };
 
-  if (isLoading) {
+  // Live mode: hold the skeleton while the stored session resolves — the
+  // highlight list is member-scoped, so a null user mid-hydration is
+  // undecided, not guest.
+  if (isLoading || (DATA_MODE === 'live' && sessionLoading)) {
     return (
       <div
         className="flex h-[calc(100dvh-4rem-76px)] items-center justify-center md:h-[calc(100dvh-4rem)]"
         aria-busy
         aria-label="Loading highlight"
       >
-        <Skeleton className="h-full w-full max-w-[560px]" />
+        <Skeleton className="h-full w-full max-w-[560px] lg:max-w-[640px]" />
       </div>
     );
   }
@@ -178,7 +193,29 @@ export default function PosterHighlightPage({
 
   return (
     <div className="relative flex h-[calc(100dvh-4rem-76px)] justify-center overflow-hidden bg-black md:h-[calc(100dvh-4rem)]">
-      <div className="relative h-full w-full max-w-[560px]">
+      {/* Desktop frame arrows — same grammar as the poster viewer:
+          visible pointer affordance at the stage edges, ends suppressed. */}
+      {!isSingle && frame > 0 ? (
+        <button
+          type="button"
+          onClick={prev}
+          aria-label="Previous frame"
+          className="pressable absolute left-5 top-1/2 z-elevated hidden h-11 w-11 -translate-y-1/2 items-center justify-center rounded-full bg-overlay text-scrim-text-primary transition-opacity hover:opacity-80 lg:flex"
+        >
+          <Icon name="back" size={20} />
+        </button>
+      ) : null}
+      {!isSingle && !isLast ? (
+        <button
+          type="button"
+          onClick={next}
+          aria-label="Next frame"
+          className="pressable absolute right-5 top-1/2 z-elevated hidden h-11 w-11 -translate-y-1/2 items-center justify-center rounded-full bg-overlay text-scrim-text-primary transition-opacity hover:opacity-80 lg:flex"
+        >
+          <Icon name="forward" size={20} />
+        </button>
+      ) : null}
+      <div className="relative h-full w-full max-w-[560px] lg:max-w-[640px]">
         <AppImage
           key={active.frameId}
           src={active.mediaUrl}

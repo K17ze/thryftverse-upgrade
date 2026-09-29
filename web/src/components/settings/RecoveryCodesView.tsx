@@ -3,11 +3,19 @@
 /**
  * RecoveryCodesView — /settings/security/recovery.
  *
- * The backup-code surface that pairs with two-factor: real crypto-random
- * codes issued on enable, copyable, regenerable (invalidating the previous
- * set). Honest scope: codes are generated and stored on this device —
- * production issues single-use codes verified server-side, which is why
- * they only exist while two-factor is on.
+ * The backup-code surface that pairs with two-factor.
+ *
+ * Fixture mode: real crypto-random codes issued on enable, copyable and
+ * regenerable on this device (each regenerate invalidates the last set).
+ *
+ * Live mode: the backend only ever reveals recovery codes once — in the
+ * POST /auth/2fa/verify response at enrolment — and stores hashes. There
+ * is no status or regenerate endpoint, so the honest live state is: gate
+ * on the account's real `twoFactorEnabled` (from /users/me via the
+ * session's accountIdentity), and when it's on explain that the codes
+ * can't be shown again — a fresh set only comes with a fresh two-factor
+ * setup. Locally minted fixture codes are never presented as account
+ * codes.
  */
 
 import { useState } from 'react';
@@ -16,23 +24,48 @@ import { SettingsSection } from './SettingsSection';
 import { Button } from '@/components/ui/Button';
 import { Icon } from '@/components/ui/Icon';
 import { Skeleton } from '@/components/ui/Skeleton';
+import { EmptyState } from '@/components/ui/EmptyState';
 import { ConfirmSheet, type ConfirmSheetState } from '@/components/orders/ConfirmSheet';
 import { useToast } from '@/components/ui/Toast';
 import { useHydrated } from '@/lib/store/useStore';
 import { useSettingsPrefs } from '@/lib/store/settingsPrefs';
+import { useSession } from '@/lib/session/SessionProvider';
+import { DATA_MODE } from '@/lib/api/client';
+
+const isLive = DATA_MODE === 'live';
 
 export function RecoveryCodesView() {
   const router = useRouter();
   const { show } = useToast();
   const hydrated = useHydrated();
-  const twoFactorEnabled = useSettingsPrefs((s) => s.twoFactorEnabled);
+  const { accountIdentity, isGuest, sessionLoading } = useSession();
+  const fixtureEnabled = useSettingsPrefs((s) => s.twoFactorEnabled);
   const backupCodes = useSettingsPrefs((s) => s.backupCodes);
   const generatedAt = useSettingsPrefs((s) => s.backupCodesGeneratedAt);
   const regenerateBackupCodes = useSettingsPrefs((s) => s.regenerateBackupCodes);
   const [confirm, setConfirm] = useState<ConfirmSheetState | null>(null);
   const [copied, setCopied] = useState(false);
 
-  if (!hydrated) {
+  // Codes only exist while 2FA is on — they are the fallback for the
+  // second factor, so without it there is nothing real to show. Live mode
+  // reads the account flag from /users/me, never the local mirror.
+  const enabled = isLive
+    ? accountIdentity?.twoFactorEnabled === true
+    : hydrated && fixtureEnabled;
+
+  if (isLive && (isGuest || sessionLoading)) {
+    return (
+      <EmptyState
+        icon="lock"
+        title="Sign in to manage recovery codes"
+        subtitle="Recovery codes belong to your account's two-factor setup — sign in to see them."
+        actionLabel="Sign in"
+        onAction={() => router.push('/auth/login')}
+      />
+    );
+  }
+
+  if (!isLive && !hydrated) {
     return (
       <div aria-busy aria-label="Loading recovery codes">
         <Skeleton className="h-[52px] w-full rounded-none" />
@@ -41,9 +74,7 @@ export function RecoveryCodesView() {
     );
   }
 
-  // Codes only exist while 2FA is on — they are the fallback for the
-  // second factor, so without it there is nothing real to show.
-  if (!twoFactorEnabled) {
+  if (!enabled) {
     return (
       <div className="flex flex-col items-center border-y border-border-subtle px-5 py-10 text-center">
         <Icon name="lockOpen" size={24} className="text-text-muted" />
@@ -61,6 +92,36 @@ export function RecoveryCodesView() {
           onClick={() => router.push('/settings/security')}
         >
           Go to security settings
+        </Button>
+      </div>
+    );
+  }
+
+  if (isLive) {
+    // Honest state: the platform stores only hashes of the codes it
+    // issued at enrolment — display-once, with no status or regenerate
+    // endpoint to call. The only real refresh path is a fresh two-factor
+    // setup, which also replaces the authenticator key.
+    return (
+      <div className="flex flex-col items-center border-y border-border-subtle px-5 py-10 text-center">
+        <Icon name="key" size={24} className="text-text-muted" />
+        <p className="mt-3 text-body-emphasis font-medium text-text-primary">
+          Two-factor is on — codes can’t be shown again
+        </p>
+        <p className="mt-1 max-w-sm text-body text-text-secondary">
+          Your recovery codes were shown once when you set up two-factor;
+          the platform stores only their hashes, so there’s nothing to
+          display or regenerate here. If you’ve lost them, turn two-factor
+          off and set it up again — that issues a fresh set (and a new
+          authenticator key).
+        </p>
+        <Button
+          variant="secondary"
+          size="md"
+          className="mt-5"
+          onClick={() => router.push('/settings/security')}
+        >
+          Manage two-factor
         </Button>
       </div>
     );

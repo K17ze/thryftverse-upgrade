@@ -99,6 +99,9 @@ frontend/.maestro/screenshots/
 output/
 .flagship/smoke/
 .flagship/*.png
+.flagship/**/*.png
+.flagship/**/shots/
+.flagship/**/shots-dx2/
 .flagship/*.xml
 .flagship/*.tsv
 
@@ -110,6 +113,10 @@ web/qa-scratch/
 web/qa-shots/
 web/.next/
 web/*.tsbuildinfo
+web/*.png
+web/scripts/test-*.mjs
+web/scripts/inspect-*.mjs
+web/scripts/dx2-*.mjs
 
 # SDD/agent scratch workspace
 .superpowers/

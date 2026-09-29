@@ -36,7 +36,7 @@ import {
 
 function PayoutsSkeleton() {
   return (
-    <div aria-busy aria-label="Loading payout methods">
+    <div aria-busy aria-label="Loading payout methods" className="mx-auto w-full max-w-xl lg:max-w-[1440px]">
       <div className="flex items-center gap-1 px-2 pt-1 sm:px-4">
         <Skeleton className="h-11 w-11 rounded-full" />
         <Skeleton className="h-7 w-44" />
@@ -120,18 +120,21 @@ export function PayoutsView() {
   };
 
   return (
-    <div className="mx-auto w-full max-w-xl pb-16">
+    <div className="mx-auto w-full max-w-xl pb-16 lg:max-w-[1440px]">
       <div className="flex items-center gap-1 px-2 pt-1 sm:px-4">
         <IconButton name="back" aria-label="Back to wallet" onClick={() => router.push('/wallet')} />
-        <h1 className="text-screen-title font-semibold text-text-primary">Payout methods</h1>
+        <h1 className="text-screen-title text-text-primary">Payout methods</h1>
       </div>
       <p className="mt-1 px-4 text-caption text-text-secondary sm:px-6">
         {isLive ? 'Payout destinations & withdrawal history' : 'Bank accounts & withdrawal history'}
       </p>
 
+      {/* Desktop grammar: destinations rail left, withdrawal history as the
+          main column — the ledger is the dominant object on this surface. */}
+      <div className="lg:grid lg:grid-cols-[minmax(0,24rem)_minmax(0,1fr)] lg:gap-x-16 xl:gap-x-20">
       {/* Saved payout destinations */}
       <section aria-label="Saved payout destinations" className="mt-8 px-4 sm:px-6">
-        <h2 className="text-label font-semibold uppercase tracking-wider text-text-muted">
+        <h2 className="text-label text-text-muted">
           {isLive ? 'Payout destinations' : 'Bank accounts'}
         </h2>
 
@@ -239,8 +242,8 @@ export function PayoutsView() {
       </section>
 
       {/* Withdrawal history */}
-      <section aria-label="Withdrawal history" className="mt-10 px-4 sm:px-6">
-        <h2 className="text-label font-semibold uppercase tracking-wider text-text-muted">
+      <section aria-label="Withdrawal history" className="mt-10 px-4 sm:px-6 lg:mt-8">
+        <h2 className="text-label text-text-muted">
           Withdrawal history
         </h2>
 
@@ -286,6 +289,7 @@ export function PayoutsView() {
           </ul>
         )}
       </section>
+      </div>
 
       <p className="mt-10 flex items-center gap-1.5 px-4 text-caption text-text-muted sm:px-6">
         <Icon name="info" size={14} className="shrink-0" />

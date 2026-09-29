@@ -20,6 +20,7 @@ import { Sheet } from '@/components/ui/Sheet';
 import { useToast } from '@/components/ui/Toast';
 import { useSignupWall } from '@/components/auth/SignupWall';
 import type { CoOwnBuyoutOffer } from '@/lib/contracts/coown';
+import { coOwnMarkGbp } from '@/lib/contracts/coown';
 import {
   useBuyoutActions,
   useBuyoutOffers,
@@ -27,6 +28,7 @@ import {
   useCoOwnPositions,
 } from '@/lib/hooks/coown-queries';
 import { useSession } from '@/lib/session/SessionProvider';
+import { DATA_MODE } from '@/lib/api/client';
 import { AssetThumb } from '../AssetThumb';
 import { gbp } from '../format';
 
@@ -56,13 +58,17 @@ function Row({ label, value, last }: { label: string; value: string; last?: bool
 
 function BuyoutSkeleton() {
   return (
-    <div className="mx-auto w-full max-w-3xl px-4 pb-20 pt-8 sm:px-6 md:pt-10">
+    <div className="mx-auto w-full max-w-3xl px-4 pb-20 pt-8 sm:px-6 md:pt-10 lg:max-w-[1440px]">
       <div className="skeleton h-4 w-24 rounded-sm" aria-hidden="true" />
       <div className="mt-4 skeleton h-9 w-48 rounded-sm" aria-hidden="true" />
-      <div className="mt-8 space-y-3" aria-hidden="true">
-        <div className="skeleton h-16 rounded-lg" />
-        <div className="skeleton h-28 rounded-lg" />
-        <div className="skeleton h-40 rounded-lg" />
+      <div className="mt-8 space-y-3 lg:grid lg:grid-cols-[minmax(0,1fr)_340px] lg:gap-x-16 lg:space-y-0" aria-hidden="true">
+        <div className="space-y-3 lg:order-1">
+          <div className="skeleton h-28 rounded-lg" />
+          <div className="skeleton h-40 rounded-lg" />
+        </div>
+        <div className="lg:order-2">
+          <div className="skeleton h-16 rounded-lg" />
+        </div>
       </div>
     </div>
   );
@@ -195,6 +201,7 @@ export function BuyoutView({ id }: { id: string }) {
   const [priceRaw, setPriceRaw] = useState('');
   const [unitsRaw, setUnitsRaw] = useState('');
   const [confirmOpen, setConfirmOpen] = useState(false);
+  const [submitting, setSubmitting] = useState(false);
   const [acceptingId, setAcceptingId] = useState<string | null>(null);
 
   const asset = assetQ.data ?? null;
@@ -230,7 +237,7 @@ export function BuyoutView({ id }: { id: string }) {
   const ownershipPct = asset.totalUnits > 0 ? (viewerUnits / asset.totalUnits) * 100 : null;
 
   // Form math — mirrors mobile: blank target = all remaining units,
-  // +24h expiry, GBP settlement.
+  // +24h expiry. Settlement runs through the 1ZE ledger, priced in GBP.
   const priceNum = Number.parseFloat(priceRaw);
   const priceValid = Number.isFinite(priceNum) && priceNum > 0;
   const unitsParsed = unitsRaw.trim() ? Math.floor(Number(unitsRaw)) : null;
@@ -242,37 +249,54 @@ export function BuyoutView({ id }: { id: string }) {
 
   const canSubmit = priceValid && unitsProvidedValid && effectiveUnits > 0;
 
-  const submitOffer = () => {
-    if (!canSubmit || !user) return;
-    createOffer(id, {
-      bidderUsername: user.username,
-      offerPriceGbp: priceNum,
-      targetUnits: effectiveUnits,
-    });
-    setConfirmOpen(false);
-    setPriceRaw('');
-    setUnitsRaw('');
-    show('Buyout offer submitted', 'success');
+  // The offer is money-moving — success is claimed only after the
+  // server commits; failures surface the server's own error text.
+  const submitOffer = async () => {
+    if (!canSubmit || !user || submitting) return;
+    setSubmitting(true);
+    try {
+      await createOffer(id, {
+        bidderUsername: user.username,
+        offerPriceGbp: priceNum,
+        targetUnits: effectiveUnits,
+      });
+      setConfirmOpen(false);
+      setPriceRaw('');
+      setUnitsRaw('');
+      show('Buyout offer submitted', 'success');
+    } catch (err) {
+      show(err instanceof Error ? err.message : 'Could not submit this offer', 'error');
+    } finally {
+      setSubmitting(false);
+    }
   };
 
-  const handleAccept = (offerId: string, units: number) => {
-    if (!requireAuth('purchase') || !user) return;
+  const handleAccept = async (offerId: string, units: number) => {
+    if (!requireAuth('purchase') || !user || acceptingId != null) return;
     setAcceptingId(offerId);
-    const ok = acceptOffer(offerId, id, units);
-    setAcceptingId(null);
-    if (ok) {
-      const offer = offers.find((o) => o.id === offerId);
-      show(
-        `Accepted ${units} ${units === 1 ? 'unit' : 'units'} at ${gbp(offer?.offerPriceGbp)} per unit`,
-        'success',
-      );
-    } else {
-      show('Could not accept this offer', 'error');
+    try {
+      const result = await acceptOffer(offerId, id, units);
+      if (result) {
+        const offer = offers.find((o) => o.id === offerId);
+        // Live mode returns the server's post-acceptance tally — the real
+        // units that committed, which the backend may have clamped.
+        const committed = typeof result === 'object' ? result.acceptedUnits : units;
+        show(
+          `Accepted ${committed} ${committed === 1 ? 'unit' : 'units'} at ${gbp(offer?.offerPriceGbp)} per unit`,
+          'success',
+        );
+      } else {
+        show('Could not accept this offer', 'error');
+      }
+    } catch (err) {
+      show(err instanceof Error ? err.message : 'Could not accept this offer', 'error');
+    } finally {
+      setAcceptingId(null);
     }
   };
 
   return (
-    <div className="mx-auto w-full max-w-3xl px-4 pb-20 pt-8 sm:px-6 md:pt-10">
+    <div className="mx-auto w-full max-w-3xl px-4 pb-20 pt-8 sm:px-6 md:pt-10 lg:max-w-[1440px]">
       <Link
         href={`/co-own/${asset.id}`}
         className="pressable inline-flex items-center gap-1.5 text-body font-medium text-text-secondary hover:text-text-primary"
@@ -288,13 +312,19 @@ export function BuyoutView({ id }: { id: string }) {
         </p>
       </header>
 
+      {/* Desktop grammar: context + position rail on the right, the offer
+          form and open offers in the main column — checkout grammar. DOM
+          order keeps mobile's context → position → form stacking; explicit
+          column placement puts the rail right at lg. */}
+      <div className="lg:grid lg:grid-cols-[minmax(0,1fr)_340px] lg:gap-x-16">
+        <aside className="min-w-0 lg:order-2 lg:col-start-2">
       {/* Asset context */}
-      <div className="mt-6 flex items-center gap-3.5 border-b border-border-subtle pb-5">
+      <div className="mt-6 flex items-center gap-3.5 border-b border-border-subtle pb-5 lg:mt-0">
         <AssetThumb src={asset.imageUrl} alt={asset.title} className="w-14" />
         <div className="min-w-0 flex-1">
           <p className="truncate text-body font-semibold text-text-primary">{asset.title}</p>
           <p className="mt-0.5 text-meta text-text-muted tnum">
-            {gbp(asset.unitPriceGbp)} / unit · {asset.totalUnits.toLocaleString()} units
+            {gbp(coOwnMarkGbp(asset))} / unit · {asset.totalUnits.toLocaleString()} units
           </p>
         </div>
       </div>
@@ -308,7 +338,9 @@ export function BuyoutView({ id }: { id: string }) {
         <Row label="Ownership" value={ownershipPct != null ? `${ownershipPct.toFixed(1)}%` : '—'} />
         <Row label="Remaining" value={`${remainingUnits.toLocaleString()} units`} last />
       </section>
+        </aside>
 
+        <div className="min-w-0 lg:order-1 lg:col-start-1 lg:row-start-1">
       {ownsAll ? (
         <section className="mt-6 border-t border-border-subtle pt-10 text-center">
           <span className="mx-auto flex h-12 w-12 items-center justify-center rounded-full bg-success-subtle text-coown-up">
@@ -333,7 +365,10 @@ export function BuyoutView({ id }: { id: string }) {
       ) : (
         <>
           {/* Offer form */}
-          <section aria-labelledby="buyout-form" className="mt-8 border-t border-border-subtle pt-6">
+          <section
+            aria-labelledby="buyout-form"
+            className="mt-8 border-t border-border-subtle pt-6 lg:mt-0 lg:border-t-0 lg:pt-0"
+          >
             <h2
               id="buyout-form"
               className="text-micro font-semibold uppercase tracking-[0.08em] text-text-muted"
@@ -349,7 +384,7 @@ export function BuyoutView({ id }: { id: string }) {
               <div>
                 <label
                   htmlFor="buyout-price"
-                  className="text-label font-semibold uppercase tracking-wider text-text-muted"
+                  className="text-label text-text-muted"
                 >
                   Offer price (GBP)
                 </label>
@@ -361,14 +396,14 @@ export function BuyoutView({ id }: { id: string }) {
                   step="0.01"
                   value={priceRaw}
                   onChange={(e) => setPriceRaw(e.target.value)}
-                  placeholder={`e.g. ${asset.unitPriceGbp.toFixed(2)}`}
+                  placeholder={`e.g. ${coOwnMarkGbp(asset).toFixed(2)}`}
                   className={`mt-2 ${FIELD}`}
                 />
               </div>
               <div>
                 <label
                   htmlFor="buyout-units"
-                  className="text-label font-semibold uppercase tracking-wider text-text-muted"
+                  className="text-label text-text-muted"
                 >
                   Target units
                 </label>
@@ -398,14 +433,16 @@ export function BuyoutView({ id }: { id: string }) {
                 <div className="mt-1">
                   <Row label="Target" value={`${effectiveUnits.toLocaleString()} units`} />
                   <Row label="Expires" value={dateTime(expiresAt.toISOString())} />
-                  <Row label="Settlement" value="GBP" last />
+                  <Row label="Settlement" value="1ZE" last />
                 </div>
               </div>
             ) : null}
 
             <div className="mt-6 flex flex-wrap items-center justify-between gap-3">
               <p className="text-meta text-text-muted">
-                Demo build — offers are stored on this device only.
+                {DATA_MODE === 'live'
+                  ? 'Offers post to your account — holders are notified and can accept.'
+                  : 'Preview build — offers are stored on this device only.'}
               </p>
               <Button
                 size="lg"
@@ -438,7 +475,7 @@ export function BuyoutView({ id }: { id: string }) {
                   <OfferCard
                     key={offer.id}
                     offer={offer}
-                    referencePriceGbp={asset.unitPriceGbp}
+                    referencePriceGbp={coOwnMarkGbp(asset)}
                     viewerUnits={viewerUnits}
                     accepting={acceptingId === offer.id}
                     onAccept={handleAccept}
@@ -449,6 +486,8 @@ export function BuyoutView({ id }: { id: string }) {
           </section>
         </>
       )}
+        </div>
+      </div>
 
       <Sheet
         open={confirmOpen}
@@ -466,17 +505,22 @@ export function BuyoutView({ id }: { id: string }) {
           <div className="mt-3">
             <Row label="Target" value={`${effectiveUnits.toLocaleString()} units`} />
             <Row label="Expires" value={dateTime(expiresAt.toISOString())} />
-            <Row label="Settlement" value="GBP" last />
+            <Row label="Settlement" value="1ZE" last />
           </div>
           <p className="mt-4 text-meta text-text-muted">
             Holders are notified and can accept or decline. The offer lapses after 24 hours.
           </p>
           <div className="mt-6 flex justify-end gap-3">
-            <Button variant="secondary" size="md" onClick={() => setConfirmOpen(false)}>
+            <Button
+              variant="secondary"
+              size="md"
+              disabled={submitting}
+              onClick={() => setConfirmOpen(false)}
+            >
               Cancel
             </Button>
-            <Button size="md" onClick={submitOffer}>
-              Submit offer
+            <Button size="md" disabled={submitting} onClick={() => void submitOffer()}>
+              {submitting ? 'Submitting…' : 'Submit offer'}
             </Button>
           </div>
         </div>

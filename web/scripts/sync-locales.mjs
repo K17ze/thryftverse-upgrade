@@ -46,7 +46,7 @@ const CHROME = {
     links: {
       allCategories: 'All categories', collections: 'Collections', outfits: 'Outfits', searchByPhoto: 'Search by photo',
       browseEverything: 'Browse everything', browseAssets: 'Browse assets', yourPortfolio: 'Your portfolio',
-      syndicates: 'Syndicates', startSyndicate: 'Start a syndicate', distributions: 'Distributions',
+      pools: 'Pools', startPool: 'Start a pool', distributions: 'Distributions',
       priceAlerts: 'Price alerts', liveAuctions: 'Live auctions', myBids: 'My bids', startAuction: 'Start an auction',
       listAnItem: 'List an item', sellerHub: 'Seller hub', liveNow: 'Live now', goLive: 'Go live',
       latestIssue: 'Latest issue', orders: 'Orders', wallet: 'Wallet', aboutThryftverse: 'About ThryftVerse',
@@ -67,7 +67,7 @@ const CHROME = {
     links: {
       allCategories: 'كل الفئات', collections: 'المجموعات', outfits: 'الإطلالات', searchByPhoto: 'البحث بالصورة',
       browseEverything: 'تصفح الكل', browseAssets: 'تصفح الأصول', yourPortfolio: 'محفظتك',
-      syndicates: 'مجموعات الاستثمار', startSyndicate: 'إنشاء مجموعة استثمار', distributions: 'التوزيعات',
+      pools: 'مجموعات الشراء', startPool: 'ابدأ مجموعة شراء', distributions: 'التوزيعات',
       priceAlerts: 'تنبيهات الأسعار', liveAuctions: 'مزادات مباشرة', myBids: 'مزايداتي', startAuction: 'بدء مزاد',
       listAnItem: 'أدرج عنصراً', sellerHub: 'مركز البائع', liveNow: 'مباشر الآن', goLive: 'ابدأ البث المباشر',
       latestIssue: 'أحدث إصدار', orders: 'الطلبات', wallet: 'المحفظة', aboutThryftverse: 'حول ThryftVerse',
@@ -88,7 +88,7 @@ const CHROME = {
     links: {
       allCategories: 'Alle Kategorien', collections: 'Kollektionen', outfits: 'Outfits', searchByPhoto: 'Fotosuche',
       browseEverything: 'Alles durchsuchen', browseAssets: 'Assets durchsuchen', yourPortfolio: 'Dein Portfolio',
-      syndicates: 'Syndikate', startSyndicate: 'Syndikat starten', distributions: 'Ausschüttungen',
+      pools: 'Pools', startPool: 'Pool starten', distributions: 'Ausschüttungen',
       priceAlerts: 'Preisalarme', liveAuctions: 'Live-Auktionen', myBids: 'Meine Gebote', startAuction: 'Auktion starten',
       listAnItem: 'Artikel einstellen', sellerHub: 'Verkäuferbereich', liveNow: 'Jetzt live', goLive: 'Live gehen',
       latestIssue: 'Aktuelle Ausgabe', orders: 'Bestellungen', wallet: 'Wallet', aboutThryftverse: 'Über ThryftVerse',
@@ -109,7 +109,7 @@ const CHROME = {
     links: {
       allCategories: 'Todas las categorías', collections: 'Colecciones', outfits: 'Outfits', searchByPhoto: 'Buscar por foto',
       browseEverything: 'Ver todo', browseAssets: 'Explorar activos', yourPortfolio: 'Tu portafolio',
-      syndicates: 'Sindicatos', startSyndicate: 'Crear un sindicato', distributions: 'Distribuciones',
+      pools: 'Pools', startPool: 'Crear un pool', distributions: 'Distribuciones',
       priceAlerts: 'Alertas de precio', liveAuctions: 'Subastas en vivo', myBids: 'Mis pujas', startAuction: 'Crear una subasta',
       listAnItem: 'Publicar un artículo', sellerHub: 'Centro de vendedor', liveNow: 'En vivo ahora', goLive: 'Emitir en vivo',
       latestIssue: 'Último número', orders: 'Pedidos', wallet: 'Cartera', aboutThryftverse: 'Acerca de ThryftVerse',
@@ -130,7 +130,7 @@ const CHROME = {
     links: {
       allCategories: 'Toutes les catégories', collections: 'Collections', outfits: 'Tenues', searchByPhoto: 'Recherche par photo',
       browseEverything: 'Tout parcourir', browseAssets: 'Parcourir les actifs', yourPortfolio: 'Votre portefeuille',
-      syndicates: 'Syndicats', startSyndicate: 'Créer un syndicat', distributions: 'Distributions',
+      pools: 'Pools', startPool: 'Créer un pool', distributions: 'Distributions',
       priceAlerts: 'Alertes prix', liveAuctions: 'Enchères en direct', myBids: 'Mes enchères', startAuction: 'Lancer une enchère',
       listAnItem: 'Mettre un article en vente', sellerHub: 'Espace vendeur', liveNow: 'En direct maintenant', goLive: 'Passer en direct',
       latestIssue: 'Dernier numéro', orders: 'Commandes', wallet: 'Portefeuille', aboutThryftverse: 'À propos de ThryftVerse',
@@ -151,7 +151,7 @@ const CHROME = {
     links: {
       allCategories: 'सभी श्रेणियाँ', collections: 'कलेक्शन', outfits: 'आउटफ़िट', searchByPhoto: 'फ़ोटो से खोजें',
       browseEverything: 'सब कुछ ब्राउज़ करें', browseAssets: 'एसेट ब्राउज़ करें', yourPortfolio: 'आपका पोर्टफ़ोलियो',
-      syndicates: 'सिंडिकेट', startSyndicate: 'सिंडिकेट शुरू करें', distributions: 'वितरण',
+      pools: 'पूल', startPool: 'पूल शुरू करें', distributions: 'वितरण',
       priceAlerts: 'मूल्य अलर्ट', liveAuctions: 'लाइव नीलामियां', myBids: 'मेरी बोलियाँ', startAuction: 'नीलामी शुरू करें',
       listAnItem: 'आइटम सूचीबद्ध करें', sellerHub: 'विक्रेता हब', liveNow: 'अभी लाइव', goLive: 'लाइव जाएं',
       latestIssue: 'नया अंक', orders: 'ऑर्डर', wallet: 'वॉलेट', aboutThryftverse: 'ThryftVerse के बारे में',
@@ -172,7 +172,7 @@ const CHROME = {
     links: {
       allCategories: 'Semua kategori', collections: 'Koleksi', outfits: 'Outfit', searchByPhoto: 'Cari dengan foto',
       browseEverything: 'Jelajahi semua', browseAssets: 'Jelajahi aset', yourPortfolio: 'Portofolio Anda',
-      syndicates: 'Sindikat', startSyndicate: 'Mulai sindikat', distributions: 'Distribusi',
+      pools: 'Pool', startPool: 'Mulai pool', distributions: 'Distribusi',
       priceAlerts: 'Notifikasi harga', liveAuctions: 'Lelang live', myBids: 'Tawaran saya', startAuction: 'Mulai lelang',
       listAnItem: 'Pasang item', sellerHub: 'Pusat penjual', liveNow: 'Live sekarang', goLive: 'Mulai live',
       latestIssue: 'Edisi terbaru', orders: 'Pesanan', wallet: 'Dompet', aboutThryftverse: 'Tentang ThryftVerse',
@@ -193,7 +193,7 @@ const CHROME = {
     links: {
       allCategories: 'すべてのカテゴリー', collections: 'コレクション', outfits: 'コーデ', searchByPhoto: '写真で検索',
       browseEverything: 'すべて見る', browseAssets: 'アセットを見る', yourPortfolio: 'ポートフォリオ',
-      syndicates: 'シンジケート', startSyndicate: 'シンジケートを作成', distributions: '分配',
+      pools: 'プール', startPool: 'プールを作成', distributions: '分配',
       priceAlerts: '価格アラート', liveAuctions: 'ライブオークション', myBids: '入札済み', startAuction: 'オークションを開始',
       listAnItem: '商品を出品', sellerHub: 'セラーハブ', liveNow: 'ライブ配信中', goLive: 'ライブを開始',
       latestIssue: '最新号', orders: '注文', wallet: 'ウォレット', aboutThryftverse: 'ThryftVerseについて',
@@ -214,7 +214,7 @@ const CHROME = {
     links: {
       allCategories: '모든 카테고리', collections: '컬렉션', outfits: '코디', searchByPhoto: '사진으로 검색',
       browseEverything: '전체 둘러보기', browseAssets: '자산 둘러보기', yourPortfolio: '내 포트폴리오',
-      syndicates: '신디케이트', startSyndicate: '신디케이트 시작', distributions: '배당',
+      pools: '풀', startPool: '풀 시작하기', distributions: '배당',
       priceAlerts: '가격 알림', liveAuctions: '라이브 경매', myBids: '내 입찰', startAuction: '경매 시작',
       listAnItem: '상품 등록', sellerHub: '셀러 허브', liveNow: '지금 라이브', goLive: '라이브 시작',
       latestIssue: '최신호', orders: '주문', wallet: '지갑', aboutThryftverse: 'ThryftVerse 정보',
@@ -235,7 +235,7 @@ const CHROME = {
     links: {
       allCategories: 'Todas as categorias', collections: 'Coleções', outfits: 'Outfits', searchByPhoto: 'Pesquisar por foto',
       browseEverything: 'Ver tudo', browseAssets: 'Explorar ativos', yourPortfolio: 'Seu portfólio',
-      syndicates: 'Sindicatos', startSyndicate: 'Criar um sindicato', distributions: 'Distribuições',
+      pools: 'Pools', startPool: 'Criar um pool', distributions: 'Distribuições',
       priceAlerts: 'Alertas de preço', liveAuctions: 'Leilões ao vivo', myBids: 'Meus lances', startAuction: 'Criar um leilão',
       listAnItem: 'Anunciar um artigo', sellerHub: 'Central do vendedor', liveNow: 'Ao vivo agora', goLive: 'Entrar ao vivo',
       latestIssue: 'Última edição', orders: 'Pedidos', wallet: 'Carteira', aboutThryftverse: 'Sobre a ThryftVerse',
@@ -256,7 +256,7 @@ const CHROME = {
     links: {
       allCategories: 'Все категории', collections: 'Коллекции', outfits: 'Образы', searchByPhoto: 'Поиск по фото',
       browseEverything: 'Смотреть всё', browseAssets: 'Смотреть активы', yourPortfolio: 'Ваш портфель',
-      syndicates: 'Синдикаты', startSyndicate: 'Создать синдикат', distributions: 'Выплаты',
+      pools: 'Пулы', startPool: 'Создать пул', distributions: 'Выплаты',
       priceAlerts: 'Уведомления о цене', liveAuctions: 'Аукционы в эфире', myBids: 'Мои ставки', startAuction: 'Создать аукцион',
       listAnItem: 'Добавить товар', sellerHub: 'Кабинет продавца', liveNow: 'Сейчас в эфире', goLive: 'Начать эфир',
       latestIssue: 'Последний выпуск', orders: 'Заказы', wallet: 'Кошелёк', aboutThryftverse: 'О ThryftVerse',
@@ -277,7 +277,7 @@ const CHROME = {
     links: {
       allCategories: 'Tüm kategoriler', collections: 'Koleksiyonlar', outfits: 'Kombinler', searchByPhoto: 'Fotoğrafla ara',
       browseEverything: 'Hepsine göz at', browseAssets: 'Varlıklara göz at', yourPortfolio: 'Portföyünüz',
-      syndicates: 'Yatırım grupları', startSyndicate: 'Yatırım grubu kur', distributions: 'Dağıtımlar',
+      pools: 'Havuzlar', startPool: 'Havuz kur', distributions: 'Dağıtımlar',
       priceAlerts: 'Fiyat uyarıları', liveAuctions: 'Canlı mezatlar', myBids: 'Tekliflerim', startAuction: 'Mezat başlat',
       listAnItem: 'Ürün listele', sellerHub: 'Satıcı merkezi', liveNow: 'Şu an canlı', goLive: 'Canlı yayına geç',
       latestIssue: 'Son sayı', orders: 'Siparişler', wallet: 'Cüzdan', aboutThryftverse: 'ThryftVerse hakkında',
@@ -298,7 +298,7 @@ const CHROME = {
     links: {
       allCategories: '所有分类', collections: '合集', outfits: '穿搭', searchByPhoto: '拍照搜索',
       browseEverything: '浏览全部', browseAssets: '浏览资产', yourPortfolio: '您的投资组合',
-      syndicates: '联合投资团', startSyndicate: '发起联合投资', distributions: '分配',
+      pools: '合买池', startPool: '发起合买池', distributions: '分配',
       priceAlerts: '价格提醒', liveAuctions: '实时拍卖', myBids: '我的出价', startAuction: '发起拍卖',
       listAnItem: '发布商品', sellerHub: '卖家中心', liveNow: '正在直播', goLive: '开始直播',
       latestIssue: '最新一期', orders: '订单', wallet: '钱包', aboutThryftverse: '关于 ThryftVerse',

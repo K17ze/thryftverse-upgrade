@@ -8,19 +8,23 @@
  * mobile's LiveShoppingHomeScreen surface grammar.
  */
 
-import { useMemo, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
+import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import type { LiveSession } from '@/lib/data/fixtures-media';
-import { useLiveSessions } from './useLiveSessions';
+import { useLiveSessions, liveSellerOf } from './useLiveSessions';
 import { LiveNowCard } from './LiveNowCard';
-import { UpcomingRail } from './UpcomingRail';
+import { UpcomingRail, formatScheduled } from './UpcomingRail';
 import { ReplaysGrid } from './ReplaysGrid';
 import { ScheduleTimeline, isSameDay } from './ScheduleTimeline';
 import { LiveViewerOverlay } from './LiveViewerOverlay';
+import { LiveBadge } from './LiveBadge';
 import { SegmentedControl } from '@/components/feed/SegmentedControl';
 import { EmptyState } from '@/components/ui/EmptyState';
 import { Skeleton } from '@/components/ui/Skeleton';
 import { Icon } from '@/components/ui/Icon';
+import { AppImage } from '@/components/ui/AppImage';
+import { useSession } from '@/lib/session/SessionProvider';
 
 function SectionHeader({ title, meta }: { title: string; meta?: string }) {
   return (
@@ -56,9 +60,41 @@ function LiveSkeleton() {
 
 export function LiveView() {
   const router = useRouter();
+  const { user } = useSession();
   const { data, isLoading, isError, refetch } = useLiveSessions();
   const [watching, setWatching] = useState<LiveSession | null>(null);
   const [category, setCategory] = useState('all');
+
+  // Deep link — /live?watch=<id> lands straight on the show surface, so
+  // a shared live card opens the same overlay a tap does.
+  useEffect(() => {
+    if (!data || watching) return;
+    const id = new URLSearchParams(window.location.search).get('watch');
+    if (!id) return;
+    const target = data.find((s) => s.id === id);
+    if (target) {
+      setWatching(target);
+    } else {
+      // Stale or session-scoped id — drop the param rather than 404 the show.
+      window.history.replaceState(null, '', '/live');
+    }
+  }, [data, watching]);
+
+  // The param write is synchronous history state, not a router nav — a
+  // close must clear it before state resets or the effect above would
+  // read the stale ?watch and reopen the overlay.
+  const openSession = (s: LiveSession) => {
+    setWatching(s);
+    window.history.replaceState(
+      null,
+      '',
+      `/live?watch=${encodeURIComponent(s.id)}`,
+    );
+  };
+  const closeSession = () => {
+    window.history.replaceState(null, '', '/live');
+    setWatching(null);
+  };
 
   // Segments come from the sessions themselves — no invented taxonomy.
   const categories = useMemo(() => {
@@ -133,6 +169,11 @@ export function LiveView() {
 
   const [hero, ...restLive] = live;
 
+  // The viewer's own shows — the host surface index. Real membership only
+  // (sellerId === session user); nothing renders for guests or sellers
+  // with no shows. Rows route to the actual console for that show.
+  const mine = user ? data.filter((s) => s.sellerId === user.id) : [];
+
   // Keep the watched session pinned to the latest hub data — a host
   // ending their show flips the cached session to 'ended', and the
   // overlay should stop claiming it's live.
@@ -163,11 +204,11 @@ export function LiveView() {
           />
           {hero ? (
             <>
-              <LiveNowCard session={hero} onWatch={setWatching} variant="hero" />
+              <LiveNowCard session={hero} onWatch={openSession} variant="hero" />
               {restLive.length > 0 ? (
                 <div className="no-scrollbar -mx-4 mt-4 flex gap-4 overflow-x-auto px-4 pb-1 sm:-mx-6 sm:px-6">
                   {restLive.map((s) => (
-                    <LiveNowCard key={s.id} session={s} onWatch={setWatching} />
+                    <LiveNowCard key={s.id} session={s} onWatch={openSession} />
                   ))}
                 </div>
               ) : null}
@@ -198,17 +239,76 @@ export function LiveView() {
           </section>
         ) : null}
 
+        {/* Your shows — the seller's own lineup/past shows, linking back
+            to the host console each row belongs to. */}
+        {mine.length > 0 ? (
+          <section aria-label="Your shows">
+            <SectionHeader title="Your shows" meta={`${mine.length}`} />
+            <ul className="divide-y divide-border-subtle border-y border-border-subtle">
+              {mine.map((s) => (
+                <YourShowRow key={s.id} session={s} />
+              ))}
+            </ul>
+          </section>
+        ) : null}
+
         {/* Replays */}
         {replays.length > 0 ? (
           <section aria-label="Replays">
             <SectionHeader title="Replays" meta={`${replays.length} shows`} />
-            <ReplaysGrid sessions={replays} onPlay={setWatching} />
+            <ReplaysGrid sessions={replays} onPlay={openSession} />
           </section>
         ) : null}
       </div>
 
-      <LiveViewerOverlay session={watchingFresh} onClose={() => setWatching(null)} />
+      <LiveViewerOverlay session={watchingFresh} onClose={closeSession} />
     </>
+  );
+}
+
+/** One row of "Your shows" — hairline timetable grammar shared with the
+ *  schedule timeline: status where the clock sits, title, scheduled time,
+ *  chevron into that show's host console. */
+function YourShowRow({ session }: { session: LiveSession }) {
+  const seller = liveSellerOf(session);
+  return (
+    <li>
+      <Link
+        href={`/live/host/${session.id}`}
+        aria-label={`Manage “${session.title}” — host console`}
+        className="pressable -mx-2 flex items-center gap-3 rounded-md px-2 py-2.5 hover:bg-surface-alt"
+      >
+        <span className="relative h-11 w-11 shrink-0 overflow-hidden rounded-md bg-surface-alt">
+          <AppImage
+            src={session.coverUri}
+            alt=""
+            fill
+            sizes="44px"
+            className="h-full w-full"
+          />
+        </span>
+        <span className="min-w-0 flex-1">
+          <span className="clamp-1 block text-body-emphasis text-text-primary">
+            {session.title}
+          </span>
+          <span className="tnum mt-0.5 block text-meta text-text-muted">
+            {session.status === 'upcoming' && session.scheduledAt
+              ? formatScheduled(session.scheduledAt)
+              : session.status === 'ended'
+                ? `Ended${session.durationMinutes != null ? ` · ${session.durationMinutes} min` : ''}`
+                : (seller?.username ? `@${seller.username}` : 'On air')}
+          </span>
+        </span>
+        {session.status === 'live' ? (
+          <LiveBadge className="shrink-0" />
+        ) : (
+          <span className="shrink-0 rounded-md bg-surface-alt px-2 py-1 text-meta font-semibold uppercase tracking-wide text-text-secondary">
+            {session.status === 'upcoming' ? 'Scheduled' : 'Replay'}
+          </span>
+        )}
+        <Icon name="forward" size={16} className="shrink-0 text-text-muted" />
+      </Link>
+    </li>
   );
 }
 

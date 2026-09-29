@@ -54,7 +54,7 @@ const VOTE_WORD: Record<VoteChoice, string> = {
 
 function VoteSkeleton() {
   return (
-    <div className="mx-auto w-full max-w-xl px-4 pb-20 pt-6 sm:px-6" aria-busy="true" aria-label="Loading ballot">
+    <div className="mx-auto w-full max-w-xl px-4 pb-20 pt-6 sm:px-6 lg:max-w-2xl" aria-busy="true" aria-label="Loading ballot">
       <Skeleton className="h-11 w-11 rounded-full" />
       <Skeleton className="mt-6 h-4 w-36" />
       <Skeleton className="mt-3 h-7 w-64" />
@@ -172,10 +172,10 @@ export function CorporateActionVoteView({
   // ── Ballot receipt — the recorded vote, durable across reloads ──────
   if (receipt) {
     return (
-      <div className="mx-auto w-full max-w-xl px-4 pb-20 pt-6 sm:px-6">
+      <div className="mx-auto w-full max-w-xl px-4 pb-20 pt-6 sm:px-6 lg:max-w-2xl">
         <div className="flex flex-col items-center pt-10 text-center">
           <Icon name="check" filled size={56} className="text-success-text" />
-          <h1 className="mt-4 text-screen-title font-semibold text-text-primary">
+          <h1 className="mt-4 text-screen-title text-text-primary">
             Vote recorded
           </h1>
           <p className="mt-1 text-body text-text-secondary">
@@ -204,7 +204,7 @@ export function CorporateActionVoteView({
   }
 
   return (
-    <div className="mx-auto w-full max-w-xl px-4 pb-20 pt-6 sm:px-6">
+    <div className="mx-auto w-full max-w-xl px-4 pb-20 pt-6 sm:px-6 lg:max-w-2xl">
       <div className="flex items-center gap-1">
         <IconButton
           name="back"
@@ -212,7 +212,7 @@ export function CorporateActionVoteView({
           onClick={() => router.push(`/co-own/${assetId}/actions/${actionId}`)}
           className="-ml-2"
         />
-        <span className="text-meta font-semibold uppercase tracking-[0.08em] text-text-muted">
+        <span className="text-meta font-semibold uppercase tracking-wide text-text-muted">
           Vote
         </span>
       </div>
@@ -258,7 +258,7 @@ export function CorporateActionVoteView({
       ) : (
         <>
           <div className="mt-6 flex items-baseline justify-between border-b border-border-subtle pb-3">
-            <span className="text-meta font-semibold uppercase tracking-[0.08em] text-text-muted">
+            <span className="text-meta font-semibold uppercase tracking-wide text-text-muted">
               Your voting power
             </span>
             <span className="tnum text-body-emphasis font-semibold text-text-primary">

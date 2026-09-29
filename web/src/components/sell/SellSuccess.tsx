@@ -13,7 +13,6 @@
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import type { Listing } from '@/lib/contracts/domain';
-import { CATEGORIES } from '@/lib/data/fixtures';
 import { AppImage } from '@/components/ui/AppImage';
 import { Badge } from '@/components/ui/Badge';
 import { Button } from '@/components/ui/Button';
@@ -21,6 +20,8 @@ import { Icon, type AppIconName } from '@/components/ui/Icon';
 import { useToast } from '@/components/ui/Toast';
 import { formatPrice } from '@/lib/utils/format';
 import { getListingCoverUri } from '@/lib/utils/media';
+import { useTaxonomy } from '@/lib/hooks/sell/useTaxonomy';
+import { categoryNodeName } from './taxonomy';
 
 interface SellSuccessProps {
   /** The record publish wrote to the session's own-listing store. */
@@ -39,7 +40,8 @@ const TIPS: { icon: AppIconName; text: string }[] = [
 export function SellSuccess({ listing, edited, onListAnother }: SellSuccessProps) {
   const router = useRouter();
   const { show } = useToast();
-  const categoryName = CATEGORIES.find((c) => c.slug === listing.category)?.name;
+  const { taxonomy } = useTaxonomy();
+  const categoryName = categoryNodeName(taxonomy.categories, listing.category);
 
   const share = async () => {
     const url = `${window.location.origin}/item/${listing.id}`;
@@ -64,7 +66,7 @@ export function SellSuccess({ listing, edited, onListAnother }: SellSuccessProps
       <span className="flex h-16 w-16 items-center justify-center rounded-full bg-success-subtle text-success-text">
         <Icon name="check" filled size={30} />
       </span>
-      <h1 className="mt-6 text-screen-title font-bold text-text-primary">
+      <h1 className="mt-6 text-screen-title text-text-primary">
         {edited ? 'Your changes are live' : 'Listed'}
       </h1>
       <p className="mt-2 max-w-sm text-body text-text-secondary">
@@ -93,7 +95,7 @@ export function SellSuccess({ listing, edited, onListAnother }: SellSuccessProps
           className="h-20 w-16 shrink-0 rounded-lg"
         />
         <div className="min-w-0 flex-1">
-          <span className="text-meta font-medium uppercase tracking-wide text-text-muted">
+          <span className="text-meta font-semibold uppercase tracking-wide text-text-muted">
             {edited ? 'Updated listing' : 'Published listing'}
           </span>
           <p className="clamp-2 mt-0.5 text-body-emphasis font-semibold text-text-primary">

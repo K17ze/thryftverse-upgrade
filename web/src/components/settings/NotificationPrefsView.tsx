@@ -12,18 +12,42 @@
  * Master toggles are pause/resume like mobile — pausing snapshots the
  * category mix, resuming restores it. Category rows for a paused channel
  * dim rather than pretend they still fire.
+ *
+ * Live mode syncs through two wires: GET/PUT /notifications/preferences
+ * (push categories + quiet hours) and GET/PUT /users/me/email-preferences
+ * (the email matrix). The local store is the optimistic mirror hydrated
+ * from server truth, every push write projects onto the coarser wire
+ * categories (PUSH_PREF_WIRE_CATEGORY), every email write projects 1:1
+ * (EMAIL_PREF_WIRE_FIELD), and a failed write restores the exact
+ * pre-write posture. Fixture and guest sessions keep the
+ * localStorage-only path.
  */
 
+import { useEffect } from 'react';
+import { useQuery } from '@tanstack/react-query';
 import { SettingsSection } from './SettingsSection';
 import { Switch } from './Switch';
 import { Skeleton } from '@/components/ui/Skeleton';
+import { useToast } from '@/components/ui/Toast';
 import { useHydrated } from '@/lib/store/useStore';
+import { useSession } from '@/lib/session/SessionProvider';
+import { DATA_MODE } from '@/lib/api/client';
+import { parseApiError } from '@/lib/api/http';
+import * as notificationsService from '@/lib/api/services/notifications';
+import * as usersService from '@/lib/api/services/users';
 import {
   useSettingsPrefs,
   channelAnyEnabled,
+  wirePushPreferences,
+  wireEmailPreferences,
+  PUSH_PREF_WIRE_CATEGORY,
+  EMAIL_PREF_WIRE_FIELD,
   type NotificationPrefKey,
   type NotifChannel,
+  type QuietHours,
 } from '@/lib/store/settingsPrefs';
+
+const isLive = DATA_MODE === 'live';
 
 interface PrefRowDef {
   key: NotificationPrefKey;
@@ -268,14 +292,133 @@ function ColumnHeader({ hasPush, hasEmail }: { hasPush: boolean; hasEmail: boole
 
 export function NotificationPrefsView() {
   const hydrated = useHydrated();
+  const { show } = useToast();
+  const { isGuest, sessionLoading } = useSession();
   const push = useSettingsPrefs((s) => s.push);
   const email = useSettingsPrefs((s) => s.email);
   const setPref = useSettingsPrefs((s) => s.setPref);
   const setChannelMaster = useSettingsPrefs((s) => s.setChannelMaster);
+  const restoreChannelPrefs = useSettingsPrefs((s) => s.restoreChannelPrefs);
+  const syncNotificationPrefs = useSettingsPrefs((s) => s.syncNotificationPrefs);
+  const syncEmailPrefs = useSettingsPrefs((s) => s.syncEmailPrefs);
   const quietHours = useSettingsPrefs((s) => s.quietHours);
   const setQuietHours = useSettingsPrefs((s) => s.setQuietHours);
 
-  if (!hydrated) {
+  // The wire only exists for an authed live session — guests and fixture
+  // mode keep the device-local mirror.
+  const syncs = isLive && !isGuest;
+  const livePrefs = useQuery({
+    queryKey: ['notifications', 'preferences'],
+    queryFn: ({ signal }) => notificationsService.fetchNotificationPreferences(signal),
+    enabled: syncs,
+    staleTime: 30_000,
+  });
+  const emailPrefs = useQuery({
+    queryKey: ['users', 'me', 'email-preferences'],
+    queryFn: ({ signal }) => usersService.fetchEmailPreferences(signal),
+    enabled: syncs,
+    staleTime: 30_000,
+  });
+
+  // Reconcile server truth into the mirror whenever the reads land.
+  useEffect(() => {
+    if (livePrefs.data) syncNotificationPrefs(livePrefs.data);
+  }, [livePrefs.data, syncNotificationPrefs]);
+  useEffect(() => {
+    if (emailPrefs.data) syncEmailPrefs(emailPrefs.data);
+  }, [emailPrefs.data, syncEmailPrefs]);
+
+  // Network/server failures carry no user-facing detail beyond "it didn't
+  // save" — the offline classifier is the only message worth surfacing.
+  const syncError = (error: unknown, fallback: string) => {
+    const parsed = parseApiError(error);
+    show(parsed.isNetworkError ? parsed.message : fallback, 'error');
+  };
+
+  /** Optimistic category write → PUT the wire projection; a failed write
+   *  restores just the toggled key. Push keys without a wire seat (the
+   *  locked security-alerts row) and email keys outside
+   *  EMAIL_PREF_WIRE_FIELD stay device-local. */
+  const syncPref = (channel: NotifChannel, key: NotificationPrefKey, v: boolean) => {
+    setPref(channel, key, v);
+    if (!syncs) return;
+    if (channel === 'push' && key in PUSH_PREF_WIRE_CATEGORY) {
+      void notificationsService
+        .updateNotificationPreferences({
+          preferences: wirePushPreferences(useSettingsPrefs.getState().push),
+        })
+        .catch((error) => {
+          setPref('push', key, !v);
+          syncError(error, 'Couldn’t save — the preference was restored');
+        });
+      return;
+    }
+    // The email wire is 1:1 with the mapped rows — the whole projected
+    // map ships on every write.
+    if (channel === 'email' && key in EMAIL_PREF_WIRE_FIELD) {
+      void usersService
+        .updateEmailPreferences(wireEmailPreferences(useSettingsPrefs.getState().email))
+        .catch((error) => {
+          setPref('email', key, !v);
+          syncError(error, 'Couldn’t save — the preference was restored');
+        });
+    }
+  };
+
+  /** Pause/resume — snapshots the mix like mobile; a failed write
+   *  restores the map and the snapshot atomically. */
+  const syncChannelMaster = (channel: NotifChannel, v: boolean) => {
+    const before = useSettingsPrefs.getState();
+    const map = before[channel];
+    const paused = channel === 'push' ? before.pausedPush : before.pausedEmail;
+    setChannelMaster(channel, v, CHANNEL_KEYS[channel]);
+    if (!syncs) return;
+    const rollback = (error: unknown) => {
+      restoreChannelPrefs(channel, map, paused);
+      syncError(error, 'Couldn’t save — the preferences were restored');
+    };
+    if (channel === 'push') {
+      void notificationsService
+        .updateNotificationPreferences({
+          preferences: wirePushPreferences(useSettingsPrefs.getState().push),
+        })
+        .catch(rollback);
+      return;
+    }
+    void usersService
+      .updateEmailPreferences(wireEmailPreferences(useSettingsPrefs.getState().email))
+      .catch(rollback);
+  };
+
+  /** Quiet hours — user-level on the server so every device honours the
+   *  same window. The mirror applies instantly; failure rolls back. */
+  const syncQuietHours = (patch: Partial<QuietHours>) => {
+    const before = useSettingsPrefs.getState().quietHours;
+    setQuietHours(patch);
+    if (!syncs) return;
+    const next = useSettingsPrefs.getState().quietHours;
+    void notificationsService
+      .updateNotificationPreferences({
+        quietHours: {
+          enabled: next.enabled,
+          startHour: next.startHour,
+          endHour: next.endHour,
+          // The window is wall-clock in the user's zone — the server
+          // evaluates it there, not UTC.
+          timezone: Intl.DateTimeFormat().resolvedOptions().timeZone,
+        },
+      })
+      .catch((error) => {
+        setQuietHours(before);
+        syncError(error, 'Couldn’t update quiet hours — restored');
+      });
+  };
+
+  if (
+    !hydrated ||
+    (isLive && sessionLoading) ||
+    (syncs && (livePrefs.isLoading || emailPrefs.isLoading))
+  ) {
     return (
       <div aria-busy aria-label="Loading preferences" className="mt-2 space-y-px">
         {[0, 1, 2, 3, 4, 5].map((i) => (
@@ -294,17 +437,34 @@ export function NotificationPrefsView() {
   return (
     <>
       <SettingsSection title="Delivery">
+        {syncs && (livePrefs.isError || emailPrefs.isError) ? (
+          <div className="px-4 py-3.5 sm:px-5">
+            <p className="text-caption text-text-muted">
+              Couldn’t reach the server — showing this device’s saved preferences.
+            </p>
+            <button
+              type="button"
+              onClick={() => {
+                void livePrefs.refetch();
+                void emailPrefs.refetch();
+              }}
+              className="pressable mt-1 inline-flex min-h-11 items-center text-caption font-semibold text-text-primary"
+            >
+              Try again
+            </button>
+          </div>
+        ) : null}
         <MasterRow
           label="Push notifications"
           on={pushOn}
           paused={!pushOn}
-          onChange={(v) => setChannelMaster('push', v, CHANNEL_KEYS.push)}
+          onChange={(v) => syncChannelMaster('push', v)}
         />
         <MasterRow
           label="Email notifications"
           on={emailOn}
           paused={!emailOn}
-          onChange={(v) => setChannelMaster('email', v, CHANNEL_KEYS.email)}
+          onChange={(v) => syncChannelMaster('email', v)}
         />
       </SettingsSection>
 
@@ -323,7 +483,7 @@ export function NotificationPrefsView() {
                   emailChecked={email[def.key]}
                   pushDisabled={!pushOn && !def.locked}
                   emailDisabled={!emailOn && !def.locked}
-                  onPref={setPref}
+                  onPref={syncPref}
                 />
               ))}
             </div>
@@ -343,7 +503,7 @@ export function NotificationPrefsView() {
           </div>
           <Switch
             checked={quietHours.enabled}
-            onChange={(v) => setQuietHours({ enabled: v })}
+            onChange={(v) => syncQuietHours({ enabled: v })}
             aria-label="Do Not Disturb"
           />
         </div>
@@ -354,7 +514,7 @@ export function NotificationPrefsView() {
               <select
                 aria-label="Quiet hours start"
                 value={quietHours.startHour}
-                onChange={(e) => setQuietHours({ startHour: Number(e.target.value) })}
+                onChange={(e) => syncQuietHours({ startHour: Number(e.target.value) })}
                 className={selectClass}
               >
                 {HOURS.map((h) => (
@@ -369,7 +529,7 @@ export function NotificationPrefsView() {
               <select
                 aria-label="Quiet hours end"
                 value={quietHours.endHour}
-                onChange={(e) => setQuietHours({ endHour: Number(e.target.value) })}
+                onChange={(e) => syncQuietHours({ endHour: Number(e.target.value) })}
                 className={selectClass}
               >
                 {HOURS.map((h) => (
@@ -384,9 +544,12 @@ export function NotificationPrefsView() {
       </SettingsSection>
 
       <p className="px-4 pt-5 text-caption text-text-muted sm:px-5">
-        Security alerts can’t be switched off — they protect your account. In this
-        preview, preferences are stored on this device; the platform syncs them
-        across devices once the notification API is connected.
+        Security alerts can’t be switched off — they protect your account.
+        {syncs
+          ? ' Push and email choices plus quiet hours sync to your account.'
+          : isLive
+            ? ' Preferences are stored on this device — sign in to sync them to your account.'
+            : ' In this preview, preferences are stored on this device; the platform syncs them across devices once the notification API is connected.'}
       </p>
     </>
   );

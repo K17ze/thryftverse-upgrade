@@ -1,5 +1,6 @@
 import type { Metadata } from 'next';
 import { coOwnAssetById } from '@/lib/data/fixtures-coown';
+import { DATA_MODE } from '@/lib/api/client';
 import { BuyoutView } from '@/components/coown/buyout/BuyoutView';
 
 export async function generateMetadata({
@@ -8,7 +9,9 @@ export async function generateMetadata({
   params: Promise<{ id: string }>;
 }): Promise<Metadata> {
   const { id } = await params;
-  const asset = coOwnAssetById(id);
+  // Live mode resolves the asset client-side — fixture titles must not
+  // stamp a real buyout link's metadata.
+  const asset = DATA_MODE === 'live' ? undefined : coOwnAssetById(id);
   if (!asset) return { title: 'Buyout' };
   return {
     title: `Buyout — ${asset.title}`,

@@ -11,10 +11,10 @@
  * sheet. Skeleton, error, not-found and populated states.
  */
 
-import { useMemo, useState } from 'react';
+import { useState } from 'react';
 import Link from 'next/link';
 import { useParams, useRouter } from 'next/navigation';
-import { useQueryClient } from '@tanstack/react-query';
+import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { AppImage } from '@/components/ui/AppImage';
 import { Avatar } from '@/components/ui/Avatar';
 import { Button } from '@/components/ui/Button';
@@ -44,6 +44,12 @@ import {
 } from '@/components/orders/IssueReportSheet';
 import { ReturnRequestSheet } from '@/components/orders/ReturnRequestSheet';
 import { ConfirmSheet, type ConfirmSheetState } from '@/components/orders/ConfirmSheet';
+import { DispatchSheet } from '@/components/orders/DispatchSheet';
+import {
+  BuyerProtectionSheet,
+  type ProtectionCoverage,
+} from '@/components/orders/BuyerProtectionSheet';
+import { ReservationCountdown } from '@/components/orders/ReservationCountdown';
 import {
   isCancelledStatus,
   isCarrierFailureStatus,
@@ -53,11 +59,11 @@ import {
   type OrderRole,
 } from '@/components/orders/orderCapabilities';
 import {
-  useCommerceOrders,
   useCreateConversation,
   useOrderActions,
   useOrderReturnCase,
 } from '@/lib/hooks/queries';
+import { useOrder } from '@/lib/hooks/order-queries';
 import { DATA_MODE } from '@/lib/api/client';
 import * as commerceService from '@/lib/api/services/commerce';
 import { parseApiError } from '@/lib/api/http';
@@ -65,6 +71,8 @@ import { useSession } from '@/lib/session/SessionProvider';
 import { useSavedAddresses, useSavedPaymentMethods } from '@/lib/store/userPaymentData';
 import { useOrderInstrumentFacts } from '@/lib/hooks/instrument-queries';
 import { useSupportActions, useSupportTickets } from '@/components/support/useSupportTickets';
+import { Skeleton } from '@/components/ui/Skeleton';
+import { useListingIds, useSellerSummary } from '@/lib/hooks/listing-resolution';
 import { listingById, userById } from '@/lib/data/fixtures';
 import {
   commerceOrderDetailFor,
@@ -74,6 +82,8 @@ import { formatDate, formatPrice } from '@/lib/utils/format';
 import { getCategoryFocalPoint, getListingCoverUri } from '@/lib/utils/media';
 
 import type { AppIconName } from '@/components/ui/Icon';
+import type { User } from '@/lib/contracts/domain';
+import type { SellerSummary } from '@/lib/api/services/users';
 
 const ACTION_LABEL: Record<OrderAction, string> = {
   pay: 'Pay now',
@@ -106,19 +116,56 @@ const ACTION_ICON: Partial<Record<OrderAction, AppIconName>> = {
   dispatch: 'send',
 };
 
+/** Stable empty for the pre-resolution order — keeps the id-list query
+ *  identity stable while the order itself is still loading. */
+const EMPTY_IDS: string[] = [];
+
+/** The counterparty fields the detail surface renders — both the fixture
+ *  user row and the live seller summary map onto it. */
+interface CounterpartyView {
+  id: string;
+  username: string;
+  avatar: string | null;
+  isVerified: boolean;
+  rating: number | null;
+}
+
+function toCounterparty(
+  source: User | SellerSummary | null | undefined,
+): CounterpartyView | null {
+  if (!source) return null;
+  if ('isVerified' in source) {
+    return {
+      id: source.id,
+      username: source.username,
+      avatar: source.avatar,
+      isVerified: source.isVerified,
+      rating: source.rating,
+    };
+  }
+  return {
+    id: source.id,
+    username: source.username,
+    avatar: source.avatar,
+    isVerified: source.verified,
+    rating: source.rating,
+  };
+}
+
 export default function OrderDetailPage() {
   const params = useParams<{ id: string }>();
   const router = useRouter();
   const { show } = useToast();
   const { user, sessionLoading } = useSession();
+  const orderId = params?.id ?? '';
+  // The order itself — GET /orders/:id, not a list-find over the paginated
+  // orders feed (a deep link can reference an order outside that page).
   const {
-    data: orders,
+    data: order,
     isLoading,
     isError,
     refetch,
-  } = useCommerceOrders();
-
-  const orderId = params?.id ?? '';
+  } = useOrder(orderId);
   const actions = useOrderActions(orderId);
   const createConversation = useCreateConversation();
   const { data: tickets } = useSupportTickets();
@@ -127,9 +174,12 @@ export default function OrderDetailPage() {
   // the enrichment store inline below — no flash for session-local cases.
   const { data: liveReturnCase } = useOrderReturnCase(orderId);
 
-  const order = useMemo(
-    () => (orders ?? []).find((o) => o.id === orderId) ?? null,
-    [orders, orderId],
+  // Live resolution — the listing and counterparty come off the wire
+  // (GET /listings/:id, GET /sellers/:id); fixture keeps the catalogue.
+  // Hooks run before the guards; ids stay null until the order resolves.
+  const liveListing = useListingIds(order ? [order.listingId] : EMPTY_IDS);
+  const liveSeller = useSellerSummary(
+    order && user ? (order.buyerId === user.id ? order.sellerId : order.buyerId) : null,
   );
 
   // Purchase-summary truth. Fixture keeps the session's resolved defaults
@@ -153,8 +203,52 @@ export default function OrderDetailPage() {
   const [actionsOpen, setActionsOpen] = useState(false);
   const [issueOpen, setIssueOpen] = useState(false);
   const [returnOpen, setReturnOpen] = useState(false);
+  const [dispatchOpen, setDispatchOpen] = useState(false);
+  const [protectionOpen, setProtectionOpen] = useState(false);
   const [confirmSheet, setConfirmSheet] = useState<ConfirmSheetState | null>(null);
   const [busy, setBusy] = useState(false);
+  const [claimBusy, setClaimBusy] = useState(false);
+
+  // Parcel trail — GET /orders/:id/parcel/events, the carrier's own scans.
+  // Live mode only: fixture orders read the authored enrichment trail.
+  const { data: parcelTrail } = useQuery({
+    queryKey: ['order', orderId, 'parcel-events'],
+    queryFn: ({ signal }) => commerceService.fetchParcelEvents(orderId, signal),
+    enabled: DATA_MODE === 'live' && !!orderId,
+  });
+
+  // Review truth — GET /orders/:id/review. The detail wire row carries no
+  // review flag (the list projection emits hasReview, the detail omits
+  // it), so the persisted review row is the verdict. Same key the
+  // /review/[orderId] composer reads — the cache is shared.
+  const { data: orderReview } = useQuery({
+    queryKey: ['order', orderId, 'review'],
+    queryFn: ({ signal }) => commerceService.fetchOrderReview(orderId, signal),
+    enabled: DATA_MODE === 'live' && !!orderId,
+    staleTime: 60_000,
+  });
+
+  // Buyer-protection coverage — GET /orders/:id/protection is buyer-gated
+  // and only fetched while the sheet is open. Fixture mode derives the
+  // same coverage shape from the order's fee split below.
+  const protectionQuery = useQuery({
+    queryKey: ['order', orderId, 'protection'],
+    queryFn: ({ signal }) => commerceService.fetchOrderProtection(orderId, signal),
+    enabled:
+      DATA_MODE === 'live' &&
+      protectionOpen &&
+      !!order &&
+      !!user &&
+      order.buyerId === user.id,
+  });
+
+  /** Order-action writes invalidate the list cache (queries.ts); the
+   *  detail read is its own key — refresh it so the status header and
+   *  capability set move with the mutation, not just the list. */
+  const refreshOrderCaches = () => {
+    void queryClient.invalidateQueries({ queryKey: ['orders'] });
+    void queryClient.invalidateQueries({ queryKey: ['order', orderId] });
+  };
 
   const run = (fn: () => Promise<unknown>, toast?: string) => {
     setBusy(true);
@@ -162,9 +256,18 @@ export default function OrderDetailPage() {
       .then(() => {
         if (toast) show(toast, 'success');
       })
+      .catch((error) => {
+        // Surface the server's own message — a rejected write must never
+        // pass silently for the success path it interrupted.
+        show(
+          parseApiError(error, 'Something went wrong — try again.').message,
+          'error',
+        );
+      })
       .finally(() => {
         setBusy(false);
         setConfirmSheet(null);
+        refreshOrderCaches();
       });
   };
 
@@ -212,15 +315,28 @@ export default function OrderDetailPage() {
   const viewerId = user.id;
   const isBuyer = order.buyerId === viewerId;
   const role: OrderRole = isBuyer ? 'buyer' : 'seller';
-  const listing = listingById(order.listingId);
-  const counterparty = userById(isBuyer ? order.sellerId : order.buyerId);
+  // Live: the wire rows; fixture: the catalogue. An unresolved live id
+  // renders the honest placeholder — never a fixture ghost.
+  const listing =
+    DATA_MODE === 'live'
+      ? (liveListing.byId.get(order.listingId) ?? null)
+      : listingById(order.listingId);
+  const counterparty = toCounterparty(
+    DATA_MODE === 'live'
+      ? (liveSeller.data ?? null)
+      : userById(isBuyer ? order.sellerId : order.buyerId),
+  );
   const detail = commerceOrderDetailFor(order);
   const enrichment = orderEnrichmentFor(order.id);
+  // Live: the carrier's parcel-event scans are the trail; fixture keeps
+  // the authored enrichment events.
+  const trackingEvents =
+    DATA_MODE === 'live' ? (parcelTrail?.events ?? []) : (enrichment.trackingEvents ?? []);
   // Live: the returns API is the truth. Fixture: the enrichment store.
   const returnCase =
     DATA_MODE === 'live' ? (liveReturnCase ?? null) : (enrichment.returnCase ?? null);
   const openTicket = (tickets ?? []).find(
-    (t) => t.orderRef === order.id && (t.status === 'open' || t.status === 'in_review'),
+    (t) => t.orderId === order.id && (t.status === 'open' || t.status === 'in_review'),
   );
 
   const key = normaliseOrderStatus(order.status);
@@ -228,14 +344,28 @@ export default function OrderDetailPage() {
   const caseOpen =
     !!openTicket ||
     (returnCase != null && returnCase.status !== 'closed' && returnCase.status !== 'refund_confirmed');
+  // Live truth: the server's own open-resolution flag (it covers support
+  // tickets AND return cases, so it stands even before the ticket store
+  // resolves); the session-locals stay OR'd in for the just-filed case.
+  const hasOpenResolution =
+    DATA_MODE === 'live' ? order.hasOpenResolution === true || caseOpen : caseOpen;
+  // Live truth: only a buyer-authored review counts — a platform
+  // auto-feedback row (isAuto) stays supersedeable, so the composer
+  // action is still offered (mobile useOrderDetail.ts rule).
+  const hasReview =
+    DATA_MODE === 'live'
+      ? (order.hasReview === true || (orderReview != null && orderReview.isAuto !== true))
+      : enrichment.hasReview === true;
+  const reviewIsAuto =
+    DATA_MODE === 'live' ? orderReview?.isAuto === true : enrichment.reviewIsAuto === true;
 
   const experience = resolveOrderExperience({
     status: order.status,
     role,
-    hasOpenResolution: caseOpen,
-    hasReview: enrichment.hasReview === true,
-    reviewIsAuto: enrichment.reviewIsAuto === true,
-    hasTracking: !!order.trackingNumber || (enrichment.trackingEvents?.length ?? 0) > 0,
+    hasOpenResolution,
+    hasReview,
+    reviewIsAuto,
+    hasTracking: !!order.trackingNumber || trackingEvents.length > 0,
     fulfilmentSnapshot: order.fulfilmentSnapshot ?? enrichment.fulfilmentSnapshot ?? null,
     shipByDate: order.shipByDate ?? enrichment.shipByDate ?? null,
     dispatchExtension:
@@ -288,105 +418,33 @@ export default function OrderDetailPage() {
 
   // ── Action handlers — capability → sheet/navigation/mutation ─────────────
 
-  /**
-   * Live 'pay' — POST /payments/intents re-serves the order's bound intent
-   * when one exists (the backend's idempotent re-attach path) or mints a
-   * fresh one bound to this order's server-derived amount and saved
-   * instrument. An SCA nextActionUrl opens in a new tab while we poll the
-   * status endpoint for settlement. Terminal failure shows the server's
-   * message — never a fake success; a still-pending intent says so plainly.
-   */
-  const payLiveOrder = async (): Promise<void> => {
-    setBusy(true);
-    try {
-      const intent = await commerceService.createCommercePaymentIntent({
-        orderId: order.id,
-        idempotencyKey: `web-order-pay-${order.id}`,
-      });
-      if (intent.status === 'succeeded') {
-        await queryClient.invalidateQueries({ queryKey: ['orders'] });
-        show('Payment confirmed.', 'success');
-        return;
-      }
-      if (intent.status === 'failed' || intent.status === 'cancelled') {
-        show(
-          intent.failureMessage ?? 'Payment could not be completed — try again or use the app.',
-          'error',
-        );
-        return;
-      }
-      if (intent.nextActionUrl) {
-        window.open(intent.nextActionUrl, '_blank', 'noopener,noreferrer');
-        show(
-          'Finish the bank check in the new tab — this page updates when payment clears.',
-          'info',
-        );
-      }
-      const deadline = Date.now() + 90_000;
-      let latest = intent;
-      while (
-        Date.now() < deadline &&
-        !['succeeded', 'failed', 'cancelled'].includes(latest.status)
-      ) {
-        await new Promise((resolve) => setTimeout(resolve, 2000));
-        latest = await commerceService
-          .getPaymentIntentStatus(intent.id)
-          .catch(() => latest);
-      }
-      if (latest.status === 'succeeded') {
-        await queryClient.invalidateQueries({ queryKey: ['orders'] });
-        show('Payment confirmed.', 'success');
-      } else if (latest.status === 'failed' || latest.status === 'cancelled') {
-        show(
-          latest.failureMessage ?? 'Payment could not be completed — try again or use the app.',
-          'error',
-        );
-      } else {
-        await queryClient.invalidateQueries({ queryKey: ['orders'] });
-        show(
-          'Payment is still processing — this page updates when it clears, or finish it in the app.',
-          'info',
-        );
-      }
-    } catch (error) {
-      show(
-        parseApiError(error, 'Payment could not be started — try again or use the app.')
-          .message,
-        'error',
-      );
-    } finally {
-      setBusy(false);
-      setConfirmSheet(null);
-    }
-  };
-
   const handleAction = (action: OrderAction) => {
     switch (action) {
       case 'pay':
         // Pay THIS order — never a second listing checkout (which would
-        // create a duplicate order). Live re-attaches to the order's bound
-        // payment intent; fixture mode flips the overlay.
+        // create a duplicate order). Live follows the native grammar:
+        // 'pay' returns the buyer to order-bound checkout
+        // (CheckoutScreen { orderId }) — /checkout?order= resumes with
+        // the stored address/payment/quote seeded, re-binds via PATCH
+        // /orders/:id/checkout only when selections diverge, then
+        // re-attaches the payment intent. Fixture mode flips the overlay.
+        if (DATA_MODE === 'live') {
+          router.push(`/checkout?order=${encodeURIComponent(order.id)}`);
+          break;
+        }
         setConfirmSheet({
           title: `Pay ${formatPrice(order.totalPrice)}?`,
           message:
-            DATA_MODE === 'live'
-              ? 'Your payment method on this order will be charged. If your bank needs a verification step it opens in a new tab.'
-              : 'Your saved payment method will be charged and the seller will be asked to dispatch.',
+            'Your saved payment method will be charged and the seller will be asked to dispatch.',
           confirmLabel: 'Pay now',
-          onConfirm: () =>
-            DATA_MODE === 'live'
-              ? void payLiveOrder()
-              : run(() => actions.payOrder(), 'Payment confirmed.'),
+          onConfirm: () => run(() => actions.payOrder(), 'Payment confirmed.'),
         });
         break;
       case 'dispatch':
-        setConfirmSheet({
-          title: 'Mark as dispatched?',
-          message:
-            'The buyer will be notified and the parcel trail opens. Funds are released once the buyer confirms receipt.',
-          confirmLabel: 'Mark as dispatched',
-          onConfirm: () => run(() => actions.markDispatched(), 'Marked as dispatched'),
-        });
+        // The ship endpoint requires a real tracking number + carrier —
+        // collect them in the dispatch sheet rather than firing a bare
+        // confirm that 422s.
+        setDispatchOpen(true);
         break;
       case 'track_order':
         scrollTo('tracking');
@@ -444,15 +502,62 @@ export default function OrderDetailPage() {
     note: string,
     evidenceUris: string[],
   ) => {
-    const ticket = await createTicket({
-      topicId: category.id === 'counterfeit' ? 'verification' : 'order_issue',
-      orderRef: order.id,
-      message: `${category.label}${note ? ` — ${note}` : ''} (order ${order.id})`,
-      evidenceUris: evidenceUris.length ? evidenceUris : undefined,
-    });
-    setIssueOpen(false);
-    show('Support request opened', 'success');
-    router.push(`/support/${ticket.id}`);
+    try {
+      const ticket = await createTicket({
+        topicId: category.id === 'counterfeit' ? 'verification' : 'order_issue',
+        orderRef: order.id,
+        message: `${category.label}${note ? ` — ${note}` : ''} (order ${order.id})`,
+        evidenceUris: evidenceUris.length ? evidenceUris : undefined,
+      });
+      setIssueOpen(false);
+      show('Support request opened', 'success');
+      router.push(`/support/${ticket.id}`);
+    } catch (error) {
+      // The ticket POST is a real server write — a rejected create (409
+      // duplicate open request, 422 unowned evidence) must surface the
+      // server's own message, not pass silently.
+      show(
+        parseApiError(error, 'Could not open the support request — try again.').message,
+        'error',
+      );
+    }
+  };
+
+  /**
+   * Buyer-protection claim — live mode posts the real claim contract
+   * (POST /orders/:id/protection/claim) and the sheet's claims list
+   * re-reads; fixture mode files the equivalent support ticket and lands
+   * on its thread, the same as "Report a problem".
+   */
+  const submitProtectionClaim = async (input: { reason: string; description: string }) => {
+    setClaimBusy(true);
+    try {
+      if (DATA_MODE === 'live') {
+        await commerceService.createProtectionClaim(order.id, input);
+        show('Claim submitted — our team will review it.', 'success');
+        await queryClient.invalidateQueries({
+          queryKey: ['order', orderId, 'protection'],
+        });
+        // The new claim flips hasOpenResolution — the order read follows.
+        void queryClient.invalidateQueries({ queryKey: ['order', orderId] });
+        return;
+      }
+      const ticket = await createTicket({
+        topicId: 'order_issue',
+        orderRef: order.id,
+        message: `Buyer protection claim — ${input.reason} — ${input.description} (order ${order.id})`,
+      });
+      setProtectionOpen(false);
+      show('Claim submitted — our team will review it.', 'success');
+      router.push(`/support/${ticket.id}`);
+    } catch (error) {
+      show(
+        parseApiError(error, 'Could not submit the claim — try again.').message,
+        'error',
+      );
+    } finally {
+      setClaimBusy(false);
+    }
   };
 
   const contextualIssues: IssueCategory[] =
@@ -497,6 +602,32 @@ export default function OrderDetailPage() {
           },
         ]
       : []),
+    // Buyer protection — coverage + claim entry. Paid orders and later;
+    // an unpaid or cancelled order has no cover to claim against.
+    ...(isBuyer && key !== 'created' && !isCancelledStatus(order.status)
+      ? [
+          {
+            key: 'buyer_protection',
+            label: 'Buyer protection',
+            icon: 'shield' as const,
+            variant: 'default' as const,
+            onPress: () => setProtectionOpen(true),
+          },
+        ]
+      : []),
+    // Hosted carrier label — the artifact the label path provisioned.
+    ...(!isBuyer && order.shippingLabelUrl
+      ? [
+          {
+            key: 'shipping_label',
+            label: 'Shipping label',
+            icon: 'document' as const,
+            variant: 'default' as const,
+            onPress: () =>
+              window.open(order.shippingLabelUrl!, '_blank', 'noopener,noreferrer'),
+          },
+        ]
+      : []),
     {
       key: 'view_listing',
       label: 'View listing',
@@ -512,12 +643,56 @@ export default function OrderDetailPage() {
     ['paid', 'shipped', 'in transit', 'out for delivery'].includes(key);
   const showInspection = isBuyer && key === 'delivered' && experience.inspectionWindowOpen;
   const showCountdown = role === 'seller' && key === 'paid';
-  const trackingEvents = enrichment.trackingEvents ?? [];
   const showTracking =
     !isCompleted && (!!order.trackingNumber || trackingEvents.length > 0);
+  const showReservationHold = key === 'created' && !!order.checkoutExpiresAt;
+
+  /**
+   * Buyer-protection coverage — live mode renders the GET
+   * /orders/:id/protection read as-is (amounts arrive in pence). Fixture
+   * mode projects the same shape from the order's own fee split under the
+   * server's rules (cap £500; window = delivered+30d or created+60d), with
+   * the session's order tickets standing in for the claims history.
+   */
+  const protectionCoverage: ProtectionCoverage | null =
+    DATA_MODE === 'live'
+      ? protectionQuery.data
+        ? {
+            covered: protectionQuery.data.status === 'covered',
+            feeGbp: protectionQuery.data.feeGbpMinor / 100,
+            coverageCapGbp: protectionQuery.data.coverageAmountGbpMinor / 100,
+            eligibleUntil: protectionQuery.data.eligibleUntil,
+            claims: protectionQuery.data.claims.map((c) => ({
+              ticketId: c.ticketId,
+              label: c.topicLabel,
+              status: c.status,
+              createdAt: c.createdAt,
+            })),
+          }
+        : null
+      : {
+          covered: detail.protectionFee > 0,
+          feeGbp: detail.protectionFee,
+          coverageCapGbp: Math.min(order.totalPrice, 500),
+          eligibleUntil: order.deliveredAt
+            ? new Date(Date.parse(order.deliveredAt) + 30 * 86_400_000).toISOString()
+            : new Date(Date.parse(order.createdAt) + 60 * 86_400_000).toISOString(),
+          claims: (tickets ?? [])
+            .filter(
+              (t) =>
+                t.orderId === order.id &&
+                (t.topicId === 'order_issue' || t.topicId === 'refund'),
+            )
+            .map((t) => ({
+              ticketId: t.id,
+              label: t.topicLabel,
+              status: t.status,
+              createdAt: t.createdAt,
+            })),
+        };
 
   return (
-    <div className="mx-auto max-w-[720px] px-4 py-8 sm:px-6">
+    <div className="mx-auto max-w-[720px] px-4 py-8 sm:px-6 lg:max-w-[1100px]">
       {/* Status header */}
       <div className="flex items-center gap-2">
         <IconButton name="back" aria-label="Back to orders" onClick={() => router.push('/orders')} className="-ml-2" />
@@ -526,7 +701,7 @@ export default function OrderDetailPage() {
         </p>
       </div>
       <div className="mt-3 flex flex-wrap items-center justify-between gap-3">
-        <h1 className="text-screen-title font-bold text-text-primary">
+        <h1 className="text-screen-title text-text-primary">
           {isBuyer ? 'Your purchase' : 'Your sale'}
         </h1>
         <OrderStatusBadge status={order.status} />
@@ -544,11 +719,36 @@ export default function OrderDetailPage() {
         </p>
       ) : null}
 
+      {/* Two-pane at lg — the order narrative (summary, fulfilment
+          evidence, timeline, resolution) flows down the left column while
+          the instrument/fulfilment facts, the capability actions and the
+          support entries pin into a sticky right rail (eBay order-detail
+          grammar). Mobile stacks the rail after the narrative — identical
+          order to the single column. */}
+      <div className="lg:grid lg:grid-cols-[minmax(0,1fr)_340px] lg:gap-x-10">
+      <div className="min-w-0">
       {/* Seller dispatch countdown — server deadline, ticking. */}
       {showCountdown ? (
         <div className="mt-4">
           <DispatchCountdown shipByDate={caps.shipByDate} shipped={false} />
         </div>
+      ) : null}
+
+      {/* Checkout reservation — an unpaid order's hold on the listing,
+          ticking down to release. */}
+      {showReservationHold ? (
+        <div className="mt-4">
+          <ReservationCountdown expiresAt={order.checkoutExpiresAt} />
+        </div>
+      ) : null}
+
+      {/* Recorded SLA breach — the platform's auto-feedback sweep flagged
+          this order past its ship-by while awaiting dispatch. */}
+      {!isBuyer && order.slaBreach ? (
+        <p className="mt-4 flex items-center gap-1.5 rounded-lg border border-danger-border bg-danger-subtle px-4 py-2.5 text-caption font-medium text-danger-text">
+          <Icon name="alert" size={14} />
+          Dispatch deadline missed — recorded on this order.
+        </p>
       ) : null}
 
       {/* Carrier failure — money still in flight. */}
@@ -627,8 +827,10 @@ export default function OrderDetailPage() {
             <Icon name="forward" size={16} className="text-text-muted" />
           </Link>
         </div>
-        {/* Order number — copyable; the reference support asks for. */}
-        <div className="mt-3 flex items-center justify-between border-t border-border-subtle pt-3">
+        {/* Order number — copyable; the reference support asks for. At
+            lg this fact moves to the instrument rail (hidden here so it
+            never renders twice). */}
+        <div className="mt-3 flex items-center justify-between border-t border-border-subtle pt-3 lg:hidden">
           <span className="text-caption text-text-muted">Order number</span>
           <button
             type="button"
@@ -645,7 +847,7 @@ export default function OrderDetailPage() {
             real provider rail (omits when unresolvable — wallet-paid or
             detached — never a local stand-in). */}
         {isBuyer && paidWith ? (
-          <div className="mt-2.5 flex items-center justify-between">
+          <div className="mt-2.5 flex items-center justify-between lg:hidden">
             <span className="text-caption text-text-muted">Paid with</span>
             <span className="flex items-center gap-1.5 text-caption text-text-secondary">
               <Icon name={paidWith.type === 'card' ? 'card' : 'wallet'} size={14} />
@@ -663,7 +865,7 @@ export default function OrderDetailPage() {
             against (live resolves the order's addressId); sellers see only
             the snapshot destination summary the fulfilment record holds. */}
         {isBuyer && deliveryAddress ? (
-          <div className="mt-2.5 flex items-start justify-between gap-3">
+          <div className="mt-2.5 flex items-start justify-between gap-3 lg:hidden">
             <span className="shrink-0 text-caption text-text-muted">Delivery address</span>
             <span className="text-right text-caption text-text-secondary">
               <span className="block font-medium text-text-primary">{deliveryAddress.name}</span>
@@ -677,7 +879,7 @@ export default function OrderDetailPage() {
         {!isBuyer &&
         (order.fulfilmentSnapshot?.destinationSummary ??
           enrichment.fulfilmentSnapshot?.destinationSummary) ? (
-          <div className="mt-2.5 flex items-center justify-between">
+          <div className="mt-2.5 flex items-center justify-between lg:hidden">
             <span className="text-caption text-text-muted">Deliver to</span>
             <span className="text-caption text-text-secondary">
               {order.fulfilmentSnapshot?.destinationSummary ??
@@ -688,8 +890,18 @@ export default function OrderDetailPage() {
       </section>
 
       {/* Counterparty — the identity itself is the profile link (mobile
-          OrderCounterpartySection), with Message + View profile actions. */}
-      {counterparty ? (
+          OrderCounterpartySection), with Message + View profile actions.
+          While the live seller read is in flight the row holds its
+          skeleton; a failed read renders nothing (never a ghost). */}
+      {!counterparty && DATA_MODE === 'live' && liveSeller.isLoading ? (
+        <section className="flex items-center gap-3 border-b border-border-subtle py-4" aria-busy>
+          <Skeleton className="h-10 w-10 rounded-full" />
+          <div className="flex-1 space-y-1.5">
+            <Skeleton className="h-4 w-28" />
+            <Skeleton className="h-3 w-24" />
+          </div>
+        </section>
+      ) : counterparty ? (
         <section className="flex items-center gap-3 border-b border-border-subtle py-4">
           <Link
             href={`/u/${counterparty.username}`}
@@ -701,12 +913,17 @@ export default function OrderDetailPage() {
               <span className="flex items-center gap-1 text-body font-medium text-text-primary">
                 <span className="clamp-1">@{counterparty.username}</span>
                 {counterparty.isVerified ? (
-                  <Icon name="verified" size={12} className="shrink-0 text-success-text" />
+                  <Icon name="verified" size={12} className="shrink-0 text-commerce-trust" />
                 ) : null}
               </span>
               <span className="mt-0.5 block text-caption text-text-secondary">
-                {isBuyer ? 'Seller' : 'Buyer'} ·{' '}
-                <span className="tnum">{counterparty.rating.toFixed(1)}</span> rating
+                {isBuyer ? 'Seller' : 'Buyer'}
+                {counterparty.rating != null ? (
+                  <>
+                    {' · '}
+                    <span className="tnum">{counterparty.rating.toFixed(1)}</span> rating
+                  </>
+                ) : null}
               </span>
             </span>
           </Link>
@@ -829,11 +1046,80 @@ export default function OrderDetailPage() {
           />
         </section>
       ) : null}
+      </div>
+
+      {/* Right rail — instrument + fulfilment facts, the capability
+          action set and the support entries, pinned under the header for
+          the whole scroll (the buy-box behaviour the PDP uses). On mobile
+          the instrument panel stays hidden — those facts live in the
+          purchase summary below 1024px — and the rail stacks in DOM order
+          (support → actions), identical to the single column. */}
+      <aside className="lg:sticky lg:top-20 lg:flex lg:flex-col lg:self-start">
+        {/* Delivery & payment — the instrument facts the summary renders
+            inline on mobile, composed as the right-hand column at lg. */}
+        <section
+          aria-label="Delivery and payment"
+          className="hidden lg:order-2 lg:mt-5 lg:block lg:border-y lg:border-border-subtle lg:py-4"
+        >
+          <h2 className="mb-3 text-body-emphasis font-semibold text-text-primary">
+            Delivery &amp; payment
+          </h2>
+          <div className="flex items-center justify-between">
+            <span className="text-caption text-text-muted">Order number</span>
+            <button
+              type="button"
+              onClick={copyOrderNumber}
+              aria-label={`Copy order number ${order.id}`}
+              className="pressable -my-2 flex items-center gap-1.5 rounded-sm py-2 text-caption text-text-secondary hover:text-text-primary"
+            >
+              <span className="tnum">{order.id}</span>
+              <Icon name="document" size={14} />
+            </button>
+          </div>
+          {isBuyer && paidWith ? (
+            <div className="mt-2.5 flex items-center justify-between">
+              <span className="text-caption text-text-muted">Paid with</span>
+              <span className="flex items-center gap-1.5 text-caption text-text-secondary">
+                <Icon name={paidWith.type === 'card' ? 'card' : 'wallet'} size={14} />
+                {paidWith.type === 'bank_account'
+                  ? (paidWith.bankName ?? 'Bank account')
+                  : `${
+                      paidWith.brand
+                        ? paidWith.brand[0].toUpperCase() + paidWith.brand.slice(1)
+                        : 'Card'
+                    } •••• ${paidWith.last4}`}
+              </span>
+            </div>
+          ) : null}
+          {isBuyer && deliveryAddress ? (
+            <div className="mt-2.5 flex items-start justify-between gap-3">
+              <span className="shrink-0 text-caption text-text-muted">Delivery address</span>
+              <span className="text-right text-caption text-text-secondary">
+                <span className="block font-medium text-text-primary">{deliveryAddress.name}</span>
+                <span className="block">{deliveryAddress.street}</span>
+                <span className="block">
+                  {deliveryAddress.city} {deliveryAddress.postcode}
+                </span>
+              </span>
+            </div>
+          ) : null}
+          {!isBuyer &&
+          (order.fulfilmentSnapshot?.destinationSummary ??
+            enrichment.fulfilmentSnapshot?.destinationSummary) ? (
+            <div className="mt-2.5 flex items-center justify-between">
+              <span className="text-caption text-text-muted">Deliver to</span>
+              <span className="text-caption text-text-secondary">
+                {order.fulfilmentSnapshot?.destinationSummary ??
+                  enrichment.fulfilmentSnapshot?.destinationSummary}
+              </span>
+            </div>
+          ) : null}
+        </section>
 
       {/* Need help? — contact the counterparty (real /inbox route) and the
           support flow, after the timeline. The open-ticket row leads when
           one exists. */}
-      <section className="border-b border-border-subtle py-4">
+      <section className="border-b border-border-subtle py-4 lg:order-3">
         <OrderSupportSection
           openTicket={openTicket ? { id: openTicket.id, topicLabel: openTicket.topicLabel } : null}
           onPressOpenTicket={(ticketId) => router.push(`/support/${ticketId}`)}
@@ -844,10 +1130,10 @@ export default function OrderDetailPage() {
       </section>
 
       {/* Actions — capability primary, then the overflow sheet. Live 'pay'
-          re-attaches to the order's bound payment intent (or mints one)
-          and follows the status to settlement — the unpaid-order recovery
-          path, same as native. */}
-      <section className="flex flex-col gap-2 pt-5">
+          returns the buyer to order-bound checkout (/checkout?order=) —
+          the native CheckoutScreen { orderId } grammar — where changed
+          selections re-bind and the payment intent re-attaches. */}
+      <section className="flex flex-col gap-2 pt-5 lg:order-1 lg:pt-0">
         {DATA_MODE === 'live' && experience.primaryAction === 'pay' ? (
           <p className="text-center text-caption text-text-secondary">
             Payment isn’t confirmed yet — pay now, or the order can be cancelled below.
@@ -883,6 +1169,8 @@ export default function OrderDetailPage() {
           More actions
         </Button>
       </section>
+      </aside>
+      </div>
 
       {/* Sheets */}
       <OrderActionsSheet
@@ -910,6 +1198,38 @@ export default function OrderDetailPage() {
         onClose={() => setReturnOpen(false)}
       />
       <ConfirmSheet sheet={confirmSheet} busy={busy} onDismiss={() => setConfirmSheet(null)} />
+      {/* Dispatch — the tracking number + carrier the ship endpoint
+          requires. Live posts /orders/:id/ship directly with both; the
+          fixture overlay records the same reference. */}
+      <DispatchSheet
+        open={dispatchOpen}
+        defaultCarrier={caps.serviceName}
+        busy={busy}
+        onSubmit={({ trackingNumber, carrier }) => {
+          setDispatchOpen(false);
+          run(
+            () =>
+              DATA_MODE === 'live'
+                ? commerceService.shipOrder(order.id, {
+                    trackingNumber,
+                    shippingProvider: carrier,
+                  })
+                : actions.markDispatched(trackingNumber),
+            'Marked as dispatched — the buyer has been notified.',
+          );
+        }}
+        onClose={() => setDispatchOpen(false)}
+      />
+      <BuyerProtectionSheet
+        open={protectionOpen}
+        coverage={protectionCoverage}
+        loading={DATA_MODE === 'live' && protectionQuery.isLoading}
+        error={DATA_MODE === 'live' && protectionQuery.isError}
+        canClaim={isBuyer}
+        claimBusy={claimBusy}
+        onSubmitClaim={(input) => void submitProtectionClaim(input)}
+        onClose={() => setProtectionOpen(false)}
+      />
     </div>
   );
 }

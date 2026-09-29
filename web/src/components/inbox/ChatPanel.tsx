@@ -28,10 +28,22 @@
  * accept lands a recorded order before the card can claim it.
  */
 
-import { useEffect, useMemo, useRef, useState, type UIEvent } from 'react';
+import {
+  useCallback,
+  useEffect,
+  useMemo,
+  useRef,
+  useState,
+  type ReactNode,
+  type UIEvent,
+} from 'react';
+import dynamic from 'next/dynamic';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
+import { useQuery, useQueryClient } from '@tanstack/react-query';
 import type { Message } from '@/lib/contracts/domain';
+import { DATA_MODE } from '@/lib/api/client';
+import { getApiBaseUrl, getAuthSession } from '@/lib/api/http';
 import {
   useConversation,
   useConversations,
@@ -40,20 +52,26 @@ import {
   useUser,
   type SendChatMessageInput,
 } from '@/lib/hooks/queries';
-import { marketplaceMeta } from '@/lib/api/services/chat';
+import {
+  fetchConversationPresence,
+  marketplaceMeta,
+  type ConversationPresence,
+} from '@/lib/api/services/chat';
 import { useSession } from '@/lib/session/SessionProvider';
 import { useHydrated } from '@/lib/store/useStore';
 import { useToast } from '@/components/ui/Toast';
 import { AppImage } from '@/components/ui/AppImage';
 import { Avatar } from '@/components/ui/Avatar';
 import { Badge } from '@/components/ui/Badge';
+import { Button } from '@/components/ui/Button';
+import { ClientTime } from '@/components/ui/ClientTime';
 import { EmptyState } from '@/components/ui/EmptyState';
 import { Icon } from '@/components/ui/Icon';
 import { IconButton } from '@/components/ui/IconButton';
 import { Skeleton } from '@/components/ui/Skeleton';
-import { formatPrice } from '@/lib/utils/format';
+import { formatPrice, timeAgo } from '@/lib/utils/format';
 import { Composer } from './Composer';
-import { ConfirmSheet, CLOSED_CONFIRM, type ConfirmSheetState } from './ConfirmSheet';
+import { CLOSED_CONFIRM, type ConfirmSheetState } from './ConfirmSheet';
 import { GroupAvatarMosaic } from './GroupAvatarMosaic';
 import { ChatSafetyBanner } from './ChatSafetyBanner';
 import { detectThreadSafetyWarning } from './chatSafety';
@@ -74,17 +92,19 @@ import {
   MessageBubble,
   type MessageCluster,
 } from './MessageBubble';
-import { MediaLightbox, sharedMediaItemFor, type SharedMediaItem } from './SharedMediaGrid';
-import { ForwardSheet } from './ForwardSheet';
-import { isGroupManager, useGroupAdminStore } from './groupAdmin';
+import { sharedMediaItemFor, type SharedMediaItem } from './SharedMediaGrid';
+import {
+  acceptFixtureRequest,
+  isGroupManager,
+  liveConversationApi,
+  useGroupAdminStore,
+} from './groupAdmin';
 import { ListingShareCard } from './ListingShareCard';
 import { OfferCard } from './OfferCard';
-import { OfferSheet } from '@/components/pdp/OfferSheet';
 import {
   effectiveOfferStatus,
   resolveOfferActions,
 } from '@/components/orders/OfferRow';
-import { listingById } from '@/lib/data/fixtures';
 import type { OfferWithOrder } from '@/lib/commerce/offerAcceptance';
 import { useInboxSafety } from './inboxSafety';
 import { useReadReceiptsEnabled } from '@/lib/store/chatPrefs';
@@ -94,13 +114,36 @@ import {
   useChatOfferActions,
   useChatOffers,
 } from './useChatOffers';
+import { useResolvedListings } from '@/lib/hooks/home-modules';
+import { useListingIds } from '@/lib/hooks/listing-resolution';
+import { useInboxPrefs } from '@/lib/store/inboxPrefs';
 import {
   conversationTitle,
   isGroupConversation,
   memberCount,
   mosaicMembers,
+  senderAvatarFor,
   senderLabelFor,
 } from './inboxModel';
+
+// Action-gated surfaces — split out of the thread's initial bundle. Each
+// only renders behind its open flag, so the chunk fetches on first use.
+const ConfirmSheet = dynamic(
+  () => import('./ConfirmSheet').then((m) => m.ConfirmSheet),
+  { ssr: false },
+);
+const ForwardSheet = dynamic(
+  () => import('./ForwardSheet').then((m) => m.ForwardSheet),
+  { ssr: false },
+);
+const MediaLightbox = dynamic(
+  () => import('./SharedMediaGrid').then((m) => m.MediaLightbox),
+  { ssr: false },
+);
+const OfferSheet = dynamic(
+  () => import('@/components/pdp/OfferSheet').then((m) => m.OfferSheet),
+  { ssr: false },
+);
 
 // ── Date separators ─────────────────────────────────────────────────────
 
@@ -195,6 +238,199 @@ function NewMessagesDivider() {
   );
 }
 
+// ── Typing + presence realtime ────────────────────────────────────────────
+// The web has no shared WS client — the SSE twin (/realtime/stream) is the
+// transport (same grammar as useCoOwnOrderBookStream: fetch + bearer,
+// browser WebSocket can't send the Authorization header). One stream per
+// open thread carries the two surfaces the conversation topic pair owns:
+//
+//   chat.typing.update on `chat.conversation:{id}` — per-user typing set,
+//   4s auto-clear per typer, self filtered (mirrors mobile useTypingUsers).
+//   presence.update on `presence.user:{peerId}` — dyad online transitions;
+//   authorized server-side to conversation peers only.
+//
+// Fixture mode, guests and SSR never connect — the REST snapshot and the
+// 15s conversation poll stay the baseline.
+
+const PRESENCE_KEY = (id: string) => ['conversation-presence', id] as const;
+
+interface RealtimeEnvelope {
+  topic?: string;
+  type?: string;
+  payload?: Record<string, unknown>;
+}
+
+/** REST snapshot for the DM peer's presence — the live-mode source for the
+ *  header's "Active now" / "Last active X" line. `null` data means the
+ *  peer hides their activity status or presence was never recorded —
+ *  render nothing rather than a fabricated dot. */
+function useConversationPresence(conversationId: string, enabled: boolean) {
+  return useQuery<ConversationPresence | null>({
+    queryKey: [...PRESENCE_KEY(conversationId)],
+    queryFn: ({ signal }) => fetchConversationPresence(conversationId, signal),
+    enabled: DATA_MODE === 'live' && enabled && !!conversationId,
+    staleTime: 15_000,
+    // The SSE presence.update stream covers transitions; the interval only
+    // refreshes the "Last active" label's drift.
+    refetchInterval: 60_000,
+  });
+}
+
+/**
+ * Subscribe to the thread's realtime topics — returns the set of
+ * counterparty user ids currently typing, and keeps the presence query
+ * cache current off `presence.update` events. A dropped stream reconnects
+ * with backoff; typing state is cleared on reconnect (a missed
+ * isTyping=false would otherwise stick the indicator).
+ */
+function useThreadRealtime(
+  conversationId: string,
+  peerUserId: string | null,
+  viewerId: string,
+  enabled: boolean,
+): string[] {
+  const queryClient = useQueryClient();
+  const [typingIds, setTypingIds] = useState<string[]>([]);
+  const clearTimers = useRef(new Map<string, ReturnType<typeof setTimeout>>());
+
+  useEffect(() => {
+    if (DATA_MODE !== 'live' || !enabled || !conversationId) {
+      setTypingIds([]);
+      return;
+    }
+
+    const topics = [`chat.conversation:${conversationId}`];
+    if (peerUserId) topics.push(`presence.user:${peerUserId}`);
+
+    let disposed = false;
+    let controller: AbortController | null = null;
+    let retryTimer: ReturnType<typeof setTimeout> | null = null;
+    let attempt = 0;
+
+    const markTyping = (userId: string, isTyping: boolean) => {
+      if (!userId || userId === viewerId) return;
+      const existing = clearTimers.current.get(userId);
+      if (existing) clearTimeout(existing);
+      if (isTyping) {
+        setTypingIds((prev) => (prev.includes(userId) ? prev : [...prev, userId]));
+        clearTimers.current.set(
+          userId,
+          setTimeout(() => {
+            setTypingIds((prev) => prev.filter((id) => id !== userId));
+            clearTimers.current.delete(userId);
+          }, 4000),
+        );
+      } else {
+        clearTimers.current.delete(userId);
+        setTypingIds((prev) => prev.filter((id) => id !== userId));
+      }
+    };
+
+    const clearAllTyping = () => {
+      for (const t of clearTimers.current.values()) clearTimeout(t);
+      clearTimers.current.clear();
+      setTypingIds([]);
+    };
+
+    const handleEvent = (event: RealtimeEnvelope) => {
+      const payload = event.payload ?? {};
+      if (event.type === 'chat.typing.update') {
+        if (
+          typeof payload.conversationId === 'string' &&
+          payload.conversationId !== conversationId
+        )
+          return;
+        if (typeof payload.userId !== 'string') return;
+        markTyping(payload.userId, payload.isTyping === true);
+        return;
+      }
+      if (event.type === 'presence.update' && typeof payload.userId === 'string') {
+        // Keep the REST snapshot's cache honest — a transition event is
+        // fresher than the last poll and carries the same shape.
+        queryClient.setQueryData(
+          [...PRESENCE_KEY(conversationId)],
+          (): ConversationPresence => ({
+            userId: payload.userId as string,
+            isOnline: payload.isOnline === true,
+            lastSeenAt:
+              typeof payload.lastSeenAt === 'string' ? payload.lastSeenAt : null,
+          }),
+        );
+      }
+    };
+
+    const connect = async () => {
+      controller = new AbortController();
+      try {
+        const session = await getAuthSession();
+        if (disposed || !session?.accessToken) return;
+        const url = `${getApiBaseUrl()}/realtime/stream?topics=${encodeURIComponent(
+          topics.join(','),
+        )}`;
+        const response = await fetch(url, {
+          headers: { Authorization: `Bearer ${session.accessToken}` },
+          signal: controller.signal,
+        });
+        if (!response.ok || !response.body) {
+          throw new Error(`stream failed (${response.status})`);
+        }
+        attempt = 0;
+
+        const reader = response.body.getReader();
+        const decoder = new TextDecoder();
+        let buffer = '';
+        let dataLines: string[] = [];
+        const flush = () => {
+          if (dataLines.length === 0) return;
+          try {
+            handleEvent(JSON.parse(dataLines.join('\n')) as RealtimeEnvelope);
+          } catch {
+            // Malformed frame — drop it; typing entries still expire.
+          }
+          dataLines = [];
+        };
+        for (;;) {
+          const { done, value } = await reader.read();
+          if (done || disposed) break;
+          buffer += decoder.decode(value, { stream: true });
+          let newline: number;
+          while ((newline = buffer.indexOf('\n')) >= 0) {
+            const line = buffer.slice(0, newline).replace(/\r$/, '');
+            buffer = buffer.slice(newline + 1);
+            if (line === '') flush();
+            else if (line.startsWith('data:')) dataLines.push(line.slice(5).trimStart());
+          }
+        }
+      } catch {
+        // Aborted intentionally or network drop — reconnect below.
+      } finally {
+        controller = null;
+      }
+
+      if (disposed) return;
+      // A missed isTyping=false on the gap would stick the row — clear
+      // rather than trust state carried across a dead connection.
+      clearAllTyping();
+      const delayMs = Math.min(1000 * 2 ** attempt, 15_000);
+      attempt += 1;
+      retryTimer = setTimeout(() => {
+        if (!disposed) void connect();
+      }, delayMs);
+    };
+
+    void connect();
+
+    return () => {
+      disposed = true;
+      controller?.abort();
+      if (retryTimer) clearTimeout(retryTimer);
+      clearAllTyping();
+    };
+  }, [conversationId, peerUserId, viewerId, enabled, queryClient]);
+
+  return typingIds;
+}
+
 // ── Component ────────────────────────────────────────────────────────────
 
 /**
@@ -225,8 +461,30 @@ export function ChatPanel({ conversationId }: { conversationId: string }) {
   // offer message resolves from the shared offer list and actions write
   // through the same path /offers uses.
   const { data: chatOffers } = useChatOffers();
-  const { respond: respondToOffer, sendCounter } = useChatOfferActions(conversationId);
+  const {
+    respond: respondToOffer,
+    sendCounter,
+    sendNewOffer,
+  } = useChatOfferActions(conversationId);
   const [counterTarget, setCounterTarget] = useState<OfferWithOrder | null>(null);
+  // Fresh offer from a shared listing — the buyer-seat "Make offer" CTA on
+  // an incoming listing_share opens the same OfferSheet grammar as a
+  // counter, resolved to the real Listing first (the sheet needs the
+  // catalogue/live record, not the message's price snapshot).
+  const [shareOfferId, setShareOfferId] = useState<string | null>(null);
+  const shareOfferResolved = useListingIds(
+    useMemo(() => (shareOfferId ? [shareOfferId] : []), [shareOfferId]),
+  );
+  const shareOfferListing = shareOfferId
+    ? shareOfferResolved.byId.get(shareOfferId)
+    : undefined;
+  // The counter-offer context listing resolves through the shared id
+  // resolver — hoisted above the early returns (rules of hooks); live
+  // ids fetch, fixture ids read the bundled catalogue.
+  const { items: counterListingResolved } = useResolvedListings(
+    counterTarget ? [counterTarget.listingId] : [],
+  );
+  const counterListing = counterListingResolved[0];
   // Shared clock — lazily-expired standing offers stop offering actions.
   const [nowMs, setNowMs] = useState(() => Date.now());
   useEffect(() => {
@@ -257,6 +515,10 @@ export function ChatPanel({ conversationId }: { conversationId: string }) {
   // shows the jump pill when messages arrive while the viewer reads up.
   const nearBottom = useRef(true);
   const [newBelow, setNewBelow] = useState(false);
+  // Polite announcement log — an incoming message is announced to AT when
+  // the composer isn't focused (a typing reader gets the visual append,
+  // not an interruption). role="log" region lives below the stream.
+  const [arrivalAnnouncement, setArrivalAnnouncement] = useState('');
   // Older-history pagination — pages fetched with `before=oldestCursor`
   // live outside the conversation cache so the 15s poll can't drop them.
   const history = useMessageHistory(conversationId, conversation);
@@ -287,6 +549,30 @@ export function ChatPanel({ conversationId }: { conversationId: string }) {
     hydrated && !isGuest,
     conversation,
   );
+  // Dyad presence + counterparty typing — live mode only. The REST
+  // snapshot seeds the header line; the SSE stream keeps it current and
+  // feeds the "typing…" affordance. Groups carry no presence surface.
+  const peerUserId =
+    conversation && !isGroup ? conversation.participantId || null : null;
+  const presenceQuery = useConversationPresence(
+    conversationId,
+    !!conversation && !isGroup && !isGuest,
+  );
+  const typingUserIds = useThreadRealtime(
+    conversationId,
+    peerUserId,
+    viewerId,
+    hydrated && !isGuest && !!conversation,
+  );
+  const peerTyping = typingUserIds.length > 0;
+  // Message-request state — the detail payload doesn't carry
+  // requestStatus; the conversations list does (and the open row shares
+  // its cache). A resolved-but-unconfirmed resolution hides the banner
+  // optimistically, same grammar as the Requests tab.
+  const requestResolutions = useInboxPrefs((s) => s.requests);
+  const setRequestResolution = useInboxPrefs((s) => s.setRequestResolution);
+  const [requestBusy, setRequestBusy] = useState(false);
+  const qc = useQueryClient();
   const searchInputRef = useRef<HTMLInputElement>(null);
   const didMountScroll = useRef(false);
   const flashTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
@@ -306,6 +592,7 @@ export function ChatPanel({ conversationId }: { conversationId: string }) {
     pendingInputs.current.clear();
     setForwardTarget(null);
     setCounterTarget(null);
+    setShareOfferId(null);
     setDescDismissed(false);
     setSearchOpen(false);
     setQuery('');
@@ -335,6 +622,45 @@ export function ChatPanel({ conversationId }: { conversationId: string }) {
   useEffect(() => {
     if (searchOpen) searchInputRef.current?.focus();
   }, [searchOpen]);
+
+  // Escape — the desktop deselect grammar (Messenger/iMessage): unwinds
+  // the innermost staged thing first (search, then a staged reply or
+  // edit), then leaves the thread for the list. Overlay surfaces handle
+  // their own Escape — the gate skips while a menu, sheet or lightbox is
+  // open, and `defaultPrevented` covers the composer's own Escape.
+  useEffect(() => {
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key !== 'Escape' || e.defaultPrevented) return;
+      if (msgMenu || confirm.open || mediaIndex !== null || forwardTarget || counterTarget)
+        return;
+      if (searchOpen) {
+        setQuery('');
+        setSearchOpen(false);
+        return;
+      }
+      if (editing) {
+        setEditing(null);
+        return;
+      }
+      if (replyTarget) {
+        setReplyTarget(null);
+        return;
+      }
+      router.push('/inbox');
+    };
+    document.addEventListener('keydown', onKey);
+    return () => document.removeEventListener('keydown', onKey);
+  }, [
+    msgMenu,
+    confirm.open,
+    mediaIndex,
+    forwardTarget,
+    counterTarget,
+    searchOpen,
+    editing,
+    replyTarget,
+    router,
+  ]);
 
   // Opening a thread marks it read — the write clears the fixture/server
   // unread flag and the row/header/tab badges drop on the same write.
@@ -414,10 +740,16 @@ export function ChatPanel({ conversationId }: { conversationId: string }) {
         : [],
     [conversation, messages],
   );
-  const openMediaFor = (m: Message) => {
-    const at = mediaItems.findIndex((it) => it.id === m.id);
-    if (at >= 0) setMediaIndex(at);
-  };
+  // Message-keyed callbacks — one stable handler each, the row supplies
+  // its own message. Per-row closures would re-render every bubble on
+  // every thread render (MessageBubble is memoized on these identities).
+  const openMediaFor = useCallback(
+    (m: Message) => {
+      const at = mediaItems.findIndex((it) => it.id === m.id);
+      if (at >= 0) setMediaIndex(at);
+    },
+    [mediaItems],
+  );
 
   // In-thread safety prompt — the mobile detectChatSafetyWarning gate:
   // the buyer side of a marketplace thread only. The marketplace signal
@@ -432,7 +764,13 @@ export function ChatPanel({ conversationId }: { conversationId: string }) {
   const meta = marketplaceMeta(conversation);
   const safetyListingId =
     conversation?.listing?.id ?? meta.itemId ?? meta.listingId;
-  const threadListing = safetyListingId ? listingById(safetyListingId) : undefined;
+  // The thread's listing resolves through the shared id resolver — live
+  // ids fetch (the safety banner's seller determination needs the real
+  // sellerId), fixture ids read the bundled catalogue.
+  const { items: threadListingResolved } = useResolvedListings(
+    safetyListingId ? [safetyListingId] : [],
+  );
+  const threadListing = threadListingResolved[0];
   const threadOffer = useMemo(
     () =>
       safetyListingId
@@ -558,19 +896,35 @@ export function ChatPanel({ conversationId }: { conversationId: string }) {
     }
   }
 
-  const scrollToMessage = (id: string) => {
-    const el = scrollRef.current?.querySelector(`[data-mid="${CSS.escape(id)}"]`);
-    if (!el) {
-      // The parent scrolled out of the loaded window — honest no-op, not
-      // a fabricated jump.
-      toast.show('Original message is outside the loaded history', 'info');
-      return;
-    }
-    el.scrollIntoView({ behavior: 'smooth', block: 'center' });
-    setFlashId(id);
-    if (flashTimer.current) clearTimeout(flashTimer.current);
-    flashTimer.current = setTimeout(() => setFlashId(null), 1400);
-  };
+  const scrollToMessage = useCallback(
+    (id: string) => {
+      const el = scrollRef.current?.querySelector(`[data-mid="${CSS.escape(id)}"]`);
+      if (!el) {
+        // The parent scrolled out of the loaded window — honest no-op, not
+        // a fabricated jump.
+        toast.show('Original message is outside the loaded history', 'info');
+        return;
+      }
+      el.scrollIntoView({ behavior: 'smooth', block: 'center' });
+      setFlashId(id);
+      if (flashTimer.current) clearTimeout(flashTimer.current);
+      flashTimer.current = setTimeout(() => setFlashId(null), 1400);
+    },
+    [toast],
+  );
+
+  // Reply / react / reaction-toggle — message-keyed, stable identities
+  // (the setters and the thread action are stable; see MessageBubble's
+  // memo contract).
+  const replyMessage = useCallback((m: Message) => setReplyTarget(m), []);
+  const reactAt = useCallback((m: Message, anchor: { x: number; y: number }) => {
+    setMsgMenu({ id: m.id, x: anchor.x, y: anchor.y });
+  }, []);
+  const { toggleReaction } = threadActions;
+  const toggleReactionFor = useCallback(
+    (m: Message, emoji: string) => toggleReaction(m, emoji),
+    [toggleReaction],
+  );
 
   const copyMessageText = async (text: string) => {
     try {
@@ -628,10 +982,29 @@ export function ChatPanel({ conversationId }: { conversationId: string }) {
         } else {
           setNewBelow(true);
         }
+        // Announce incoming arrivals politely unless the composer holds
+        // focus — mid-typing announcements would interrupt the reader.
+        if (
+          lastMessage &&
+          !isMine(lastMessage) &&
+          !isSystem(lastMessage) &&
+          !lastMessage.isDeleted
+        ) {
+          const active = document.activeElement;
+          const composerFocused =
+            active instanceof HTMLElement &&
+            active.closest('[data-chat-composer]') !== null;
+          if (!composerFocused) {
+            setArrivalAnnouncement(
+              `${senderNameFor(lastMessage)}: ${previewTextFor(lastMessage)}`,
+            );
+          }
+        }
       }
     }
     if (!prepended) prependAnchor.current = null;
     prevWindow.current = { first, last, count: messages.length };
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- senderNameFor/previewTextFor are render-closures over the same conversation/message set
   }, [messages, searchOpen]);
 
   // Scroll-to-top auto-load — the WhatsApp grammar; the "Load older"
@@ -825,18 +1198,102 @@ export function ChatPanel({ conversationId }: { conversationId: string }) {
 
   const title = conversationTitle(conversation);
   const members = memberCount(conversation);
-  const counterListing = counterTarget ? listingById(counterTarget.listingId) : undefined;
-  // DM subtitle is a real presence signal; groups show the member count
-  // (mobile ChatTopBar grammar — no presence on a group avatar).
-  const subtitle = isGroup
+  const presence = presenceQuery.data ?? null;
+  // A live presence update flips the dot on the avatar the same way the
+  // subtitle reads it — 'null' means the peer hides activity status and
+  // no presence chrome renders (never a fabricated dot).
+  const isPeerOnline =
+    !isGroup &&
+    (DATA_MODE === 'live'
+      ? presence?.isOnline === true
+      : conversation.isOnline === true);
+  // Presence subtitle (the mobile useChatHeaderData grammar): 'typing…'
+  // wins over everything, then the live snapshot — 'Active now' while
+  // connected, 'Last active X' from the persisted last-seen. Fixture
+  // mode keeps the authored online/lastSeen fields.
+  const subtitle: ReactNode = isGroup
     ? `${members} ${members === 1 ? 'member' : 'members'}`
-    : conversation.isOnline
-      ? 'Active now'
-      : participant?.lastSeen
-        ? /^(now|just now)$/i.test(participant.lastSeen)
+    : peerTyping
+      ? 'typing…'
+      : DATA_MODE === 'live'
+        ? presence?.isOnline
           ? 'Active now'
-          : `Last seen ${participant.lastSeen}`
-        : null;
+          : presence?.lastSeenAt
+            ? (
+                <ClientTime
+                  iso={presence.lastSeenAt}
+                  format={(iso) => `Last active ${timeAgo(iso)}`}
+                />
+              )
+            : null
+        : conversation.isOnline
+          ? 'Active now'
+          : participant?.lastSeen
+            ? /^(now|just now)$/i.test(participant.lastSeen)
+              ? 'Active now'
+              : `Last seen ${participant.lastSeen}`
+            : null;
+
+  // Unaccepted inbound request — the thread opens read-only until the
+  // viewer resolves it (the send edge rejects pending requests
+  // server-side: 'Message request has not been accepted').
+  const requestResolution = hydrated
+    ? requestResolutions[conversationId]
+    : undefined;
+  const pendingRequest =
+    !isGroup &&
+    (conversation.isRequest === true ||
+      (allConversations ?? []).find((c) => c.id === conversationId)?.isRequest === true) &&
+    !requestResolution;
+
+  // Accept / decline — the identical write grammar the Requests tab runs
+  // (ConversationList): optimistic resolution in inboxPrefs, the live
+  // edge posts and reverts on failure, fixtures mutate the module
+  // dataset. A decline removes the thread from the inbox — leave it.
+  const acceptRequest = () => {
+    if (requestBusy) return;
+    setRequestBusy(true);
+    setRequestResolution(conversationId, 'accepted');
+    if (DATA_MODE === 'live') {
+      liveConversationApi
+        .acceptRequest(conversationId)
+        .then(() => {
+          void qc.invalidateQueries({ queryKey: ['conversations'] });
+          void qc.invalidateQueries({ queryKey: ['conversation', conversationId] });
+        })
+        .catch(() => {
+          setRequestResolution(conversationId, null);
+          toast.show("Couldn't accept the request — try again", 'error');
+        })
+        .finally(() => setRequestBusy(false));
+      return;
+    }
+    acceptFixtureRequest(conversationId);
+    void qc.invalidateQueries({ queryKey: ['conversations'] });
+    setRequestBusy(false);
+  };
+  const declineRequest = () => {
+    if (requestBusy) return;
+    setRequestBusy(true);
+    setRequestResolution(conversationId, 'declined');
+    const leave = () => router.push('/inbox');
+    if (DATA_MODE === 'live') {
+      liveConversationApi
+        .declineRequest(conversationId)
+        .then(() => {
+          void qc.invalidateQueries({ queryKey: ['conversations'] });
+          leave();
+        })
+        .catch(() => {
+          setRequestResolution(conversationId, null);
+          toast.show("Couldn't decline the request — try again", 'error');
+        })
+        .finally(() => setRequestBusy(false));
+      return;
+    }
+    leave();
+    setRequestBusy(false);
+  };
 
   const groups = groupByDay(matches);
   const lastMine = [...messages].reverse().find(isMine);
@@ -855,7 +1312,7 @@ export function ChatPanel({ conversationId }: { conversationId: string }) {
       ? blockedUserIds.includes(conversation.participantId)
       : false;
   const groupReadOnly = isGroup && capabilities != null && !capabilities.canSendMessages;
-  const composerOpen = !counterpartyBlocked && !groupReadOnly;
+  const composerOpen = !counterpartyBlocked && !groupReadOnly && !pendingRequest;
   // Reply only targets real messages — a pending optimistic id means
   // nothing to the server, and tombstones/systems carry nothing to quote.
   const replyable = (m: Message) =>
@@ -884,7 +1341,11 @@ export function ChatPanel({ conversationId }: { conversationId: string }) {
   const menuMessage = msgMenu ? messages.find((mm) => mm.id === msgMenu.id) : undefined;
 
   return (
-    <div className="flex h-full min-w-0 flex-col bg-background">
+    <div
+      role="region"
+      aria-label={`Conversation with ${title}`}
+      className="flex h-full min-w-0 flex-col bg-background"
+    >
       {/* Presence / group header */}
       <header className="flex shrink-0 items-center gap-2 border-b border-border-subtle px-2 py-2 md:px-3">
         <IconButton
@@ -912,7 +1373,7 @@ export function ChatPanel({ conversationId }: { conversationId: string }) {
             ) : (
               <>
                 <Avatar src={conversation.participantAvatar} name={title} size={40} />
-                {conversation.isOnline ? (
+                {isPeerOnline ? (
                   <span
                     className="absolute -bottom-0.5 -right-0.5 h-3 w-3 rounded-full bg-success-text ring-2 ring-background"
                     aria-label="Online"
@@ -951,6 +1412,37 @@ export function ChatPanel({ conversationId }: { conversationId: string }) {
         />
       </header>
 
+      {/* Message request — the native MessageRequests grammar at thread
+          top: the sender wants to message you; Accept unlocks the
+          composer, Decline removes the thread from the inbox. The thread
+          stays read-only while pending (the send edge rejects it). */}
+      {pendingRequest ? (
+        <div className="shrink-0 border-b border-border-subtle bg-surface-alt px-4 py-2.5">
+          <div className="mx-auto flex w-full items-center gap-3 lg:max-w-3xl">
+            <p className="min-w-0 flex-1 text-meta text-text-secondary">
+              <span className="font-semibold text-text-primary">{title}</span>{' '}
+              wants to message you — accept to reply.
+            </p>
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={declineRequest}
+              disabled={requestBusy}
+            >
+              Decline
+            </Button>
+            <Button
+              variant="primary"
+              size="sm"
+              onClick={acceptRequest}
+              disabled={requestBusy}
+            >
+              Accept
+            </Button>
+          </div>
+        </div>
+      ) : null}
+
       {/* In-thread search — filters the stream client-side with match
           highlighting and a live result count; Escape clears, then closes. */}
       {searchOpen ? (
@@ -970,7 +1462,7 @@ export function ChatPanel({ conversationId }: { conversationId: string }) {
             }}
             placeholder={`Search in ${title}`}
             aria-label={`Search in ${title}`}
-            className="h-8 min-w-0 flex-1 bg-transparent text-body text-input-text placeholder:text-text-muted focus:outline-none"
+            className="h-11 -my-1.5 min-w-0 flex-1 bg-transparent text-body text-input-text placeholder:text-text-muted focus:outline-none"
           />
           {searchQuery ? (
             <span className="tnum shrink-0 text-meta text-text-muted" aria-live="polite">
@@ -981,7 +1473,7 @@ export function ChatPanel({ conversationId }: { conversationId: string }) {
             name="close"
             size={14}
             aria-label="Close search"
-            className="h-8 w-8 shrink-0"
+            className="-my-1.5 shrink-0"
             onClick={() => {
               setQuery('');
               setSearchOpen(false);
@@ -1001,7 +1493,7 @@ export function ChatPanel({ conversationId }: { conversationId: string }) {
             name="close"
             size={14}
             aria-label="Dismiss group description"
-            className="h-8 w-8 shrink-0"
+            className="-my-1.5 shrink-0"
             onClick={() => setDescDismissed(true)}
           />
         </div>
@@ -1029,7 +1521,7 @@ export function ChatPanel({ conversationId }: { conversationId: string }) {
               name="close"
               size={14}
               aria-label="Unpin message"
-              className="h-8 w-8 shrink-0"
+              className="-my-1.5 shrink-0"
               onClick={() => {
                 const m = messageById.get(pinnedView.messageId) ?? pin?.message;
                 if (m) togglePin(m);
@@ -1089,8 +1581,15 @@ export function ChatPanel({ conversationId }: { conversationId: string }) {
         <div
           ref={scrollRef}
           onScroll={onStreamScroll}
+          role="log"
+          aria-label="Messages"
           className="h-full overflow-y-auto px-3 py-4 md:px-4"
         >
+        {/* Readable column — bubbles centre inside a ~3xl measure on
+            desktop so lines never stretch across the pane (the WhatsApp-
+            web grammar); the pane chrome (header, banners, composer)
+            stays full-width. */}
+        <div className="mx-auto w-full lg:max-w-3xl">
         {/* Older-history affordance — the button is the keyboard-explicit
             path; scrolling to the top auto-loads too. An exhausted
             history reads its end state once. */}
@@ -1148,10 +1647,18 @@ export function ChatPanel({ conversationId }: { conversationId: string }) {
                   isGroup && !mine && !isSystem(m) && !hasPrev
                     ? senderLabelFor(conversation, m.senderId)
                     : undefined;
+                // Incoming group messages carry the sender's avatar on the
+                // run's LAST bubble (single or last), with an indent
+                // spacer on the earlier ones — the mobile ChatMessageItem
+                // avatar-recurrence rule, so consecutive senders are
+                // scannable without a label on every row.
+                const groupIncoming =
+                  isGroup && !mine && !isSystem(m) && !m.isDeleted;
+                const senderAvatar =
+                  groupIncoming && (cluster === 'single' || cluster === 'last')
+                    ? senderAvatarFor(conversation, m.senderId)
+                    : undefined;
                 const onReply = replyable(m) ? () => setReplyTarget(m) : undefined;
-                const onReplyPress = m.replyToMessageId
-                  ? () => scrollToMessage(m.replyToMessageId as string)
-                  : undefined;
                 // The actions menu opens on any persisted message, plus
                 // the two non-persisted edge cases the mobile grammar
                 // covers: a failed pending send (Retry / Discard — the
@@ -1188,6 +1695,15 @@ export function ChatPanel({ conversationId }: { conversationId: string }) {
                     }`}
                   >
                     {m.id === unreadAnchor.current.id ? <NewMessagesDivider /> : null}
+                    <div className={groupIncoming ? 'flex items-end gap-2' : undefined}>
+                    {groupIncoming ? (
+                      <span className="w-6 shrink-0 pb-0.5" aria-hidden={senderAvatar ? undefined : true}>
+                        {senderAvatar ? (
+                          <Avatar src={senderAvatar.avatar} name={senderAvatar.name} size={24} />
+                        ) : null}
+                      </span>
+                    ) : null}
+                    <div className={groupIncoming ? 'min-w-0 flex-1' : undefined}>
                     {m.isDeleted ? (
                       <DeletedMessageTombstone mine={mine} senderLabel={senderLabel} tight={tight} />
                     ) : isOffer(m) ? (
@@ -1231,6 +1747,11 @@ export function ChatPanel({ conversationId }: { conversationId: string }) {
                         );
                       })()
                     ) : m.type === 'listing_share' && m.listing ? (
+                      // Buyer-seat offer CTA (the native share card's
+                      // action dock): only when the viewer isn't the
+                      // listing's seller and the item isn't sold. An
+                      // unproven sellerId still shows it — the create
+                      // edge rejects own-listing offers honestly.
                       <ListingShareCard
                         message={m}
                         mine={mine}
@@ -1239,6 +1760,14 @@ export function ChatPanel({ conversationId }: { conversationId: string }) {
                         onReply={onReply}
                         onReact={onReact}
                         tight={tight}
+                        onMakeOffer={
+                          m.listing.isSold !== true &&
+                          (m.listing.sellerId
+                            ? m.listing.sellerId !== viewerId
+                            : true)
+                            ? () => setShareOfferId(m.listing!.id)
+                            : undefined
+                        }
                       />
                     ) : (
                       <MessageBubble
@@ -1249,18 +1778,18 @@ export function ChatPanel({ conversationId }: { conversationId: string }) {
                         senderLabel={senderLabel}
                         highlight={searchQuery || undefined}
                         replyTo={replyInfoFor(m)}
-                        onReplyPress={onReplyPress}
-                        onReply={onReply}
-                        onReact={onReact}
-                        onMediaPress={m.mediaUri ? openMediaFor : undefined}
-                        onToggleReaction={
-                          menuable
-                            ? (emoji) => threadActions.toggleReaction(m, emoji)
-                            : undefined
-                        }
+                        replyable={replyable(m)}
+                        menuable={menuable}
+                        onReplyPress={scrollToMessage}
+                        onReply={replyMessage}
+                        onReact={reactAt}
+                        onMediaPress={openMediaFor}
+                        onToggleReaction={toggleReactionFor}
                         cluster={cluster}
                       />
                     )}
+                    </div>
+                    </div>
                     {failedIds.has(m.id) ? (
                       <div className={`flex ${mine ? 'justify-end' : 'justify-start'}`}>
                         <button
@@ -1284,6 +1813,7 @@ export function ChatPanel({ conversationId }: { conversationId: string }) {
           </p>
         ) : null}
         </div>
+        </div>
 
         {/* Jump-to-latest — appears only when arrivals land while the
             viewer is reading up; pressing it smooth-scrolls to the tail.
@@ -1297,7 +1827,7 @@ export function ChatPanel({ conversationId }: { conversationId: string }) {
             <button
               type="button"
               onClick={jumpToLatest}
-              className="pressable pointer-events-auto flex items-center gap-1.5 rounded-full bg-brand px-3.5 py-2 text-meta font-semibold text-text-inverse shadow-lg"
+              className="pressable pointer-events-auto flex items-center gap-1.5 rounded-full bg-brand px-3.5 py-2 text-meta font-semibold text-text-inverse shadow-modal"
             >
               <Icon name="chevronDown" size={14} aria-hidden />
               New messages
@@ -1305,6 +1835,12 @@ export function ChatPanel({ conversationId }: { conversationId: string }) {
           ) : null}
         </div>
       </div>
+
+      {/* Polite arrival log — announces incoming messages when the
+          composer isn't holding focus (set by the stream effect). */}
+      <p aria-live="polite" role="status" className="sr-only">
+        {arrivalAnnouncement}
+      </p>
 
       {msgMenu && menuMessage
         ? (() => {
@@ -1412,23 +1948,46 @@ export function ChatPanel({ conversationId }: { conversationId: string }) {
           })()
         : null}
 
-      {counterpartyBlocked ? (
-        <div className="flex shrink-0 items-center justify-between gap-3 border-t border-border-subtle px-4 py-3">
-          <p className="text-meta text-text-muted">
-            You blocked {title} — unblock to send messages.
-          </p>
-          <button
-            type="button"
-            onClick={() => toggleBlocked(conversation.participantId)}
-            className="pressable shrink-0 text-body-emphasis font-semibold text-brand"
-          >
-            Unblock
-          </button>
+      {/* Typing — three-dot indicator (the mobile TypingIndicator
+          grammar) anchored above the composer; entries expire 4s after
+          the last event so a stale "typing…" never lingers. */}
+      {peerTyping ? (
+        <div className="shrink-0 px-4 pb-1" aria-live="polite">
+          <div className="mx-auto flex w-full items-center gap-1.5 lg:max-w-3xl">
+            {[0, 1, 2].map((i) => (
+              <span
+                key={i}
+                aria-hidden
+                className="h-1.5 w-1.5 animate-pulse rounded-full bg-text-muted"
+                style={{ animationDelay: `${i * 150}ms` }}
+              />
+            ))}
+            <span className="sr-only">{title} is typing</span>
+          </div>
+        </div>
+      ) : null}
+
+      {pendingRequest ? null : counterpartyBlocked ? (
+        <div className="shrink-0 border-t border-border-subtle px-4 py-3">
+          <div className="mx-auto flex w-full items-center justify-between gap-3 lg:max-w-3xl">
+            <p className="text-meta text-text-muted">
+              You blocked {title} — unblock to send messages.
+            </p>
+            <button
+              type="button"
+              onClick={() => toggleBlocked(conversation.participantId)}
+              className="pressable shrink-0 text-body-emphasis font-semibold text-brand"
+            >
+              Unblock
+            </button>
+          </div>
         </div>
       ) : groupReadOnly ? (
-        <p className="shrink-0 border-t border-border-subtle px-4 py-3.5 text-center text-meta text-text-muted">
-          Only admins can send messages in this group.
-        </p>
+        <div className="shrink-0 border-t border-border-subtle px-4 py-3.5">
+          <p className="mx-auto w-full text-center text-meta text-text-muted lg:max-w-3xl">
+            Only admins can send messages in this group.
+          </p>
+        </div>
       ) : (
         <Composer
           threadId={conversationId}
@@ -1449,16 +2008,21 @@ export function ChatPanel({ conversationId }: { conversationId: string }) {
         />
       )}
 
-      <ConfirmSheet state={confirm} onClose={() => setConfirm(CLOSED_CONFIRM)} />
+      {confirm.open ? (
+        <ConfirmSheet state={confirm} onClose={() => setConfirm(CLOSED_CONFIRM)} />
+      ) : null}
 
       {/* Forward picker — the message payload re-sends into the chosen
-          conversation through the normal send edge. */}
-      <ForwardSheet
-        open={forwardTarget !== null}
-        onClose={() => setForwardTarget(null)}
-        targets={(allConversations ?? []).filter((c) => c.id !== conversationId)}
-        onSelect={forwardPicked}
-      />
+          conversation through the normal send edge. Lazily imported —
+          mounts (and fetches its chunk) only while a forward is staged. */}
+      {forwardTarget !== null ? (
+        <ForwardSheet
+          open
+          onClose={() => setForwardTarget(null)}
+          targets={(allConversations ?? []).filter((c) => c.id !== conversationId)}
+          onSelect={forwardPicked}
+        />
+      ) : null}
 
       {/* Inline media viewer — the same MediaLightbox the info panel's
           shared-media grid opens; arrows page the whole thread set. */}
@@ -1485,6 +2049,21 @@ export function ChatPanel({ conversationId }: { conversationId: string }) {
           onSend={(amount, expiryHours) => {
             sendCounter(counterTarget, amount, expiryHours);
             setCounterTarget(null);
+          }}
+        />
+      ) : null}
+
+      {/* Make-offer on a shared listing — the same sheet, no counter
+          context; the write threads conversationId so the offer lands in
+          this thread (native sendListingShare → offer flow). */}
+      {shareOfferListing ? (
+        <OfferSheet
+          open
+          onClose={() => setShareOfferId(null)}
+          listing={shareOfferListing}
+          onSend={(amount, expiryHours) => {
+            sendNewOffer(shareOfferListing, amount, expiryHours);
+            setShareOfferId(null);
           }}
         />
       ) : null}

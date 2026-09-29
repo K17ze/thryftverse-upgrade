@@ -97,14 +97,15 @@ export function EditCollectionSheet({
           <textarea
             value={description}
             onChange={(e) => setDescription(e.target.value)}
-            maxLength={200}
+            maxLength={500}
             rows={3}
             placeholder="What's this collection for?"
             aria-label="Collection description"
             className="mt-1.5 w-full resize-none rounded-lg bg-input px-3.5 py-2.5 text-body text-input-text outline-none placeholder:text-text-muted focus:ring-1 focus:ring-brand"
           />
+          {/* Backend allows 500 — the field mirrors the schema cap. */}
           <span className="tnum mt-0.5 block text-right text-micro text-text-muted">
-            {description.length}/200
+            {description.length}/500
           </span>
         </label>
 

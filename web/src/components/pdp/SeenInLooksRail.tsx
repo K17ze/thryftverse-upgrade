@@ -8,17 +8,26 @@
  */
 
 import Link from 'next/link';
+import { useQuery } from '@tanstack/react-query';
 import type { Listing, Look } from '@/lib/contracts/domain';
 import { LOOKS, userById } from '@/lib/data/fixtures';
+import { DATA_MODE } from '@/lib/api/client';
+import { fetchLooks, type LookWithCounts } from '@/lib/api/services/social';
 import { AppImage } from '@/components/ui/AppImage';
 import { Icon } from '@/components/ui/Icon';
+
+const LIVE = DATA_MODE === 'live';
 
 interface SeenInLooksRailProps {
   listing: Listing;
 }
 
-function LookCard({ look }: { look: Look }) {
-  const creator = userById(look.creatorId);
+function LookCard({ look }: { look: Look | LookWithCounts }) {
+  // Live rows carry the backend's creator summary; fixtures resolve
+  // through USERS.
+  const creatorName = LIVE
+    ? ((look as LookWithCounts).creator?.username ?? null)
+    : (userById(look.creatorId)?.username ?? null);
   return (
     <Link
       href={`/look/${look.id}`}
@@ -28,7 +37,7 @@ function LookCard({ look }: { look: Look }) {
     >
       <AppImage
         src={look.coverImageUri}
-        alt={look.title ?? `Look by @${creator?.username ?? 'creator'}`}
+        alt={look.title ?? `Look by @${creatorName ?? 'creator'}`}
         aspectRatio={0.8}
         focalPoint={{ x: 0.5, y: 0.35 }}
         className="w-full rounded-lg"
@@ -39,15 +48,30 @@ function LookCard({ look }: { look: Look }) {
           {look.title}
         </p>
       ) : null}
-      {creator ? (
-        <p className="clamp-1 mt-0.5 text-meta text-text-muted">@{creator.username}</p>
+      {creatorName ? (
+        <p className="clamp-1 mt-0.5 text-meta text-text-muted">@{creatorName}</p>
       ) : null}
     </Link>
   );
 }
 
 export function SeenInLooksRail({ listing }: SeenInLooksRailProps) {
-  const looks = LOOKS.filter((l) => l.itemIds.includes(listing.id));
+  // Live: fetch recent looks and keep only those whose tags include this
+  // listing — the backend tags carry listingId, so membership stays
+  // server-derived. An empty result hides the rail honestly.
+  const looksQuery = useQuery({
+    queryKey: ['pdp', 'seen-in-looks', listing.id],
+    queryFn: async ({ signal }) => {
+      const rows = await fetchLooks({ sort: 'foryou', limit: 50 }, signal);
+      return rows.filter((l) => l.itemIds.includes(listing.id));
+    },
+    enabled: LIVE,
+    staleTime: 5 * 60_000,
+  });
+
+  const looks = LIVE
+    ? (looksQuery.data ?? [])
+    : LOOKS.filter((l) => l.itemIds.includes(listing.id));
   if (looks.length === 0) return null;
 
   return (

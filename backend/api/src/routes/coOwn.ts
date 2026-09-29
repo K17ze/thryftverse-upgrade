@@ -2895,6 +2895,53 @@ app.get('/co-own/assets/:assetId/executions', async (request, reply) => {
   };
 });
 
+// GET /co-own/executions — the market-wide public tape.
+// One bounded read across every Co-Own market so clients don't fan out
+// per-asset (the N+1 pattern this replaces). Counterparties and side
+// are never exposed — the tape prints units, price and time only.
+app.get('/co-own/executions', async (request, reply) => {
+  const querySchema = z.object({
+    limit: z.coerce.number().int().min(1).max(500).default(100),
+    assetId: z.string().min(2).max(128).optional(),
+  });
+  const { limit, assetId } = querySchema.parse(request.query);
+
+  const result = await db.query<{
+    id: number;
+    asset_id: string;
+    units: number;
+    unit_price_gbp: string;
+    notional_gbp: string;
+    created_at: string;
+    settlement_status: string;
+  }>(
+    `
+      SELECT id, asset_id, units, unit_price_gbp::text, notional_gbp::text,
+             created_at, settlement_status
+      FROM coOwn_trades
+      WHERE settlement_status IN ('settled', 'failed', 'reversed')
+        AND ($2::text IS NULL OR asset_id = $2)
+      ORDER BY created_at DESC, id DESC
+      LIMIT $1
+    `,
+    [limit, assetId ?? null]
+  );
+
+  return {
+    ok: true,
+    serverTimestamp: new Date().toISOString(),
+    items: result.rows.map((row) => ({
+      id: row.id,
+      assetId: row.asset_id,
+      units: row.units,
+      unitPriceGbp: Number(row.unit_price_gbp),
+      notionalGbp: Number(row.notional_gbp),
+      executedAt: row.created_at,
+      settlementStatus: row.settlement_status,
+    })),
+  };
+});
+
 // ── B14: Aggregate portfolio projection ──────────────────────────────
 // Returns all holdings with marks, provenance, sellable units, and
 // capabilities in one bounded query — replaces the frontend's N+1

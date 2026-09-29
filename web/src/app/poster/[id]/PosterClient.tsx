@@ -1,0 +1,720 @@
+'use client';
+
+/**
+ * Poster viewer — immersive media stage, web port of PosterViewerScreen.
+ * Progress segments top, author row beneath (links to the creator's
+ * profile), caption + lifecycle meta on the bottom scrim, shoppable
+ * product hotspots pinned to the frame. Tap right/left to step frames —
+ * press-and-hold pauses, arrow keys navigate, Escape closes.
+ *
+ * Resolves two sources: feed posters (POSTERS + POSTER_SLIDES) and the
+ * member's own archive stories (fixtures-posters), so archive cards open
+ * in the same chrome. Own stories get the mobile options-sheet owner
+ * actions — archive + delete — which write the poster-stories endpoints
+ * in live mode and the posterArchive session store in fixture mode.
+ *
+ * Existence is decided upstream by the server shell (poster resolver in
+ * lib/api/server.ts → notFound()); the unavailable state below is the
+ * client-side net for paths the server deferred.
+ */
+
+import { useCallback, useEffect, useRef, useState } from 'react';
+import Link from 'next/link';
+import { useParams, useRouter } from 'next/navigation';
+import { useQuery, useQueryClient } from '@tanstack/react-query';
+import {
+  appendFixtureMessage,
+  POSTERS,
+  STORY_RAIL,
+  USERS,
+  userById,
+} from '@/lib/data/fixtures';
+import { DATA_MODE } from '@/lib/api/client';
+import * as socialService from '@/lib/api/services/social';
+import * as chatService from '@/lib/api/services/chat';
+import { useCreateConversation } from '@/lib/hooks/queries';
+import { useSignupWall } from '@/components/auth/SignupWall';
+import { POSTER_SLIDES } from '@/lib/data/fixtures-media';
+import {
+  archiveStoryById,
+  posterTagsFor,
+  type PosterArchiveStory,
+} from '@/lib/data/fixtures-posters';
+import { usePosterArchive } from '@/lib/store/posterArchive';
+import { useHydrated } from '@/lib/store/useStore';
+import { useSession } from '@/lib/session/SessionProvider';
+import { AppImage } from '@/components/ui/AppImage';
+import { Avatar } from '@/components/ui/Avatar';
+import { Icon } from '@/components/ui/Icon';
+import { IconButton } from '@/components/ui/IconButton';
+import { Sheet } from '@/components/ui/Sheet';
+import { Skeleton } from '@/components/ui/Skeleton';
+import { EmptyState } from '@/components/ui/EmptyState';
+import { useToast } from '@/components/ui/Toast';
+import { useShare } from '@/components/profile/useShare';
+import { ConfirmSheet, type ConfirmSheetState } from '@/components/orders/ConfirmSheet';
+import { timeAgo } from '@/lib/utils/format';
+
+const FRAME_MS = 6000;
+const HOLD_MS = 180;
+const tick = (ms = 240) => new Promise((r) => setTimeout(r, ms));
+
+interface PosterView {
+  id: string;
+  authorId: string;
+  slides: string[];
+  /** Per-frame captions for archive stories; feed posters use `caption`. */
+  frameCaptions: (string | undefined)[];
+  caption?: string | null;
+  createdAt?: string;
+  /** Set when the id resolves to one of the member's archive stories. */
+  story?: PosterArchiveStory;
+  /** Live stories carry the author identity on the wire — the profile
+   *  link renders from it instead of a fixture lookup. */
+  creator?: { id: string; username: string | null; avatar: string | null } | null;
+  /** Live only — creators can disable story replies; the composer hides
+   *  rather than offering a write the route would reject. */
+  allowReplies?: boolean;
+}
+
+function usePoster(id: string) {
+  return useQuery<PosterView | null>({
+    queryKey: ['poster', id, DATA_MODE],
+    queryFn: async () => {
+      if (DATA_MODE === 'live') {
+        // Live stories resolve from /poster-stories/:id — frames map to
+        // slides; the archive-shaped projection powers owner features.
+        const story = await socialService.fetchPosterStory(id);
+        if (!story) return null;
+        const frames = story.frames;
+        return {
+          id: story.id,
+          authorId: story.creatorId,
+          slides: frames.map((f) => f.posterUrl || f.mediaUrl),
+          frameCaptions: frames.map((f) => f.caption ?? undefined),
+          caption: frames[0]?.caption ?? null,
+          createdAt: story.createdAt,
+          creator: story.creator,
+          allowReplies: story.allowReplies,
+          story: socialService.mapPosterStoryToArchive(story),
+        };
+      }
+      await tick();
+      const poster = POSTERS.find((p) => p.id === id);
+      if (poster) {
+        const slides = POSTER_SLIDES[id] ?? [poster.coverUri];
+        return {
+          id: poster.id,
+          authorId: poster.authorId,
+          slides,
+          frameCaptions: slides.map(() => undefined),
+          caption: poster.caption,
+          createdAt: poster.createdAt,
+        };
+      }
+      const story = archiveStoryById(id);
+      if (story) {
+        return {
+          id: story.id,
+          authorId: story.creatorId,
+          slides: story.frames.map((f) => f.mediaUrl),
+          frameCaptions: story.frames.map((f) => f.caption),
+          createdAt: story.createdAt,
+          story,
+        };
+      }
+      // Story-rail entries (s*) resolve to a single-frame poster keyed by
+      // the rail cover — keeps every rail avatar openable in fixture mode.
+      const rail = STORY_RAIL.find((s) => s.id === id);
+      if (rail) {
+        const railAuthor = USERS.find((u) => u.username === rail.username);
+        return {
+          id: rail.id,
+          authorId: railAuthor?.id ?? 'me',
+          slides: [rail.coverUri],
+          frameCaptions: [undefined],
+        };
+      }
+      return null;
+    },
+  });
+}
+
+export function PosterClient() {
+  const params = useParams<{ id: string }>();
+  const id = params?.id ?? '';
+  const router = useRouter();
+  const { show } = useToast();
+  const share = useShare();
+  const { user: me } = useSession();
+  const hydrated = useHydrated();
+  const { data, isLoading } = usePoster(id);
+  const queryClient = useQueryClient();
+  const { requireAuth, wall } = useSignupWall();
+  const createConversation = useCreateConversation();
+
+  const [frame, setFrame] = useState(0);
+  const [progress, setProgress] = useState(0);
+  const [paused, setPaused] = useState(false);
+  const [optionsOpen, setOptionsOpen] = useState(false);
+  const [confirm, setConfirm] = useState<ConfirmSheetState | null>(null);
+  const [replyDraft, setReplyDraft] = useState('');
+  const [sendingReply, setSendingReply] = useState(false);
+  const holdTimer = useRef<number | null>(null);
+  const heldRef = useRef(false);
+  const suppressClick = useRef(false);
+
+  // Persisted archive mutations — owner menu actions write here.
+  const removedStoryIds = usePosterArchive((s) => s.removedStoryIds);
+  const archivedStoryIds = usePosterArchive((s) => s.archivedStoryIds);
+  const archiveStory = usePosterArchive((s) => s.archiveStory);
+  const removeStory = usePosterArchive((s) => s.removeStory);
+
+  const slides = data?.slides ?? [];
+  const frameCount = slides.length;
+  const tags = posterTagsFor(id).filter(
+    (t) => (t.frameIndex ?? 0) === frame,
+  );
+
+  const isOwn = !!data?.story && !!me && data.authorId === me.id;
+  const storyStatus: 'active' | 'archived' | undefined = data?.story
+    ? hydrated && archivedStoryIds.includes(data.story.id)
+      ? 'archived'
+      : data.story.status
+    : undefined;
+
+  const next = useCallback(() => {
+    setProgress(0);
+    setFrame((f) => Math.min(f + 1, frameCount - 1));
+  }, [frameCount]);
+
+  const prev = useCallback(() => {
+    setProgress(0);
+    setFrame((f) => Math.max(f - 1, 0));
+  }, []);
+
+  // Auto-advance; halts on the final frame and while press-held.
+  useEffect(() => {
+    if (frameCount <= 1 || frame >= frameCount - 1 || paused) return;
+    const started = Date.now() - progress * FRAME_MS;
+    const interval = setInterval(() => {
+      const p = (Date.now() - started) / FRAME_MS;
+      if (p >= 1) {
+        clearInterval(interval);
+        next();
+      } else {
+        setProgress(p);
+      }
+    }, 50);
+    return () => clearInterval(interval);
+    // progress intentionally excluded — restarting on resume carries it over.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [frame, frameCount, paused, next]);
+
+  // Keyboard parity — arrows step frames, Escape closes.
+  useEffect(() => {
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key === 'ArrowRight') next();
+      if (e.key === 'ArrowLeft') prev();
+      if (e.key === 'Escape') router.back();
+    };
+    window.addEventListener('keydown', onKey);
+    return () => window.removeEventListener('keydown', onKey);
+  }, [next, prev, router]);
+
+  // Frame view recording — POST /poster-frames/:frameId/view once per
+  // frame per mounted session (native PosterViewerScreen parity). The
+  // backend dedupes on (frame_id, viewer_id); the ref just keeps the
+  // write fire-once here. Live mode + signed-in non-owner viewers only —
+  // the route 401s for guests and ignores the creator's own hits.
+  const recordedFrames = useRef<Set<string>>(new Set());
+  useEffect(() => {
+    recordedFrames.current = new Set();
+  }, [id]);
+  useEffect(() => {
+    if (DATA_MODE !== 'live' || !me || !data?.story || isOwn) return;
+    const frameId = data.story.frames[frame]?.id;
+    if (!frameId || recordedFrames.current.has(frameId)) return;
+    recordedFrames.current.add(frameId);
+    void socialService.recordPosterFrameView(frameId).catch(() => {
+      // Seen-state is best-effort — a dropped record never blocks viewing.
+    });
+  }, [frame, data, me, isOwn]);
+
+  // Press-and-hold pauses auto-advance; a released hold must not also
+  // count as a tap, so the following click is swallowed.
+  const onZoneDown = () => {
+    heldRef.current = false;
+    suppressClick.current = false;
+    holdTimer.current = window.setTimeout(() => {
+      heldRef.current = true;
+      setPaused(true);
+    }, HOLD_MS);
+  };
+  const onZoneRelease = () => {
+    if (holdTimer.current) {
+      clearTimeout(holdTimer.current);
+      holdTimer.current = null;
+    }
+    if (heldRef.current) {
+      heldRef.current = false;
+      suppressClick.current = true;
+      setPaused(false);
+    }
+  };
+  const onZoneClick = (advance: () => void) => {
+    if (suppressClick.current) {
+      suppressClick.current = false;
+      return;
+    }
+    advance();
+  };
+
+  if (isLoading) {
+    return (
+      <div
+        className="flex h-[calc(100dvh-4rem-76px)] items-center justify-center md:h-[calc(100dvh-4rem)]"
+        aria-busy
+        aria-label="Loading poster"
+      >
+        <Skeleton className="h-full w-full max-w-[560px] lg:max-w-[640px]" />
+      </div>
+    );
+  }
+
+  // Deleted archive stories stay deleted on direct URL visits too.
+  const isRemoved =
+    hydrated && !!data?.story && removedStoryIds.includes(data.id);
+
+  if (!data || isRemoved) {
+    return (
+      <EmptyState
+        icon="image"
+        title="Poster unavailable"
+        subtitle="This poster has expired or been removed."
+        actionLabel="Back to feed"
+        onAction={() => router.push('/')}
+      />
+    );
+  }
+
+  // Author identity — live stories carry it on the wire (PosterStoryApi
+  // .creator); fixture resolves the catalogue user. A live author without
+  // a resolvable username renders without the profile link — no dead /u/.
+  const author =
+    data.creator ??
+    (DATA_MODE === 'live' ? null : userById(data.authorId));
+  const authorUsername = author?.username ?? null;
+  const authorHref = authorUsername
+    ? data.authorId === 'me'
+      ? '/profile'
+      : `/u/${authorUsername}`
+    : null;
+  // Reply affordance (IG story grammar): non-owners get a composer that
+  // posts the story reply and opens the DM thread with it sent. The
+  // fixture 'me' author is the demo member — a viewer can't DM it. Live
+  // stories can disable replies server-side; the composer hides rather
+  // than offer a write the route would reject.
+  const canReply =
+    !!author &&
+    data.authorId !== 'me' &&
+    data.authorId !== me?.id &&
+    data.allowReplies !== false;
+  const caption = data.frameCaptions[frame] ?? data.caption;
+  const expiresAt = data.story ? new Date(data.story.expiresAt).getTime() : 0;
+  const hoursLeft = Math.max(0, Math.ceil((expiresAt - Date.now()) / 3600e3));
+
+  const posterUrl = `${window.location.origin}/poster/${id}`;
+  // Author row content — shared by the linked and unlinked renders (the
+  // identity is the link only when the wire carries a username; without
+  // one the row renders plain, never a dead /u/ link).
+  const authorRow = (
+    <>
+      <Avatar src={author?.avatar ?? null} name={authorUsername} size={32} ring />
+      <span className="min-w-0">
+        <span className="flex items-center gap-1.5 text-body font-semibold text-scrim-text-primary">
+          <span className="clamp-1">@{authorUsername ?? 'author'}</span>
+          {/* Fixture users carry the verified flag; the wire creator shape
+              doesn't — the badge renders only when the source has it. */}
+          {author && 'isVerified' in author && author.isVerified ? (
+            <Icon name="verified" size={13} className="shrink-0 text-scrim-text-primary" filled />
+          ) : null}
+        </span>
+        {data.createdAt ? (
+          <span className="block text-meta text-scrim-text-secondary">
+            {timeAgo(data.createdAt)}
+          </span>
+        ) : null}
+      </span>
+    </>
+  );
+  // Share icon → native sheet with clipboard fallback (one share grammar);
+  // the options-sheet row keeps an explicit "Copy link" affordance.
+  const sharePoster = () => share({ url: posterUrl, title: 'Poster on ThryftVerse' });
+  const copyLink = async () => {
+    try {
+      await navigator.clipboard.writeText(posterUrl);
+      show('Link copied', 'success');
+    } catch {
+      show('Could not copy link', 'error');
+    }
+  };
+
+  const askDelete = () =>
+    setConfirm({
+      title: 'Delete story?',
+      message: 'This will permanently remove your poster story.',
+      confirmLabel: 'Delete',
+      variant: 'destructive',
+      onConfirm: () => {
+        if (DATA_MODE === 'live') {
+          void (async () => {
+            try {
+              await socialService.deletePosterStory(id);
+              void queryClient.invalidateQueries({ queryKey: ['poster-stories'] });
+              void queryClient.invalidateQueries({ queryKey: ['poster-archive'] });
+              void queryClient.removeQueries({ queryKey: ['poster', id] });
+              setConfirm(null);
+              show('Story deleted', 'info');
+              router.back();
+            } catch {
+              show('Could not delete the story', 'error');
+            }
+          })();
+          return;
+        }
+        removeStory(id);
+        setConfirm(null);
+        show('Story deleted', 'info');
+        router.back();
+      },
+    });
+
+  const archiveNow = () => {
+    setOptionsOpen(false);
+    if (DATA_MODE === 'live') {
+      void (async () => {
+        try {
+          await socialService.archivePosterStory(id);
+          void queryClient.invalidateQueries({ queryKey: ['poster', id] });
+          void queryClient.invalidateQueries({ queryKey: ['poster-stories'] });
+          void queryClient.invalidateQueries({ queryKey: ['poster-archive'] });
+          show('Story archived', 'info');
+        } catch {
+          show('Could not archive the story', 'error');
+        }
+      })();
+      return;
+    }
+    archiveStory(id);
+    show('Story archived', 'info');
+  };
+
+  /** Story reply → frame reply edge + DM bridge. In live mode the reply
+   *  posts to /poster-frames/:frameId/replies first (native handleReply
+   *  parity) so the creator's activity surface sees it; the DM thread
+   *  then carries the same text into the inbox and the viewer lands on
+   *  the conversation. Fixture mode keeps the local thread write. */
+  const sendReply = async () => {
+    const text = replyDraft.trim();
+    if (!text || sendingReply) return;
+    if (!requireAuth('message_seller')) return;
+    setSendingReply(true);
+    if (DATA_MODE === 'live') {
+      try {
+        const frameId = data.story?.frames[frame]?.id;
+        if (!frameId) throw new Error('missing frame id');
+        await socialService.createPosterReply(frameId, {
+          id: `reply_${typeof crypto !== 'undefined' && crypto.randomUUID ? crypto.randomUUID() : Date.now().toString(36)}`,
+          body: text,
+        });
+      } catch {
+        setSendingReply(false);
+        show('Could not send the reply', 'error');
+        return;
+      }
+    }
+    try {
+      const conversation = await createConversation.mutateAsync({
+        memberIds: [data.authorId],
+      });
+      if (DATA_MODE === 'live') {
+        await chatService.sendChatMessage(conversation.id, { text }, me?.id);
+      } else {
+        appendFixtureMessage(conversation.id, {
+          id: `local-${Date.now()}`,
+          senderId: me?.id ?? 'me',
+          sender: 'me',
+          text,
+          type: 'text',
+          timestamp: new Date().toISOString(),
+          readStatus: 'sent',
+        });
+        // Re-issue the inbox/thread caches so the new message reads fresh
+        // (same keys the useSendChatMessage onSuccess touches).
+        const userKey = me?.id ?? 'guest';
+        void queryClient.invalidateQueries({ queryKey: ['conversations', userKey] });
+        void queryClient.invalidateQueries({
+          queryKey: ['conversation', conversation.id, userKey],
+        });
+      }
+      setReplyDraft('');
+      router.push(`/inbox/${conversation.id}`);
+    } catch {
+      // In live mode the story reply already persisted — only the inbox
+      // bridge failed, so the toast names what actually went wrong.
+      show(
+        DATA_MODE === 'live'
+          ? 'Reply sent — could not open the conversation'
+          : 'Could not send the reply',
+        'error',
+      );
+    } finally {
+      setSendingReply(false);
+    }
+  };
+
+  return (
+    <div className="relative flex h-[calc(100dvh-4rem-76px)] justify-center overflow-hidden bg-black md:h-[calc(100dvh-4rem)]">
+      {/* Desktop frame arrows — the tap zones still work, but pointer
+          users get a visible affordance at the stage edges (IG story
+          viewer grammar). Hidden below lg; suppressed at the ends since
+          auto-advance halts on the final frame. */}
+      {frameCount > 1 && frame > 0 ? (
+        <button
+          type="button"
+          onClick={prev}
+          aria-label="Previous frame"
+          className="pressable absolute left-5 top-1/2 z-elevated hidden h-11 w-11 -translate-y-1/2 items-center justify-center rounded-full bg-overlay text-scrim-text-primary transition-opacity hover:opacity-80 lg:flex"
+        >
+          <Icon name="back" size={20} />
+        </button>
+      ) : null}
+      {frameCount > 1 && frame < frameCount - 1 ? (
+        <button
+          type="button"
+          onClick={next}
+          aria-label="Next frame"
+          className="pressable absolute right-5 top-1/2 z-elevated hidden h-11 w-11 -translate-y-1/2 items-center justify-center rounded-full bg-overlay text-scrim-text-primary transition-opacity hover:opacity-80 lg:flex"
+        >
+          <Icon name="forward" size={20} />
+        </button>
+      ) : null}
+      <div className="relative h-full w-full max-w-[560px] lg:max-w-[640px]">
+        {/* Stage */}
+        <AppImage
+          key={slides[frame]}
+          src={slides[frame]}
+          alt={caption ?? `Poster by @${author?.username ?? 'author'}`}
+          fill
+          priority
+          className="h-full w-full"
+          imgClassName="object-cover"
+          sizes="(max-width: 560px) 100vw, 560px"
+        />
+
+        {/* Tap zones — invisible navigation; press-and-hold pauses */}
+        {frameCount > 1 ? (
+          <>
+            <button
+              type="button"
+              aria-label="Previous frame"
+              onPointerDown={onZoneDown}
+              onPointerUp={onZoneRelease}
+              onPointerLeave={onZoneRelease}
+              onClick={() => onZoneClick(prev)}
+              className="absolute inset-y-0 left-0 w-1/3 cursor-w-resize"
+            />
+            <button
+              type="button"
+              aria-label="Next frame"
+              onPointerDown={onZoneDown}
+              onPointerUp={onZoneRelease}
+              onPointerLeave={onZoneRelease}
+              onClick={() => onZoneClick(next)}
+              className="absolute inset-y-0 right-0 w-2/3 cursor-e-resize"
+            />
+          </>
+        ) : null}
+
+        {/* Shoppable hotspots — product tags pinned to the frame */}
+        {tags.map((tag) => (
+          <Link
+            key={tag.id}
+            href={`/item/${tag.listingId}`}
+            className="group absolute z-elevated"
+            style={{ left: `${tag.x * 100}%`, top: `${tag.y * 100}%` }}
+            aria-label={`Shop ${tag.label}`}
+          >
+            <span className="block -translate-x-1/2 -translate-y-1/2 p-3">
+              <span className="block h-3 w-3 rounded-full bg-brand ring-2 ring-white/80 transition-transform group-hover:scale-110" />
+            </span>
+            <span className="absolute left-1/2 top-4 block -translate-x-1/2 whitespace-nowrap rounded-full bg-overlay px-2.5 py-1 text-micro font-semibold text-scrim-text-primary">
+              {tag.label}
+            </span>
+          </Link>
+        ))}
+
+        {paused ? (
+          <div className="pointer-events-none absolute inset-0 flex items-center justify-center">
+            <span className="inline-flex items-center gap-1.5 rounded-full bg-overlay px-3 py-1.5 text-meta font-medium text-scrim-text-secondary">
+              <Icon name="pause" size={14} />
+              Paused
+            </span>
+          </div>
+        ) : null}
+
+        {/* Top chrome — progress segments + author row */}
+        <div className="pointer-events-none absolute inset-x-0 top-0 bg-gradient-to-b from-media-overlay-scrim to-transparent px-3 pb-10 pt-3">
+          {frameCount > 1 ? (
+            <div className="flex gap-1.5" role="progressbar" aria-valuemin={0} aria-valuemax={frameCount} aria-valuenow={frame + 1} aria-label={`Frame ${frame + 1} of ${frameCount}`}>
+              {slides.map((_, i) => (
+                <span key={i} className="h-[3px] flex-1 overflow-hidden rounded-full bg-white/30">
+                  <span
+                    className="block h-full rounded-full bg-white"
+                    style={{
+                      width:
+                        i < frame
+                          ? '100%'
+                          : i === frame
+                            ? frame === frameCount - 1
+                              ? '100%'
+                              : `${Math.min(progress * 100, 100)}%`
+                            : '0%',
+                    }}
+                  />
+                </span>
+              ))}
+            </div>
+          ) : null}
+
+          <div className="pointer-events-auto mt-3 flex items-center gap-2.5">
+            {authorHref ? (
+              <Link
+                href={authorHref}
+                className="pressable flex min-w-0 flex-1 items-center gap-2.5 rounded-md"
+                aria-label={`Open @${authorUsername ?? 'author'} profile`}
+              >
+                {authorRow}
+              </Link>
+            ) : (
+              <div className="flex min-w-0 flex-1 items-center gap-2.5">{authorRow}</div>
+            )}
+            <IconButton name="share" aria-label="Share poster" onMedia onClick={sharePoster} />
+            {isOwn ? (
+              <IconButton
+                name="more"
+                aria-label="Story options"
+                onMedia
+                onClick={() => setOptionsOpen(true)}
+              />
+            ) : null}
+            <IconButton name="close" aria-label="Close poster" onMedia onClick={() => router.back()} />
+          </div>
+        </div>
+
+        {/* Caption + lifecycle meta + reply — bottom scrim */}
+        {caption || data.story || canReply ? (
+          <div className="pointer-events-none absolute inset-x-0 bottom-0 bg-gradient-to-t from-media-overlay-scrim to-transparent px-4 pb-6 pt-14">
+            {caption ? (
+              <p className="text-body-large font-medium text-scrim-text-primary">{caption}</p>
+            ) : null}
+            {data.story ? (
+              <p className="mt-1.5 text-meta text-scrim-text-secondary">
+                {storyStatus === 'active' ? (
+                  <span className="tnum">{hoursLeft}h left</span>
+                ) : (
+                  'Archived'
+                )}
+                {frameCount > 1 ? (
+                  <span className="tnum"> · {frame + 1} / {frameCount}</span>
+                ) : null}
+              </p>
+            ) : null}
+            {canReply ? (
+              <form
+                className="pointer-events-auto mt-3 flex items-center gap-2"
+                onSubmit={(e) => {
+                  e.preventDefault();
+                  void sendReply();
+                }}
+              >
+                <input
+                  value={replyDraft}
+                  onChange={(e) => setReplyDraft(e.target.value)}
+                  placeholder={`Reply to @${author?.username ?? 'author'}…`}
+                  aria-label={`Reply to @${author?.username ?? 'author'}`}
+                  maxLength={500}
+                  className="h-10 min-w-0 flex-1 rounded-full bg-overlay px-4 text-body text-scrim-text-primary outline-none placeholder:text-scrim-text-secondary focus:ring-1 focus:ring-white/60"
+                />
+                <button
+                  type="submit"
+                  disabled={!replyDraft.trim() || sendingReply}
+                  aria-label="Send reply"
+                  className="pressable flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-overlay text-scrim-text-primary transition-opacity disabled:opacity-50"
+                >
+                  <Icon name="send" size={17} />
+                </button>
+              </form>
+            ) : null}
+          </div>
+        ) : null}
+      </div>
+
+      {/* Owner options — mirrors PosterOptionsMenu (owner tier) */}
+      <Sheet open={optionsOpen} onClose={() => setOptionsOpen(false)} title="Story options" maxWidth={440}>
+        <div className="px-5 pb-6 pt-1">
+          <button
+            type="button"
+            onClick={() => {
+              setOptionsOpen(false);
+              void copyLink();
+            }}
+            className="pressable flex w-full items-center gap-3 rounded-md py-3 text-left text-body-emphasis text-text-primary"
+          >
+            <Icon name="link" size={20} />
+            Copy link
+          </button>
+          <button
+            type="button"
+            onClick={() => {
+              setOptionsOpen(false);
+              router.push(`/poster/${id}/activity`);
+            }}
+            className="pressable flex w-full items-center gap-3 rounded-md py-3 text-left text-body-emphasis text-text-primary"
+          >
+            <Icon name="analytics" size={20} />
+            View activity
+          </button>
+          {/* Archive + delete persist server-side in live mode
+              (POST /poster-stories/:id/archive, DELETE /poster-stories/:id);
+              fixture mode keeps the session-store overlay. */}
+          {storyStatus === 'active' ? (
+            <button
+              type="button"
+              onClick={archiveNow}
+              className="pressable flex w-full items-center gap-3 rounded-md py-3 text-left text-body-emphasis text-text-primary"
+            >
+              <Icon name="inventory" size={20} />
+              Archive story
+            </button>
+          ) : null}
+          <button
+            type="button"
+            onClick={() => {
+              setOptionsOpen(false);
+              askDelete();
+            }}
+            className="pressable flex w-full items-center gap-3 rounded-md py-3 text-left text-body-emphasis text-danger-text"
+          >
+            <Icon name="trash" size={20} />
+            Delete story
+          </button>
+        </div>
+      </Sheet>
+
+      <ConfirmSheet sheet={confirm} onDismiss={() => setConfirm(null)} />
+      {wall}
+    </div>
+  );
+}

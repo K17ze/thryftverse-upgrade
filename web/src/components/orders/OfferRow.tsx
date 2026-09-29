@@ -22,6 +22,8 @@ import { AppImage } from '@/components/ui/AppImage';
 import { Badge } from '@/components/ui/Badge';
 import { Button } from '@/components/ui/Button';
 import { Icon } from '@/components/ui/Icon';
+import { DATA_MODE } from '@/lib/api/client';
+import { useListingIds, useSellerSummary } from '@/lib/hooks/listing-resolution';
 import { listingById, userById } from '@/lib/data/fixtures';
 import { offerOrderId } from '@/lib/commerce/offerAcceptance';
 import { OFFER_STATUS_LABEL } from '@/lib/commerce/offerLabels';
@@ -161,10 +163,20 @@ interface OfferRowProps {
 }
 
 export function OfferRow({ offer, direction, viewerId, nowMs, onAction }: OfferRowProps) {
-  const listing = listingById(offer.listingId);
+  const LIVE = DATA_MODE === 'live';
+  // Live rows resolve the real listing + counterparty (GET /listings/:id,
+  // GET /sellers/:id); fixture rows read the catalogue. A live id that
+  // fails to resolve renders the honest placeholder — never a fixture
+  // ghost standing in for the member's actual negotiation.
+  const { byId } = useListingIds([offer.listingId]);
   const counterpartyId = direction === 'received' ? offer.buyerId : offer.sellerId;
-  const counterparty = userById(counterpartyId);
-  const counterpartyName = counterparty?.username ?? 'member';
+  const seller = useSellerSummary(LIVE ? counterpartyId : null);
+  const listing = LIVE
+    ? byId.get(offer.listingId) ?? null
+    : listingById(offer.listingId);
+  const counterpartyName = LIVE
+    ? seller.data?.username ?? 'member'
+    : userById(counterpartyId)?.username ?? 'member';
 
   const effective = effectiveOfferStatus(offer, nowMs);
   const live = effective === 'pending' || effective === 'countered';
@@ -180,7 +192,7 @@ export function OfferRow({ offer, direction, viewerId, nowMs, onAction }: OfferR
 
   return (
     <li className="py-4">
-      <div className="flex items-center gap-3">
+      <div className="flex items-center gap-3 lg:grid lg:grid-cols-[3.5rem_minmax(0,1.3fr)_minmax(0,0.8fr)_9.5rem_7rem] lg:gap-x-5">
         <Link
           href={`/item/${offer.listingId}`}
           className="pressable w-14 shrink-0 overflow-hidden rounded-md"
@@ -200,7 +212,9 @@ export function OfferRow({ offer, direction, viewerId, nowMs, onAction }: OfferR
           <Link href={`/item/${offer.listingId}`} className="clamp-1 text-body font-medium text-text-primary hover:underline">
             {listing?.title ?? 'Listing'}
           </Link>
-          <p className="mt-0.5 flex flex-wrap items-center gap-x-2 text-caption text-text-secondary">
+          {/* Compact counterparty line — mobile only; at lg the same
+              facts render as their own table cell. */}
+          <p className="mt-0.5 flex flex-wrap items-center gap-x-2 text-caption text-text-secondary lg:hidden">
             <span>
               {direction === 'received' ? 'From' : 'To'}{' '}
               <span className="font-medium text-text-primary">
@@ -238,7 +252,20 @@ export function OfferRow({ offer, direction, viewerId, nowMs, onAction }: OfferR
           ) : null}
         </div>
 
-        <div className="shrink-0 text-right">
+        {/* Desktop cell — counterparty + last move, the column the mobile
+            meta line collapses into the title block. */}
+        <div className="hidden min-w-0 lg:block">
+          <p className="clamp-1 text-body text-text-secondary">
+            {direction === 'received' ? 'From' : 'To'}{' '}
+            <span className="font-medium text-text-primary">@{counterpartyName}</span>
+          </p>
+          <p className="mt-0.5 flex items-center gap-1 text-caption text-text-muted">
+            <Icon name="clock" size={11} />
+            {timeAgo(offer.updatedAt)}
+          </p>
+        </div>
+
+        <div className="shrink-0 text-right lg:justify-self-end">
           <p className="tnum text-body-large font-bold text-text-primary">
             {formatPrice(offer.amount)}
           </p>
@@ -262,7 +289,7 @@ export function OfferRow({ offer, direction, viewerId, nowMs, onAction }: OfferR
           declines, buyer cancels); your own standing move gets only its
           legal exit — Withdraw for a seller, Cancel for a buyer. */}
       {actions.length > 0 ? (
-        <div className="mt-3 flex gap-2 pl-[68px]">
+        <div className="mt-3 flex gap-2 pl-[68px] lg:mt-2.5 lg:justify-end lg:pl-0">
           {actions.includes('accept') ? (
             <Button variant="primary" size="sm" onClick={() => onAction(offer, 'accept')}>
               Accept <span className="tnum">{formatPrice(offer.amount)}</span>
@@ -285,7 +312,7 @@ export function OfferRow({ offer, direction, viewerId, nowMs, onAction }: OfferR
           ) : null}
         </div>
       ) : offer.status === 'accepted' ? (
-        <p className="mt-2.5 flex items-center gap-1.5 pl-[68px] text-caption text-success-text">
+        <p className="mt-2.5 flex items-center gap-1.5 pl-[68px] text-caption text-success-text lg:justify-end lg:pl-0">
           <Icon name="check" size={13} filled />
           Deal made —{' '}
           {offerOrderId(offer) ? (

@@ -13,6 +13,7 @@
 
 import { create } from 'zustand';
 import { persist, createJSONStorage } from 'zustand/middleware';
+import { DATA_MODE } from '@/lib/api/client';
 import type { MoodboardItemPosition } from '@/lib/data/fixtures-content';
 
 export interface MoodboardOverlay {
@@ -30,6 +31,12 @@ export interface MoodboardOverlay {
 
 interface MoodboardsState {
   boards: Record<string, MoodboardOverlay>;
+  /** Live-write failure channel — boardId → the write kind that failed
+   *  after rollback ('rename' | 'items' | 'position' | 'theme'). Runtime
+   *  only, never persisted; surfaces read it to disclose a failed sync
+   *  instead of a fake-success toast. */
+  syncIssues: Record<string, string>;
+  setSyncIssue: (boardId: string, kind: string | null) => void;
   renameBoard: (boardId: string, title: string) => void;
   setBoardItems: (boardId: string, itemIds: string[]) => void;
   setBoardTheme: (boardId: string, themeId: string) => void;
@@ -53,6 +60,14 @@ export const useMoodboardEdits = create<MoodboardsState>()(
   persist(
     (set) => ({
       boards: {},
+      syncIssues: {},
+      setSyncIssue: (boardId, kind) =>
+        set((s) => {
+          const syncIssues = { ...s.syncIssues };
+          if (kind === null) delete syncIssues[boardId];
+          else syncIssues[boardId] = kind;
+          return { syncIssues };
+        }),
       renameBoard: (boardId, title) =>
         set((s) => ({
           boards: { ...s.boards, [boardId]: { ...s.boards[boardId], title } },
@@ -161,4 +176,19 @@ export function itemToLayer(
   const without = ids.filter((x) => x !== id);
   if (without.length === ids.length) return ids;
   return layer === 'front' ? [...without, id] : [id, ...without];
+}
+
+/**
+ * Fixture-scoped overlay read — in live mode the server (via the moodboard
+ * query cache + `useMoodboardActions` writes) is the truth, so the
+ * persisted overlay must never override a live board's title/items. Use
+ * this instead of `s.boards[id]` at merge sites. Overlay *writes* still
+ * land for every mode: a fixture board keeps working, and live callers
+ * going through `useMoodboardActions` write the overlay only as an
+ * optimistic mirror that reverts on failure.
+ */
+export function useMoodboardOverlay(boardId: string | null | undefined): MoodboardOverlay | undefined {
+  return useMoodboardEdits((s) =>
+    DATA_MODE === 'live' || !boardId ? undefined : s.boards[boardId],
+  );
 }

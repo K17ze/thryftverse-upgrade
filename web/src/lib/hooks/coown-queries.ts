@@ -9,14 +9,18 @@ import type {
   CandlePoint,
   CoOwnAsset,
   CoOwnBuyoutOffer,
+  CoOwnDripEnrollment,
+  CoOwnEligibility,
   CoOwnOrder,
   CoOwnPosition,
+  CoOwnRecourse,
   CorporateAction,
-  Distribution,
   DistributionReceipt,
   DueDiligenceProfile,
   OrderBookSnapshot,
   PriceWindow,
+  RiskDisclosureDocument,
+  StoredPriceAlert,
   TradeLedgerEntry,
   VoteChoice,
 } from '@/lib/contracts/coown';
@@ -35,6 +39,7 @@ import {
   priceWindow,
 } from '@/lib/data/fixtures-coown';
 import { DATA_MODE } from '@/lib/api/client';
+import { ApiRequestError } from '@/lib/api/http';
 import * as coownService from '@/lib/api/services/coown';
 import { useSession } from '@/lib/session/SessionProvider';
 import { useCoOwnVotes } from '@/lib/store/coownVotes';
@@ -78,6 +83,7 @@ export function useCoOwnAsset(id: string) {
 }
 
 export function useOrderBook(assetId: string) {
+  const { isGuest } = useSession();
   return useQuery({
     queryKey: ['coown', 'book', assetId],
     queryFn: async (): Promise<OrderBookSnapshot | null> => {
@@ -87,13 +93,18 @@ export function useOrderBook(assetId: string) {
       await tick(90);
       return ORDER_BOOKS[assetId] ?? null;
     },
+    // Guests can't hold the SSE transport (the stream route 401s without
+    // a session even though the topic itself is public), so their book
+    // refreshes on a short REST poll instead of going permanently stale.
+    // Authenticated viewers get freshness from useCoOwnOrderBookStream.
+    refetchInterval: DATA_MODE === 'live' && isGuest ? 5_000 : false,
   });
 }
 
 export function usePriceHistory(assetId: string, window: PriceWindow) {
   return useQuery({
     queryKey: ['coown', 'price', assetId, window],
-    queryFn: () => fetchCandles(assetId, window),
+    queryFn: ({ signal }) => fetchCandles(assetId, window, signal),
   });
 }
 
@@ -103,7 +114,7 @@ export function usePriceHistoryMap(assetIds: readonly string[], window: PriceWin
   return useQueries({
     queries: assetIds.map((assetId) => ({
       queryKey: ['coown', 'price', assetId, window] as const,
-      queryFn: () => fetchCandles(assetId, window),
+      queryFn: ({ signal }: { signal?: AbortSignal }) => fetchCandles(assetId, window, signal),
       staleTime: DATA_MODE === 'live' ? undefined : Infinity,
     })),
     combine: (results) =>
@@ -113,11 +124,17 @@ export function usePriceHistoryMap(assetIds: readonly string[], window: PriceWin
 
 /** Backend candles arrive in minor units + ISO timestamps — the web chart
  *  works in GBP numbers + Unix ms, converted once here at the boundary. */
-async function fetchCandles(assetId: string, window: PriceWindow): Promise<CandlePoint[]> {
+async function fetchCandles(
+  assetId: string,
+  window: PriceWindow,
+  signal?: AbortSignal,
+): Promise<CandlePoint[]> {
   if (DATA_MODE === 'live') {
-    const { candles } = await coownService.fetchCoOwnPriceHistory(assetId, {
-      interval: WINDOW_INTERVAL[window],
-    });
+    const { candles } = await coownService.fetchCoOwnPriceHistory(
+      assetId,
+      { interval: WINDOW_INTERVAL[window] },
+      signal,
+    );
     return candles.map((c) => ({
       t: Date.parse(c.timestamp),
       o: c.openGbpMinor / 100,
@@ -132,11 +149,17 @@ async function fetchCandles(assetId: string, window: PriceWindow): Promise<Candl
 }
 
 export function useCoOwnPositions() {
+  const queryClient = useQueryClient();
   return useQuery({
     queryKey: ['coown', 'positions'],
     queryFn: async (): Promise<CoOwnPosition[]> => {
       if (DATA_MODE === 'live') {
-        const { positions } = await coownService.fetchCoOwnPortfolio();
+        const { positions, partial } = await coownService.fetchCoOwnPortfolio();
+        // The `partial` flag is portfolio-level meta, not a position row —
+        // park it in a sibling cache entry so surfaces can render the
+        // "positions may be incomplete" banner without changing this key's
+        // shape (session ledger writes treat it as CoOwnPosition[]).
+        queryClient.setQueryData(PORTFOLIO_META_KEY, { partial });
         return positions;
       }
       await tick(120);
@@ -149,12 +172,47 @@ export function useCoOwnPositions() {
   });
 }
 
-export function useCoOwnOrders() {
+const PORTFOLIO_META_KEY = ['coown', 'portfolio-meta'] as const;
+
+/**
+ * Portfolio-level flags hydrated alongside positions. `partial` is true
+ * when the backend projection degraded (e.g. a marks source failed) —
+ * the portfolio banner reads this so a degraded read never renders as a
+ * complete one.
+ */
+export function useCoOwnPortfolioMeta() {
   return useQuery({
-    queryKey: ['coown', 'orders'],
+    queryKey: PORTFOLIO_META_KEY,
+    queryFn: () => ({ partial: false }),
+    // The positions queryFn is the only writer — this observer never
+    // fetches itself; it just surfaces whatever meta landed last.
+    staleTime: Infinity,
+    gcTime: Infinity,
+  });
+}
+
+export function useCoOwnOrders() {
+  const { user } = useSession();
+  return useQuery({
+    queryKey: ['coown', 'orders', user?.id ?? 'anon'],
+    // my-orders is an authenticated read — a guest has no open orders,
+    // so don't fan out on markets that can't answer.
+    enabled: DATA_MODE !== 'live' || !!user,
     queryFn: async (): Promise<CoOwnOrder[]> => {
       if (DATA_MODE === 'live') {
-        return coownService.fetchCoOwnOrders();
+        // There is no aggregate "my orders" route — fan out per asset,
+        // bounded. Candidates: held positions (orders can exist on assets
+        // with zero units only for unfilled buys, so also the first
+        // market page — the same bound useCoOwnActivity('all') uses).
+        const [assetsPage, portfolio] = await Promise.all([
+          coownService.fetchCoOwnAssets({ limit: 12 }),
+          coownService.fetchCoOwnPortfolio(),
+        ]);
+        const assetIds = [
+          ...portfolio.positions.map((p) => p.assetId),
+          ...assetsPage.items.map((a) => a.id),
+        ];
+        return coownService.fetchCoOwnOrders(assetIds);
       }
       await tick(120);
       return CO_OWN_OPEN_ORDERS;
@@ -177,10 +235,12 @@ export function useCoOwnActivity(assetId?: string) {
     queryFn: async () => {
       if (DATA_MODE === 'live') {
         if (!assetId) {
-          // No global activity endpoint — aggregate per-asset executions.
-          const page = await coownService.fetchCoOwnAssets();
+          // No global activity endpoint — aggregate per-asset activity,
+          // bounded to the first page slice so the feed can't fan out
+          // unboundedly as the market count grows.
+          const page = await coownService.fetchCoOwnAssets({ limit: 12 });
           const nested = await Promise.all(
-            page.items.map((a) => coownService.fetchCoOwnActivity(a.id)),
+            page.items.map((a) => coownService.fetchCoOwnActivity(a.id).catch(() => [])),
           );
           return nested.flat().sort((a, b) => Date.parse(b.at) - Date.parse(a.at));
         }
@@ -192,15 +252,25 @@ export function useCoOwnActivity(assetId?: string) {
   });
 }
 
+/**
+ * Distributions for one asset (or all markets) — live reads return the
+ * page verbatim: per-recipient rows for signed-in holders, public
+ * per-asset aggregates for anonymous callers. Consumers must not assume
+ * `items` is populated for guests — render `aggregates` then.
+ */
 export function useDistributions(assetId?: string) {
+  const { user } = useSession();
   return useQuery({
-    queryKey: ['coown', 'distributions', assetId ?? 'all'],
-    queryFn: async (): Promise<Distribution[]> => {
+    queryKey: ['coown', 'distributions', assetId ?? 'all', user?.id ?? 'anon'],
+    queryFn: async (): Promise<coownService.CoOwnDistributionsPage> => {
       if (DATA_MODE === 'live') {
         return coownService.fetchCoOwnDistributions(assetId);
       }
       await tick(120);
-      return assetId ? DISTRIBUTIONS.filter((d) => d.assetId === assetId) : DISTRIBUTIONS;
+      return {
+        items: assetId ? DISTRIBUTIONS.filter((d) => d.assetId === assetId) : DISTRIBUTIONS,
+        aggregates: [],
+      };
     },
   });
 }
@@ -231,17 +301,19 @@ export function useCorporateActionVotes(actionId: string) {
   return useQuery({
     queryKey: corporateActionVotesKey(actionId),
     enabled: DATA_MODE === 'live',
-    queryFn: () => coownService.fetchGovernanceVotes(actionId),
+    queryFn: ({ signal }) => coownService.fetchGovernanceVotes(actionId, signal),
   });
 }
 
-/** The public tape for one market — masked counterparties, newest first. */
+/** The public tape for one market — execution prints off coOwn_trades
+ *  (GET /co-own/assets/:id/executions), newest first. The wire carries
+ *  no aggressor side; side-less prints render the tick direction. */
 export function useMarketLedger(assetId: string) {
   return useQuery({
     queryKey: ['coown', 'ledger', assetId],
     queryFn: async (): Promise<TradeLedgerEntry[]> => {
       if (DATA_MODE === 'live') {
-        return coownService.fetchCoOwnExecutions(assetId);
+        return coownService.fetchCoOwnExecutions(assetId, 50);
       }
       await tick(110);
       return MARKET_LEDGER[assetId] ?? [];
@@ -250,11 +322,10 @@ export function useMarketLedger(assetId: string) {
 }
 
 /**
- * The market-wide tape — every per-asset ledger folded into one stream,
+ * The market-wide tape — every market's prints folded into one stream,
  * newest first. Fixture mode reads each asset's session cache first so
  * prints written this session surface alongside the seeded tape; live
- * mode aggregates the per-asset executions endpoints (there is no global
- * tape endpoint).
+ * mode hits the bounded global executions endpoint — no per-asset fan-out.
  */
 export function useMarketTape() {
   const queryClient = useQueryClient();
@@ -262,13 +333,7 @@ export function useMarketTape() {
     queryKey: ['coown', 'tape'],
     queryFn: async (): Promise<TradeLedgerEntry[]> => {
       if (DATA_MODE === 'live') {
-        const page = await coownService.fetchCoOwnAssets();
-        const nested = await Promise.all(
-          page.items.map((a) => coownService.fetchCoOwnExecutions(a.id).catch(() => [])),
-        );
-        return nested
-          .flat()
-          .sort((a, b) => Date.parse(b.executedAt) - Date.parse(a.executedAt));
+        return coownService.fetchCoOwnGlobalExecutions(150);
       }
       await tick(120);
       return CO_OWN_ASSETS.flatMap(
@@ -290,17 +355,22 @@ export function useDueDiligence(assetId: string) {
     queryKey: ['coown', 'diligence', assetId],
     queryFn: async (): Promise<DueDiligenceProfile | null> => {
       if (DATA_MODE === 'live') {
-        // The backend asset row carries trust/custody fields — project them
-        // onto the web profile shape. No separate dossier endpoint exists.
+        // The detail endpoint carries the trust dossier (custody,
+        // authenticity, appraisal, protection) — project it onto the
+        // web profile shape. No separate dossier endpoint exists.
         const asset = await coownService.fetchCoOwnAsset(assetId);
         if (!asset) return null;
+        const dossier = asset.dossier;
+        const hasDossier =
+          dossier != null && Object.values(dossier).some((v) => v != null);
         return {
           assetId,
           authenticatedBy: null,
-          authenticatedAt: null,
-          conditionGrade: null,
-          conditionSummary: asset.custodyNote,
+          authenticatedAt: dossier?.authenticityVerifiedAt ?? null,
+          conditionGrade: dossier?.conditionGrade ?? null,
+          conditionSummary: asset.custodyNote ?? dossier?.provenance ?? null,
           documents: [],
+          dossier: hasDossier ? dossier : undefined,
         };
       }
       await tick(110);
@@ -324,18 +394,26 @@ export function useDistributionReceipts() {
           coownService.fetchCoOwnPortfolio(),
         ]);
         const held = new Map(positions.map((p) => [p.assetId, p.units]));
-        return distributions
-          .filter((d) => (held.get(d.assetId) ?? 0) > 0)
+        return distributions.items
+          // The wire row already knows the record-date units — prefer it;
+          // the portfolio holding is only the fallback for older payloads.
+          // A holder who sold out since the snapshot still earned the
+          // payout, so unitsAtRecord > 0 keeps the receipt visible.
+          .filter((d) => (d.unitsAtRecord ?? held.get(d.assetId) ?? 0) > 0)
           .map((d) => {
-            const unitsHeld = held.get(d.assetId)!;
+            const unitsHeld = d.unitsAtRecord ?? held.get(d.assetId)!;
             return {
               id: d.id,
               assetId: d.assetId,
               kind: d.kind,
+              rawType: d.rawType,
               amountPerUnitGbp: d.amountPerUnitGbp,
               unitsHeld,
-              totalGbp: Math.round(unitsHeld * d.amountPerUnitGbp * 100) / 100,
-              exDate: d.scheduledFor,
+              // The wire's per-recipient amount (amountGbpMinor mapped to
+              // GBP) — recomputing units × rate would re-derive a figure
+              // the server already settled.
+              totalGbp: d.totalPotGbp,
+              exDate: d.exDate ?? d.scheduledFor,
               paidAt: d.paidAt,
               status: d.status,
             };
@@ -390,33 +468,33 @@ const nextBuyoutId = (assetId: string) =>
 
 export function useBuyoutActions() {
   const queryClient = useQueryClient();
+  const { user } = useSession();
 
   return {
-    /** Post an offer for the remaining units — expires in 24h like mobile. */
+    /**
+     * Post an offer for the remaining units — expires in 24h like mobile.
+     * Live: POSTs the strict backend schema ({bidderUserId, offerPriceGbp,
+     * targetUnits?, expiresInHours?} — the server rejects extra keys and
+     * 403s a bidder that isn't the session user), resolves with the real
+     * server offer, and rejects with the server's error verbatim.
+     */
     createOffer(assetId: string, input: NewBuyoutOfferInput): Promise<CoOwnBuyoutOffer> | CoOwnBuyoutOffer {
       if (DATA_MODE === 'live') {
-        // Server-owned creation — the cache refetches on success.
+        if (!user) throw new ApiRequestError('Sign in to post a buyout offer', 401, { code: 'AUTH_REQUIRED' });
         return coownService
           .createBuyoutOffer(assetId, {
+            bidderUserId: user.id,
             offerPriceGbp: Math.round(input.offerPriceGbp * 100) / 100,
             targetUnits: input.targetUnits,
+            // The confirm sheet tells the holder the offer lapses in 24h —
+            // send it rather than relying on the schema default drifting.
+            expiresInHours: 24,
           })
-          .then(() => {
+          .then((offer) => {
             void queryClient.invalidateQueries({ queryKey: buyoutKey(assetId) });
-            // Return a pending placeholder; the real row lands on refetch.
-            const now = Date.now();
-            return {
-              id: `pending-${now.toString(36)}`,
-              assetId,
-              bidderUsername: input.bidderUsername,
-              mine: true,
-              offerPriceGbp: input.offerPriceGbp,
-              targetUnits: input.targetUnits,
-              acceptedUnits: 0,
-              status: 'open' as const,
-              expiresAt: new Date(now + 24 * 3_600_000).toISOString(),
-              createdAt: new Date(now).toISOString(),
-            };
+            // The create response has no bidder username join — fill it
+            // from the session for the first paint; the refetch overwrites.
+            return offer.bidderUsername ? offer : { ...offer, bidderUsername: input.bidderUsername };
           });
       }
       const now = Date.now();
@@ -443,17 +521,27 @@ export function useBuyoutActions() {
      * A holder commits units against an open offer. Updates the offer's
      * accepted tally (filled when the target is met) and draws the units
      * out of the viewer's position so holdings stay consistent.
+     * Live: resolves with the server's post-acceptance tally; rejects with
+     * the server's error verbatim — never a swallowed false.
      */
-    acceptOffer(offerId: string, assetId: string, units: number): boolean | Promise<boolean> {
+    acceptOffer(
+      offerId: string,
+      assetId: string,
+      units: number,
+    ): boolean | Promise<{ acceptedUnits: number; status: string }> {
       if (DATA_MODE === 'live') {
+        if (!user) {
+          return Promise.reject(
+            new ApiRequestError('Sign in to accept a buyout offer', 401, { code: 'AUTH_REQUIRED' }),
+          );
+        }
         return coownService
-          .acceptBuyoutOffer(offerId, units)
-          .then(() => {
+          .acceptBuyoutOffer(offerId, { holderUserId: user.id, units })
+          .then((result) => {
             void queryClient.invalidateQueries({ queryKey: buyoutKey(assetId) });
             void queryClient.invalidateQueries({ queryKey: ['coown', 'positions'] });
-            return true;
-          })
-          .catch(() => false);
+            return result;
+          });
       }
       const offers = queryClient.getQueryData<CoOwnBuyoutOffer[]>(buyoutKey(assetId)) ?? seedOffers(assetId);
       const offer = offers.find((o) => o.id === offerId);
@@ -543,7 +631,7 @@ export function useGovernanceActions(assetId?: string) {
 export function useGovernanceVotes(actionId: string) {
   return useQuery({
     queryKey: ['coown', 'votes', actionId],
-    queryFn: () => coownService.fetchGovernanceVotes(actionId),
+    queryFn: ({ signal }) => coownService.fetchGovernanceVotes(actionId, signal),
     enabled: DATA_MODE === 'live',
   });
 }
@@ -618,4 +706,184 @@ export function useCastCorporateVote() {
   };
 
   return { cast };
+}
+
+// ── Price alerts (server-persisted in live mode) ─────────────────────
+// The backend owns evaluation + delivery — the web layer reads and
+// mutates rows. Fixture mode stays on the device-local alertStore.
+
+export type CoOwnPriceAlert = StoredPriceAlert & { triggeredAt: string | null };
+
+export function useCoOwnPriceAlerts() {
+  const { user } = useSession();
+  return useQuery({
+    queryKey: ['coown', 'price-alerts', user?.id],
+    enabled: DATA_MODE === 'live' && !!user,
+    queryFn: ({ signal }): Promise<CoOwnPriceAlert[]> =>
+      coownService.fetchCoOwnPriceAlerts(signal),
+  });
+}
+
+export function useCoOwnPriceAlertActions() {
+  const queryClient = useQueryClient();
+  const { user } = useSession();
+  const key = ['coown', 'price-alerts', user?.id];
+
+  const refresh = () =>
+    void queryClient.invalidateQueries({ queryKey: ['coown', 'price-alerts'] });
+
+  return {
+    createAlert: async (input: {
+      assetId: string;
+      direction: 'above' | 'below';
+      targetPriceGbp: number;
+    }): Promise<boolean> => {
+      try {
+        await coownService.createCoOwnPriceAlert(input);
+      } catch {
+        return false;
+      }
+      refresh();
+      return true;
+    },
+    // Server-side toggle — a fired alert re-arms (triggered_at clears).
+    toggleAlert: async (alert: CoOwnPriceAlert): Promise<boolean> => {
+      // Optimistic flip, then re-read — the server re-arms on activate.
+      queryClient.setQueryData<CoOwnPriceAlert[]>(key, (old) =>
+        (old ?? []).map((a) =>
+          a.id === alert.id
+            ? { ...a, active: !a.active, triggeredAt: a.active ? a.triggeredAt : null }
+            : a,
+        ),
+      );
+      try {
+        await coownService.setCoOwnPriceAlertActive(alert.id, !alert.active);
+      } catch {
+        refresh();
+        return false;
+      }
+      refresh();
+      return true;
+    },
+    removeAlert: async (id: string): Promise<boolean> => {
+      queryClient.setQueryData<CoOwnPriceAlert[]>(key, (old) =>
+        (old ?? []).filter((a) => a.id !== id),
+      );
+      try {
+        await coownService.deleteCoOwnPriceAlert(id);
+      } catch {
+        refresh();
+        return false;
+      }
+      refresh();
+      return true;
+    },
+  };
+}
+
+// ── Recourse — the holder-protection dossier ──────────────────────────
+// Authenticated endpoint; in fixture mode no record exists (the dossier
+// section fails closed rather than inventing liability terms).
+
+export function useCoOwnRecourse(assetId: string) {
+  const { user } = useSession();
+  return useQuery({
+    queryKey: ['coown', 'recourse', assetId, user?.id],
+    enabled: DATA_MODE === 'live' && !!user,
+    queryFn: ({ signal }): Promise<CoOwnRecourse> =>
+      coownService.fetchCoOwnRecourse(assetId, signal),
+  });
+}
+
+// ── Eligibility — the server's advisory verdict for this viewer ───────
+
+export function useCoOwnEligibility(assetId: string) {
+  const { user } = useSession();
+  return useQuery({
+    queryKey: ['coown', 'eligibility', assetId, user?.id],
+    enabled: DATA_MODE === 'live' && !!user,
+    queryFn: ({ signal }): Promise<CoOwnEligibility> =>
+      coownService.fetchCoOwnEligibility(assetId, signal),
+    // The decision is short-lived (server TTL) — don't serve it stale.
+    staleTime: 30_000,
+  });
+}
+
+// ── Policy — the versioned order/buyout caps the server enforces ─────
+
+export function useCoOwnPolicy() {
+  return useQuery({
+    queryKey: ['coown', 'policy'],
+    enabled: DATA_MODE === 'live',
+    queryFn: ({ signal }): Promise<coownService.CoOwnPolicy> =>
+      coownService.fetchCoOwnPolicy(signal),
+    // Policy is versioned — effectively static within a session.
+    staleTime: 5 * 60_000,
+  });
+}
+
+// ── DRIP — per-asset dividend reinvestment enrolment ──────────────────
+
+export function useDripEnrollments() {
+  const { user } = useSession();
+  return useQuery({
+    queryKey: ['coown', 'drip', user?.id],
+    enabled: DATA_MODE === 'live' && !!user,
+    queryFn: ({ signal }): Promise<CoOwnDripEnrollment[]> =>
+      coownService.fetchDripEnrollments(signal),
+  });
+}
+
+export function useSetDripEnrollment() {
+  const queryClient = useQueryClient();
+  const { user } = useSession();
+  const key = ['coown', 'drip', user?.id];
+
+  return async (assetId: string, enrolled: boolean): Promise<boolean> => {
+    queryClient.setQueryData<CoOwnDripEnrollment[]>(key, (old) => {
+      const list = old ?? [];
+      const found = list.some((e) => e.assetId === assetId);
+      return found
+        ? list.map((e) =>
+            e.assetId === assetId
+              ? { ...e, enrolled, enrolledAt: enrolled ? new Date().toISOString() : null }
+              : e,
+          )
+        : [
+            ...list,
+            { assetId, enrolled, enrolledAt: enrolled ? new Date().toISOString() : null },
+          ];
+    });
+    try {
+      await coownService.setDripEnrollment(assetId, enrolled);
+    } catch {
+      void queryClient.invalidateQueries({ queryKey: key });
+      return false;
+    }
+    return true;
+  };
+}
+
+// ── Risk disclosure — the active document + the viewer's consent ──────
+// Live mode only: consent is a server-side record, so fixture mode never
+// asks. `accepted` starts false until the consent read resolves.
+
+export function useRiskDisclosure() {
+  const { user } = useSession();
+  return useQuery({
+    queryKey: ['compliance', 'risk-disclosure', user?.id],
+    enabled: DATA_MODE === 'live' && !!user,
+    queryFn: async ({ signal }): Promise<{
+      document: RiskDisclosureDocument | null;
+      accepted: boolean;
+    }> => {
+      const document = await coownService.fetchActiveRiskDisclosure(signal);
+      if (!document || !user) return { document, accepted: false };
+      const consent = await coownService
+        .fetchUserConsent(user.id, document.id, signal)
+        .catch(() => null);
+      return { document, accepted: consent?.accepted ?? false };
+    },
+    staleTime: 60_000,
+  });
 }

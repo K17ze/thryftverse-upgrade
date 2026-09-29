@@ -4,9 +4,9 @@
  * ProfileAbout — the About tab shared by the self and public profile
  * surfaces, ported from mobile StorefrontAboutTab / UserProfileAboutTab:
  * flat editorial rows — bio, website, then the shop-policies block.
- * The web carries no seller-authored announcement/policy overrides, so the
- * block shows the platform defaults mobile falls back to verbatim; nothing
- * else is invented.
+ * Seller-authored storefront policies (the profile aggregate's
+ * storefront.policies) replace the platform defaults row-for-row when
+ * present; rows the seller never wrote keep the mobile fallback copy.
  */
 
 import Link from 'next/link';
@@ -14,9 +14,18 @@ import type { User } from '@/lib/contracts/domain';
 import { EmptyState } from '@/components/ui/EmptyState';
 import { Icon } from '@/components/ui/Icon';
 
+/** Seller-authored policy copy from the storefront aggregate — null
+ *  fields fall back to the platform defaults. */
+export interface StorefrontPolicies {
+  shipping: string | null;
+  returns: string | null;
+  additional: string | null;
+}
+
 interface ProfileAboutProps {
   user: User;
   variant: 'self' | 'public';
+  policies?: StorefrontPolicies | null;
 }
 
 /** Normalize a stored website into a safe external href. */
@@ -35,7 +44,7 @@ function AboutRow({
 }) {
   return (
     <div className={`py-3.5 ${last ? '' : 'border-b border-border-subtle'}`}>
-      <p className="text-meta font-semibold uppercase tracking-wider text-text-muted">
+      <p className="text-meta font-semibold uppercase tracking-wide text-text-muted">
         {label}
       </p>
       <p className="mt-1 text-body text-text-primary">{value}</p>
@@ -43,10 +52,15 @@ function AboutRow({
   );
 }
 
-export function ProfileAbout({ user, variant }: ProfileAboutProps) {
+export function ProfileAbout({ user, variant, policies }: ProfileAboutProps) {
   const bio = user.bio?.trim();
   const website = user.website?.trim();
-  const hasDetails = Boolean(bio || website);
+  const shipping = policies?.shipping?.trim();
+  const returns = policies?.returns?.trim();
+  const additional = policies?.additional?.trim();
+  // Seller-authored policy copy is real About content — it keeps the tab
+  // out of the empty state even when bio/website are unset.
+  const hasDetails = Boolean(bio || website || shipping || returns || additional);
 
   // Mobile rule: a bare public profile gets the honest empty state —
   // the policy block only renders once there is real content around it.
@@ -62,10 +76,12 @@ export function ProfileAbout({ user, variant }: ProfileAboutProps) {
   }
 
   return (
-    <div className="px-4 pb-8 sm:px-6">
+    // Text surface — a reading column on wide canvases, not a sheet of
+    // hairline rows stretched edge-to-edge.
+    <div className="px-4 pb-8 sm:px-6 lg:max-w-2xl">
       {bio ? (
         <div className="pt-4">
-          <h3 className="text-meta font-semibold uppercase tracking-wider text-text-muted">
+          <h3 className="text-meta font-semibold uppercase tracking-wide text-text-muted">
             About
           </h3>
           <p className="mt-2 max-w-xl text-body text-text-primary">{bio}</p>
@@ -79,7 +95,7 @@ export function ProfileAbout({ user, variant }: ProfileAboutProps) {
           rel="noopener noreferrer"
           className="pressable -mx-1 block rounded-md px-1 py-3.5"
         >
-          <p className="text-meta font-semibold uppercase tracking-wider text-text-muted">
+          <p className="text-meta font-semibold uppercase tracking-wide text-text-muted">
             Website
           </p>
           <p className="mt-1 flex items-center gap-1.5 text-body text-text-primary">
@@ -92,12 +108,16 @@ export function ProfileAbout({ user, variant }: ProfileAboutProps) {
       {/* Shop policies — canonical home for the platform buyer terms,
           mirroring the mobile fallback copy. */}
       <div className="pt-5">
-        <h3 className="pb-1 text-meta font-semibold uppercase tracking-wider text-text-muted">
+        <h3 className="pb-1 text-meta font-semibold uppercase tracking-wide text-text-muted">
           Shop policies
         </h3>
         <AboutRow label="Payments" value="Secure checkout with buyer protection" />
-        <AboutRow label="Shipping" value="Tracking provided on dispatch." />
-        <AboutRow label="Returns" value="Returns accepted for items not as described." />
+        <AboutRow label="Shipping" value={shipping || 'Tracking provided on dispatch.'} />
+        <AboutRow
+          label="Returns"
+          value={returns || 'Returns accepted for items not as described.'}
+        />
+        {additional ? <AboutRow label="Additional" value={additional} /> : null}
         <AboutRow label="Response" value="Seller aims to respond promptly." last />
       </div>
 

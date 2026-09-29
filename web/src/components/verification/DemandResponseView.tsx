@@ -80,7 +80,7 @@ function DemandShell({
 }) {
   const router = useRouter();
   return (
-    <div className="mx-auto w-full max-w-[720px] px-4 pb-16 sm:px-6">
+    <div className="mx-auto w-full max-w-[720px] px-4 pb-16 sm:px-6 lg:max-w-[1100px]">
       <div className="flex items-center pt-2 md:pt-6">
         <IconButton
           name="back"
@@ -88,7 +88,7 @@ function DemandShell({
           onClick={() => router.push(backTo ?? '/verification/demands')}
           className="-ml-2"
         />
-        <h1 className="ml-1 text-screen-title font-semibold text-text-primary">
+        <h1 className="ml-1 text-screen-title text-text-primary">
           Respond to verification
         </h1>
       </div>
@@ -326,9 +326,11 @@ export function DemandResponseView({ demandId }: { demandId: number }) {
       // Live mode — upload at pick time, same as the mobile gallery path.
       setEvidence((prev) => [...prev, { id, uri, uploadedUrl: null, uploading: true }]);
       uploadImageFile(file, 'evidence')
-        .then((url) => {
+        .then((media) => {
           setEvidence((prev) =>
-            prev.map((e) => (e.id === id ? { ...e, uploadedUrl: url, uploading: false } : e)),
+            prev.map((e) =>
+              e.id === id ? { ...e, uploadedUrl: media.publicUrl, uploading: false } : e,
+            ),
           );
         })
         .catch(() => {
@@ -392,8 +394,12 @@ export function DemandResponseView({ demandId }: { demandId: number }) {
 
   return (
     <DemandShell>
+      {/* Context rail left, response form right at lg — the request stays
+          in view while evidence is assembled. */}
+      <div className="lg:mt-4 lg:grid lg:grid-cols-[360px_minmax(0,1fr)] lg:items-start lg:gap-10">
+        <aside className="min-w-0 lg:sticky lg:top-20">
       {/* Demand context — type, deadline, guidance. */}
-      <div className="mt-4 rounded-lg border border-border-subtle bg-surface p-4">
+      <div className="mt-4 rounded-lg border border-border-subtle bg-surface p-4 lg:mt-0">
         <div className="flex items-center gap-3">
           <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-md bg-surface-alt text-text-primary">
             <Icon name={demandTypeIcon(demand.demandType)} size={20} />
@@ -428,9 +434,11 @@ export function DemandResponseView({ demandId }: { demandId: number }) {
           <Icon name="forward" size={16} className="shrink-0 text-text-muted" />
         </Link>
       </div>
+        </aside>
 
+        <div className="min-w-0">
       {/* Evidence photos. */}
-      <div className="mt-7">
+      <div className="mt-7 lg:mt-0">
         <h2 className="text-label text-text-muted">Evidence photos</h2>
         <p className="mt-1.5 text-caption leading-relaxed text-text-secondary">
           Upload photos proving{' '}
@@ -519,6 +527,8 @@ export function DemandResponseView({ demandId }: { demandId: number }) {
         >
           {respond.isPending ? 'Submitting…' : overdue ? 'Submit evidence now' : 'Submit evidence'}
         </Button>
+      </div>
+        </div>
       </div>
     </DemandShell>
   );

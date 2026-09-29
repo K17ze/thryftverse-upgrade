@@ -34,17 +34,24 @@ export function timeAgo(iso: string | undefined): string {
   if (days < 7) return `${days}d ago`;
   const weeks = Math.floor(days / 7);
   if (weeks < 5) return `${weeks}w ago`;
+  // Absolute branch pins UTC: the server and the client must print the
+  // same string for the same instant or hydration drifts (the runtime TZ
+  // differs between them). A UTC day is the canonical rendering — the
+  // same contract GitHub uses for absolute timestamps.
   return new Date(iso).toLocaleDateString('en-GB', {
     day: 'numeric',
     month: 'short',
+    timeZone: 'UTC',
   });
 }
 
 export function formatDate(iso: string | undefined): string {
   if (!iso) return '';
+  // UTC-pinned — see timeAgo's absolute branch for the hydration contract.
   return new Date(iso).toLocaleDateString('en-GB', {
     day: 'numeric',
     month: 'long',
     year: 'numeric',
+    timeZone: 'UTC',
   });
 }

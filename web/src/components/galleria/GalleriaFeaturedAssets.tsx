@@ -35,7 +35,7 @@ function AssetCard({ asset }: { asset: ResolvedGalleriaAsset }) {
           aspectRatio={4 / 5}
           focalPoint={primaryMedia?.focalPoint}
           className="h-full w-full"
-          sizes="(max-width: 768px) 50vw, 33vw"
+          sizes="(max-width: 768px) 50vw, (max-width: 1024px) 33vw, (max-width: 1280px) 25vw, 224px"
         />
         {listing.isSold ? (
           <>
@@ -48,7 +48,7 @@ function AssetCard({ asset }: { asset: ResolvedGalleriaAsset }) {
       </div>
 
       <div className="mt-3 flex flex-col gap-1 px-0.5">
-        <p className="text-label font-semibold uppercase tracking-[0.14em] text-text-muted">
+        <p className="text-label text-text-muted">
           {asset.fromCollection}
         </p>
         <h3 className="clamp-1 text-body text-text-primary">
@@ -76,7 +76,7 @@ function AssetCard({ asset }: { asset: ResolvedGalleriaAsset }) {
 export function GalleriaFeaturedAssets({ assets }: GalleriaFeaturedAssetsProps) {
   if (assets.length === 0) return null;
   return (
-    <div className="mt-8 grid grid-cols-2 gap-x-4 gap-y-9 md:grid-cols-3">
+    <div className="mt-8 grid grid-cols-2 gap-x-4 gap-y-9 md:grid-cols-3 lg:grid-cols-4 xl:grid-cols-6">
       {assets.map((asset) => (
         <AssetCard key={asset.listingId} asset={asset} />
       ))}

@@ -26,6 +26,7 @@ import { Skeleton } from '@/components/ui/Skeleton';
 import { useToast } from '@/components/ui/Toast';
 import { parseApiError } from '@/lib/api/http';
 import * as payoutsService from '@/lib/api/services/payouts';
+import { useWithdrawData, withdrawKeys } from '@/lib/hooks/withdraw/useWithdrawData';
 import { useSession } from '@/lib/session/SessionProvider';
 import { formatPrice } from '@/lib/utils/format';
 import type { PayoutRequest } from '@/lib/data/fixtures';
@@ -44,8 +45,11 @@ import {
   formatRequestDate,
   formatRequestedAt,
   newPayoutReference,
+  PAYOUT_GATE_COPY,
+  payoutPolicyHint,
   QUICK_PERCENTAGES,
   quickAmount,
+  resolvePayoutAvailability,
   resolvePayoutStatusConfig,
   withdrawError,
   WITHDRAWAL_ETA_LABEL,
@@ -74,7 +78,7 @@ const STAGE_MS = 550;
 
 function WithdrawSkeleton() {
   return (
-    <div aria-busy aria-label="Loading withdraw">
+    <div aria-busy aria-label="Loading withdraw" className="mx-auto w-full max-w-xl lg:max-w-2xl">
       <div className="flex items-center gap-1 px-2 pt-1 sm:px-4">
         <Skeleton className="h-11 w-11 rounded-full" />
         <Skeleton className="h-7 w-40" />
@@ -115,6 +119,14 @@ export function WithdrawView() {
     recordRequest,
   } = payouts;
   const isLive = mode === 'live';
+  const {
+    balances,
+    isHydratingBalance,
+    balanceError,
+    reloadBalance,
+    capabilities,
+    connectStatus,
+  } = useWithdrawData();
 
   const [step, setStep] = useState<WithdrawStep>('form');
   const [amount, setAmount] = useState('');
@@ -125,7 +137,11 @@ export function WithdrawView() {
   const [submitting, setSubmitting] = useState(false);
   const [result, setResult] = useState<WithdrawSuccessData | null>(null);
 
-  const available = data?.available ?? 0;
+  // The composer gates on the ledger-backed available balance — the wallet
+  // snapshot accepts a client-asserted blob and cannot authorise money UI
+  // (native useWithdrawData → getSellerWalletBalances). Fixture mode keeps
+  // reading its demo wallet.
+  const available = isLive ? (balances?.availableGbp ?? 0) : (data?.available ?? 0);
   const currency = data?.currency ?? 'GBP';
   const numericAmount = Number(amount) || 0;
   const hasPayoutMethod = selectableDestinations.length > 0;
@@ -137,6 +153,13 @@ export function WithdrawView() {
     hasPayoutMethod && selected?.status === 'active',
     submitting,
   );
+  // Capability gate (native usePayoutAccountConnection): the Stripe rail
+  // must exist in the country policy AND have payouts enabled — otherwise
+  // the surface names the blocker instead of offering a doomed setup CTA.
+  const payoutAvailability = isLive
+    ? resolvePayoutAvailability(capabilities, connectStatus)
+    : 'available';
+  const policyHint = isLive ? payoutPolicyHint(capabilities) : null;
 
   // One idempotency key per (amount, destination) attempt — retries of the
   // same attempt reuse it so the backend dedupe replays instead of
@@ -146,13 +169,14 @@ export function WithdrawView() {
     idempotencyKeyRef.current = null;
   }, [numericAmount, selectedId]);
 
-  // Mobile prefills the composer with the full available balance.
+  // Mobile prefills the composer with the full available balance — in
+  // live mode that's the resolved ledger read, never the snapshot number.
   useEffect(() => {
-    if (data && amount === '' && data.available > 0) {
-      setAmount(data.available.toFixed(2));
+    if (amount === '' && available > 0 && (!isLive || balances != null)) {
+      setAmount(available.toFixed(2));
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [data]);
+  }, [available, balances, isLive]);
 
   // Keep the selection pointed at a real, usable account — the default
   // when unset or removed.
@@ -252,9 +276,15 @@ export function WithdrawView() {
       queryClient.setQueryData<WalletData>(walletKeys.all(user.id), (old) =>
         old ? { ...old, available: nextAvailable } : old,
       );
-      // Re-read the wallet + rail so the ledger and history reflect the
-      // recorded request.
+      // The same server-computed figure mirrors onto the ledger balances
+      // read the composer gates on, then re-read so the withdraw form and
+      // the wallet can never drift apart.
+      queryClient.setQueryData<payoutsService.WalletBalances>(
+        withdrawKeys.balances(user.id),
+        (old) => (old ? { ...old, availableGbp: nextAvailable } : old),
+      );
       void queryClient.invalidateQueries({ queryKey: walletKeys.root });
+      void queryClient.invalidateQueries({ queryKey: withdrawKeys.balances(user.id) });
       void refetchPayouts();
 
       setResult({
@@ -318,7 +348,8 @@ export function WithdrawView() {
     });
   };
 
-  if (sessionLoading || isLoading || payoutsLoading) return <WithdrawSkeleton />;
+  if (sessionLoading || isLoading || payoutsLoading || isHydratingBalance)
+    return <WithdrawSkeleton />;
 
   // Withdrawals are account-bound — guests never see fixture funds.
   if (isGuest) {
@@ -348,15 +379,15 @@ export function WithdrawView() {
   // ── Success receipt ───────────────────────────────────────────────────
   if (step === 'success' && result) {
     return (
-      <div className="mx-auto w-full max-w-xl pb-16">
+      <div className="mx-auto w-full max-w-xl pb-16 lg:max-w-2xl">
         <div className="flex items-center gap-1 px-2 pt-1 sm:px-4">
           <IconButton name="back" aria-label="Back to wallet" onClick={() => router.push('/wallet')} />
-          <h1 className="text-screen-title font-semibold text-text-primary">Withdraw</h1>
+          <h1 className="text-screen-title text-text-primary">Withdraw</h1>
         </div>
 
         <div className="flex flex-col items-center px-4 pt-10 text-center sm:px-6">
           <Icon name="check" filled size={56} className="text-success-text" />
-          <h2 className="mt-4 text-screen-title font-semibold text-text-primary">
+          <h2 className="mt-4 text-screen-title text-text-primary">
             Withdrawal requested
           </h2>
           <p className="mt-1 text-body text-text-secondary">
@@ -405,10 +436,10 @@ export function WithdrawView() {
   if (step === 'submitting') {
     const stages = isLive ? LIVE_STAGES : FIXTURE_STAGES;
     return (
-      <div className="mx-auto w-full max-w-xl pb-16" aria-busy aria-live="polite">
+      <div className="mx-auto w-full max-w-xl pb-16 lg:max-w-2xl" aria-busy aria-live="polite">
         <div className="flex items-center gap-1 px-2 pt-1 sm:px-4">
           <span className="h-11 w-11" aria-hidden />
-          <h1 className="text-screen-title font-semibold text-text-primary">Withdraw</h1>
+          <h1 className="text-screen-title text-text-primary">Withdraw</h1>
         </div>
         <div className="px-4 pt-16 sm:px-6">
           <p className="tnum text-display-large font-bold tracking-tight text-text-primary">
@@ -452,10 +483,10 @@ export function WithdrawView() {
   if (step === 'confirm' && selected) {
     const amountLabel = formatPrice(numericAmount, 'GBP');
     return (
-      <div className="mx-auto w-full max-w-xl pb-16">
+      <div className="mx-auto w-full max-w-xl pb-16 lg:max-w-2xl">
         <div className="flex items-center gap-1 px-2 pt-1 sm:px-4">
           <IconButton name="back" aria-label="Back to edit" onClick={() => setStep('form')} />
-          <h1 className="text-screen-title font-semibold text-text-primary">Confirm withdrawal</h1>
+          <h1 className="text-screen-title text-text-primary">Confirm withdrawal</h1>
         </div>
 
         <section aria-label="Withdrawal summary" className="mt-8 px-4 sm:px-6">
@@ -488,11 +519,38 @@ export function WithdrawView() {
   const nothingAvailable = available <= 0;
   const openAddFlow = () => (isLive ? setSetupSheetOpen(true) : setAddSheetOpen(true));
 
+  // Ledger read failed — the honest-retry state (native balanceError),
+  // never a fabricated £0 that would hide real seller funds. Placed after
+  // the receipt/confirm branches so a committed withdrawal's outcome
+  // can't be replaced by a background refetch failure.
+  if (isLive && balanceError) {
+    return (
+      <div className="mx-auto w-full max-w-xl pb-10 lg:max-w-2xl">
+        <div className="flex items-center gap-1 px-2 pt-1 sm:px-4">
+          <IconButton
+            name="back"
+            aria-label="Back to wallet"
+            onClick={() => router.push('/wallet')}
+          />
+          <h1 className="text-screen-title text-text-primary">Withdraw</h1>
+        </div>
+        <EmptyState
+          compact
+          icon="wallet"
+          title={balanceError}
+          subtitle="Your funds are safe — this is a read failure, not a missing balance."
+          actionLabel="Try again"
+          onAction={reloadBalance}
+        />
+      </div>
+    );
+  }
+
   return (
-    <div className="mx-auto w-full max-w-xl pb-10">
+    <div className="mx-auto w-full max-w-xl pb-10 lg:max-w-2xl">
       <div className="flex items-center gap-1 px-2 pt-1 sm:px-4">
         <IconButton name="back" aria-label="Back to wallet" onClick={() => router.push('/wallet')} />
-        <h1 className="text-screen-title font-semibold text-text-primary">Withdraw</h1>
+        <h1 className="text-screen-title text-text-primary">Withdraw</h1>
       </div>
 
       {nothingAvailable ? (
@@ -509,7 +567,7 @@ export function WithdrawView() {
           {/* Amount composer */}
           <section aria-label="Amount" className="px-4 pt-6 sm:px-6">
             <div className="flex items-baseline justify-between">
-              <p className="text-label font-semibold uppercase tracking-wider text-text-muted">
+              <p className="text-label text-text-muted">
                 Available to withdraw
               </p>
               <p className="tnum text-body-emphasis font-semibold text-text-primary">
@@ -551,9 +609,12 @@ export function WithdrawView() {
 
           {/* Transfer to */}
           <section aria-label="Payout destination" className="mt-10 px-4 sm:px-6">
-            <h2 className="text-label font-semibold uppercase tracking-wider text-text-muted">
+            <h2 className="text-label text-text-muted">
               Transfer to
             </h2>
+            {policyHint ? (
+              <p className="mt-1 text-caption text-text-muted">{policyHint}</p>
+            ) : null}
 
             {payoutsError ? (
               <div className="mt-3 rounded-lg border border-border-subtle px-4 py-4">
@@ -569,6 +630,19 @@ export function WithdrawView() {
                 </button>
               </div>
             ) : destinations.length === 0 ? (
+              isLive && payoutAvailability === 'country_unsupported' ? (
+                /* The country policy excludes the payout rail — name the
+                   blocker (native withdraw.payout.bankUnavailable) instead
+                   of offering a setup flow that can only fail. */
+                <div className="mt-3 rounded-lg border border-border-subtle px-4 py-4">
+                  <p className="text-body-emphasis font-medium text-text-primary">
+                    {PAYOUT_GATE_COPY.countryUnsupportedTitle}
+                  </p>
+                  <p className="mt-1 text-caption text-text-muted">
+                    {PAYOUT_GATE_COPY.countryUnsupportedSubtitle}
+                  </p>
+                </div>
+              ) : (
               <button
                 type="button"
                 onClick={openAddFlow}
@@ -577,16 +651,25 @@ export function WithdrawView() {
                 <Icon name="plus" size={20} className="text-brand" />
                 <span className="flex-1">
                   <span className="block text-body-emphasis font-medium text-text-primary">
-                    {isLive ? 'Set up payouts' : 'Add a bank account'}
+                    {isLive
+                      ? payoutAvailability === 'onboarding_required'
+                        ? PAYOUT_GATE_COPY.finishSetupTitle
+                        : 'Set up payouts'
+                      : 'Add a bank account'}
                   </span>
                   <span className="block text-caption text-text-muted">
                     {isLive
-                      ? 'Required to withdraw — verify with Stripe'
+                      ? payoutAvailability === 'onboarding_required'
+                        ? connectStatus?.requirementsCurrentlyDue?.length
+                          ? PAYOUT_GATE_COPY.requirementsDueSubtitle
+                          : PAYOUT_GATE_COPY.finishSetupSubtitle
+                        : 'Required to withdraw — verify with Stripe'
                       : 'Required to withdraw — sort code + account number'}
                   </span>
                 </span>
                 <Icon name="forward" size={16} className="text-text-muted" />
               </button>
+              )
             ) : (
               <ul role="radiogroup" aria-label="Payout destination" className="mt-1">
                 {destinations.map((d) => {
@@ -657,7 +740,7 @@ export function WithdrawView() {
           {/* Recent withdrawals — honest statuses */}
           {requestsError ? (
             <section aria-label="Recent withdrawals" className="mt-10 px-4 sm:px-6">
-              <h2 className="text-label font-semibold uppercase tracking-wider text-text-muted">
+              <h2 className="text-label text-text-muted">
                 Recent withdrawals
               </h2>
               <p className="mt-3 text-body text-text-muted">
@@ -673,7 +756,7 @@ export function WithdrawView() {
             </section>
           ) : recentRequests.length > 0 ? (
             <section aria-label="Recent withdrawals" className="mt-10 px-4 sm:px-6">
-              <h2 className="text-label font-semibold uppercase tracking-wider text-text-muted">
+              <h2 className="text-label text-text-muted">
                 Recent withdrawals
               </h2>
               <ul className="mt-1 divide-y divide-border-subtle">
@@ -728,9 +811,11 @@ export function WithdrawView() {
             {error === 'no_method' && numericAmount > 0 ? (
               <p className="mt-2 text-center text-caption text-danger-text" role="alert">
                 {isLive
-                  ? destinations.length > 0
-                    ? 'Finish payout setup — your method is still being verified.'
-                    : 'Set up a payout method to withdraw.'
+                  ? payoutAvailability === 'country_unsupported'
+                    ? PAYOUT_GATE_COPY.countryUnsupportedTitle
+                    : destinations.length > 0
+                      ? 'Finish payout setup — your method is still being verified.'
+                      : 'Set up a payout method to withdraw.'
                   : AMOUNT_ERROR_COPY.no_method}
               </p>
             ) : null}

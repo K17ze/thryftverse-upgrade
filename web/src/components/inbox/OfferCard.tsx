@@ -20,6 +20,7 @@ import type { OfferRowAction } from '@/components/orders/OfferRow';
 import { AppImage } from '@/components/ui/AppImage';
 import { Badge } from '@/components/ui/Badge';
 import { Button } from '@/components/ui/Button';
+import { ClientTime } from '@/components/ui/ClientTime';
 import { Icon } from '@/components/ui/Icon';
 import { formatPrice } from '@/lib/utils/format';
 import { MessageActions, MessageReceipt, formatMessageTime, Highlight } from './MessageBubble';
@@ -96,7 +97,6 @@ export function OfferCard({
   const itemImage = m.itemImage ?? m.listing?.image ?? m.listing?.images?.[0];
   const itemTitle = m.listing?.title;
   const itemHref = m.listing?.id ? `/item/${m.listing.id}` : null;
-  const time = formatMessageTime(m.timestamp);
   // The standing record's amount is the truth once resolved — a countered
   // card shows what's actually on the table, not the stale first bid.
   const amount = offer?.amount ?? m.offerPrice;
@@ -220,12 +220,14 @@ export function OfferCard({
 
             {/* Same meta grammar as the bubbles — time always, receipt on own
                 offers only (fixture readStatus, never assumed). */}
-            {time || mine ? (
+            {mine ? (
               <div className="mt-2 flex items-center justify-end gap-1 text-text-muted">
-                {time ? <span className="text-micro tnum">{time}</span> : null}
-                {mine ? (
-                  <MessageReceipt status={m.readStatus} readClassName="text-brand" />
-                ) : null}
+                <ClientTime
+                  iso={m.timestamp}
+                  format={formatMessageTime}
+                  className="text-micro tnum"
+                />
+                <MessageReceipt status={m.readStatus} readClassName="text-brand" />
               </div>
             ) : null}
           </div>

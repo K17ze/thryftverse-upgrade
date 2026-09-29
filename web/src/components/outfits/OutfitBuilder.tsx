@@ -21,7 +21,8 @@ import { useToast } from '@/components/ui/Toast';
 import { INPUT_CLASS } from '@/components/sell/SellField';
 import { useSignupWall } from '@/components/auth/SignupWall';
 import { BackBar } from '@/components/profile/BackBar';
-import { listingsForIds } from '@/components/profile/fixtures';
+import { DATA_MODE } from '@/lib/api/client';
+import { useListingIds } from '@/lib/hooks/listing-resolution';
 import { useStore, useHydrated } from '@/lib/store/useStore';
 import {
   OUTFIT_SLOTS,
@@ -37,6 +38,8 @@ import { inferListingSlot, saveCtaLabel, toOutfitItems } from './outfitItems';
 import { suggestCompletion } from './styleGraph';
 import { LISTINGS } from '@/lib/data/fixtures';
 
+const LIVE = DATA_MODE === 'live';
+
 export function OutfitBuilder() {
   const router = useRouter();
   const { show } = useToast();
@@ -47,11 +50,13 @@ export function OutfitBuilder() {
   const saved = useStore((s) => s.saved);
   const saveOutfit = useOutfits((s) => s.saveOutfit);
 
-  /** Tray source — favourites ∪ saved, resolved against fixtures. */
-  const sourceItems = useMemo(
-    () => listingsForIds([...new Set([...wishlist, ...saved])]),
+  /** Tray source — favourites ∪ saved, resolved through the shared
+   *  id-listing hook (live: real /listings/:id reads; fixture: catalogue). */
+  const sourceIds = useMemo(
+    () => [...new Set([...wishlist, ...saved])],
     [wishlist, saved],
   );
+  const { items: sourceItems } = useListingIds(sourceIds);
 
   const [name, setName] = useState('');
   const [items, setItems] = useState<OutfitCanvasItems>({});
@@ -110,20 +115,22 @@ export function OutfitBuilder() {
     apply({ ...items, [slot]: undefined });
 
   /** Complete-the-look — StyleGraph heuristic over real listings. The
-   *  candidate pool is the member's own rail (saved + favourites) first,
-   *  then the wider catalogue — both resolve to real items, never
-   *  fabricated suggestions. */
+   *  candidate pool is the member's own rail (saved + favourites) first;
+   *  fixture mode widens it with the authored catalogue. Live mode never
+   *  fabricates candidates from a catalogue the member never saved. */
   const suggestion = useMemo(() => {
     const placed = new Set(
       Object.values(items)
         .map((l) => l?.id)
         .filter((x): x is string => Boolean(x)),
     );
-    const pool = [
-      ...sourceItems,
-      ...LISTINGS.filter((l) => !sourceItems.some((s) => s.id === l.id)),
-    ].filter((l) => !placed.has(l.id));
-    return suggestCompletion(items, pool);
+    const pool = LIVE
+      ? sourceItems
+      : [
+          ...sourceItems,
+          ...LISTINGS.filter((l) => !sourceItems.some((s) => s.id === l.id)),
+        ];
+    return suggestCompletion(items, pool.filter((l) => !placed.has(l.id)));
   }, [items, sourceItems]);
 
   const clearAll = () => {
@@ -178,7 +185,7 @@ export function OutfitBuilder() {
       />
 
       <div className="flex items-center justify-between px-4 pt-1 sm:px-6">
-        <h1 className="text-screen-title font-bold text-text-primary">
+        <h1 className="text-screen-title text-text-primary">
           New outfit
         </h1>
       </div>

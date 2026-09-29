@@ -11,6 +11,7 @@
  */
 
 import { useState } from 'react';
+import { useQueryClient } from '@tanstack/react-query';
 import { Icon } from '@/components/ui/Icon';
 import { IconButton } from '@/components/ui/IconButton';
 import { Sheet } from '@/components/ui/Sheet';
@@ -22,17 +23,33 @@ import { useSettingsPrefs } from '@/lib/store/settingsPrefs';
 import { useHydrated } from '@/lib/store/useStore';
 import { useSession } from '@/lib/session/SessionProvider';
 import { DATA_MODE } from '@/lib/api/client';
-import { blockUser, unblockUser } from '@/lib/api/services/users';
+import {
+  blockUser,
+  unblockUser,
+  muteUser,
+  unmuteUser,
+  restrictUser,
+  unrestrictUser,
+} from '@/lib/api/services/users';
+import {
+  applyFixtureModeration,
+  PROFILE_AGGREGATE_ROOT,
+} from '@/lib/hooks/profile-queries';
 import type { User } from '@/lib/contracts/domain';
+import type { ProfileViewerState } from './ProfileHero';
 import { useShare } from './useShare';
 
 interface ProfileOptionsMenuProps {
   user: User;
+  /** Viewer-scoped flags from the profile aggregate — live truth for the
+   *  mute/restrict labels; block also reads the local safety stores. */
+  viewer?: ProfileViewerState;
 }
 
-export function ProfileOptionsMenu({ user }: ProfileOptionsMenuProps) {
+export function ProfileOptionsMenu({ user, viewer }: ProfileOptionsMenuProps) {
   const { show } = useToast();
   const share = useShare();
+  const qc = useQueryClient();
   const { user: me } = useSession();
   const hydrated = useHydrated();
   const blockedIds = useInboxSafety((s) => s.blockedUserIds);
@@ -48,9 +65,19 @@ export function ProfileOptionsMenu({ user }: ProfileOptionsMenuProps) {
   const [confirm, setConfirm] = useState<ConfirmSheetState | null>(null);
   const [busy, setBusy] = useState(false);
 
+  // Local stores are the fixture truth; the aggregate's viewer flags are
+  // the live truth — either saying "blocked" is honoured.
   const blocked =
-    hydrated &&
-    (blockedIds.includes(user.id) || prefBlockedIds.includes(user.id));
+    viewer?.isBlocked === true ||
+    (hydrated &&
+      (blockedIds.includes(user.id) || prefBlockedIds.includes(user.id)));
+  const muted = viewer?.isMuted === true;
+  const restricted = viewer?.isRestricted === true;
+
+  /** Re-read the profile aggregate after a moderation write so every
+   *  consumer (blocked view, menu labels) settles on server truth. */
+  const invalidateAggregate = () =>
+    void qc.invalidateQueries({ queryKey: PROFILE_AGGREGATE_ROOT });
 
   const applyBlock = (next: boolean) => {
     setBusy(true);
@@ -67,6 +94,7 @@ export function ProfileOptionsMenu({ user }: ProfileOptionsMenuProps) {
         if (blockedIds.includes(user.id) !== next) toggleBlocked(user.id);
         if (next) prefBlock(user.id);
         else prefUnblock(user.id);
+        invalidateAggregate();
         show(
           next
             ? `@${user.username} blocked — they can't message you`
@@ -102,6 +130,65 @@ export function ProfileOptionsMenu({ user }: ProfileOptionsMenuProps) {
     });
   };
 
+  // Mute + restrict are the silent rungs of the moderation ladder (mobile
+  // ProfileMoreSheet) — the member is never told. Fixture mode writes the
+  // session overlay the aggregate derivation reads back.
+  const applyModeration = (
+    kind: 'mute' | 'restrict',
+    next: boolean,
+  ) => {
+    setMenuOpen(false);
+    setBusy(true);
+    const write =
+      DATA_MODE === 'live'
+        ? kind === 'mute'
+          ? next
+            ? muteUser(user.id)
+            : unmuteUser(user.id)
+          : next
+            ? restrictUser(user.id)
+            : unrestrictUser(user.id)
+        : Promise.resolve();
+    void write
+      .then(() => {
+        if (DATA_MODE !== 'live') {
+          applyFixtureModeration(
+            user.id,
+            kind === 'mute' ? { isMuted: next } : { isRestricted: next },
+          );
+        }
+        invalidateAggregate();
+        show(
+          next
+            ? `@${user.username} ${kind === 'mute' ? 'muted' : 'restricted'}`
+            : `@${user.username} ${kind === 'mute' ? 'unmuted' : 'unrestricted'}`,
+          'info',
+        );
+      })
+      .catch(() => {
+        show(`Could not update ${kind} for this member`, 'error');
+      })
+      .finally(() => setBusy(false));
+  };
+
+  const askToggleRestrict = () => {
+    setMenuOpen(false);
+    if (restricted) {
+      applyModeration('restrict', false);
+      return;
+    }
+    setConfirm({
+      title: `Restrict @${user.username}?`,
+      message:
+        "Their messages move to your requests and they won't see when you've read them or when you're typing. They won't know they're restricted.",
+      confirmLabel: 'Restrict',
+      onConfirm: () => {
+        setConfirm(null);
+        applyModeration('restrict', true);
+      },
+    });
+  };
+
   // Blocking yourself is meaningless — the menu only mounts on public
   // profiles, but guard anyway for stale own-profile renders.
   if (!me || me.id === user.id) return null;
@@ -110,8 +197,9 @@ export function ProfileOptionsMenu({ user }: ProfileOptionsMenuProps) {
     <>
       <IconButton
         name="more"
-        aria-label="Profile options"
+        aria-label={`Profile options for @${user.username}`}
         aria-haspopup="dialog"
+        aria-expanded={menuOpen}
         onClick={() => setMenuOpen(true)}
       />
       <Sheet
@@ -158,6 +246,34 @@ export function ProfileOptionsMenu({ user }: ProfileOptionsMenuProps) {
               </button>
             </li>
             <li aria-hidden className="my-1 border-b border-border-subtle" />
+            {/* Graduated moderation ladder — mute → restrict → block, the
+                mobile more-sheet ordering. */}
+            <li>
+              <button
+                type="button"
+                onClick={() => applyModeration('mute', !muted)}
+                disabled={busy}
+                className="pressable flex min-h-12 w-full items-center gap-3.5 py-3 text-left text-text-primary"
+              >
+                <Icon name={muted ? 'notifications' : 'notificationsOff'} size={20} />
+                <span className="flex-1 text-body-emphasis font-medium">
+                  {muted ? `Unmute @${user.username}` : `Mute @${user.username}`}
+                </span>
+              </button>
+            </li>
+            <li>
+              <button
+                type="button"
+                onClick={askToggleRestrict}
+                disabled={busy}
+                className="pressable flex min-h-12 w-full items-center gap-3.5 py-3 text-left text-text-primary"
+              >
+                <Icon name={restricted ? 'eye' : 'eyeOff'} size={20} />
+                <span className="flex-1 text-body-emphasis font-medium">
+                  {restricted ? `Unrestrict @${user.username}` : `Restrict @${user.username}`}
+                </span>
+              </button>
+            </li>
             <li>
               <button
                 type="button"

@@ -112,13 +112,13 @@ export function IssueReportSheet({ open, contextualIssues, onSelect, onClose }: 
 
         {hasContextual ? (
           <>
-            <p className="text-label font-medium uppercase tracking-wide text-text-muted">
+            <p className="text-label text-text-muted">
               For this order
             </p>
             {contextualIssues.map((c) => (
               <Row key={c.id} category={c} />
             ))}
-            <p className="mt-3 text-label font-medium uppercase tracking-wide text-text-muted">
+            <p className="mt-3 text-label text-text-muted">
               Other issues
             </p>
           </>

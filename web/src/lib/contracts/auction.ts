@@ -54,6 +54,26 @@ export interface AuctionMarketItem {
   secondChanceOfferedTo?: string | null;
   /** Winning bidder id when the server reports it. */
   winnerBidderId?: string | null;
+  /** Payment-capture instant once the winner paid — detail read. */
+  paidAt?: string | null;
+  /** Server-computed max the viewer has bid — detail read; supersedes
+   *  re-deriving the lead from a bounded bid-history window. */
+  viewerHighestBid?: number | null;
+  /** Per-viewer watch flag the live board/detail echoes when authed —
+   *  seeds the local watchlist; the local store stays the optimistic
+   *  write path. Absent on fixture rows. */
+  isWatched?: boolean;
+  /** Server clock at response time (ISO) — stamped on live detail/board
+   *  rows so countdown surfaces can correct device-clock skew. */
+  serverNow?: string;
+  /** Seller summary from the market payload — live surfaces (Pulse
+   *  creator rows) need it; fixture callers leave it undefined. */
+  seller?: {
+    id: string;
+    username: string | null;
+    displayName?: string | null;
+    avatar: string | null;
+  } | null;
 }
 
 export interface AuctionViewModel extends AuctionMarketItem {

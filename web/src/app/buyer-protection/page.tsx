@@ -17,7 +17,7 @@ const STEPS: { icon: AppIconName; title: string; body: string }[] = [
   {
     icon: 'box',
     title: 'The seller ships',
-    body: `They get a prepaid tracked label and ${DISPATCH_SLA_DAYS} working days to dispatch. You watch it move.`,
+    body: `They get a prepaid tracked label and ${DISPATCH_SLA_DAYS} days to dispatch. You watch it move.`,
   },
   {
     icon: 'shieldCheck',

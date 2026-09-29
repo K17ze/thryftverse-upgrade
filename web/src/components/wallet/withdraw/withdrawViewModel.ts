@@ -10,7 +10,12 @@
  */
 
 import type { PayoutAccount, PayoutRequest, PayoutRequestStatus } from '@/lib/data/fixtures';
-import type { PayoutAccountPayload, PayoutRequestPayload } from '@/lib/api/services/payouts';
+import type {
+  PayoutAccountPayload,
+  PayoutRequestPayload,
+  StripeConnectStatusPayload,
+  UserCountryCapabilities,
+} from '@/lib/api/services/payouts';
 import { round2 } from '../convertViewModel';
 
 // ── Flow ──────────────────────────────────────────────────────────────
@@ -129,6 +134,74 @@ export const QUICK_PERCENTAGES = [25, 50, 100] as const;
 
 export function quickAmount(available: number, pct: number): number {
   return round2((available * pct) / 100);
+}
+
+// ── Payout capability gating ──────────────────────────────────────────
+// Web port of the native gate: usePayoutAccountConnection checks the
+// capability gateway priority before offering Stripe and blocks until
+// `payoutsEnabled` — the surface must name WHY withdrawals can't run
+// (country policy vs unfinished onboarding), not just fail the POST.
+
+export type PayoutAvailability =
+  /** The capability/status reads haven't resolved — fail open; the
+   *  setup sheet surfaces the server's own verdict on attempt. */
+  | 'unknown'
+  /** The rail is offered and Stripe reports payouts enabled. */
+  | 'available'
+  /** Country policy excludes the Stripe rail — no CTA to retry. */
+  | 'country_unsupported'
+  /** The rail exists but Stripe onboarding/KYC hasn't completed. */
+  | 'onboarding_required';
+
+export function resolvePayoutAvailability(
+  capabilities: UserCountryCapabilities | null,
+  connectStatus: StripeConnectStatusPayload | null,
+): PayoutAvailability {
+  if (connectStatus?.payoutPolicySupported === false) return 'country_unsupported';
+  if (capabilities && !capabilities.payouts.gatewayPriority.includes('stripe_americas')) {
+    return 'country_unsupported';
+  }
+  if (connectStatus && !connectStatus.payoutsEnabled) return 'onboarding_required';
+  if (!capabilities && !connectStatus) return 'unknown';
+  return 'available';
+}
+
+/** Native vocabulary (withdraw.payout.* / withdraw.error.*) — one place. */
+export const PAYOUT_GATE_COPY = {
+  countryUnsupportedTitle: 'Payouts unavailable in your region',
+  countryUnsupportedSubtitle:
+    'Country policy will route withdrawals through supported payout rails.',
+  finishSetupTitle: 'Finish payout setup',
+  finishSetupSubtitle:
+    'Finish the required verification steps with Stripe to unlock payouts.',
+  requirementsDueSubtitle:
+    "Stripe still needs a few details — complete them and we'll recheck automatically.",
+} as const;
+
+/** Native formatPayoutPolicyHint — 'Payout default GBP · Supported GBP'. */
+export function payoutPolicyHint(
+  capabilities: Pick<
+    UserCountryCapabilities,
+    'payouts'
+  > | null,
+): string | null {
+  if (!capabilities) return null;
+  return `Payout default ${capabilities.payouts.defaultCurrency} · Supported ${capabilities.payouts.supportedCurrencies.join(', ')}`;
+}
+
+/** Native formatCountryPolicyScope — 'GB · Uk' region scope label. */
+export function countryPolicyScope(
+  capabilities: Pick<
+    UserCountryCapabilities,
+    'effectiveCountryCode' | 'countryCluster'
+  > | null,
+): string | null {
+  if (!capabilities) return null;
+  const cluster = capabilities.countryCluster
+    .split('_')
+    .map((part) => part.charAt(0) + part.slice(1).toLowerCase())
+    .join(' ');
+  return `${capabilities.effectiveCountryCode} · ${cluster}`;
 }
 
 // ── Payout destination — the unified rail view model ──────────────────

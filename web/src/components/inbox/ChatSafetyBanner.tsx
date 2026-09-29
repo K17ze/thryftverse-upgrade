@@ -47,7 +47,8 @@ export function ChatSafetyBanner({
           name="close"
           size={12}
           aria-label="Dismiss safety warning"
-          className="-mr-1 -mt-0.5 h-7 w-7 shrink-0"
+          // 28px chrome on a 44px ::after hit area — the pad-out grammar.
+          className="relative -mr-1 -mt-0.5 h-7 w-7 shrink-0 after:absolute after:-inset-2 after:content-['']"
           onClick={onDismiss}
         />
       ) : null}

@@ -6,7 +6,7 @@ import Link from 'next/link';
 import { EmptyState } from '@/components/ui/EmptyState';
 import { Icon } from '@/components/ui/Icon';
 import type { CoOwnAsset, CoOwnPosition } from '@/lib/contracts/coown';
-import { deriveLifecycleState } from '@/lib/contracts/coown';
+import { coOwnMarkGbp, deriveLifecycleState } from '@/lib/contracts/coown';
 import { usePriceHistory } from '@/lib/hooks/coown-queries';
 import { AssetThumb } from './AssetThumb';
 import { LifecycleTag } from './LifecycleTag';
@@ -199,6 +199,10 @@ export function PositionsTable({ rows }: { rows: PositionRow[] }) {
       <ul className="divide-y divide-border-subtle">
         {sorted.map(({ position, asset, value, plGbp, plPct }) => {
           const up = plGbp >= 0;
+          // The "last" column is the mark — the server projection's mark
+          // when it reports one, else the last settled trade over the
+          // issue price. Never the stale issuance print alone.
+          const mark = position.markPriceGbp ?? coOwnMarkGbp(asset);
           const tone = up ? 'text-coown-up' : 'text-coown-down';
           // Halted/exiting holdings carry the tag — a live position doesn't
           // need the noise.
@@ -225,7 +229,7 @@ export function PositionsTable({ rows }: { rows: PositionRow[] }) {
                       <span className="tnum">{position.units} units</span>
                     </p>
                     <p className="mt-0.5 text-meta text-text-muted tnum">
-                      avg {gbp(position.avgEntryPriceGbp)} · last {gbp(asset.unitPriceGbp)}
+                      avg {gbp(position.avgEntryPriceGbp)} · last {gbp(mark)}
                     </p>
                     {halted ? <LifecycleTag asset={asset} className="mt-1" /> : null}
                   </div>
@@ -257,7 +261,7 @@ export function PositionsTable({ rows }: { rows: PositionRow[] }) {
                   {gbp(position.avgEntryPriceGbp)}
                 </p>
                 <p className="text-right text-body text-text-primary tnum">
-                  {gbp(asset.unitPriceGbp)}
+                  {gbp(mark)}
                 </p>
                 <p className="text-right text-body-emphasis text-text-primary tnum">{gbp(value)}</p>
                 <p className={`text-right text-body-emphasis tnum ${tone}`}>

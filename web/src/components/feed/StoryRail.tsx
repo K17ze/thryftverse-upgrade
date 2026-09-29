@@ -23,7 +23,7 @@ export function StoryRail() {
     refetch,
   } = useQuery({
     queryKey: ['poster-stories'],
-    queryFn: () => data.posterStories(),
+    queryFn: ({ signal }) => data.posterStories(signal),
     staleTime: 60_000,
   });
 
@@ -35,9 +35,9 @@ export function StoryRail() {
 
   if (isLoading) {
     return (
-      <div className="flex gap-2 overflow-hidden px-4 py-3">
+      <div className="flex gap-2 overflow-hidden px-4 py-3 sm:px-6">
         {Array.from({ length: 6 }).map((_, i) => (
-          <Skeleton key={i} className="h-[135px] w-[76px] shrink-0 rounded-lg" />
+          <Skeleton key={i} className="h-[135px] w-[76px] shrink-0 rounded-lg lg:h-[168px] lg:w-[94px]" />
         ))}
       </div>
     );
@@ -78,7 +78,7 @@ export function StoryRail() {
             {/* Ring state — solid brand while unwatched, hairline once
                 seen (mobile posterTileRing/posterTileSeen). */}
             <div
-              className={`h-[135px] w-[76px] rounded-lg p-[2px] ${
+              className={`h-[135px] w-[76px] rounded-lg p-[2px] lg:h-[168px] lg:w-[94px] ${
                 isUnwatched ? 'bg-brand' : 'bg-border-subtle'
               }`}
             >
@@ -87,8 +87,7 @@ export function StoryRail() {
                   src={story.coverUri}
                   alt={`${story.username || 'Poster'} story`}
                   fill
-                  sizes="76px"
-                  priority={idx < 4}
+                  sizes="(max-width: 1024px) 76px, 94px"
                   className="h-full w-full media-zoom"
                 />
                 {/* Name chip — scrim pill + fresh/seen status dot */}

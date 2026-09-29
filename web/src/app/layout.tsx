@@ -23,7 +23,13 @@ const playfair = localFont({
   display: 'swap',
 });
 
+/** Canonical origin for metadata URL resolution (og:image, alternates,
+ *  robots sitemap). Public base — NEXT_PUBLIC_ so it also survives into
+ *  any client-rendered share copy that wants an absolute URL. */
+const siteUrl = process.env.NEXT_PUBLIC_SITE_URL ?? 'https://www.thryftverse.com';
+
 export const metadata: Metadata = {
+  metadataBase: new URL(siteUrl),
   title: {
     default: 'ThryftVerse — Buy and sell pre-loved fashion',
     template: '%s · ThryftVerse',
@@ -31,6 +37,21 @@ export const metadata: Metadata = {
   description:
     'ThryftVerse is the marketplace for pre-loved fashion. Discover, buy and sell second-hand clothing, accessories and more.',
   applicationName: 'ThryftVerse',
+  openGraph: {
+    type: 'website',
+    siteName: 'ThryftVerse',
+    title: 'ThryftVerse — Buy and sell pre-loved fashion',
+    description:
+      'ThryftVerse is the marketplace for pre-loved fashion. Discover, buy and sell second-hand clothing, accessories and more.',
+    url: '/',
+    locale: 'en_GB',
+  },
+  twitter: {
+    card: 'summary_large_image',
+    title: 'ThryftVerse — Buy and sell pre-loved fashion',
+    description:
+      'ThryftVerse is the marketplace for pre-loved fashion. Discover, buy and sell second-hand clothing, accessories and more.',
+  },
 };
 
 export const viewport: Viewport = {
@@ -56,7 +77,7 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
           }}
         />
       </head>
-      <body className={`${inter.variable} ${playfair.variable}`}>
+      <body className={`${inter.variable} ${playfair.variable}`} suppressHydrationWarning>
         {/* Keyboard/AT path past the sticky chrome — visually hidden until
             focused (the left offset is the hiding mechanism, not sr-only,
             so the link stays in the focus order without layout churn). */}

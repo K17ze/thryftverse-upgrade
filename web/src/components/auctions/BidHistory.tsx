@@ -14,6 +14,7 @@ import type { AuctionBid } from '@/lib/contracts/auction';
 import { Icon } from '@/components/ui/Icon';
 import { Skeleton } from '@/components/ui/Skeleton';
 import { userById } from '@/lib/data/fixtures';
+import { DATA_MODE } from '@/lib/api/client';
 import { formatPrice, timeAgo } from '@/lib/utils/format';
 
 /**
@@ -110,7 +111,13 @@ export function BidHistory({ bids, viewerId, isLoading, isError, onRetry }: BidH
       <tbody>
         {ordered.map((bid, index) => {
           const mine = viewerId != null && bid.bidderId === viewerId;
-          const username = userById(bid.bidderId)?.username ?? bid.bidderName;
+          // The wire's bidderName is the identity truth — fixture
+          // enrichment only for fixture ids (a live-id collision would
+          // attribute the bid to the wrong member).
+          const username =
+            DATA_MODE === 'fixture'
+              ? (userById(bid.bidderId)?.username ?? bid.bidderName)
+              : bid.bidderName;
           const exact = new Date(bid.createdAt).toLocaleString('en-GB', {
             day: 'numeric',
             month: 'short',
@@ -126,7 +133,7 @@ export function BidHistory({ bids, viewerId, isLoading, isError, onRetry }: BidH
               <td className="py-2.5 pr-3 text-body font-medium text-text-primary">
                 {mine ? 'You' : maskBidder(username)}
                 {index === 0 ? (
-                  <span className="ml-2 text-meta font-semibold uppercase tracking-[0.08em] text-success-text">
+                  <span className="ml-2 text-meta font-semibold uppercase tracking-wide text-success-text">
                     Top bid
                   </span>
                 ) : null}

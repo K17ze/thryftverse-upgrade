@@ -20,7 +20,7 @@
  * equivalent of the mobile swipe-to-reply + long-press copy.
  */
 
-import { useEffect, useRef, useState } from 'react';
+import { memo, useEffect, useRef, useState } from 'react';
 import type { Message } from '@/lib/contracts/domain';
 import { EXTENDED_REACTIONS } from '@/lib/hooks/chat-queries';
 import { isLocalMediaUri } from '@/lib/utils/media';
@@ -29,6 +29,7 @@ import {
   useReadReceiptsEnabled,
 } from '@/lib/store/chatPrefs';
 import { AppImage } from '@/components/ui/AppImage';
+import { ClientTime } from '@/components/ui/ClientTime';
 import { Icon } from '@/components/ui/Icon';
 import { useToast } from '@/components/ui/Toast';
 
@@ -144,6 +145,64 @@ export function DeletedMessageTombstone({
         </p>
       </div>
     </div>
+  );
+}
+
+// ── Linkified text ─────────────────────────────────────────────────────
+
+const URL_RE = /https?:\/\/[^\s<>"']+/gi;
+
+/**
+ * URLs in a message body become real anchors — the desktop messenger
+ * grammar (plain text on web is the prototype tell). Each segment still
+ * runs through the search highlighter, so a marked match inside a URL
+ * stays marked. Links open in a new tab; the bubble itself isn't a link
+ * so no event suppression is needed.
+ */
+export function MessageText({
+  text,
+  query,
+  mine,
+  markClassName,
+}: {
+  text: string;
+  query: string;
+  mine: boolean;
+  markClassName: string;
+}) {
+  const segments: { text: string; url?: string }[] = [];
+  let from = 0;
+  for (const match of text.matchAll(URL_RE)) {
+    const at = match.index ?? 0;
+    if (at > from) segments.push({ text: text.slice(from, at) });
+    segments.push({ text: match[0], url: match[0] });
+    from = at + match[0].length;
+  }
+  if (from < text.length) segments.push({ text: text.slice(from) });
+  if (segments.length === 0) segments.push({ text });
+
+  return (
+    <>
+      {segments.map((s, i) =>
+        s.url ? (
+          <a
+            key={i}
+            href={s.url}
+            target="_blank"
+            rel="noreferrer noopener"
+            className={`break-all underline underline-offset-2 ${
+              mine
+                ? 'decoration-text-inverse/60 hover:decoration-text-inverse'
+                : 'text-brand decoration-brand/60 hover:decoration-brand'
+            }`}
+          >
+            <Highlight text={s.text} query={query} markClassName={markClassName} />
+          </a>
+        ) : (
+          <Highlight key={i} text={s.text} query={query} markClassName={markClassName} />
+        ),
+      )}
+    </>
   );
 }
 
@@ -298,7 +357,7 @@ export function MessageActions({
   // focus-visible flips pointer events + opacity (a shared container
   // opacity would swallow the focus state).
   const btn =
-    'pointer-events-none flex h-11 items-center rounded-md px-2 text-micro font-semibold uppercase tracking-wide text-text-muted opacity-0 transition-opacity duration-150 hover:text-text-primary focus-visible:pointer-events-auto focus-visible:opacity-100 group-hover/msg:pointer-events-auto group-hover/msg:opacity-100';
+    'pointer-events-none flex h-11 items-center rounded-md px-2 text-micro font-semibold uppercase tracking-[0.08em] text-text-muted opacity-0 transition-opacity duration-150 hover:text-text-primary focus-visible:pointer-events-auto focus-visible:opacity-100 group-hover/msg:pointer-events-auto group-hover/msg:opacity-100';
   return (
     <div
       className={`absolute top-1/2 z-[1] flex -translate-y-1/2 ${
@@ -545,7 +604,7 @@ export function MessageActionsMenu({
       role="menu"
       aria-label="Message actions"
       onKeyDown={onKeyDown}
-      className="fixed z-dropdown overflow-hidden rounded-lg border border-border bg-surface py-1 shadow-lg"
+      className="fixed z-dropdown overflow-hidden rounded-lg border border-border bg-surface py-1 shadow-floating"
       style={{ left, top, width }}
     >
       {reactable ? (
@@ -670,14 +729,20 @@ interface MessageBubbleProps {
   highlight?: string;
   /** Resolved reply preview — the caller looks up replyToMessageId. */
   replyTo?: { senderName: string; text: string } | null;
+  /** Reply affordance gate — the caller's composer/permission state, as a
+   *  primitive so the memo comparator can track it without callback
+   *  identity churn. */
+  replyable?: boolean;
+  /** Actions-menu gate — persisted / failed / saved-tombstone messages. */
+  menuable?: boolean;
   /** Press on the reply quote — jumps to the parent message. */
-  onReplyPress?: () => void;
+  onReplyPress?: (messageId: string) => void;
   /** Reply affordance — the caller stages the quoted compose bar. */
-  onReply?: () => void;
+  onReply?: (message: Message) => void;
   /** Opens the actions menu (quick-react row) anchored at the gutter button. */
-  onReact?: (anchor: { x: number; y: number }) => void;
+  onReact?: (message: Message, anchor: { x: number; y: number }) => void;
   /** Tapping a reaction chip toggles the viewer's reaction on that emoji. */
-  onToggleReaction?: (emoji: string) => void;
+  onToggleReaction?: (message: Message, emoji: string) => void;
   /** Tap on the inline photo/video — opens the shared media lightbox
    *  paged to this attachment (mobile ChatMediaPreviewScreen parity). */
   onMediaPress?: (message: Message) => void;
@@ -689,13 +754,20 @@ interface MessageBubbleProps {
   cluster?: MessageCluster;
 }
 
-export function MessageBubble({
+/**
+ * The bubble takes message-keyed callbacks (the caller passes one stable
+ * handler, the bubble supplies its own message) so the memo below can
+ * hold across a thread re-render — per-row closures would defeat it.
+ */
+function MessageBubbleImpl({
   message: m,
   mine,
   showSeen,
   senderLabel,
   highlight,
   replyTo,
+  replyable,
+  menuable,
   onReplyPress,
   onReply,
   onReact,
@@ -719,7 +791,6 @@ export function MessageBubble({
     return <DeletedMessageTombstone mine={mine} senderLabel={senderLabel} />;
   }
 
-  const time = formatMessageTime(m.timestamp);
   const isVideo = m.mediaType === 'video';
   const mediaOnly = Boolean(m.mediaUri) && !m.text;
   const reactions = m.reactions ?? [];
@@ -773,7 +844,9 @@ export function MessageBubble({
             onReplyPress ? (
               <button
                 type="button"
-                onClick={onReplyPress}
+                onClick={() => {
+                  if (m.replyToMessageId) onReplyPress(m.replyToMessageId);
+                }}
                 aria-label="Jump to the original message"
                 className={`pressable mb-1.5 block w-full border-l-2 py-0.5 pl-2 text-left ${
                   mine ? 'border-text-inverse/50' : 'border-brand'
@@ -867,9 +940,10 @@ export function MessageBubble({
           {m.type === 'document' || m.documentUri ? <DocumentAttachment m={m} mine={mine} /> : null}
           {m.text ? (
             <p className="whitespace-pre-wrap break-words text-body">
-              <Highlight
+              <MessageText
                 text={m.text}
                 query={highlight ?? ''}
+                mine={mine}
                 markClassName={mine ? 'bg-brand-pressed' : 'bg-brand-subtle'}
               />
             </p>
@@ -880,7 +954,10 @@ export function MessageBubble({
             } ${metaTone}`}
           >
             {m.isEdited ? <span className="text-micro">Edited</span> : null}
-            {time ? <span className="text-micro">{time}</span> : null}
+            {/* Local clock time — client-computed (ClientTime): a server
+                render can't know the viewer's timezone, so the label is
+                empty in SSR HTML and fills on mount. */}
+            <ClientTime iso={m.timestamp} format={formatMessageTime} className="text-micro" />
             {/* A failed send keeps its 'sending' readStatus — the clock
                 would claim in-flight on a write that already failed; the
                 "Not delivered" affordance below the bubble carries it. */}
@@ -917,11 +994,11 @@ export function MessageBubble({
                   ) : null}
                 </>
               );
-              return onToggleReaction ? (
+              return onToggleReaction && menuable ? (
                 <button
                   key={`${r.emoji}-${i}`}
                   type="button"
-                  onClick={() => onToggleReaction(r.emoji)}
+                  onClick={() => onToggleReaction(m, r.emoji)}
                   aria-pressed={r.reactedByMe === true}
                   aria-label={`${r.emoji} reaction${count > 1 ? ` — ${count} people` : ''}`}
                   className={`pressable relative ${chipCls} after:absolute after:-inset-1.5 after:content-['']`}
@@ -942,11 +1019,41 @@ export function MessageBubble({
             same way. */}
         <MessageActions
           mine={mine}
-          onReply={onReply}
+          onReply={replyable && onReply ? () => onReply(m) : undefined}
           onCopy={m.text ? copyText : undefined}
-          onReact={onReact}
+          onReact={menuable && onReact ? (anchor) => onReact(m, anchor) : undefined}
         />
       </div>
     </div>
   );
 }
+
+/**
+ * Memoized — a thread with full history re-renders on every poll tick,
+ * send, receipt and search keystroke; unchanged bubbles skip their
+ * render. The comparator tracks every meaningful prop: message payload
+ * (by reference — React Query keeps row identity), the derived booleans,
+ * and the reply preview by field (the caller resolves it fresh each
+ * render). Callbacks are message-keyed and stable upstream, so identity
+ * equality is meaningful — a changed identity re-renders honestly.
+ */
+export const MessageBubble = memo(
+  MessageBubbleImpl,
+  (a, b) =>
+    a.message === b.message &&
+    a.mine === b.mine &&
+    a.failed === b.failed &&
+    a.showSeen === b.showSeen &&
+    a.senderLabel === b.senderLabel &&
+    a.highlight === b.highlight &&
+    a.cluster === b.cluster &&
+    a.replyable === b.replyable &&
+    a.menuable === b.menuable &&
+    a.replyTo?.senderName === b.replyTo?.senderName &&
+    a.replyTo?.text === b.replyTo?.text &&
+    a.onReplyPress === b.onReplyPress &&
+    a.onReply === b.onReply &&
+    a.onReact === b.onReact &&
+    a.onToggleReaction === b.onToggleReaction &&
+    a.onMediaPress === b.onMediaPress,
+);

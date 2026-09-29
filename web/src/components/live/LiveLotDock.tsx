@@ -111,7 +111,7 @@ export function LiveLotDock({ session }: { session: LiveSession }) {
             </span>
           ) : null}
           <div className="min-w-0 flex-1">
-            <p className="flex items-center gap-2 text-meta font-semibold uppercase tracking-[0.08em] text-scrim-text-secondary">
+            <p className="flex items-center gap-2 text-meta font-semibold uppercase tracking-wide text-scrim-text-secondary">
               Lot {currentLot.lotNumber}
               {currentLot.status === 'open' || currentLot.status === 'closing' ? (
                 <>
@@ -182,7 +182,7 @@ export function LiveLotDock({ session }: { session: LiveSession }) {
             </span>
           ) : null}
           <div className="min-w-0">
-            <p className="text-meta font-semibold uppercase tracking-[0.08em] text-scrim-text-secondary">
+            <p className="text-meta font-semibold uppercase tracking-wide text-scrim-text-secondary">
               Up next · Lot {upNext.lotNumber}
             </p>
             <p className="clamp-1 mt-0.5 text-caption font-medium text-scrim-text-primary">

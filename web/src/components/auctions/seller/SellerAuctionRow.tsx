@@ -13,7 +13,9 @@ import Link from 'next/link';
 import { AppImage } from '@/components/ui/AppImage';
 import { Icon } from '@/components/ui/Icon';
 import type { AuctionViewModel } from '@/lib/contracts/auction';
-import { listingById } from '@/lib/data/fixtures';
+import { useListingIds } from '@/lib/hooks/listing-resolution';
+import { MY_LISTING_STATS, listingById } from '@/lib/data/fixtures';
+import { DATA_MODE } from '@/lib/api/client';
 import { formatPrice } from '@/lib/utils/format';
 import {
   resolveSellerRowPresentation,
@@ -32,7 +34,29 @@ const TONE_CLASS: Record<SellerRowTone, string> = {
 export function SellerAuctionRow({ auction }: { auction: AuctionViewModel }) {
   const presentation = resolveSellerRowPresentation(auction);
   const price = sellerPrice(auction);
-  const brand = listingById(auction.listingId)?.brand;
+  // Brand: fixture ids read the catalogue; live ids resolve through the
+  // shared listing resolver (a fixture miss would blank the cell, and a
+  // live-id collision would print the wrong brand).
+  const { byId: resolvedListings } = useListingIds([auction.listingId]);
+  const brand =
+    DATA_MODE === 'live'
+      ? resolvedListings.get(auction.listingId)?.brand
+      : listingById(auction.listingId)?.brand;
+  // Watchers — the seller's listing-level engagement stat, keyed by
+  // listing id (fixture truth; the live wire carries no per-auction
+  // watcher count, so it stays off rather than fabricated). Sold rows
+  // keep the ledger clean — a closed sale's watchers changed nothing.
+  const watchers =
+    DATA_MODE === 'live'
+      ? 0
+      : (MY_LISTING_STATS[auction.listingId]?.watchers ?? 0);
+  const meta: string[] = [];
+  if (auction.bidCount > 0 && presentation.stateLabel !== 'Sold') {
+    meta.push(`${auction.bidCount} ${auction.bidCount === 1 ? 'bid' : 'bids'}`);
+  }
+  if (watchers > 0 && presentation.stateLabel !== 'Sold') {
+    meta.push(`${watchers} watching`);
+  }
 
   return (
     <li>
@@ -70,7 +94,7 @@ export function SellerAuctionRow({ auction }: { auction: AuctionViewModel }) {
             <span className="clamp-2 text-body-emphasis font-medium text-text-primary">
               {auction.title}
             </span>
-            <span className={`pt-0.5 text-label font-semibold ${TONE_CLASS[presentation.stateTone]}`}>
+            <span className={`pt-0.5 text-label ${TONE_CLASS[presentation.stateTone]}`}>
               {presentation.stateLabel}
             </span>
           </span>
@@ -96,9 +120,9 @@ export function SellerAuctionRow({ auction }: { auction: AuctionViewModel }) {
               <span className={`tnum clamp-1 text-meta ${TONE_CLASS[presentation.leadingTone]}`}>
                 {presentation.leadingLabel}
               </span>
-              {auction.bidCount > 0 && presentation.stateLabel !== 'Sold' ? (
-                <span className="tnum text-meta text-text-muted">
-                  {auction.bidCount} {auction.bidCount === 1 ? 'bid' : 'bids'}
+              {meta.length > 0 ? (
+                <span className="tnum shrink-0 text-meta text-text-muted">
+                  {meta.join(' · ')}
                 </span>
               ) : null}
             </span>

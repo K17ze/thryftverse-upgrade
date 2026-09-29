@@ -10,10 +10,13 @@
  */
 
 import Link from 'next/link';
+import { useMemo } from 'react';
 import { useRouter } from 'next/navigation';
 import type { LiveSession } from '@/lib/data/fixtures-media';
+import { DATA_MODE } from '@/lib/api/client';
 import { listingById } from '@/lib/data/fixtures';
 import { useSessionPins } from './livePins';
+import { useLiveLots } from './useLiveLots';
 import { AppImage } from '@/components/ui/AppImage';
 import { Icon } from '@/components/ui/Icon';
 import { useToast } from '@/components/ui/Toast';
@@ -26,6 +29,14 @@ interface LiveProductRailProps {
   session: LiveSession;
 }
 
+interface RailItem {
+  id: string;
+  title: string;
+  price: number;
+  image: string;
+  sold: boolean;
+}
+
 export function LiveProductRail({ session }: LiveProductRailProps) {
   const router = useRouter();
   const { show } = useToast();
@@ -34,12 +45,39 @@ export function LiveProductRail({ session }: LiveProductRailProps) {
   const bag = useStore((s) => s.bag);
   const addToBag = useStore((s) => s.addToBag);
 
-  // Shared pins store — authored fixtures for seeded shows, live host
-  // writes for session streams; a host pinning mid-show lands here.
+  // Live: the lot engine is the pinned-product source — the lot on the
+  // table first (pin mark), then the run-of-show queue, then sold lots
+  // keeping their "Sold" state. Fixture: the shared pins store, whose
+  // ids resolve against the bundled catalogue.
+  const lots = useLiveLots(session.id, session.status === 'live');
   const pinIds = useSessionPins(session.id);
-  const items = pinIds
-    .map((id) => listingById(id))
-    .filter((l): l is NonNullable<typeof l> => l != null);
+
+  const items: RailItem[] = useMemo(() => {
+    if (DATA_MODE === 'live') {
+      const ordered = [
+        ...(lots.currentLot ? [lots.currentLot] : []),
+        ...lots.queue,
+        ...lots.settled.filter((lot) => lot.status === 'sold'),
+      ];
+      return ordered.map((lot) => ({
+        id: lot.listingId,
+        title: lot.title,
+        price: lot.highBid > 0 ? lot.highBid : lot.startPrice,
+        image: lot.imageUrl,
+        sold: lot.status === 'sold',
+      }));
+    }
+    return pinIds
+      .map((id) => listingById(id))
+      .filter((l): l is NonNullable<typeof l> => l != null)
+      .map((l) => ({
+        id: l.id,
+        title: l.title,
+        price: l.price,
+        image: getListingCoverUri(l.images),
+        sold: l.isSold === true || l.status === 'sold',
+      }));
+  }, [lots.currentLot, lots.queue, lots.settled, pinIds]);
 
   if (items.length === 0) return null;
 
@@ -60,7 +98,7 @@ export function LiveProductRail({ session }: LiveProductRailProps) {
       className="no-scrollbar flex gap-2 overflow-x-auto pb-0.5"
     >
       {items.map((l, i) => {
-        const sold = l.isSold === true || l.status === 'sold';
+        const sold = l.sold;
         const inBag = hydrated && bag.some((b) => b.listingId === l.id);
         return (
           <div
@@ -75,7 +113,7 @@ export function LiveProductRail({ session }: LiveProductRailProps) {
             >
               <span className="relative h-12 w-12 shrink-0 overflow-hidden rounded-md bg-white/10">
                 <AppImage
-                  src={getListingCoverUri(l.images)}
+                  src={l.image}
                   alt={l.title}
                   fill
                   sizes="48px"

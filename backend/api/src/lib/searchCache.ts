@@ -44,15 +44,20 @@ export interface SearchQueryParams {
   q: string;
   filters?: {
     category?: string;
+    /** Multi-select equivalents of the scalar filters (CSV on the wire;
+     *  arrays hash stably after sort). */
+    categories?: string[];
     condition?: string;
+    conditions?: string[];
     size?: string;
-    /** Multi-select filters (arrays hash stably after sort). */
     brands?: string[];
     sizes?: string[];
     priceMin?: number;
     priceMax?: number;
     location?: string;
     sustainableOnly?: boolean;
+    /** Include sold rows in the match (status IN ('active','sold')). */
+    includeSold?: boolean;
   };
   sort?: 'relevance' | 'recent' | 'price_asc' | 'price_desc' | 'most_liked' | 'ending_soon';
   page?: number;
@@ -79,6 +84,10 @@ export interface CachedSearchResult {
     searchEngineVersion?: string;
   };
   items: unknown[];
+  /** Total matching rows for the query+filters, unblended by promoted
+   *  slots — lets clients render a truthful result count instead of the
+   *  page length. Absent on payloads cached before the field existed. */
+  total?: number;
   cachedAt: number;
   fromCache: boolean;
   stale?: boolean;

@@ -31,18 +31,26 @@ const capClearedIds = (ids: string[]): string[] =>
 interface NotificationCursorState {
   /** Feed ids the user has explicitly read or cleared. */
   clearedIds: string[];
+  /** Feed ids the user has dismissed — the swipe-to-clear overlay. Live
+   *  mode also deletes the event server-side; the overlay keeps the row
+   *  gone across remounts and fixture mode. */
+  dismissedIds: string[];
   /** Unread ids from the latest feed read — runtime state, not persisted. */
   sourceUnreadIds: string[];
   /** Re-seed the shared source rows after a feed fetch. */
   syncUnreadSource: (unreadIds: string[]) => void;
   markRead: (id: string) => void;
   markAllRead: () => void;
+  /** Swipe-to-clear analogue — removes the row and posts the delete
+   *  edge in live mode. */
+  dismissNotification: (id: string) => void;
 }
 
 export const useNotificationCursor = create<NotificationCursorState>()(
   persist(
     (set, get) => ({
       clearedIds: [],
+      dismissedIds: [],
       sourceUnreadIds: NOTIFICATION_FEED.filter((n) => n.unread).map((n) => n.id),
       syncUnreadSource: (unreadIds) =>
         set((s) =>
@@ -73,20 +81,43 @@ export const useNotificationCursor = create<NotificationCursorState>()(
           ),
         }));
       },
+      dismissNotification: (id) => {
+        if (DATA_MODE === 'live') {
+          // Fire-and-forget — same contract as markRead: the overlay is
+          // the optimistic mirror, a failed delete re-syncs on fetch.
+          void notificationsService.dismissNotification(id).catch(() => {});
+        }
+        set((s) =>
+          s.dismissedIds.includes(id)
+            ? s
+            : { dismissedIds: capClearedIds([...s.dismissedIds, id]) },
+        );
+      },
     }),
     {
       name: 'thryftverse.web.notification-cursor',
       storage: createJSONStorage(() => localStorage),
-      partialize: (s) => ({ clearedIds: capClearedIds(s.clearedIds) }),
-      // v0 → v1: cap the persisted list — pre-cap storage can hold an
-      // unbounded clearedIds array.
-      version: 1,
+      partialize: (s) => ({
+        clearedIds: capClearedIds(s.clearedIds),
+        dismissedIds: capClearedIds(s.dismissedIds),
+      }),
+      // v1 → v2: introduce the dismissed overlay — existing clearedIds
+      // carry over unchanged.
+      version: 2,
       migrate: (persisted) => {
-        const old = persisted as { clearedIds?: unknown } | undefined;
+        const old = persisted as
+          | { clearedIds?: unknown; dismissedIds?: unknown }
+          | undefined;
         const ids = Array.isArray(old?.clearedIds)
           ? (old.clearedIds as string[])
           : [];
-        return { clearedIds: capClearedIds(ids) };
+        const dismissed = Array.isArray(old?.dismissedIds)
+          ? (old.dismissedIds as string[])
+          : [];
+        return {
+          clearedIds: capClearedIds(ids),
+          dismissedIds: capClearedIds(dismissed),
+        };
       },
     },
   ),

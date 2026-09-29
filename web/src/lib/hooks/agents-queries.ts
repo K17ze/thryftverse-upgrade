@@ -38,12 +38,13 @@ async function fetchBots(): Promise<AgentBot[]> {
   return AGENT_BOTS.map((b) => ({ ...b, capabilities: [...b.capabilities] }));
 }
 
-async function fetchRuns(): Promise<AgentRunEntry[]> {
+async function fetchRuns(botId?: string): Promise<AgentRunEntry[]> {
   if (DATA_MODE === 'live') {
-    return agentsService.fetchAgentRuns();
+    // botId is a real query param on GET /agent-runs — scope server-side.
+    return agentsService.fetchAgentRuns(botId);
   }
   await tick();
-  return AGENT_RUNS.map((r) => ({ ...r }));
+  return AGENT_RUNS.filter((r) => !botId || r.botId === botId).map((r) => ({ ...r }));
 }
 
 export interface AgentMemoryState {
@@ -87,14 +88,13 @@ export function useAgentBot(id: string | undefined) {
   });
 }
 
-/** The full activity ledger; pass a botId to scope it client-side. */
+/** The activity ledger — scoped server-side via ?botId= when given. */
 export function useAgentLedger(botId?: string) {
   return useQuery({
-    queryKey: RUNS_KEY,
-    queryFn: fetchRuns,
+    queryKey: [...RUNS_KEY, botId ?? 'all'],
+    queryFn: () => fetchRuns(botId),
     staleTime: DATA_MODE === 'live' ? undefined : Infinity,
     gcTime: DATA_MODE === 'live' ? undefined : Infinity,
-    select: (runs) => (botId ? runs.filter((r) => r.botId === botId) : runs),
   });
 }
 
@@ -190,12 +190,18 @@ export function useAgentMemoryActions() {
 // ---------------------------------------------------------------------------
 // Actions — every write lands in the cache, plus an honest ledger row where
 // the action itself is agent activity (install, pause, resume, remove).
+// Live mutations are optimistic with revert-on-failure (the same grammar
+// useAgentMemoryActions uses): the toggle moves now, a failed write snaps
+// back and the error is rethrown so the caller toasts the real outcome.
 // ---------------------------------------------------------------------------
 
 export interface NewAgentBotInput {
   name: string;
   purposeId: AgentPurposeId;
+  /** Fixture automation trigger — no live wire field exists for it. */
   triggerId: AgentTriggerId;
+  /** Live agentConfig.triggerMode — the chat reply grammar the wire knows. */
+  triggerMode?: 'mention' | 'command' | 'always';
   enabled: boolean;
 }
 
@@ -214,52 +220,90 @@ export function useAgentActions() {
       id: `run-local-${Date.now().toString(36)}`,
       at: new Date().toISOString(),
     };
-    queryClient.setQueryData<AgentRunEntry[]>(RUNS_KEY, (old) =>
+    // The ledger is keyed per scope — write the unscoped list and this
+    // bot's scoped list (only if that query already exists).
+    queryClient.setQueryData<AgentRunEntry[]>([...RUNS_KEY, 'all'], (old) =>
       old ? [run, ...old] : [run],
     );
+    const scopedKey = [...RUNS_KEY, entry.botId] as const;
+    if (queryClient.getQueryData(scopedKey)) {
+      queryClient.setQueryData<AgentRunEntry[]>(scopedKey, (old) => [
+        run,
+        ...(old ?? []),
+      ]);
+    }
+  };
+
+  /** Shared live-write shape: optimistic mirror, revert + rethrow on
+   *  failure, refetch on success so the server row stays canonical.
+   *  enabled ⇔ status 'available' | 'disabled' — the wire has no install
+   *  flag, so nothing else is touched. */
+  const writeBotFlag = (botId: string, enabled: boolean): Promise<void> => {
+    const prev = queryClient.getQueryData<AgentBot[]>(BOTS_KEY);
+    updateBots((bots) =>
+      bots.map((b) =>
+        b.id === botId
+          ? {
+              ...b,
+              enabled,
+              ...(b.status !== undefined
+                ? { status: enabled ? ('available' as const) : ('disabled' as const) }
+                : {}),
+            }
+          : b,
+      ),
+    );
+    return agentsService
+      .setAgentBotEnabled(botId, enabled)
+      .then(() => {
+        void queryClient.invalidateQueries({ queryKey: BOTS_KEY });
+      })
+      .catch((err) => {
+        if (prev) queryClient.setQueryData(BOTS_KEY, prev);
+        throw err;
+      });
   };
 
   return {
     /** Install a directory/community bot — enabled by default. */
-    installBot: (botId: string): void => {
-      if (DATA_MODE === 'live') {
-        void agentsService
-          .setAgentBotEnabled(botId, true)
-          .then(() => queryClient.invalidateQueries({ queryKey: BOTS_KEY }));
-        return;
-      }
+    installBot: (botId: string): Promise<void> => {
+      if (DATA_MODE === 'live') return writeBotFlag(botId, true);
       updateBots((bots) =>
         bots.map((b) =>
           b.id === botId ? { ...b, installed: true, enabled: true } : b,
         ),
       );
+      return Promise.resolve();
     },
 
     /** Remove the install. The bot's past runs stay in the ledger. */
-    uninstallBot: (botId: string): void => {
-      if (DATA_MODE === 'live') {
-        void agentsService
-          .setAgentBotEnabled(botId, false)
-          .then(() => queryClient.invalidateQueries({ queryKey: BOTS_KEY }));
-        return;
-      }
+    uninstallBot: (botId: string): Promise<void> => {
+      if (DATA_MODE === 'live') return writeBotFlag(botId, false);
       updateBots((bots) =>
         bots.map((b) =>
           b.id === botId ? { ...b, installed: false, enabled: false } : b,
         ),
       );
+      return Promise.resolve();
     },
 
     /** Run toggle — recorded in the ledger so the audit trail stays honest. */
-    setEnabled: (botId: string, enabled: boolean): void => {
+    setEnabled: (botId: string, enabled: boolean): Promise<void> => {
       if (DATA_MODE === 'live') {
-        void agentsService
+        const prev = queryClient.getQueryData<AgentBot[]>(BOTS_KEY);
+        updateBots((bots) =>
+          bots.map((b) => (b.id === botId ? { ...b, enabled } : b)),
+        );
+        return agentsService
           .setAgentBotEnabled(botId, enabled)
           .then(() => {
             void queryClient.invalidateQueries({ queryKey: BOTS_KEY });
             void queryClient.invalidateQueries({ queryKey: RUNS_KEY });
+          })
+          .catch((err) => {
+            if (prev) queryClient.setQueryData(BOTS_KEY, prev);
+            throw err;
           });
-        return;
       }
       let name = botId;
       updateBots((bots) =>
@@ -275,6 +319,7 @@ export function useAgentActions() {
         target: name,
         outcome: 'succeeded',
       });
+      return Promise.resolve();
     },
 
     /**
@@ -290,6 +335,8 @@ export function useAgentActions() {
             description: purpose?.detail ?? 'Custom assistant.',
             category: purpose?.category ?? 'automation',
             permissions: purpose ? [...purpose.capabilities] : undefined,
+            triggerMode: input.triggerMode,
+            purposeId: input.purposeId,
           })
           .then((created) => {
             void queryClient.invalidateQueries({ queryKey: BOTS_KEY });
@@ -327,15 +374,28 @@ export function useAgentActions() {
       return bot;
     },
 
-    /** Delete a session-built bot — removes it from the list entirely. */
-    deleteBot: (botId: string): void => {
+    /** Delete a session-built bot — removes it from the list entirely.
+     *  Optimistic remove; a failed DELETE restores the row and rethrows. */
+    deleteBot: (botId: string): Promise<void> => {
       if (DATA_MODE === 'live') {
-        void agentsService
+        const prev = queryClient.getQueryData<AgentBot[]>(BOTS_KEY);
+        if (prev) {
+          queryClient.setQueryData<AgentBot[]>(
+            BOTS_KEY,
+            prev.filter((b) => b.id !== botId),
+          );
+        }
+        return agentsService
           .deleteAgentBot(botId)
-          .then(() => queryClient.invalidateQueries({ queryKey: BOTS_KEY }));
-        return;
+          .then(() => queryClient.invalidateQueries({ queryKey: BOTS_KEY }))
+          .then(() => undefined)
+          .catch((err) => {
+            if (prev) queryClient.setQueryData(BOTS_KEY, prev);
+            throw err;
+          });
       }
       updateBots((bots) => bots.filter((b) => b.id !== botId));
+      return Promise.resolve();
     },
   };
 }

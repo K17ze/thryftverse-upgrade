@@ -1,5 +1,6 @@
 /**
- * Syndicate fixtures — seeded group-buy pools over Co-Own assets.
+ * Pool fixtures — seeded group-buy pools over Co-Own assets (the
+ * syndicate wire contract — see lib/contracts/syndicate.ts).
  * Covers every state the surfaces must render: a pool the viewer is in,
  * a joinable open pool, a member-capped pool, a fully funded pool, and
  * an executed pool with a complete order history.

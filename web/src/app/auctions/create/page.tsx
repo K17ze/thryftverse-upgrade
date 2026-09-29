@@ -6,7 +6,7 @@
  * detail surface; it dissolves on reload, and the page says so.
  */
 
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { Button } from '@/components/ui/Button';
 import { EmptyState } from '@/components/ui/EmptyState';
@@ -17,6 +17,7 @@ import { useMyListings } from '@/lib/hooks/queries';
 import { useCreateAuction } from '@/lib/hooks/auction-queries';
 import { useSession } from '@/lib/session/SessionProvider';
 import { DATA_MODE } from '@/lib/api/client';
+import { newAuctionCreateAttemptKey } from '@/lib/api/services/auctions';
 import { formatPrice } from '@/lib/utils/format';
 
 const DURATIONS = [
@@ -32,6 +33,35 @@ interface FormErrors {
   buyNow?: string;
   reserve?: string;
   schedule?: string;
+}
+
+/**
+ * Radio-group keyboard grammar — the checkout SelectionList pattern:
+ * roving tabindex (only the selected, or the first enabled, radio is
+ * tabbable) and arrows/Home/End that move focus AND selection, matching
+ * the ARIA radio-group pattern.
+ */
+function onRadioGroupKeyDown(event: React.KeyboardEvent<HTMLElement>) {
+  const radios = Array.from(
+    event.currentTarget.querySelectorAll<HTMLElement>('[role="radio"]'),
+  );
+  const current = radios.indexOf(document.activeElement as HTMLElement);
+  if (current < 0) return;
+  let next = -1;
+  if (event.key === 'ArrowDown' || event.key === 'ArrowRight') {
+    next = (current + 1) % radios.length;
+  } else if (event.key === 'ArrowUp' || event.key === 'ArrowLeft') {
+    next = (current - 1 + radios.length) % radios.length;
+  } else if (event.key === 'Home') {
+    next = 0;
+  } else if (event.key === 'End') {
+    next = radios.length - 1;
+  }
+  if (next < 0 || next === current) return;
+  event.preventDefault();
+  const target = radios[next];
+  target?.focus();
+  target?.click();
 }
 
 /** Earliest schedulable slot — five minutes out, post-mount so SSR agrees. */
@@ -69,6 +99,12 @@ export default function CreateAuctionPage() {
   const [startAt, setStartAt] = useState('');
   const [minStart, setMinStart] = useState('');
   const [errors, setErrors] = useState<FormErrors>({});
+  /** One idempotency key per form session — minted on first commit and
+   *  held across retries so a lost response replays the created auction
+   *  server-side instead of double-listing (same grammar as the bid
+   *  sheet's attempt key). Cleared on success so the next create is a
+   *  fresh attempt. */
+  const createKeyRef = useRef<string | null>(null);
 
   // datetime-local min is clock-derived — compute post-mount so SSR and
   // the first client render agree.
@@ -78,6 +114,9 @@ export default function CreateAuctionPage() {
 
   const selected = available.find((listing) => listing.id === listingId) ?? null;
   const creating = create.isPending;
+  // Parsed once so every consumer of the opening figure — validation and
+  // the create payload — reads the same number.
+  const openingBid = Number(startingBid.replace(/[^0-9.]/g, ''));
   // The live create schema drops reservePriceGbp (backend index.ts:37308)
   // — collecting it would silently discard seller input. Fixture mode
   // keeps it fully working (the ended grammar reads it).
@@ -97,7 +136,7 @@ export default function CreateAuctionPage() {
     event.preventDefault();
     const next: FormErrors = {};
     if (!selected) next.item = 'Pick a listing to auction';
-    const opening = Number(startingBid.replace(/[^0-9.]/g, ''));
+    const opening = openingBid;
     if (!Number.isFinite(opening) || opening <= 0) {
       next.startingBid = 'Set a starting bid above zero';
     }
@@ -130,6 +169,9 @@ export default function CreateAuctionPage() {
     }
     setErrors(next);
     if (Object.values(next).some(Boolean) || !selected) return;
+    // Mint on the first commit of this form session — retries of the same
+    // attempt reuse it; a new attempt mints a new key.
+    createKeyRef.current ??= newAuctionCreateAttemptKey();
     try {
       const created = await create.mutateAsync({
         listingId: selected.id,
@@ -138,7 +180,9 @@ export default function CreateAuctionPage() {
         buyNowPrice,
         reservePrice,
         startsAt: scheduledIso,
+        idempotencyKey: createKeyRef.current,
       });
+      createKeyRef.current = null;
       show(
         scheduledIso
           ? `Auction scheduled — ${formatScheduledStart(scheduledIso)}`
@@ -208,28 +252,34 @@ export default function CreateAuctionPage() {
 
   return (
     <div className="mx-auto w-full max-w-[720px] px-4 pb-16 pt-6 sm:px-6">
-      <h1 className="text-screen-title font-bold text-text-primary">Create auction</h1>
+      <h1 className="text-screen-title text-text-primary">Create auction</h1>
       <p className="mt-1 text-body text-text-secondary">
         Pick an item, set the opening bid, choose the window.
       </p>
 
+      {/* Single-column composer — the fields are the truth; no restated
+          run-sheet. Commit rides as the last hairline-separated block. */}
       <form onSubmit={submit} className="mt-6 flex flex-col gap-6">
         {/* Item */}
         <fieldset>
-          <legend className="text-label font-semibold uppercase tracking-wide text-text-secondary">
+          <legend className="text-label text-text-secondary">
             Item
           </legend>
           <div
             className="no-scrollbar mt-3 flex gap-3 overflow-x-auto pb-1"
             role="radiogroup"
             aria-label="Your listings"
+            onKeyDown={onRadioGroupKeyDown}
           >
-            {available.map((listing) => (
+            {available.map((listing, i) => (
               <button
                 key={listing.id}
                 type="button"
                 role="radio"
                 aria-checked={listing.id === listingId}
+                // Roving tabindex — the checked radio is the tab stop;
+                // nothing picked yet → the first listing takes it.
+                tabIndex={listing.id === listingId || (!listingId && i === 0) ? 0 : -1}
                 onClick={() => pick(listing.id)}
                 className={`pressable w-40 shrink-0 overflow-hidden rounded-lg border text-left ${
                   listing.id === listingId ? 'border-text-primary' : 'border-border'
@@ -262,7 +312,7 @@ export default function CreateAuctionPage() {
           <div className="flex flex-col gap-2">
             <label
               htmlFor="starting-bid"
-              className="text-label font-semibold uppercase tracking-wide text-text-secondary"
+              className="text-label text-text-secondary"
             >
               Starting bid
             </label>
@@ -293,10 +343,15 @@ export default function CreateAuctionPage() {
           </div>
 
           <div className="flex flex-col gap-2">
-            <span className="text-label font-semibold uppercase tracking-wide text-text-secondary">
+            <span className="text-label text-text-secondary">
               Start
             </span>
-            <div className="flex gap-2" role="radiogroup" aria-label="When the auction opens">
+            <div
+              className="flex gap-2"
+              role="radiogroup"
+              aria-label="When the auction opens"
+              onKeyDown={onRadioGroupKeyDown}
+            >
               {(
                 [
                   { key: 'now' as const, label: 'Now', hint: 'Opens the moment you create it' },
@@ -308,6 +363,7 @@ export default function CreateAuctionPage() {
                   type="button"
                   role="radio"
                   aria-checked={schedule === option.key}
+                  tabIndex={schedule === option.key ? 0 : -1}
                   onClick={() => setSchedule(option.key)}
                   className={`pressable h-9 flex-1 rounded-md text-caption font-semibold ${
                     schedule === option.key
@@ -345,7 +401,7 @@ export default function CreateAuctionPage() {
           </div>
 
           <div className="flex flex-col gap-2">
-            <span className="text-label font-semibold uppercase tracking-wide text-text-secondary">
+            <span className="text-label text-text-secondary">
               Duration
             </span>
             <div className="flex gap-2">
@@ -466,6 +522,7 @@ export default function CreateAuctionPage() {
           </div>
         </div>
 
+        {/* Commit — the action plus the fixture/live honesty note. */}
         <div className="flex flex-col gap-2 border-t border-border-subtle pt-6">
           <Button type="submit" size="lg" fullWidth disabled={creating || !selected}>
             {creating

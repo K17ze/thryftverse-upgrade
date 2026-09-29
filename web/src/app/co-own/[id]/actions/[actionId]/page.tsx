@@ -1,5 +1,6 @@
 import type { Metadata } from 'next';
 import { coOwnAssetById } from '@/lib/data/fixtures-coown';
+import { DATA_MODE } from '@/lib/api/client';
 import { CorporateActionDetailView } from '@/components/coown/actions/CorporateActionDetailView';
 
 export async function generateMetadata({
@@ -8,7 +9,8 @@ export async function generateMetadata({
   params: Promise<{ id: string }>;
 }): Promise<Metadata> {
   const { id } = await params;
-  const asset = coOwnAssetById(id);
+  // Live mode must not leak a fixture asset title into a real action's metadata.
+  const asset = DATA_MODE === 'live' ? undefined : coOwnAssetById(id);
   return {
     title: asset ? `Corporate action — ${asset.title}` : 'Corporate action',
     description: 'Corporate action record — resolution, tally and voting deadline.',

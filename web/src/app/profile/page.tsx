@@ -9,16 +9,16 @@
  */
 
 import { useEffect, useMemo, useRef, useState } from 'react';
+import { useQuery } from '@tanstack/react-query';
 import { useRouter } from 'next/navigation';
 import { useSession } from '@/lib/session/SessionProvider';
 import { useMyListings, useReviews } from '@/lib/hooks/queries';
 import { useStore } from '@/lib/store/useStore';
 import { LOOKS } from '@/lib/data/fixtures';
-import { listingsForIds } from '@/components/profile/fixtures';
+import { DATA_MODE } from '@/lib/api/client';
+import * as socialService from '@/lib/api/services/social';
 import { boardHref } from '@/components/profile/profileViewModel';
-import { useOwnerBoards } from '@/components/profile/useOwnerBoards';
-import { HighlightsRail } from '@/components/profile/HighlightsRail';
-import { useProfileHighlights } from '@/components/profile/useProfileHighlights';
+import { useOwnerBoards, type OwnerBoard } from '@/components/profile/useOwnerBoards';
 import { ShopRail } from '@/components/profile/ShopRail';
 import { BoardSortControl } from '@/components/profile/BoardSortControl';
 import { sortBoards, useBoardPrefs } from '@/components/profile/boardPrefs';
@@ -35,9 +35,29 @@ import { ProfileAbout } from '@/components/profile/ProfileAbout';
 import { BoardCard, BoardGrid } from '@/components/profile/BoardGrid';
 import { EmptyState } from '@/components/ui/EmptyState';
 import { Icon } from '@/components/ui/Icon';
-import { listingCoverThumbs } from '@/components/profile/boardMedia';
+import { useBoardCoverThumbs } from '@/components/profile/boardMedia';
+import { useListingIds } from '@/lib/hooks/listing-resolution';
 
 type TabKey = 'listings' | 'looks' | 'boards' | 'saved' | 'about' | 'reviews';
+
+/** Board card — the collage resolves through the live-aware hook so a
+ *  live board never renders catalogue ghosts (fixture keeps the same
+ *  derivation). */
+function ProfileBoardCard({ board }: { board: OwnerBoard }) {
+  const resolved = useBoardCoverThumbs(board.itemIds, 4, board.coverUri, board.coverItemId);
+  // Live moodboards carry wire thumbs + itemCount — membership isn't on
+  // the list wire, so the empty itemIds derivation stays a fallback.
+  const thumbs = board.thumbs && board.thumbs.length > 0 ? board.thumbs : resolved;
+  return (
+    <BoardCard
+      href={boardHref(board)}
+      title={board.title}
+      thumbs={thumbs}
+      count={board.itemCount ?? board.itemIds.length}
+      isPrivate={board.isPrivate}
+    />
+  );
+}
 
 export default function ProfilePage() {
   const router = useRouter();
@@ -54,19 +74,38 @@ export default function ProfilePage() {
   }, [isGuest, router]);
 
   const saved = useStore((s) => s.saved);
+  const savedSyncError = useStore((s) => s.savedSyncError);
+  const savedListsStale = useStore((s) => s.savedListsStale);
   const { data: myListings, isLoading: listingsLoading } = useMyListings();
   const { data: reviews, isLoading: reviewsLoading } = useReviews(user?.id ?? '');
 
   const listings = myListings ?? [];
-  const looks = useMemo(() => LOOKS.filter((l) => l.creatorId === user?.id), [user?.id]);
+  // Live mode reads the server's creator-scoped look list; fixture mode
+  // filters the bundled set.
+  const looksQuery = useQuery({
+    queryKey: ['looks', 'creator', user?.id, DATA_MODE],
+    queryFn: () => socialService.fetchLooks({ creatorId: user?.id }),
+    enabled: DATA_MODE === 'live' && !!user?.id,
+  });
+  const looks = useMemo(
+    () =>
+      DATA_MODE === 'live'
+        ? (looksQuery.data ?? [])
+        : LOOKS.filter((l) => l.creatorId === user?.id),
+    [looksQuery.data, user?.id],
+  );
   // One board derivation shared with /saved — fixture truth plus the
   // owner's persisted title/item edits. No 'me' fallback: a null user is
   // a guest (walled above), never the demo account.
   const boardsRaw = useOwnerBoards(user?.id ?? '', true);
-  const { highlights } = useProfileHighlights(user?.id ?? '');
+
   const boardSort = useBoardPrefs((s) => s.sort);
   const boards = useMemo(() => sortBoards(boardsRaw, boardSort), [boardsRaw, boardSort]);
-  const savedListings = useMemo(() => listingsForIds(saved), [saved]);
+  // Id lists resolve through the shared live/fixture hook — live ids are
+  // fetched per id (misses dropped and counted); fixture keeps the
+  // catalogue. Never swapped for fixture rows in live mode.
+  const { items: savedListings, isLoading: savedLoading, unresolvedCount: savedUnavailable } =
+    useListingIds(useMemo(() => [...new Set(saved)], [saved]));
 
   // Stat seams scroll the tabbed content into view — the stat that only
   // vibrates is a dead affordance (mobile FRESH-06). scroll-mt clears the
@@ -97,17 +136,6 @@ export default function ProfilePage() {
   // Section headers only earn their place when both kinds are present.
   const showBoardSections = moodboards.length > 0 && collections.length > 0;
 
-  const boardCard = (b: (typeof boards)[number]) => (
-    <BoardCard
-      key={b.id}
-      href={boardHref(b)}
-      title={b.title}
-      thumbs={listingCoverThumbs(b.itemIds, 4, b.coverUri, b.coverItemId)}
-      count={b.itemIds.length}
-      isPrivate={b.isPrivate}
-    />
-  );
-
   return (
     <div className="mx-auto max-w-[1200px]">
       <ProfileHero
@@ -116,8 +144,6 @@ export default function ProfilePage() {
         variant="self"
         onStatPress={onStatPress}
       />
-
-      <HighlightsRail highlights={highlights} isOwner />
 
       <ShopRail ownerId={user.id} isOwner listings={listings} />
 
@@ -172,10 +198,10 @@ export default function ProfilePage() {
                 <BoardSortControl />
               </div>
               <ProfileSectionHeader title="Moodboards" count={moodboards.length} />
-              <BoardGrid>{moodboards.map(boardCard)}</BoardGrid>
+              <BoardGrid>{moodboards.map((b) => <ProfileBoardCard key={b.id} board={b} />)}</BoardGrid>
               <div className="mt-6">
                 <ProfileSectionHeader title="Collections" count={collections.length} />
-                <BoardGrid>{collections.map(boardCard)}</BoardGrid>
+                <BoardGrid>{collections.map((b) => <ProfileBoardCard key={b.id} board={b} />)}</BoardGrid>
               </div>
             </>
           ) : (
@@ -191,25 +217,39 @@ export default function ProfilePage() {
                 </button>
                 <BoardSortControl />
               </div>
-              <BoardGrid>{boards.map(boardCard)}</BoardGrid>
+              <BoardGrid>{boards.map((b) => <ProfileBoardCard key={b.id} board={b} />)}</BoardGrid>
             </>
           )
         ) : null}
 
         {tab === 'saved' ? (
-          !mounted ? (
+          !mounted || savedLoading ? (
             <ClosetGridSkeleton />
           ) : (
-            <ClosetGrid
-              items={savedListings}
-              unsave="saved"
-              onFileItem={(item) => setFiling({ id: item.id, title: item.title })}
-              emptyIcon="bookmark"
-              emptyTitle="No saved items"
-              emptySubtitle="Bookmark items to compare them here later."
-              actionLabel="Explore"
-              onAction={() => router.push('/explore')}
-            />
+            <>
+              {savedSyncError || savedListsStale ? (
+                <p className="px-4 pb-2 text-meta text-warning-text sm:px-6">
+                  {savedSyncError
+                    ? "Some changes couldn't sync — check your connection and try again."
+                    : "Couldn't refresh your saved items — this list may be outdated."}
+                </p>
+              ) : null}
+              {savedUnavailable > 0 ? (
+                <p className="px-4 pb-2 text-meta text-text-muted sm:px-6">
+                  {savedUnavailable} {savedUnavailable === 1 ? 'item' : 'items'} unavailable
+                </p>
+              ) : null}
+              <ClosetGrid
+                items={savedListings}
+                unsave="saved"
+                onFileItem={(item) => setFiling({ id: item.id, title: item.title })}
+                emptyIcon="bookmark"
+                emptyTitle="No saved items"
+                emptySubtitle="Bookmark items to compare them here later."
+                actionLabel="Explore"
+                onAction={() => router.push('/explore')}
+              />
+            </>
           )
         ) : null}
 
@@ -219,7 +259,7 @@ export default function ProfilePage() {
           reviewsLoading ? (
             <ReviewListSkeleton />
           ) : (
-            <div className="px-4 sm:px-6">
+            <div className="px-4 sm:px-6 lg:max-w-3xl">
               {(reviews ?? []).length > 0 ? (
                 <>
                   {/* Same aggregate block as the public profile — one

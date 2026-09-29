@@ -27,7 +27,7 @@ import { Icon } from '@/components/ui/Icon';
 import { useHydrated, useStore } from '@/lib/store/useStore';
 import { useFollows } from '@/lib/store/follows';
 import { useRecentlyViewed } from '@/lib/store/recentlyViewed';
-import { listingById } from '@/lib/data/fixtures';
+import { useResolvedListings } from '@/lib/hooks/home-modules';
 import { getListingCoverUri } from '@/lib/utils/media';
 import type { FeedSource, ServeItemMeta } from '@/lib/hooks/feed-queries';
 import type { ServeMode } from '@/lib/api/services/recommendations';
@@ -153,6 +153,10 @@ export function FeedExplanationSheet({
   const wishlist = useStore((s) => s.wishlist);
   const followingIds = useFollows((s) => s.followingIds);
   const viewedIds = useRecentlyViewed((s) => s.listingIds);
+  // Saved/viewed ids resolve through the shared id resolver — live ids
+  // fetch, misses drop; a reason that can't name a real piece isn't shown.
+  const { items: wishlistListings } = useResolvedListings(wishlist);
+  const { items: viewedListings } = useResolvedListings(viewedIds);
 
   const reasons = useMemo<ExplanationReason[]>(() => {
     if (!listing) return [];
@@ -172,9 +176,7 @@ export function FeedExplanationSheet({
       // Saved items → the specific piece that shares the brand/category.
       let savedBrandTitle: string | null = null;
       let savedCategoryTitle: string | null = null;
-      for (const id of wishlist) {
-        const liked = listingById(id);
-        if (!liked) continue;
+      for (const liked of wishlistListings) {
         if (!savedBrandTitle && brandKey && liked.brand?.toLowerCase() === brandKey) {
           savedBrandTitle = liked.title;
         }
@@ -209,9 +211,7 @@ export function FeedExplanationSheet({
       // Viewed items — the weaker implicit tier the ranker actually uses.
       let viewedSubcategory = false;
       let viewedCategory = false;
-      for (const id of viewedIds) {
-        const viewed = listingById(id);
-        if (!viewed) continue;
+      for (const viewed of viewedListings) {
         if (subcategoryKey && viewed.subcategory?.toLowerCase() === subcategoryKey) {
           viewedSubcategory = true;
         }
@@ -240,7 +240,7 @@ export function FeedExplanationSheet({
         weight: 0.3,
       },
     ];
-  }, [listing, meta, hydrated, wishlist, followingIds, viewedIds, feedSource]);
+  }, [listing, meta, hydrated, wishlistListings, followingIds, viewedListings, feedSource]);
 
   if (!listing) return null;
 
@@ -291,7 +291,7 @@ export function FeedExplanationSheet({
 
         {/* Reasons */}
         <div>
-          <p className="mb-1.5 text-label uppercase tracking-wide text-text-muted">Reasons</p>
+          <p className="mb-1.5 text-label text-text-muted">Reasons</p>
           <div className="border-t border-border-subtle">
             {reasons.map((reason, i) => (
               <div

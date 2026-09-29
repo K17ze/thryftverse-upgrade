@@ -90,8 +90,8 @@ const FLYOUTS: Record<string, FlyoutSection[]> = {
       links: [
         { href: '/co-own', labelKey: 'browseAssets' },
         { href: '/co-own/portfolio', labelKey: 'yourPortfolio' },
-        { href: '/co-own/syndicate', labelKey: 'syndicates' },
-        { href: '/co-own/syndicate/create', labelKey: 'startSyndicate' },
+        { href: '/co-own/pools', labelKey: 'pools' },
+        { href: '/co-own/pools/create', labelKey: 'startPool' },
       ],
     },
     {
@@ -171,7 +171,7 @@ function FlyoutPanel({
       <div className="flex max-h-[70vh] gap-9 overflow-y-auto rounded-lg border border-border bg-surface-elevated p-5 shadow-subtle">
         {sections.map((section) => (
           <div key={section.labelKey} className="min-w-[148px]">
-            <p className="px-2 text-label font-semibold uppercase tracking-wide text-text-muted">
+            <p className="px-2 text-label text-text-muted">
               {t(`chrome.groups.${section.labelKey}`)}
             </p>
             <ul
@@ -222,7 +222,7 @@ export function DepartmentNav() {
         return (
           <div
             key={item.href}
-            className="relative flex items-center"
+            className="relative flex h-full items-center"
             onMouseEnter={() => {
               if (flyout) setOpenHref(item.href);
             }}
@@ -273,13 +273,19 @@ export function DepartmentNav() {
                   });
                 }
               }}
-              className={`pressable rounded-md px-3 py-2 text-body-emphasis ${
+              className={`pressable relative flex h-full items-center px-3 text-body-emphasis font-medium transition-colors ${
                 active
-                  ? 'text-text-primary'
+                  ? 'text-text-primary font-semibold'
                   : 'text-text-secondary hover:text-text-primary focus:text-text-primary'
               }`}
             >
-              {label}
+              <span>{label}</span>
+              {active ? (
+                <span
+                  className="absolute bottom-0 left-2.5 right-2.5 h-[2px] rounded-t-full bg-text-primary"
+                  aria-hidden
+                />
+              ) : null}
             </Link>
             {flyout ? (
               <FlyoutPanel id={panelId} label={label} sections={flyout} open={open} />

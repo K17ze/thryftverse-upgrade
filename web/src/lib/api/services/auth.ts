@@ -52,6 +52,51 @@ export interface AuthSession {
   refreshTokenExpiresAt?: string;
 }
 
+// ── Two-factor challenge ─────────────────────────────────────────────────────
+// /auth/login, /auth/magic-link/consume and /auth/otp/verify answer with one
+// of these codes when the credentials are right but the account demands a
+// second factor (TOTP enrolled via settings → security). The UI treats this
+// as a challenge step, not a terminal failure — the same set the mobile
+// client branches on (loginViewModels.TWO_FACTOR_CHALLENGE_CODES).
+
+const TWO_FACTOR_CHALLENGE_CODES: ReadonlySet<string> = new Set([
+  'TWO_FACTOR_REQUIRED',
+  'TWO_FACTOR_CODE_REQUIRED',
+  'TWO_FACTOR_CODE_INVALID',
+  'TWO_FACTOR_NOT_CONFIGURED',
+  'RECOVERY_CODE_REQUIRED',
+  'RECOVERY_CODE_INVALID',
+]);
+
+/** Typed challenge signal — `message` is the server's reason verbatim and
+ *  safe to render; `code` is the backend's `body.code`. */
+export class TwoFactorChallengeError extends Error {
+  readonly code: string;
+
+  constructor(code: string, message: string) {
+    super(message);
+    this.name = 'TwoFactorChallengeError';
+    this.code = code;
+  }
+}
+
+export function isTwoFactorChallengeError(error: unknown): error is TwoFactorChallengeError {
+  return error instanceof TwoFactorChallengeError;
+}
+
+/** Auth-route failure translation: 2FA codes surface as a typed challenge
+ *  error the UI can branch on; everything else keeps the friendly copy. */
+function rethrowAuthError(error: unknown): never {
+  const parsed = parseApiError(error);
+  if (parsed.code && TWO_FACTOR_CHALLENGE_CODES.has(parsed.code)) {
+    throw new TwoFactorChallengeError(
+      parsed.code,
+      parsed.message || 'Two-factor authentication failed',
+    );
+  }
+  throw new Error(friendlyAuthError(error));
+}
+
 function friendlyAuthError(error: unknown): string {
   const parsed = parseApiError(error);
   const msg = (parsed.message ?? '').toLowerCase();
@@ -96,7 +141,19 @@ function toAuthSession(r: AuthResponse): AuthSession {
   };
 }
 
-export async function login(input: { email: string; password: string }): Promise<AuthSession> {
+export interface LoginInput {
+  email: string;
+  password: string;
+  /** Second-step fields — present only on the challenge resubmission after
+   *  the server answered TWO_FACTOR_CODE_REQUIRED. Exactly one is sent. */
+  twoFactorCode?: string;
+  recoveryCode?: string;
+}
+
+/** POST /auth/login. Throws `TwoFactorChallengeError` when the account has
+ *  2FA enrolled and the code is missing or wrong — retry the same call with
+ *  `twoFactorCode` (authenticator) or `recoveryCode` set. */
+export async function login(input: LoginInput): Promise<AuthSession> {
   try {
     const res = await fetchJson<AuthResponse>('/auth/login', {
       method: 'POST',
@@ -107,7 +164,7 @@ export async function login(input: { email: string; password: string }): Promise
     await persistTokens(session, session.user.id);
     return session;
   } catch (e) {
-    throw new Error(friendlyAuthError(e));
+    rethrowAuthError(e);
   }
 }
 
@@ -115,12 +172,21 @@ export async function signup(input: {
   email: string;
   password: string;
   username: string;
+  /** Referral code captured from an /invite/[code] link — the server
+   *  attributes the signup best-effort (unknown/self codes are ignored).
+   *  Optional on the wire; only sent when present (the schema is
+   *  additionalProperties:false). */
+  referralCode?: string;
 }): Promise<AuthSession> {
   try {
     const res = await fetchJson<AuthResponse>('/auth/signup', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify(input),
+      body: JSON.stringify(
+        input.referralCode
+          ? { ...input, referralCode: input.referralCode }
+          : { email: input.email, password: input.password, username: input.username },
+      ),
     });
     const session = toAuthSession(res);
     await persistTokens(session, session.user.id);
@@ -154,6 +220,8 @@ export interface AccountIdentity {
   email: string | null;
   emailVerified: boolean;
   phone: string | null;
+  /** TOTP enrolment from /users/me — the security surface's 2FA switch. */
+  twoFactorEnabled?: boolean;
 }
 
 export interface MeResult {
@@ -183,6 +251,7 @@ export async function fetchMe(signal?: AbortSignal): Promise<MeResult> {
           email: res.user.email ?? null,
           emailVerified: res.user.emailVerified === true,
           phone: res.user.phone ?? null,
+          twoFactorEnabled: res.user.twoFactorEnabled === true,
         },
       };
     }
@@ -202,34 +271,77 @@ export async function requestMagicLink(email: string): Promise<void> {
   });
 }
 
-export async function consumeMagicLink(token: string): Promise<AuthSession> {
-  const res = await fetchJson<AuthResponse>('/auth/magic-link/consume', {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ token }),
-  });
-  const session = toAuthSession(res);
-  await persistTokens(session, session.user.id);
-  return session;
+/** POST /auth/magic-link/consume — `{token, email?, twoFactorCode?,
+ *  recoveryCode?}`. A 2FA-enabled account answers TWO_FACTOR_REQUIRED and
+ *  the link is NOT consumed — retry the same token with a code. */
+export async function consumeMagicLink(input: {
+  token: string;
+  email?: string;
+  twoFactorCode?: string;
+  recoveryCode?: string;
+}): Promise<AuthSession> {
+  try {
+    const res = await fetchJson<AuthResponse>('/auth/magic-link/consume', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(input),
+    });
+    const session = toAuthSession(res);
+    await persistTokens(session, session.user.id);
+    return session;
+  } catch (e) {
+    rethrowAuthError(e);
+  }
 }
 
-export async function requestOtp(email: string): Promise<void> {
-  await fetchJson('/auth/otp/request', {
+export interface OtpChallenge {
+  challengeId: string;
+  expiresInSeconds: number;
+}
+
+/** POST /auth/otp/request — `{email}` → `{challengeId, expiresInSeconds}`.
+ *  The challengeId is the verify call's handle; keep it. */
+export async function requestOtp(email: string): Promise<OtpChallenge> {
+  const res = await fetchJson<{
+    ok: boolean;
+    challengeId?: string;
+    expiresInSeconds?: number;
+  }>('/auth/otp/request', {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({ email }),
   });
+  if (!res.ok || typeof res.challengeId !== 'string' || res.challengeId.length === 0) {
+    throw new ApiRequestError('OTP response missing challenge id');
+  }
+  return {
+    challengeId: res.challengeId,
+    expiresInSeconds: typeof res.expiresInSeconds === 'number' ? res.expiresInSeconds : 0,
+  };
 }
 
-export async function verifyOtp(email: string, code: string): Promise<AuthSession> {
-  const res = await fetchJson<AuthResponse>('/auth/otp/verify', {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ email, code }),
-  });
-  const session = toAuthSession(res);
-  await persistTokens(session, session.user.id);
-  return session;
+/** POST /auth/otp/verify — `{challengeId, code, twoFactorCode?,
+ *  recoveryCode?}`. A 2FA-enabled account answers TWO_FACTOR_REQUIRED
+ *  without consuming the challenge — retry the same challengeId + code
+ *  with a second-factor code attached. */
+export async function verifyOtp(input: {
+  challengeId: string;
+  code: string;
+  twoFactorCode?: string;
+  recoveryCode?: string;
+}): Promise<AuthSession> {
+  try {
+    const res = await fetchJson<AuthResponse>('/auth/otp/verify', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(input),
+    });
+    const session = toAuthSession(res);
+    await persistTokens(session, session.user.id);
+    return session;
+  } catch (e) {
+    rethrowAuthError(e);
+  }
 }
 
 export async function requestPasswordReset(email: string): Promise<void> {

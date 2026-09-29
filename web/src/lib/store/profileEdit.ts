@@ -9,6 +9,8 @@
 
 import { create } from 'zustand';
 import { persist, createJSONStorage } from 'zustand/middleware';
+import { DATA_MODE } from '@/lib/api/client';
+import { updateMyProfile } from '@/lib/api/services/users';
 
 export interface ProfileOverlay {
   username?: string;
@@ -20,6 +22,34 @@ export interface ProfileOverlay {
   location?: string;
   website?: string;
   pronouns?: string;
+}
+
+/**
+ * Live-mode profile patch — the fields PATCH /users/me accepts for the
+ * public profile. `null` clears avatar/coverPhoto; empty strings clear
+ * text fields (the backend stores them verbatim).
+ */
+export type ProfileLivePatch = Partial<{
+  username: string;
+  bio: string;
+  location: string;
+  website: string;
+  pronouns: string;
+  avatar: string | null;
+  coverPhoto: string | null;
+}>;
+
+/**
+ * Live write — PATCH /users/me with the fields the edit form touched.
+ * The overlay store is fixture-mode truth only: in live mode the server
+ * is the single source (SessionProvider stops merging the overlay), so
+ * the save goes straight to the endpoint and the caller follows with
+ * `refreshSession()` so every self-facing surface re-renders from
+ * /users/me. Throws on failure — the caller toasts; nothing is faked.
+ */
+export async function saveProfileLive(patch: ProfileLivePatch): Promise<void> {
+  if (DATA_MODE !== 'live') return;
+  await updateMyProfile(patch);
 }
 
 interface ProfileEditState {

@@ -2129,9 +2129,8 @@ export const registerStreamingRoutes = ({
   // Mount point for LiveKit server events. The /webhooks/* prefix is already
   // public in the consumer-auth allowlist and is covered by the
   // fastify-raw-body registration in index.ts, so request.rawBody carries the
-  // exact bytes the signature was computed over. Verified events no-op 200
-  // for now — future egress/recording handling (e.g. 'egress_ended' →
-  // persist recording_url) hooks in below the receiver.
+  // exact bytes the signature was computed over. 'egress_ended' persists the
+  // recording URL onto the session row; every other verified event no-ops 200.
   app.post("/webhooks/livekit", async (request, reply) => {
     const apiKey = config.livekitApiKey;
     const apiSecret = config.livekitApiSecret;
@@ -2157,7 +2156,43 @@ export const registerStreamingRoutes = ({
       const { WebhookReceiver } = await import("livekit-server-sdk");
       const receiver = new WebhookReceiver(apiKey, apiSecret);
       const event = await receiver.receive(rawBody, authorization);
-      return { ok: true, event: event.event || "unknown" };
+      const eventType = event.event || "unknown";
+
+      // egress_ended — a recording finished. The LiveKit room name is the
+      // live_shopping_sessions.id (persistSession writes room.roomId as
+      // the row id), so egressInfo.roomName locates the session directly.
+      // The replayable URL arrives on whichever output the egress ran:
+      // cloud-uploaded files carry fileResults[].location, segmented/HLS
+      // carries segmentResults[].playlistLocation, stream outputs carry
+      // streamResults[].url; manifestLocation is the backup-storage
+      // fallback. Only a real URL persists — a bare filename is a local
+      // egress path the web can never fetch.
+      if (eventType === "egress_ended" && event.egressInfo) {
+        const info = event.egressInfo;
+        const recordingUrl =
+          info.fileResults.find((f) => f.location)?.location ??
+          info.segmentResults.find((s) => s.playlistLocation)?.playlistLocation ??
+          info.streamResults.find((s) => s.url)?.url ??
+          info.manifestLocation ??
+          null;
+        const looksFetchable =
+          typeof recordingUrl === "string" && /^https?:\/\//.test(recordingUrl);
+        if (info.roomName && looksFetchable) {
+          await db.query(
+            `UPDATE live_shopping_sessions
+               SET recording_url = $2
+             WHERE id = $1 AND (recording_url IS NULL OR recording_url <> $2)`,
+            [info.roomName, recordingUrl],
+          );
+        }
+        if (info.error) {
+          console.warn(
+            `[streaming] egress ${info.egressId} ended with error for room ${info.roomName}: ${info.error}`,
+          );
+        }
+      }
+
+      return { ok: true, event: eventType };
     } catch {
       reply.code(401);
       return {

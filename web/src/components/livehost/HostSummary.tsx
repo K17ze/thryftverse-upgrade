@@ -38,7 +38,7 @@ export function HostSummary({ stream, onDone }: HostSummaryProps) {
       <span className="flex h-16 w-16 items-center justify-center rounded-full bg-surface-alt text-success-text">
         <Icon name="check" filled size={28} />
       </span>
-      <h1 className="mt-5 text-screen-title font-bold text-text-primary">Stream ended</h1>
+      <h1 className="mt-5 text-screen-title text-text-primary">Stream ended</h1>
       <p className="mt-1.5 text-meta text-text-muted">
         Simulated results — no real viewers, orders or payouts.
       </p>

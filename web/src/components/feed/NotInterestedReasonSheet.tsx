@@ -63,7 +63,7 @@ export function NotInterestedReasonSheet({
         {/* Reason rows — each carries its real feed effect as the subline,
             so the choice is informed, not surveyed. */}
         <div>
-          <p className="mb-1.5 text-label uppercase tracking-wide text-text-muted">
+          <p className="mb-1.5 text-label text-text-muted">
             Tell us why — optional
           </p>
           <div className="border-t border-border-subtle">

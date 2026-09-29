@@ -19,21 +19,45 @@ import { useMemberDirectory } from '@/lib/hooks/queries';
 const MAX_ROWS = 4;
 
 export function MemberResults({ query }: { query: string }) {
-  const { data } = useMemberDirectory(query);
+  const { data, isError, refetch } = useMemberDirectory(query);
   const members = (data ?? []).slice(0, MAX_ROWS);
+
+  // A failed directory call is not an empty directory — show a retryable
+  // error rather than silently hiding the block.
+  if (isError) {
+    return (
+      <section aria-label="Members" className="px-4 pb-4 sm:px-6">
+        <div className="flex items-center justify-between gap-3 py-1">
+          <p className="text-caption text-text-muted">
+            Couldn&apos;t load member matches
+          </p>
+          <button
+            type="button"
+            onClick={() => void refetch()}
+            className="pressable text-caption font-semibold text-brand"
+          >
+            Try again
+          </button>
+        </div>
+      </section>
+    );
+  }
+
   if (members.length === 0) return null;
 
   return (
     <section aria-label="Members" className="px-4 pb-4 sm:px-6">
-      <h2 className="text-label font-semibold uppercase tracking-wide text-text-muted">
+      <h2 className="text-label text-text-muted">
         Members
       </h2>
-      <ul className="mt-1 divide-y divide-border-subtle">
+      {/* Two columns at lg — the member scan-line composes across the
+          results column instead of stretching phone rows full-bleed. */}
+      <ul className="mt-1 divide-y divide-border-subtle lg:grid lg:grid-cols-2 lg:gap-x-10 lg:divide-y-0">
         {members.map((m) => (
-          <li key={m.id}>
+          <li key={m.id} className="lg:border-b lg:border-border-subtle">
             <Link
               href={`/u/${m.username}`}
-              className="pressable -mx-2 flex items-center gap-3 rounded-lg px-2 py-2.5 hover:bg-surface-alt"
+              className="pressable -mx-2 flex items-center gap-3 rounded-lg px-2 py-2.5 hover:bg-row"
             >
               <Avatar src={m.avatar} name={m.username} size={40} />
               <span className="min-w-0 flex-1">
@@ -45,7 +69,7 @@ export function MemberResults({ query }: { query: string }) {
                     <Icon
                       name="verified"
                       size={13}
-                      className="shrink-0 text-success-text"
+                      className="shrink-0 text-commerce-trust"
                     />
                   ) : null}
                 </span>

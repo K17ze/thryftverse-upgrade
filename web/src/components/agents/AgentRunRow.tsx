@@ -13,10 +13,16 @@ import { Icon } from '@/components/ui/Icon';
 import { AgentIcon } from './AgentIcon';
 
 const OUTCOME_CLASS: Record<AgentRunEntry['outcome'], string> = {
-  succeeded: 'text-success-text',
-  skipped: 'text-text-muted',
-  failed: 'text-danger-text',
+  queued: 'text-text-muted',
+  running: 'text-text-muted',
   awaiting_approval: 'text-warning-text',
+  waiting_for_input: 'text-warning-text',
+  succeeded: 'text-success-text',
+  failed: 'text-danger-text',
+  timed_out: 'text-danger-text',
+  cancelled: 'text-text-muted',
+  unknown_outcome: 'text-text-muted',
+  skipped: 'text-text-muted',
 };
 
 interface AgentRunRowProps {
@@ -29,31 +35,41 @@ interface AgentRunRowProps {
 
 export function AgentRunRow({ run, botName, botCategory, showBot }: AgentRunRowProps) {
   const outcome = OUTCOME_META[run.outcome];
+  // The wire's target is the conversation the run happened in; fixture
+  // rows carry an authored object label. Show whichever exists — never a
+  // placeholder.
+  const targetLabel =
+    run.target ?? (run.conversationId ? `Chat ${run.conversationId}` : '');
+  // Mobile: the stacked ledger line (action / target / detail). At lg the
+  // two wrapper divs dissolve via display:contents and the row re-forms as
+  // a dense ops table — action · target · outcome · time columns.
   return (
-    <li className="flex items-start gap-3.5 py-3">
-      <span className="mt-0.5 flex h-8 w-8 shrink-0 items-center justify-center text-text-secondary">
+    <li className="flex items-start gap-3.5 py-3 lg:grid lg:grid-cols-[32px_minmax(0,1.2fr)_minmax(0,1fr)_96px_64px] lg:items-center lg:gap-x-6">
+      <span className="mt-0.5 flex h-8 w-8 shrink-0 items-center justify-center text-text-secondary lg:col-start-1 lg:row-start-1 lg:row-span-2 lg:mt-0">
         <AgentIcon category={botCategory} name={botName} size={18} />
       </span>
-      <div className="min-w-0 flex-1">
-        <div className="flex items-baseline gap-3">
-          <p className="clamp-1 min-w-0 flex-1 text-body font-medium text-text-primary">
+      <div className="min-w-0 flex-1 lg:contents">
+        <div className="flex items-baseline gap-3 lg:contents">
+          <p className="clamp-1 min-w-0 flex-1 text-body font-medium text-text-primary lg:col-start-2 lg:row-start-1">
             {run.action}
           </p>
           <span
-            className={`shrink-0 text-caption font-medium ${OUTCOME_CLASS[run.outcome]}`}
+            className={`shrink-0 text-caption font-medium lg:col-start-4 lg:row-start-1 lg:text-right ${OUTCOME_CLASS[run.outcome]}`}
           >
             {outcome.label}
           </span>
-          <span className="tnum w-16 shrink-0 text-right text-meta text-text-muted">
+          <span className="tnum w-16 shrink-0 text-right text-meta text-text-muted lg:col-start-5 lg:row-start-1 lg:w-auto">
             {timeAgo(run.at)}
           </span>
         </div>
-        <p className="clamp-1 mt-0.5 text-caption text-text-secondary">
+        <p className="clamp-1 mt-0.5 text-caption text-text-secondary lg:col-start-3 lg:row-start-1 lg:mt-0">
           {showBot && botName ? `${botName} · ` : ''}
-          {run.target}
+          {targetLabel}
         </p>
         {run.detail ? (
-          <p className="clamp-2 mt-0.5 text-caption text-text-muted">{run.detail}</p>
+          <p className="clamp-2 mt-0.5 text-caption text-text-muted lg:col-span-3 lg:col-start-2 lg:row-start-2">
+            {run.detail}
+          </p>
         ) : null}
       </div>
     </li>

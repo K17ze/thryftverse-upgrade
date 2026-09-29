@@ -23,6 +23,7 @@ import * as commerceService from '@/lib/api/services/commerce';
 import {
   OFFERS,
   counterOffer,
+  recordSentOffer,
   type CommerceOffer,
 } from '@/lib/data/fixtures-commerce';
 import { acceptOffer, type OfferWithOrder } from '@/lib/commerce/offerAcceptance';
@@ -30,7 +31,7 @@ import { useSession } from '@/lib/session/SessionProvider';
 import { useToast } from '@/components/ui/Toast';
 import type { OfferRowAction } from '@/components/orders/OfferRow';
 import { formatPrice } from '@/lib/utils/format';
-import type { Conversation, Message } from '@/lib/contracts/domain';
+import type { Conversation, Listing, Message } from '@/lib/contracts/domain';
 
 /** 'pending' | 'countered' — the standing-offer states actions attach to. */
 const isLiveStatus = (s: CommerceOffer['status']) =>
@@ -212,5 +213,37 @@ export function useChatOfferActions(conversationId: string) {
     [toast, viewerId, refresh, conversationId],
   );
 
-  return { respond, sendCounter, viewerId };
+  /**
+   * Fresh offer on a listing shared into the thread — the buyer-seat
+   * "Make offer" path off a listing_share card. Same write the PDP dock
+   * runs (POST /listings/:id/offers); conversationId threads it so the
+   * created offer lands as a message in this conversation.
+   */
+  const sendNewOffer = useCallback(
+    (listing: Listing, amount: number, expiryHours = 48) => {
+      if (!viewerId) return;
+      if (DATA_MODE === 'live') {
+        void commerceService
+          .makeOffer(listing.id, amount, {
+            originalPriceGbp: listing.price,
+            expiryHours,
+            conversationId,
+          })
+          .then(() => {
+            refresh();
+            toast.show(`Offer sent — ${formatPrice(amount)}`, 'success');
+          })
+          .catch(() =>
+            toast.show('Could not send the offer — try again.', 'error'),
+          );
+        return;
+      }
+      recordSentOffer(listing, amount, expiryHours, conversationId);
+      refresh();
+      toast.show(`Offer sent — ${formatPrice(amount)}`, 'success');
+    },
+    [toast, viewerId, refresh, conversationId],
+  );
+
+  return { respond, sendCounter, sendNewOffer, viewerId };
 }

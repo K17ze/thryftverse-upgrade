@@ -144,10 +144,10 @@ export function OfferSheet({ open, onClose, listing, counterTo, onSend }: OfferS
           {itemRow}
 
           <div className="rounded-lg bg-surface-alt px-4 py-3.5">
-            <p className="text-label font-semibold uppercase tracking-wide text-text-muted">
+            <p className="text-label text-text-muted">
               {counterTo ? 'Counter-offer amount' : 'Offer amount'}
             </p>
-            <p className="tnum mt-1 text-screen-title font-bold text-text-primary">
+            <p className="tnum mt-1 text-screen-title text-text-primary">
               {formatPrice(numeric)}
             </p>
             {counterTo ? (
@@ -213,7 +213,7 @@ export function OfferSheet({ open, onClose, listing, counterTo, onSend }: OfferS
 
           {/* Price input */}
           <div>
-            <label htmlFor="offer-amount" className="text-label font-semibold uppercase tracking-wide text-text-secondary">
+            <label htmlFor="offer-amount" className="text-label text-text-secondary">
               Your offer
             </label>
             <div className="mt-2 flex h-12 items-center rounded-lg border border-border bg-input px-4 focus-within:border-text-muted">
@@ -268,7 +268,7 @@ export function OfferSheet({ open, onClose, listing, counterTo, onSend }: OfferS
           {/* Expiry — mobile MakeOfferExpirySection parity: 24/48/72h chips,
               the chosen value feeds expiryHours on the create/counter call. */}
           <div>
-            <p className="text-label font-semibold uppercase tracking-wide text-text-secondary">
+            <p className="text-label text-text-secondary">
               Valid for
             </p>
             <div className="mt-2 flex gap-1.5" role="group" aria-label="Offer expiry">

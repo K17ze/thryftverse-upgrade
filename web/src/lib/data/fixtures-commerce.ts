@@ -837,7 +837,9 @@ export const COMMERCE_ORDER_EXTRAS: CommerceOrder[] = [
     },
   },
   {
-    // Buyer, created — payment incomplete (Pay capability).
+    // Buyer, created — payment incomplete (Pay capability). The checkout
+    // reservation is still live so the detail surface can exercise the
+    // hold countdown (the real TTL is checkout_expires_at on the row).
     id: 'ord-1059',
     listingId: 'l18', // Straight Leg Cargo Trousers, £48 — u2
     buyerId: 'me',
@@ -845,6 +847,7 @@ export const COMMERCE_ORDER_EXTRAS: CommerceOrder[] = [
     status: 'created',
     totalPrice: 54.59,
     createdAt: hoursAgo(3),
+    checkoutExpiresAt: inHours(0.45),
   },
 ];
 
@@ -1047,36 +1050,57 @@ export function commerceOrderDetailFor(order: CommerceOrder): OrderDetailInfo {
   const base = ORDER_DETAILS[order.id];
   const key = STATUS_NORMALISE(order.status === 'pending' ? 'paid' : order.status);
   const listing = listingById(order.listingId);
-  const itemPrice = base?.itemPrice ?? listing?.price ?? order.totalPrice;
-  const protectionFee = base?.protectionFee ?? (listing ? protectionFeeFor(listing) : 0);
-  const shippingFee =
-    base?.shippingFee ?? Math.max(0, Math.round((order.totalPrice - itemPrice - protectionFee) * 100) / 100);
+  // Wire-first money: live orders carry the real fee split on
+  // GET /orders/:id (subtotalGbp / postageFeeGbp / buyerProtectionFeeGbp)
+  // so the summary renders the charge lines that actually settled. The
+  // catalogue derivation below is the fixture-mode fallback — it runs only
+  // when the order itself carries no split.
+  const wireSubtotal = order.subtotalGbp;
+  const wireSplit = wireSubtotal != null;
+  const itemPrice =
+    wireSubtotal ?? (base?.itemPrice ?? listing?.price ?? order.totalPrice);
+  const protectionFee = wireSplit
+    ? (order.buyerProtectionFeeGbp ?? 0)
+    : (base?.protectionFee ?? (listing ? protectionFeeFor(listing) : 0));
+  const shippingFee = wireSplit
+    ? (order.postageFeeGbp ?? 0)
+    : (base?.shippingFee ?? Math.max(0, Math.round((order.totalPrice - itemPrice - protectionFee) * 100) / 100));
   const isSale = order.sellerId === 'me';
+  // Carrier truth: authored fixture/enrichment rows win; on the wire the
+  // order's shippingProvider + the purchased-service label are the real
+  // carrier evidence. 'manual'/'untracked' are flow markers, not couriers.
+  const provider = order.shippingProvider;
+  const wireCarrier =
+    provider && provider !== 'manual' && provider !== 'untracked' && provider !== 'seller_assertion'
+      ? provider
+      : null;
   return {
     orderId: order.id,
-    carrier: enr.carrier ?? base?.carrier ?? null,
-    service: enr.service ?? base?.service ?? null,
+    carrier: enr.carrier ?? base?.carrier ?? wireCarrier,
+    service: enr.service ?? base?.service ?? order.fulfilmentSnapshot?.serviceName ?? null,
     itemPrice,
     protectionFee,
     shippingFee,
     timeline: enr.timeline ?? base?.timeline ?? [
       { key: 'ordered' as const, label: 'Order placed', at: order.createdAt },
       // Payment is captured at order placement — a 'created' order is the
-      // only state where the paid milestone is still in the future.
+      // only state where the paid milestone is still in the future. Live
+      // orders stamp paidAt; the fixture fallback co-locates it with the
+      // order's creation.
       {
         key: 'paid' as const,
         label: 'Paid',
-        at: key === 'created' ? null : order.createdAt,
+        at: order.paidAt ?? (key === 'created' ? null : order.createdAt),
       },
       {
         key: 'shipped' as const,
         label: isSale ? 'You shipped this order' : 'Shipped by seller',
-        at: SHIPPED_OR_LATER.has(key) ? order.createdAt : null,
+        at: order.shippedAt ?? (SHIPPED_OR_LATER.has(key) ? order.createdAt : null),
       },
       {
         key: 'delivered' as const,
         label: 'Delivered',
-        at: DELIVERED_SET.has(key) ? order.createdAt : null,
+        at: order.deliveredAt ?? (DELIVERED_SET.has(key) ? order.createdAt : null),
       },
     ],
   };
@@ -1130,6 +1154,35 @@ export function markOrderDispatched(orderId: string, trackingNumber?: string): v
 /** Buyer cancelled an unpaid ('created') order. */
 export function cancelCommerceOrder(orderId: string): void {
   ORDER_OVERRIDES[orderId] = { ...ORDER_OVERRIDES[orderId], status: 'cancelled' };
+}
+
+/**
+ * Seller proposed a dispatch extension — fixture mirror of
+ * POST /orders/:id/dispatch-extension. The server gates on status 'paid'
+ * and rejects a second pending proposal; the fixture honours both. Returns
+ * the pending extension, or null when the order can't take one.
+ */
+export function proposeDispatchExtension(
+  orderId: string,
+  days: number,
+): DispatchExtension | null {
+  const order = allCommerceOrders().find((o) => o.id === orderId);
+  if (!order || order.status !== 'paid') return null;
+  const existing =
+    orderEnrichmentFor(orderId).dispatchExtension ?? order.dispatchExtension;
+  if (existing?.status === 'pending') return null;
+  // Server semantics: proposed_ship_by = effective ship-by base + days.
+  const base = order.shipByDate ?? new Date().toISOString();
+  const ext: DispatchExtension = {
+    id: `ext-${Date.now().toString(36)}`,
+    days,
+    proposedShipBy: new Date(Date.parse(base) + days * 86_400_000).toISOString(),
+    proposedBy: order.sellerId,
+    status: 'pending',
+    createdAt: new Date().toISOString(),
+  };
+  enrichmentEntry(orderId).dispatchExtension = ext;
+  return ext;
 }
 
 /** Buyer responded to a pending dispatch extension. */

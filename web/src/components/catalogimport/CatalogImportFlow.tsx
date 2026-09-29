@@ -10,6 +10,7 @@
 
 import { useCallback, useState } from 'react';
 import { useRouter } from 'next/navigation';
+import { Icon } from '@/components/ui/Icon';
 import { IconButton } from '@/components/ui/IconButton';
 import { useSession } from '@/lib/session/SessionProvider';
 import { CURRENT_USER } from '@/lib/data/fixtures';
@@ -34,6 +35,34 @@ import { SummaryStep } from './SummaryStep';
 import { DraftsView } from './DraftsView';
 
 type Step = 'start' | 'consent' | 'review' | 'item' | 'progress' | 'summary' | 'drafts';
+
+/** The pipeline as the rail shows it — 'item' is a review sub-step and
+ *  'drafts' sits outside the flow entirely. */
+const PIPELINE: { key: string; label: string }[] = [
+  { key: 'start', label: 'Source' },
+  { key: 'consent', label: 'Consent' },
+  { key: 'review', label: 'Review' },
+  { key: 'progress', label: 'Import' },
+  { key: 'summary', label: 'Receipt' },
+];
+
+function pipelineIndex(step: Step): number {
+  switch (step) {
+    case 'start':
+      return 0;
+    case 'consent':
+      return 1;
+    case 'review':
+    case 'item':
+      return 2;
+    case 'progress':
+      return 3;
+    case 'summary':
+      return 4;
+    default:
+      return -1;
+  }
+}
 
 export function CatalogImportFlow() {
   const router = useRouter();
@@ -100,8 +129,10 @@ export function CatalogImportFlow() {
   // Progress gets no back affordance — the sequence is seconds and commits
   // already happened; interrupting it would lie about the outcome.
 
+  const pipelineAt = pipelineIndex(step);
+
   return (
-    <div className="mx-auto w-full max-w-[720px] px-4 pb-24 sm:px-6">
+    <div className="mx-auto w-full max-w-[720px] px-4 pb-24 sm:px-6 lg:max-w-[1100px]">
       <div className="flex items-center pb-2 pt-2">
         {onBack ? (
           <IconButton name="back" aria-label="Back" onClick={onBack} className="-ml-3" />
@@ -110,6 +141,58 @@ export function CatalogImportFlow() {
         )}
       </div>
 
+      {/* Step rail + content column at lg — the wizard reads as a staged
+          pipeline, not a phone screen stretched wide. Drafts sits outside
+          the pipeline and takes the full column. */}
+      <div
+        className={
+          pipelineAt >= 0
+            ? 'lg:grid lg:grid-cols-[240px_minmax(0,1fr)] lg:items-start lg:gap-12'
+            : ''
+        }
+      >
+        {pipelineAt >= 0 ? (
+          <aside className="hidden lg:block" aria-label="Import progress">
+            <ol className="flex flex-col">
+              {PIPELINE.map((stage, i) => {
+                const done = i < pipelineAt;
+                const current = i === pipelineAt;
+                return (
+                  <li
+                    key={stage.key}
+                    aria-current={current ? 'step' : undefined}
+                    className="flex items-center gap-3 border-b border-border-subtle py-3 last:border-b-0"
+                  >
+                    <span
+                      className={`flex h-6 w-6 shrink-0 items-center justify-center rounded-full border text-micro font-semibold ${
+                        done
+                          ? 'border-text-primary text-text-primary'
+                          : current
+                            ? 'border-brand text-brand'
+                            : 'border-border text-text-muted'
+                      }`}
+                    >
+                      {done ? <Icon name="check" size={12} /> : i + 1}
+                    </span>
+                    <span
+                      className={`text-body ${
+                        current
+                          ? 'font-semibold text-text-primary'
+                          : done
+                            ? 'font-medium text-text-secondary'
+                            : 'font-medium text-text-muted'
+                      }`}
+                    >
+                      {stage.label}
+                    </span>
+                  </li>
+                );
+              })}
+            </ol>
+          </aside>
+        ) : null}
+
+        <div className="min-w-0">
       {step === 'start' ? (
         <StartStep
           draftsCount={drafts?.length ?? 0}
@@ -155,6 +238,8 @@ export function CatalogImportFlow() {
         />
       ) : null}
       {step === 'drafts' ? <DraftsView onRestart={restart} /> : null}
+        </div>
+      </div>
     </div>
   );
 }

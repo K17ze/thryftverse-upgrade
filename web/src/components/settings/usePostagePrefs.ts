@@ -1,11 +1,11 @@
 'use client';
 
 /**
- * Postage preferences — seller-side shipping defaults persisted on device,
- * mirroring the mobile postagePreferences slice (carrier key, free shipping,
- * bundle postage discount). On mobile these write through to
- * PATCH /users/me/postage; on web they persist locally — the screen copy
- * marks the sync boundary honestly.
+ * Postage preferences — seller-side shipping defaults mirroring the
+ * mobile postagePreferences slice (carrier key, free shipping, bundle
+ * postage discount). Live mode hydrates them from GET /users/me/postage
+ * and writes through PATCH /users/me/postage — this store is the
+ * optimistic mirror and the fixture-mode truth.
  */
 
 import { useEffect, useState } from 'react';
@@ -54,4 +54,15 @@ export function usePostagePrefs(): {
     });
 
   return { prefs, loaded, update };
+}
+
+/** Account-switch reset — drops the persisted seller shipping defaults
+ *  (the next session starts from defaults until the seller re-authors). */
+export function resetPostagePrefs(): void {
+  if (typeof window === 'undefined') return;
+  try {
+    window.localStorage.removeItem(KEY);
+  } catch {
+    /* storage unavailable — nothing persisted to clear */
+  }
 }

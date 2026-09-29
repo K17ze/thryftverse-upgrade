@@ -16,6 +16,7 @@ import {
   countdownUrgency,
   formatDuration,
 } from '@/lib/data/fixtures-auctions';
+import { formatPrice } from '@/lib/utils/format';
 
 export type SellerAuctionBucket = 'scheduled' | 'live' | 'sold' | 'unsold';
 
@@ -91,20 +92,33 @@ export function resolveSellerRowPresentation(
   const bucket = sellerAuctionBucket(auction);
   if (bucket === 'live') {
     const final = countdownUrgency(auction) === 'final';
+    // The seller sees their reserve state on the live row — the floor
+    // itself stays private, but whether the hammer has reached it is the
+    // fact a seller acts on (eBay seller grammar).
+    const reserve =
+      auction.reservePrice != null
+        ? auction.currentBid >= auction.reservePrice
+          ? ' · Reserve met'
+          : ' · Reserve not met'
+        : '';
     return {
       stateLabel: final ? 'Ending' : 'Live',
       stateTone: final ? 'danger' : 'primary',
-      leadingLabel: `${formatDuration(auction.msToEnd)} left`,
+      leadingLabel: `${formatDuration(auction.msToEnd)} left${reserve}`,
       leadingTone: final ? 'danger' : 'secondary',
       actionLabel: 'View bids',
       showLiveDot: true,
     };
   }
   if (bucket === 'scheduled') {
+    // The seller's own floor is their data — a scheduled row names the
+    // reserve so a missing one is caught before the window opens.
+    const reserve =
+      auction.reservePrice != null ? ` · Reserve ${formatPrice(auction.reservePrice)}` : '';
     return {
       stateLabel: 'Scheduled',
       stateTone: 'secondary',
-      leadingLabel: `Starts in ${formatDuration(auction.msToStart)}`,
+      leadingLabel: `Starts in ${formatDuration(auction.msToStart)}${reserve}`,
       leadingTone: 'secondary',
       actionLabel: 'View schedule',
       showLiveDot: false,

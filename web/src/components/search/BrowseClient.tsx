@@ -7,19 +7,19 @@
  * is shareable; the category chips stay a local scope.
  */
 
-import { useMemo, useState } from 'react';
+import { useCallback, useMemo, useState } from 'react';
 import { Chip } from '@/components/ui/Chip';
 import { RefinedResults } from './RefinedResults';
 import { useFacetParams } from './useFacetParams';
 import { useSortParam } from './useSortParam';
 import { CATEGORIES } from '@/lib/data/fixtures';
+import { DATA_MODE } from '@/lib/api/client';
 import { useListings } from '@/lib/hooks/queries';
 
 export function BrowseClient() {
   const [category, setCategory] = useState<string | null>(null);
   const [sort, setSort] = useSortParam();
   const [filters, setFilters] = useFacetParams();
-  const { data, isLoading, isError, refetch } = useListings(category ?? undefined);
 
   // When the chip rail scopes the set, a category facet stacked on top
   // would only ever produce empty intersections — strip it (the group is
@@ -32,10 +32,27 @@ export function BrowseClient() {
     [category, filters],
   );
 
+  // Facets + sort ride the wire in live mode — the server owns the set,
+  // the order and the count.
+  const {
+    data,
+    isLoading,
+    isError,
+    refetch,
+    hasNextPage,
+    fetchNextPage,
+    isFetchingNextPage,
+  } = useListings(
+    category ?? undefined,
+    undefined,
+    { filters: effectiveFilters, sort },
+  );
+  const loadMore = useCallback(() => void fetchNextPage(), [fetchNextPage]);
+
   return (
     <div className="mx-auto max-w-[1440px]">
       <div className="px-4 pt-6 sm:px-6">
-        <h1 className="text-screen-title font-bold text-text-primary">
+        <h1 className="text-screen-title text-text-primary">
           Browse
         </h1>
       </div>
@@ -61,10 +78,15 @@ export function BrowseClient() {
 
       <RefinedResults
         key={category ?? 'all'}
-        listings={data ?? []}
+        listings={data?.items ?? []}
         isLoading={isLoading}
         isError={isError}
         onRetry={() => void refetch()}
+        serverOrdered={DATA_MODE === 'live'}
+        totalCount={data?.total ?? null}
+        hasMore={DATA_MODE === 'live' && hasNextPage === true}
+        onLoadMore={loadMore}
+        isLoadingMore={isFetchingNextPage}
         filters={effectiveFilters}
         onFiltersChange={setFilters}
         sort={sort}

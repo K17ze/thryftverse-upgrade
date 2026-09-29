@@ -1,9 +1,10 @@
 'use client';
 
 /**
- * CsatPrompt — post-resolution feedback: five star targets (44px hit,
- * 24px glyph) plus an optional note. Once submitted it renders read-only.
- * Mirrors the mobile SupportStateBanner feedback flow.
+ * CsatPrompt — post-resolution feedback in the server's own vocabulary:
+ * POST /support/conversations/:id/feedback takes rating
+ * 'helpful'|'unhelpful' plus an optional reason. Once submitted it renders
+ * read-only. Mirrors the mobile support feedback flow.
  */
 
 import { useState } from 'react';
@@ -13,27 +14,28 @@ import type { SupportTicketCsat } from '@/lib/contracts/support';
 
 interface CsatPromptProps {
   submitted: SupportTicketCsat | null;
-  onSubmit: (rating: number, note: string) => void;
+  onSubmit: (rating: 'helpful' | 'unhelpful', note: string) => void;
 }
 
 export function CsatPrompt({ submitted, onSubmit }: CsatPromptProps) {
-  const [stars, setStars] = useState(0);
+  const [rating, setRating] = useState<'helpful' | 'unhelpful' | null>(null);
   const [note, setNote] = useState('');
 
   if (submitted) {
     return (
       <div aria-label="Your feedback">
-        <div className="flex gap-1">
-          {Array.from({ length: 5 }).map((_, i) => (
-            <Icon
-              key={i}
-              name="star"
-              filled
-              size={16}
-              className={i < submitted.rating ? 'text-rating-star' : 'text-text-muted'}
-            />
-          ))}
-        </div>
+        <p className="flex items-center gap-1.5 text-body text-text-primary">
+          <Icon
+            name={submitted.rating === 'helpful' ? 'check' : 'close'}
+            size={16}
+            className={
+              submitted.rating === 'helpful' ? 'text-success-text' : 'text-text-muted'
+            }
+          />
+          {submitted.rating === 'helpful'
+            ? 'You found this helpful'
+            : 'You marked this as not helpful'}
+        </p>
         {submitted.note ? (
           <p className="mt-2 text-body text-text-secondary">“{submitted.note}”</p>
         ) : null}
@@ -43,26 +45,29 @@ export function CsatPrompt({ submitted, onSubmit }: CsatPromptProps) {
 
   return (
     <div>
-      <div className="flex gap-1">
-        {[1, 2, 3, 4, 5].map((n) => (
+      <div className="flex gap-2">
+        {(
+          [
+            { value: 'helpful' as const, label: 'Yes, helpful' },
+            { value: 'unhelpful' as const, label: 'Not helpful' },
+          ]
+        ).map((opt) => (
           <button
-            key={n}
+            key={opt.value}
             type="button"
-            onClick={() => setStars(n)}
-            aria-label={`${n} star${n === 1 ? '' : 's'}`}
-            aria-pressed={stars >= n}
-            className="pressable flex h-11 w-11 items-center justify-center"
+            onClick={() => setRating(opt.value)}
+            aria-pressed={rating === opt.value}
+            className={`pressable inline-flex min-h-11 items-center rounded-full border px-4 text-body font-medium ${
+              rating === opt.value
+                ? 'border-text-primary bg-surface-alt text-text-primary'
+                : 'border-border text-text-secondary'
+            }`}
           >
-            <Icon
-              name="star"
-              filled={n <= stars}
-              size={24}
-              className={n <= stars ? 'text-rating-star' : 'text-text-muted'}
-            />
+            {opt.label}
           </button>
         ))}
       </div>
-      {stars > 0 ? (
+      {rating ? (
         <>
           <textarea
             value={note}
@@ -76,7 +81,7 @@ export function CsatPrompt({ submitted, onSubmit }: CsatPromptProps) {
             variant="primary"
             size="md"
             className="mt-3"
-            onClick={() => onSubmit(stars, note)}
+            onClick={() => onSubmit(rating, note)}
           >
             Send feedback
           </Button>

@@ -128,7 +128,7 @@ export function OrderReceipt({
   };
 
   return (
-    <div className="mx-auto w-full max-w-[640px] px-4 pb-16 pt-8 sm:px-6">
+    <div className="mx-auto w-full max-w-[640px] px-4 pb-16 pt-8 sm:px-6 lg:max-w-[1100px]">
       {/* Scoped print sheet — hides global chrome and flattens the
           document to ink-on-paper (same grammar as the shipping label). */}
       <style>{`
@@ -167,8 +167,14 @@ export function OrderReceipt({
         </div>
       </div>
 
+      {/* Two-pane at lg — the document reads down the left column while
+          the screen-only actions sit in a right-hand rail (invoice grammar:
+          paper on the canvas, operations beside it). Mobile stacks the
+          rail under the document — identical order to the single column. */}
+      <div className="lg:grid lg:grid-cols-[minmax(0,1fr)_280px] lg:gap-x-10">
+        <div className="min-w-0">
       {isSuccess ? (
-        <div className="mt-6 text-center print:hidden">
+        <div className="mt-6 text-center print:hidden lg:text-left">
           <p className="text-section-title font-semibold text-text-primary">
             {isBuyer ? 'Order complete' : 'Payment received'}
           </p>
@@ -218,7 +224,7 @@ export function OrderReceipt({
         <Divider />
 
         {/* Itemised item — thumbnail + title + paid price. */}
-        <p className="text-label font-medium uppercase tracking-wide text-text-muted">Item</p>
+        <p className="text-label text-text-muted">Item</p>
         <div className="mt-2 flex items-center gap-3">
           <span className="w-14 shrink-0 overflow-hidden rounded-md">
             <AppImage
@@ -250,7 +256,7 @@ export function OrderReceipt({
         {/* Full ledger — item, protection fee, postage, total. The order
             contract carries no tax/VAT fields, so no tax rows render —
             nothing invented. */}
-        <p className="text-label font-medium uppercase tracking-wide text-text-muted">
+        <p className="text-label text-text-muted">
           Order breakdown
         </p>
         <dl className="mt-1">
@@ -275,7 +281,7 @@ export function OrderReceipt({
         {hasDeliveryFacts ? (
           <>
             <Divider />
-            <p className="text-label font-medium uppercase tracking-wide text-text-muted">
+            <p className="text-label text-text-muted">
               Delivery
             </p>
             <dl className="mt-1">
@@ -310,12 +316,15 @@ export function OrderReceipt({
           </p>
         ) : null}
       </article>
+        </div>
 
-      {/* Screen-only footer actions. */}
-      <div className="mt-6 flex flex-col items-center gap-1 print:hidden">
+      {/* Screen-only actions — centred under the document on mobile,
+          a hairline rail beside it at lg. */}
+      <aside className="lg:sticky lg:top-20 lg:self-start print:hidden">
+      <div className="mt-6 flex flex-col items-center gap-1 lg:mt-0 lg:items-stretch lg:gap-0 lg:divide-y lg:divide-border-subtle lg:border-y lg:border-border-subtle">
         <Link
           href={`/orders/${order.id}`}
-          className="pressable flex min-h-11 items-center gap-1 text-body-emphasis font-semibold text-text-primary"
+          className="pressable flex min-h-11 items-center gap-1 text-body-emphasis font-semibold text-text-primary lg:justify-between"
         >
           View order details
           <Icon name="forward" size={16} />
@@ -323,11 +332,13 @@ export function OrderReceipt({
         <button
           type="button"
           onClick={() => void shareReceipt()}
-          className="pressable flex min-h-11 items-center gap-1.5 text-body text-text-secondary hover:text-text-primary"
+          className="pressable flex min-h-11 items-center gap-1.5 text-body text-text-secondary hover:text-text-primary lg:justify-between"
         >
-          <Icon name="share" size={16} />
           Share receipt
+          <Icon name="share" size={16} className="lg:order-2" />
         </button>
+      </div>
+      </aside>
       </div>
     </div>
   );

@@ -1,5 +1,6 @@
 import type { Metadata } from 'next';
 import { coOwnAssetById } from '@/lib/data/fixtures-coown';
+import { DATA_MODE } from '@/lib/api/client';
 import { CorporateActionVoteView } from '@/components/coown/actions/CorporateActionVoteView';
 
 export async function generateMetadata({
@@ -8,7 +9,8 @@ export async function generateMetadata({
   params: Promise<{ id: string }>;
 }): Promise<Metadata> {
   const { id } = await params;
-  const asset = coOwnAssetById(id);
+  // Live mode must not label a real vote URL with a demo market title.
+  const asset = DATA_MODE === 'live' ? undefined : coOwnAssetById(id);
   return {
     title: asset ? `Vote — ${asset.title}` : 'Vote',
     description: 'Cast your ballot on this Co-Own governance resolution.',

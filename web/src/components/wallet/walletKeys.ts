@@ -9,4 +9,19 @@ export const walletKeys = {
   root: ['wallet'] as const,
   /** The per-user wallet snapshot + session ledger. */
   all: (userId?: string | null) => ['wallet', userId ?? 'guest'] as const,
+  /** The per-user paginated transaction feed (live mode only). */
+  transactions: (userId?: string | null) =>
+    ['wallet', userId ?? 'guest', 'transactions'] as const,
+  /** The per-user multi-currency pockets (live mode only). Nested under the
+   *  root so `invalidateQueries({ queryKey: walletKeys.root })` — issued by
+   *  convert/withdraw/exchange writes — refreshes the pocket list too. */
+  currencyBalances: (userId?: string | null) =>
+    ['wallet', userId ?? 'guest', 'currency-balances'] as const,
+  /** The per-user beneficiary (payout recipient) list — nested under the
+   *  root so transfer/beneficiary writes refresh it via root invalidation. */
+  beneficiaries: (userId?: string | null) =>
+    ['wallet', userId ?? 'guest', 'beneficiaries'] as const,
+  /** The per-user outbound transfer feed (newest-first). */
+  transfers: (userId?: string | null) =>
+    ['wallet', userId ?? 'guest', 'transfers'] as const,
 };

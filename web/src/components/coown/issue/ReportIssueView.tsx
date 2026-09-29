@@ -16,6 +16,7 @@ import { Icon, type AppIconName } from '@/components/ui/Icon';
 import { useToast } from '@/components/ui/Toast';
 import type { CoOwnIssueCategory } from '@/lib/contracts/coown';
 import { DATA_MODE } from '@/lib/api/client';
+import { reportCoOwnIssue } from '@/lib/api/services/coown';
 import { useCoOwnAsset } from '@/lib/hooks/coown-queries';
 import { useSession } from '@/lib/session/SessionProvider';
 import {
@@ -35,7 +36,7 @@ const CATEGORIES: { value: CoOwnIssueCategory; label: string; icon: AppIconName 
 
 function IssueSkeleton() {
   return (
-    <div className="mx-auto w-full max-w-xl px-4 pb-20 pt-8 sm:px-6 md:pt-10">
+    <div className="mx-auto w-full max-w-xl px-4 pb-20 pt-8 sm:px-6 md:pt-10 lg:max-w-2xl">
       <div className="skeleton h-4 w-24 rounded-sm" aria-hidden="true" />
       <div className="mt-4 skeleton h-9 w-56 rounded-sm" aria-hidden="true" />
       <div className="mt-8 space-y-4" aria-hidden="true">
@@ -120,16 +121,27 @@ export function ReportIssueView({ id }: { id: string }) {
     setSubmitting(true);
     const categoryLabel = CATEGORIES.find((c) => c.value === category)?.label ?? 'Issue';
     try {
-      // A real support case — the ref on the receipt is the case thread's,
-      // and /support/[id] holds it for follow-up. No minted local refs.
+      let issueRef: string | null = null;
+      if (DATA_MODE === 'live') {
+        // The asset-anchored record — same endpoint the mobile app posts
+        // to; lands in the compliance audit trail with the category.
+        const issue = await reportCoOwnIssue(asset.id, {
+          category: category!,
+          description: description.trim(),
+        });
+        issueRef = issue.id;
+      }
+      // The support thread — /support/[id] is where follow-up lands.
+      // No minted local refs; the receipt carries the real case id.
       const ticket = await createTicket({
         topicId: 'other',
         orderRef: null,
         message:
           `Co-Own issue — ${categoryLabel} · ${asset.title} (${asset.id})` +
+          (issueRef ? ` · ref ${issueRef}` : '') +
           ` — ${description.trim()}`,
       });
-      setSubmitted({ ref: ticket.ref ?? ticket.id.toUpperCase(), id: ticket.id });
+      setSubmitted({ ref: issueRef ?? ticket.ref ?? ticket.id.toUpperCase(), id: ticket.id });
       show('Issue reported', 'success');
     } catch {
       show("Couldn't submit the report — check your connection and try again.", 'error');
@@ -139,7 +151,7 @@ export function ReportIssueView({ id }: { id: string }) {
   };
 
   return (
-    <div className="mx-auto w-full max-w-xl px-4 pb-20 pt-8 sm:px-6 md:pt-10">
+    <div className="mx-auto w-full max-w-xl px-4 pb-20 pt-8 sm:px-6 md:pt-10 lg:max-w-2xl">
       <Link
         href={`/co-own/${asset.id}`}
         className="pressable inline-flex items-center gap-1.5 text-body font-medium text-text-secondary hover:text-text-primary"
@@ -195,7 +207,7 @@ export function ReportIssueView({ id }: { id: string }) {
 
           {/* Category picker — 2×2 grid, one selected grammar */}
           <fieldset className="mt-6">
-            <legend className="text-label font-semibold uppercase tracking-wider text-text-muted">
+            <legend className="text-label text-text-muted">
               Issue category
             </legend>
             <div className="mt-3 grid grid-cols-2 gap-3">
@@ -245,7 +257,7 @@ export function ReportIssueView({ id }: { id: string }) {
           <div className="mt-6">
             <label
               htmlFor="issue-description"
-              className="text-label font-semibold uppercase tracking-wider text-text-muted"
+              className="text-label text-text-muted"
             >
               Description
             </label>

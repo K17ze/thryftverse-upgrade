@@ -90,3 +90,9 @@ export function useLiveReminders(): {
 
   return { reminded, toggle };
 }
+
+/** Account-switch reset — clears the persisted reminder set (the session's
+ *  server seed re-arms on the next mount). */
+export function resetLiveReminders(): void {
+  writeSet(new Set());
+}

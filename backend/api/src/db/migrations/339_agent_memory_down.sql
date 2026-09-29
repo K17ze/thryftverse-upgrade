@@ -9,6 +9,17 @@ WHERE name IN (
   'recall_memories', 'store_memory', 'forget_memory'
 );
 
+-- Post-migration event types introduced by 339. Rows carrying them violate
+-- the restored constraint, so they are removed first — deleting audit
+-- history for a feature being rolled back is the honest cost of reverting
+-- it; remapping types would falsify the record.
+DELETE FROM chat_bot_audit_events
+WHERE event_type IN (
+  'run_waiting_approval',
+  'memory_stored', 'memory_recalled', 'memory_retracted',
+  'memory_cleared', 'memory_settings_updated'
+);
+
 ALTER TABLE chat_bot_audit_events
   DROP CONSTRAINT IF EXISTS chat_bot_audit_events_event_type_check;
 ALTER TABLE chat_bot_audit_events

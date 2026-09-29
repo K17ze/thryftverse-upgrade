@@ -1,5 +1,5 @@
 /**
- * Explore topics — the authored destinations behind the "Trending topics"
+ * Explore topics — the authored destinations behind the "Explore themes"
  * band. Hrefs are composed from the real browse taxonomy (CATEGORY_TREE
  * subcategories deep-link via ?sub=, matching CategoryClient) and
  * catalogue-verified queries; each cover is borrowed from the listing

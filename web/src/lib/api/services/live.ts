@@ -65,6 +65,14 @@ function writeLocalReminder(id: string, on: boolean) {
 function mapRoom(room: BackendStreamRoom): LiveSession {
   const scheduledStartAt = room.scheduledStartAt ?? room.scheduled_start_at ?? undefined;
   const remindedFlag = room.reminded ?? (readLocalReminders().has(room.roomId) ? true : undefined);
+  const startedMs = room.startedAt ? Date.parse(room.startedAt) : NaN;
+  const endedMs = room.endedAt ? Date.parse(room.endedAt) : NaN;
+  // Replay length is derivable truth — render it only when both stamps
+  // resolved, never a placeholder number.
+  const durationMinutes =
+    Number.isFinite(startedMs) && Number.isFinite(endedMs) && endedMs > startedMs
+      ? Math.max(1, Math.round((endedMs - startedMs) / 60_000))
+      : undefined;
   return {
     id: room.roomId,
     sellerId: room.hostUserId,
@@ -72,11 +80,12 @@ function mapRoom(room: BackendStreamRoom): LiveSession {
     sellerAvatar: room.hostAvatarUrl ?? '',
     sellerVerified: room.hostVerified ?? false,
     title: room.title,
-    category: 'All',
+    // No category field on the room contract — the hub's segment filter
+    // stays absent in live mode rather than inventing a taxonomy value.
+    category: undefined,
     coverUri: room.thumbnailUrl ?? '',
     aspectRatio: 16 / 10,
     viewers: room.viewerCount,
-    likeCount: 0,
     status:
       room.status === 'live' || (room.status as string) === 'ending'
         ? 'live'
@@ -86,11 +95,11 @@ function mapRoom(room: BackendStreamRoom): LiveSession {
     startedAt: room.startedAt,
     scheduledAt: scheduledStartAt,
     endedAt: room.endedAt,
+    durationMinutes,
     currentItemTitle: room.currentLotTitle ?? undefined,
     currentBid: room.currentLotPriceMinor != null ? room.currentLotPriceMinor / 100 : undefined,
     recordingUrl: room.recordingUrl ?? null,
     recordingEnabled: room.recordingEnabled ?? false,
-    isFollowing: false,
     reminderSet: remindedFlag,
     isDemo: false,
   };
@@ -103,6 +112,249 @@ export async function fetchLiveSessions(signal?: AbortSignal): Promise<LiveSessi
     { signal },
   );
   return (res.sessions ?? []).map(mapRoom);
+}
+
+// ── Host lifecycle — mirrors mobile liveBroadcastApi.ts. Web creates,
+//    schedules, starts and ends sessions; the host console at
+//    /live/host/[id] publishes camera/mic over a 'host' LiveKit grant. ───
+
+/** GET /streaming/sessions/:id — the session snapshot the host console
+ *  resolves before rendering. Returns null when neither the persisted row
+ *  nor the provider know the room (the route answers ok:false + null). */
+export async function fetchStreamSession(
+  sessionId: string,
+  signal?: AbortSignal,
+): Promise<LiveSession | null> {
+  const res = await fetchJson<{ ok: boolean; session?: BackendStreamRoom | null }>(
+    `/streaming/sessions/${encodeURIComponent(sessionId)}`,
+    undefined,
+    { signal },
+  );
+  return res.session ? mapRoom(res.session) : null;
+}
+
+/** POST /streaming/sessions/:id/start — host/admin only; the real go-live.
+ *  Flips the session to 'live' (there is no webhook status transition —
+ *  this call is the contract), re-creates a provider room that was reaped
+ *  while idle, and fans out live_started notifications. */
+export async function startStreamSession(sessionId: string): Promise<LiveSession> {
+  const res = await fetchJson<{ ok: boolean; session?: BackendStreamRoom }>(
+    `/streaming/sessions/${encodeURIComponent(sessionId)}/start`,
+    { method: 'POST' },
+  );
+  if (!res.session) throw new Error('Stream session did not start');
+  return mapRoom(res.session);
+}
+
+/** POST /streaming/sessions/:id/end — host/admin only. Deletes the provider
+ *  room, persists 'ended', and broadcasts `live.session.ended` with the
+ *  real totals (viewers, lots sold, sales) on the session topic. */
+export async function endStreamSession(sessionId: string): Promise<LiveSession> {
+  const res = await fetchJson<{ ok: boolean; session?: BackendStreamRoom }>(
+    `/streaming/sessions/${encodeURIComponent(sessionId)}/end`,
+    { method: 'POST' },
+  );
+  if (!res.session) throw new Error('Stream session did not end');
+  return mapRoom(res.session);
+}
+
+/** POST /streaming/sessions — seller/admin only. When `scheduledStartAt`
+ *  is a future ISO the row persists in 'created' status and surfaces under
+ *  Coming up on every platform's hub; omitting it creates the provider room
+ *  immediately. */
+export async function createBroadcastSession(input: {
+  title: string;
+  recordingEnabled?: boolean;
+  maxViewers?: number;
+  scheduledStartAt?: string;
+}): Promise<LiveSession> {
+  const res = await fetchJson<{ ok: boolean; session?: BackendStreamRoom }>(
+    '/streaming/sessions',
+    {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        title: input.title,
+        recordingEnabled: input.recordingEnabled ?? false,
+        maxViewers: input.maxViewers ?? 0,
+        ...(input.scheduledStartAt ? { scheduledStartAt: input.scheduledStartAt } : {}),
+      }),
+    },
+  );
+  if (!res.session) throw new Error('Stream session was not created');
+  return mapRoom(res.session);
+}
+
+/** POST /streaming/sessions/:sessionId/lots — schedule one pinned listing as
+ *  a lot. Amounts arrive in GBP major units; the wire speaks minor units. */
+export async function scheduleStreamLot(
+  sessionId: string,
+  input: { listingId: string; lotNumber: number; position: number; startPriceGbp: number },
+): Promise<void> {
+  await fetchJson(`/streaming/sessions/${encodeURIComponent(sessionId)}/lots`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({
+      listingId: input.listingId,
+      lotNumber: input.lotNumber,
+      position: input.position,
+      startPriceMinor: Math.round(input.startPriceGbp * 100),
+      currency: 'GBP',
+    }),
+  });
+}
+
+// ── Room join / leave — POST /streaming/sessions/:roomId/token mints the
+//    LiveKit credentials; the viewer grant is subscribe-only. The backend
+//    gates viewer tokens server-side: 401 unauthenticated, 409 while the
+//    session is not live (STREAM_NOT_LIVE), 403 for muted viewers
+//    (STREAM_VIEWER_MUTED) — callers map those to honest states, never a
+//    simulated feed. ────────────────────────────────────────────────────
+
+/** Mirrors the backend StreamTokenResult — wsUrl is the LiveKit websocket
+ *  URL the token is scoped to. */
+export interface StreamJoinToken {
+  token: string;
+  wsUrl: string;
+  roomId: string;
+  identity: string;
+}
+
+export async function fetchStreamToken(
+  sessionId: string,
+  role: 'host' | 'viewer' = 'viewer',
+): Promise<StreamJoinToken> {
+  const res = await fetchJson<{ ok: boolean; token?: StreamJoinToken }>(
+    `/streaming/sessions/${encodeURIComponent(sessionId)}/token`,
+    {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ role }),
+    },
+  );
+  if (!res.ok || !res.token?.token) {
+    throw new Error('Stream token was not issued');
+  }
+  return res.token;
+}
+
+/** POST /streaming/sessions/:id/leave — drops the caller from the room's
+ *  authoritative viewer set. Fire-and-forget on overlay close; the server
+ *  no-ops when the caller was never counted. */
+export async function leaveStreamSession(sessionId: string): Promise<void> {
+  await fetchJson(`/streaming/sessions/${encodeURIComponent(sessionId)}/leave`, {
+    method: 'POST',
+  });
+}
+
+// ── Live chat — GET returns recent visible messages (block-filtered for
+//    signed-in viewers), POST persists + fans out `live.chat.message` on
+//    the session's realtime topic. Sends are server-moderated: 403 for
+//    muted/blocked viewers, 422 for rejected content, 400 for scam
+//    patterns — surface the server's reason verbatim. ───────────────────
+
+export interface StreamChatMessage {
+  id: string;
+  sessionId: string;
+  userId: string;
+  userName: string;
+  message: string;
+  type: string;
+  isSeller: boolean;
+  moderationState: string;
+  createdAt: string;
+}
+
+interface BackendChatResponse {
+  ok: boolean;
+  messages?: StreamChatMessage[];
+  message?: StreamChatMessage;
+}
+
+export async function fetchStreamChatMessages(
+  sessionId: string,
+  limit = 50,
+  signal?: AbortSignal,
+): Promise<StreamChatMessage[]> {
+  const res = await fetchJson<BackendChatResponse>(
+    `/streaming/sessions/${encodeURIComponent(sessionId)}/chat?limit=${limit}`,
+    undefined,
+    { signal },
+  );
+  return res.messages ?? [];
+}
+
+export async function sendStreamChatMessage(
+  sessionId: string,
+  message: string,
+): Promise<StreamChatMessage> {
+  const res = await fetchJson<BackendChatResponse>(
+    `/streaming/sessions/${encodeURIComponent(sessionId)}/chat`,
+    {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ message }),
+    },
+  );
+  if (!res.message) throw new Error('Message was not sent');
+  return res.message;
+}
+
+// ── Host viewer moderation — host/admin only (fail-closed 403). Mute is
+//    reversible and blocks chat + fresh viewer tokens; kick ejects the
+//    viewer from the in-memory room set now. Consumed by the host console
+//    moderation panel at /live/host/[id]. ────────────────────────────────
+
+export interface MutedStreamViewer {
+  userId: string;
+  mutedAt: string | null;
+  mutedBy: string | null;
+}
+
+export async function fetchMutedStreamViewers(
+  sessionId: string,
+  signal?: AbortSignal,
+): Promise<MutedStreamViewer[]> {
+  const res = await fetchJson<{ ok: boolean; muted?: MutedStreamViewer[] }>(
+    `/streaming/sessions/${encodeURIComponent(sessionId)}/moderation/viewers`,
+    undefined,
+    { signal },
+  );
+  return res.muted ?? [];
+}
+
+export async function setStreamViewerMuted(
+  sessionId: string,
+  userId: string,
+  muted: boolean,
+): Promise<void> {
+  await fetchJson(
+    `/streaming/sessions/${encodeURIComponent(sessionId)}/moderation/${
+      muted ? 'mute' : 'unmute'
+    }`,
+    {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ userId }),
+    },
+  );
+}
+
+/** Kick ejects the viewer now — they may rejoin with a fresh token unless
+ *  also muted. Returns the room's post-kick viewer count. */
+export async function kickStreamViewer(
+  sessionId: string,
+  userId: string,
+): Promise<number> {
+  const res = await fetchJson<{ ok: boolean; viewerCount?: number }>(
+    `/streaming/sessions/${encodeURIComponent(sessionId)}/moderation/kick`,
+    {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ userId }),
+    },
+  );
+  return res.viewerCount ?? 0;
 }
 
 export async function setLiveReminder(sessionId: string, on: boolean): Promise<void> {
@@ -378,4 +630,122 @@ export async function placeStreamBid(
       clientBidId,
     };
   }
+}
+
+// ── Host lot controls — the same lot-engine contracts the mobile seller
+//    console drives (routes/liveLotEngine.ts). Open sends a duration so the
+//    server deadline + anti-snipe sweep apply; close decides sold/passed
+//    through the shared close path; cancel and settle are their own
+//    explicit transitions. All are host/admin only (fail-closed 403). ────
+
+/** Mirrors mobile DEFAULT_LOT_DURATION_SECONDS — the bidding window the
+ *  server sets when the host opens a lot. */
+export const DEFAULT_LOT_DURATION_SECONDS = 60;
+
+interface BackendLotMutationResponse {
+  ok: boolean;
+  lot?: BackendLotAggregate;
+  /** Action responses carry the snapshot as a sibling (mapLotRow has no
+   *  inline snapshot — the list endpoint is the one that joins it). */
+  snapshot?: BackendLotSnapshot | null;
+  outcome?: 'sold' | 'passed';
+  winnerId?: string | null;
+}
+
+function mapMutationLot(res: BackendLotMutationResponse): LiveLot {
+  if (!res.lot) throw new Error('The lot action returned no lot');
+  return mapBackendLot({
+    ...res.lot,
+    snapshot: res.snapshot ?? res.lot.snapshot ?? null,
+  });
+}
+
+/** PUT /streaming/sessions/:id/current-lot — pins a lot onto the table so
+ *  viewers see it as the thing being sold. Host/admin only. */
+export async function setStreamCurrentLot(
+  sessionId: string,
+  input: { listingId: string; lotNumber: number },
+): Promise<LiveLot> {
+  const res = await fetchJson<{ ok: boolean; lot?: BackendCurrentLot }>(
+    `/streaming/sessions/${encodeURIComponent(sessionId)}/current-lot`,
+    {
+      method: 'PUT',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ listingId: input.listingId, lotNumber: input.lotNumber }),
+    },
+  );
+  if (!res.lot) throw new Error('The current lot was not set');
+  return mapBackendCurrentLot(res.lot);
+}
+
+/** POST .../lots/:lotId/open — opens bidding on a scheduled (or passed)
+ *  lot. `durationSeconds` sets the server-side closes_at deadline so the
+ *  auto-close sweep can finish the lot if the host walks away. */
+export async function openStreamLot(
+  sessionId: string,
+  lotId: string,
+  options?: { durationSeconds?: number },
+): Promise<LiveLot> {
+  const res = await fetchJson<BackendLotMutationResponse>(
+    `/streaming/sessions/${encodeURIComponent(sessionId)}/lots/${encodeURIComponent(lotId)}/open`,
+    {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(
+        options?.durationSeconds != null ? { durationSeconds: options.durationSeconds } : {},
+      ),
+    },
+  );
+  return mapMutationLot(res);
+}
+
+/** POST .../lots/:lotId/close — resolves the open lot: 'sold' when a bid
+ *  cleared reserve, 'passed' otherwise. Returns the outcome + winner. */
+export async function closeStreamLot(
+  sessionId: string,
+  lotId: string,
+): Promise<{ lot: LiveLot; outcome: 'sold' | 'passed' | null; winnerId: string | null }> {
+  const res = await fetchJson<BackendLotMutationResponse>(
+    `/streaming/sessions/${encodeURIComponent(sessionId)}/lots/${encodeURIComponent(lotId)}/close`,
+    { method: 'POST' },
+  );
+  return {
+    lot: mapMutationLot(res),
+    outcome: res.outcome ?? null,
+    winnerId: res.winnerId ?? null,
+  };
+}
+
+/** POST .../lots/:lotId/cancel — pulls a lot out of the show entirely
+ *  (anything except already-sold/cancelled). */
+export async function cancelStreamLot(sessionId: string, lotId: string): Promise<LiveLot> {
+  const res = await fetchJson<BackendLotMutationResponse>(
+    `/streaming/sessions/${encodeURIComponent(sessionId)}/lots/${encodeURIComponent(lotId)}/cancel`,
+    { method: 'POST' },
+  );
+  return mapMutationLot(res);
+}
+
+interface BackendSettleLotResponse {
+  ok: boolean;
+  idempotent?: boolean;
+  lot?: BackendLotAggregate;
+  order?: { id: string; status?: string };
+  checkout?: { reservationId?: string };
+}
+
+/** POST .../lots/:lotId/settle — creates the winner's order on a sold lot.
+ *  Host/admin or the winner; idempotent on an existing order. */
+export async function settleStreamLot(
+  sessionId: string,
+  lotId: string,
+): Promise<{ orderId: string | null; reservationId: string | null }> {
+  const res = await fetchJson<BackendSettleLotResponse>(
+    `/streaming/sessions/${encodeURIComponent(sessionId)}/lots/${encodeURIComponent(lotId)}/settle`,
+    { method: 'POST' },
+  );
+  return {
+    orderId: res.order?.id ?? null,
+    reservationId: res.checkout?.reservationId ?? null,
+  };
 }

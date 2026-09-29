@@ -84,7 +84,7 @@ export function ReviewStep({ rows, onRowsChange, onConfirm, onInspect }: ReviewS
 
   return (
     <div>
-      <h1 className="text-screen-title font-bold text-text-primary">Review your listings</h1>
+      <h1 className="text-screen-title text-text-primary">Review your listings</h1>
       <p className="mt-2 text-section-title font-semibold text-text-primary">{summaryText}</p>
       <p className="mt-1 text-body text-text-secondary">
         Edit anything that looks off, or uncheck a row to skip it.
@@ -106,13 +106,13 @@ export function ReviewStep({ rows, onRowsChange, onConfirm, onInspect }: ReviewS
       {/* ── Column header — flat labels, hairline ── */}
       <div className="mt-6 hidden items-center gap-3 border-b border-border-subtle pb-2 sm:flex">
         <span className="w-7 shrink-0" aria-hidden />
-        <span className="flex-1 text-label font-semibold uppercase tracking-wider text-text-muted">
+        <span className="flex-1 text-label text-text-muted">
           Item
         </span>
-        <span className="w-28 shrink-0 text-label font-semibold uppercase tracking-wider text-text-muted">
+        <span className="w-28 shrink-0 text-label text-text-muted">
           Price
         </span>
-        <span className="w-44 shrink-0 text-label font-semibold uppercase tracking-wider text-text-muted">
+        <span className="w-44 shrink-0 text-label text-text-muted">
           Condition
         </span>
       </div>

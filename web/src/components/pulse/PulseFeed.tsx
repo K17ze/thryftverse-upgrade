@@ -65,6 +65,13 @@ export function PulseFeed({ cards }: { cards: PulseCardModel[] }) {
     } else if (e.key === 'ArrowUp' || e.key === 'PageUp') {
       e.preventDefault();
       step(-1);
+    } else if (e.key === 'Home') {
+      e.preventDefault();
+      scrollRef.current?.scrollTo({ top: 0 });
+    } else if (e.key === 'End') {
+      e.preventDefault();
+      const el = scrollRef.current;
+      if (el) el.scrollTo({ top: el.scrollHeight });
     } else if (e.key === 'Escape') {
       // Release feed focus — arrows return to normal page scrolling.
       scrollRef.current?.blur();
@@ -97,13 +104,15 @@ export function PulseFeed({ cards }: { cards: PulseCardModel[] }) {
             className="flex h-full snap-start snap-always items-center justify-center"
           >
             <div
-              className={`h-full w-full max-w-[430px] transition-[opacity,transform] duration-500 ease-[var(--ease-standard)] md:py-3 ${
+              className={`h-full w-full max-w-[430px] transition-[opacity,transform] duration-500 ease-standard md:py-3 ${
                 i === active ? '' : 'md:scale-[0.97] md:opacity-55'
               }`}
             >
               <PulseCard
                 card={card}
                 priority={i === 0}
+                position={i + 1}
+                total={cards.length}
                 followed={hydrated && followingIds.includes(card.creatorId)}
                 onToggleFollow={toggleFollow}
                 requireAuth={requireAuth}
@@ -132,6 +141,14 @@ export function PulseFeed({ cards }: { cards: PulseCardModel[] }) {
             >
               Keep browsing
             </Button>
+            <button
+              type="button"
+              onClick={() => router.push('/live')}
+              className="pressable mt-3 inline-flex h-9 items-center gap-1.5 rounded-md px-2 text-caption font-medium text-text-muted transition-colors hover:text-text-primary"
+            >
+              <Icon name="videocam" size={14} />
+              Live shows and schedule
+            </button>
           </div>
         </div>
       </div>

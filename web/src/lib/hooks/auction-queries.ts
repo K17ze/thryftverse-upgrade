@@ -34,6 +34,7 @@ import {
 import { CURRENT_USER } from '@/lib/data/fixtures';
 import { DATA_MODE } from '@/lib/api/client';
 import * as auctionsService from '@/lib/api/services/auctions';
+import { mergeServerWatches } from '@/components/auctions/auctionWatchlist';
 import { useSession } from '@/lib/session/SessionProvider';
 
 const tick = (ms = 120) => new Promise((resolve) => setTimeout(resolve, ms));
@@ -100,59 +101,131 @@ export function useNowTick(intervalMs = 1000): number {
 }
 
 // ============================================================================
+// Server clock — live responses stamp `serverNow`; paired with the
+// query's dataUpdatedAt it approximates (server clock − device clock) at
+// receipt. Countdown surfaces run on the corrected clock so a fast or
+// slow device can't lie about the window. Fixture rows carry no stamp —
+// skew resolves to 0.
+// ============================================================================
+
+function serverSkewMs(
+  source: AuctionMarketItem | AuctionMarketItem[] | null | undefined,
+  updatedAt: number,
+): number {
+  const list = source == null ? [] : Array.isArray(source) ? source : [source];
+  const stamp = list.find((item) => item.serverNow)?.serverNow;
+  const skew = stamp ? Date.parse(stamp) - updatedAt : NaN;
+  return Number.isFinite(skew) ? skew : 0;
+}
+
+/** Union server-echoed watch flags into the local watchlist store — the
+ *  same merge grammar the /auctions/watchlist seed runs (server truth on
+ *  fetch; local flags are never deleted by a stale read). */
+function mergeEchoedWatches(items: AuctionMarketItem[]): void {
+  if (DATA_MODE !== 'live') return;
+  mergeServerWatches(items.filter((item) => item.isWatched === true).map((item) => item.id));
+}
+
+/** Lifecycle-keyed poll grammar — mirrors native useAuctionDetail:
+ *  10s while live (rival bids, outbid state), 45s while upcoming (the
+ *  window may open), and no polling once ended. Resolved through
+ *  toViewModel so server-declared lifecycles decide, not timestamps. */
+function auctionPollInterval(item: AuctionMarketItem | null | undefined): number | false {
+  if (item === null) return false;
+  if (item === undefined) return 10_000;
+  const lifecycle = toViewModel(item, Date.now()).lifecycle;
+  return lifecycle === 'live' ? 10_000 : lifecycle === 'upcoming' ? 45_000 : false;
+}
+
+/** The detail serve carries its own bid ledger (with usernames); the
+ *  standalone /bids route doesn't echo bidder usernames on this
+ *  deployment, so detail rows win whenever the payload provides them.
+ *  Session-scoped like the other runtime stores. */
+const detailBidLedger = new Map<string, AuctionBid[]>();
+
+// ============================================================================
 // Queries
 // ============================================================================
 
 /** Hub board — sorted live → upcoming → ended, recomputed on every tick. */
 export function useAuctionBoard() {
   const now = useNowTick(1000);
-  const { data, isLoading, isError, refetch } = useQuery({
+  const { data, dataUpdatedAt, isLoading, isError, refetch } = useQuery({
     queryKey: ['auctions'],
-    queryFn: async () => {
+    queryFn: async ({ signal }) => {
       if (DATA_MODE === 'live') {
-        const page = await auctionsService.fetchAuctionBoard();
+        const page = await auctionsService.fetchAuctionBoard(undefined, signal);
+        mergeEchoedWatches(page.items);
         return page.items;
       }
       await tick();
       return allAuctions();
     },
   });
+  const skew = serverSkewMs(data, dataUpdatedAt);
   const auctions = useMemo(
-    () => sortAuctions((data ?? []).map((item) => toViewModel(item, now))),
-    [data, now],
+    () => sortAuctions((data ?? []).map((item) => toViewModel(item, now + skew))),
+    [data, now, skew],
   );
   return { auctions, isLoading, isError, refetch };
 }
 
 export function useAuction(id: string) {
+  const qc = useQueryClient();
   const now = useNowTick(1000);
-  const { data, isLoading, isError, refetch } = useQuery({
+  const { data, dataUpdatedAt, isLoading, isError, refetch } = useQuery({
     queryKey: ['auction', id],
-    queryFn: async () => {
+    queryFn: async ({ signal }) => {
       if (DATA_MODE === 'live') {
-        return auctionsService.fetchAuctionDetail(id);
+        const bundle = await auctionsService.fetchAuctionDetailBundle(id, signal);
+        if (!bundle) return null;
+        mergeEchoedWatches([bundle.auction]);
+        // The detail serve's own ledger carries usernames — seed the bids
+        // cache so the ledger renders real names even before its own
+        // query resolves (the /bids route can't provide them).
+        if (bundle.bids) {
+          detailBidLedger.set(id, bundle.bids);
+          qc.setQueryData<AuctionBid[]>(['auction-bids', id], bundle.bids);
+        }
+        return bundle.auction;
       }
       await tick();
       return allAuctions().find((a) => a.id === id) ?? null;
     },
+    // Live-grammar poll (native parity): 10s while the hammer is up —
+    // rival bids and outbid state land without a reload — 45s while
+    // upcoming, nothing after the close.
+    refetchInterval: (query) => auctionPollInterval(query.state.data),
   });
+  const skew = serverSkewMs(data, dataUpdatedAt);
   const auction = useMemo(
-    () => (data ? toViewModel(data, now) : null),
-    [data, now],
+    () => (data ? toViewModel(data, now + skew) : null),
+    [data, now, skew],
   );
   return { auction, isLoading, isError, refetch };
 }
 
 export function useAuctionBids(auctionId: string) {
+  const qc = useQueryClient();
   return useQuery({
     queryKey: ['auction-bids', auctionId],
-    queryFn: async () => {
+    queryFn: async ({ signal }) => {
       if (DATA_MODE === 'live') {
-        return auctionsService.fetchAuctionBids(auctionId);
+        // Prefer the detail payload's ledger — it carries usernames the
+        // standalone /bids route omits on this deployment.
+        const seeded = detailBidLedger.get(auctionId);
+        if (seeded) return seeded;
+        return auctionsService.fetchAuctionBids(auctionId, signal);
       }
       await tick();
       return allBids().filter((bid) => bid.auctionId === auctionId);
     },
+    // Same lifecycle grammar as the detail poll, keyed off the resolved
+    // auction so the ledger keeps pace while live and rests once ended.
+    refetchInterval: () =>
+      auctionPollInterval(
+        qc.getQueryData<AuctionMarketItem | null>(['auction', auctionId]),
+      ),
   });
 }
 
@@ -171,14 +244,16 @@ export function useMyBids(viewerId: string) {
   const now = useNowTick(30_000);
   const {
     data: auctions,
+    dataUpdatedAt: auctionsUpdatedAt,
     isLoading,
     isError: auctionsError,
     refetch: refetchAuctions,
   } = useQuery({
     queryKey: ['auctions'],
-    queryFn: async () => {
+    queryFn: async ({ signal }) => {
       if (DATA_MODE === 'live') {
-        const page = await auctionsService.fetchAuctionBoard();
+        const page = await auctionsService.fetchAuctionBoard(undefined, signal);
+        mergeEchoedWatches(page.items);
         return page.items;
       }
       await tick();
@@ -189,19 +264,42 @@ export function useMyBids(viewerId: string) {
     queryKey: ['auction-bids-all', viewerId],
     // Guests have no ledger — never hit the authed endpoint for them.
     enabled: viewerId !== '' || DATA_MODE !== 'live',
-    queryFn: async () => {
+    queryFn: async ({ signal }) => {
       if (DATA_MODE === 'live') {
-        return auctionsService.fetchMyAuctionBids('all');
+        return auctionsService.fetchMyAuctionBids('all', signal);
       }
       await tick();
       return allBids();
     },
   });
 
+  const skew = serverSkewMs(auctions, auctionsUpdatedAt);
   const board = useMemo<MyBidsBoard>(() => {
+    const correctedNow = now + skew;
+    // The wire returns one row per BID — collapse to one row per auction
+    // keeping the viewer's highest bid (its own bidState decides the
+    // label, so the kept row is the honest one). A viewer who bid twice
+    // on a lot otherwise renders duplicate keys with contradictory
+    // states.
+    const myBidApis = DATA_MODE === 'live'
+      ? (() => {
+          const perAuction = new Map<string, auctionsService.MyAuctionBidApi>();
+          for (const b of (bids ?? []) as auctionsService.MyAuctionBidApi[]) {
+            const existing = perAuction.get(b.auction.id);
+            if (
+              !existing ||
+              b.amountGbp > existing.amountGbp ||
+              (b.amountGbp === existing.amountGbp && b.createdAt > existing.createdAt)
+            ) {
+              perAuction.set(b.auction.id, b);
+            }
+          }
+          return [...perAuction.values()];
+        })()
+      : [];
     const rows: MyBidRow[] =
       DATA_MODE === 'live'
-        ? ((bids ?? []) as auctionsService.MyAuctionBidApi[]).map((b) => {
+        ? myBidApis.map((b) => {
             // The wire distinguishes 'leading' from 'active' (bid placed,
             // lead unresolved). Mapping 'active' into the winning bucket
             // would claim a lead the serve never reported — keep it
@@ -228,10 +326,10 @@ export function useMyBids(viewerId: string) {
               currentBid: b.auction.currentBidGbp,
               bidCount: b.auction.bidCount,
             };
-            return { auction: toViewModel(item, now), myBid: b.amountGbp, status, placedAt: b.createdAt };
+            return { auction: toViewModel(item, correctedNow), myBid: b.amountGbp, status, placedAt: b.createdAt };
           })
         : myBidRows(
-            (auctions ?? []).map((item) => toViewModel(item, now)),
+            (auctions ?? []).map((item) => toViewModel(item, correctedNow)),
             (bids ?? []) as AuctionBid[],
             viewerId,
           );
@@ -246,7 +344,7 @@ export function useMyBids(viewerId: string) {
       won: pick('won'),
       lost: pick('lost'),
     };
-  }, [auctions, bids, now, viewerId]);
+  }, [auctions, bids, now, skew, viewerId]);
 
   return {
     board,
@@ -272,24 +370,88 @@ export function useSellerAuctionBoard(_sellerId: string = CURRENT_USER.id) {
   // The board is the caller's own — the session identity decides. Guests
   // resolve to '' so they never borrow the fixture 'me' board.
   const effectiveSellerId = user?.id ?? '';
-  const { data, isLoading, isError, refetch } = useQuery({
-    queryKey: ['auctions'],
-    queryFn: async () => {
+  const { data, dataUpdatedAt, isLoading, isError, refetch } = useQuery({
+    // Live asks the backend for the seller's own page (seller=me) under
+    // its own key — sharing ['auctions'] would let the filtered serve
+    // overwrite the public board's cache. Fixture keeps the shared key
+    // so session writes (created auctions, bid overlays) land here too.
+    queryKey:
+      DATA_MODE === 'live' ? ['auctions', 'seller', effectiveSellerId] : ['auctions'],
+    // seller=me is authed-only — guests have no inventory to fetch.
+    enabled: DATA_MODE !== 'live' || effectiveSellerId !== '',
+    queryFn: async ({ signal }) => {
       if (DATA_MODE === 'live') {
-        const page = await auctionsService.fetchAuctionBoard();
+        const page = await auctionsService.fetchAuctionBoard({ seller: 'me' }, signal);
+        mergeEchoedWatches(page.items);
         return page.items;
       }
       await tick();
       return allAuctions();
     },
   });
+  const skew = serverSkewMs(data, dataUpdatedAt);
   const auctions = useMemo(
     () =>
       (data ?? [])
         .filter((item) => item.sellerId === effectiveSellerId)
-        .map((item) => toViewModel(item, now)),
-    [data, now, effectiveSellerId],
+        .map((item) => toViewModel(item, now + skew)),
+    [data, now, skew, effectiveSellerId],
   );
+  return { auctions, isLoading, isError, refetch };
+}
+
+/**
+ * Watching board — the viewer's watchlist as a server-side scope. Live
+ * asks the backend (watchedOnly) so the tab isn't bounded by board page
+ * 1; fixture keeps the local-store intersection. Locally-toggled ids the
+ * server hasn't echoed yet resolve from the detail/board caches so an
+ * optimistic watch surfaces immediately.
+ */
+export function useWatchedAuctionBoard(
+  watched: ReadonlySet<string>,
+  options: { enabled?: boolean } = {},
+) {
+  const { isGuest } = useSession();
+  const qc = useQueryClient();
+  const now = useNowTick(1000);
+  // watchedOnly is authed-only — guests never hit the endpoint.
+  const enabled = (options.enabled ?? true) && (DATA_MODE !== 'live' || !isGuest);
+  const { data, dataUpdatedAt, isLoading, isError, refetch } = useQuery({
+    queryKey: DATA_MODE === 'live' ? ['auctions', 'watched'] : ['auctions'],
+    enabled,
+    queryFn: async ({ signal }) => {
+      if (DATA_MODE === 'live') {
+        const page = await auctionsService.fetchAuctionBoard(
+          { watchedOnly: true, limit: 60 },
+          signal,
+        );
+        mergeEchoedWatches(page.items);
+        return page.items;
+      }
+      await tick();
+      return allAuctions();
+    },
+  });
+  const skew = serverSkewMs(data, dataUpdatedAt);
+  const auctions = useMemo(() => {
+    const items = new Map<string, AuctionMarketItem>();
+    for (const item of data ?? []) items.set(item.id, item);
+    // Optimistic overlay — a watch toggled this session lands in the
+    // local store before the next server read; pull the row from the
+    // detail/board caches it was toggled on.
+    for (const id of watched) {
+      if (items.has(id)) continue;
+      const cached =
+        qc.getQueryData<AuctionMarketItem | null>(['auction', id]) ??
+        qc.getQueryData<AuctionMarketItem[]>(['auctions'])?.find((a) => a.id === id);
+      if (cached) items.set(id, cached);
+    }
+    return sortAuctions(
+      [...items.values()]
+        .filter((item) => watched.has(item.id))
+        .map((item) => toViewModel(item, now + skew)),
+    );
+  }, [data, watched, now, skew, qc]);
   return { auctions, isLoading, isError, refetch };
 }
 
@@ -450,6 +612,10 @@ export function usePlaceBid(auctionId: string) {
 export interface CreateAuctionSessionInput extends CreateAuctionInput {
   /** ISO — present when the auction is scheduled for later. */
   startsAt?: string;
+  /** One stable key per form session — the caller mints it once and holds
+   *  it across retries so a lost response replays the created auction
+   *  server-side instead of double-listing. Fixture mode ignores it. */
+  idempotencyKey?: string;
 }
 
 export function useCreateAuction() {
@@ -469,6 +635,10 @@ export function useCreateAuction() {
           endsAt: new Date(startsAtMs + input.durationHours * 3_600_000).toISOString(),
           startingBidGbp: input.startingBid,
           buyNowPriceGbp: input.buyNowPrice,
+          // The caller supplies one key per form session; fall back to a
+          // fresh one so a bare call can never go out unsigned.
+          idempotencyKey:
+            input.idempotencyKey ?? auctionsService.newAuctionCreateAttemptKey(),
         });
         return auction;
       }

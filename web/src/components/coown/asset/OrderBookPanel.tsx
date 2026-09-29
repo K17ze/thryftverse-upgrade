@@ -284,6 +284,16 @@ export function OrderBookPanel({
         {book ? (
           <p className="text-meta text-text-muted tnum">
             {book.bids.length + book.asks.length} levels · {book.source}
+            {book.depthLimits &&
+            (book.bids.length >= book.depthLimits.bid ||
+              book.asks.length >= book.depthLimits.ask) ? (
+              <span> · depth capped</span>
+            ) : null}
+            {book.reconciliationState === 'reconciling' ? (
+              <span className="text-warning-text"> · syncing</span>
+            ) : book.reconciliationState === 'break' ? (
+              <span className="text-danger-text"> · resyncing</span>
+            ) : null}
           </p>
         ) : null}
       </div>

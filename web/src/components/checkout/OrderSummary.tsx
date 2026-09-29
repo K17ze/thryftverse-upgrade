@@ -74,6 +74,7 @@ function SellerParcel({
   serviceLabel,
   index,
   count,
+  bundleCharged = true,
 }: {
   group: SellerGroup;
   /** The parcel's own postage — the per-seller charge, or "Free" when the
@@ -85,6 +86,10 @@ function SellerParcel({
   /** 1-based parcel position — the manifest reads "Parcel 1 of 2". */
   index: number;
   count: number;
+  /** Fixture-only: when false (live mode) the −£ bundle line is omitted —
+   *  the backend charges listing price in full; the "post together"
+   *  header copy above remains the truthful bundle benefit. */
+  bundleCharged?: boolean;
 }) {
   const username = group.seller?.username ?? null;
   const carrier = serviceLabel ?? sharedCarrier(group);
@@ -118,7 +123,7 @@ function SellerParcel({
           </dt>
           <dd className="tnum text-text-primary">{postageLabel}</dd>
         </div>
-        {group.qualifies ? (
+        {bundleCharged && group.qualifies ? (
           <div className="flex items-baseline justify-between gap-3 text-caption">
             <dt className="flex items-center gap-1 text-text-secondary">
               <Icon name="pricetag" size={13} className="text-success-text" />
@@ -140,6 +145,7 @@ export function OrderSummary({
   bundleDiscount = 0,
   delivery = {},
   verificationLabel,
+  bundleCharged = true,
 }: {
   items: Listing[];
   totals: CheckoutTotals;
@@ -151,8 +157,13 @@ export function OrderSummary({
   /** When set, an "Item verification" ledger line renders with this value
    *  ("Free" — the backend exposes no verification price). */
   verificationLabel?: string;
+  /** Fixture-only switch — false in live mode so no −£ bundle line
+   *  renders anywhere (parcel or ledger); the discount isn't real on
+   *  the wire. */
+  bundleCharged?: boolean;
 }) {
-  const payableTotal = Math.round((totals.total - bundleDiscount) * 100) / 100;
+  const payableTotal =
+    Math.round((totals.total - (bundleCharged ? bundleDiscount : 0)) * 100) / 100;
   const groups = sellerGroups(items);
 
   return (
@@ -170,6 +181,7 @@ export function OrderSummary({
               serviceLabel={quote ? `${quote.carrierId} ${quote.serviceName}` : null}
               index={i + 1}
               count={groups.length}
+              bundleCharged={bundleCharged}
             />
           );
         })}
@@ -196,7 +208,7 @@ export function OrderSummary({
             <dd className="text-text-primary">{verificationLabel}</dd>
           </div>
         ) : null}
-        {bundleDiscount > 0 ? (
+        {bundleCharged && bundleDiscount > 0 ? (
           <div className="flex justify-between text-body text-text-secondary">
             <dt className="flex items-center gap-1.5">
               <Icon name="pricetag" size={15} className="text-success-text" />

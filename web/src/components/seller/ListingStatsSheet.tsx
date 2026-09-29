@@ -57,7 +57,7 @@ export function ListingStatsSheet({
       open={row != null}
       onClose={onClose}
       title={row ? `Stats — ${row.listing.title || 'Untitled'}` : undefined}
-      ariaLabel={row ? undefined : 'Listing stats'}
+      ariaLabel="Listing stats"
       maxWidth={440}
     >
       <div className="px-5 py-5">
@@ -107,7 +107,7 @@ export function ListingStatsSheet({
 
             {stats.data.priceHistory.length ? (
               <div className="mt-4">
-                <p className="text-label font-semibold uppercase tracking-wider text-text-muted">
+                <p className="text-label text-text-muted">
                   Price history
                 </p>
                 <ul className="mt-2 space-y-1.5">

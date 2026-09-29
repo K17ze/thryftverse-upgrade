@@ -10,11 +10,19 @@
  */
 
 import { useEffect, useRef, useState } from 'react';
+import dynamic from 'next/dynamic';
 import { Icon } from '@/components/ui/Icon';
 import { DATA_MODE } from '@/lib/api/client';
 import { ERROR_COPY, MAX_FILE_BYTES } from './visualSearchTypes';
-import { VisualSearchCamera } from './VisualSearchCamera';
 import type { VisualSearchErrorKind } from './visualSearchTypes';
+
+// Camera capture — mounts only behind the "Take a photo" action (and only
+// where getUserMedia is real), so the getUserMedia graph stays out of the
+// visual-search entry bundle.
+const VisualSearchCamera = dynamic(
+  () => import('./VisualSearchCamera').then((m) => m.VisualSearchCamera),
+  { ssr: false },
+);
 
 interface VisualSearchDropzoneProps {
   error: VisualSearchErrorKind | null;
@@ -78,7 +86,7 @@ export function VisualSearchDropzone({
   const copy = error ? ERROR_COPY[error] : null;
 
   return (
-    <div className="mx-auto w-full max-w-xl" onPaste={handlePaste}>
+    <div className="mx-auto w-full max-w-xl lg:max-w-2xl" onPaste={handlePaste}>
       <button
         type="button"
         onClick={() => inputRef.current?.click()}

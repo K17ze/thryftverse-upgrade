@@ -13,7 +13,7 @@ interface SettingsSectionProps {
 export function SettingsSection({ title, children }: SettingsSectionProps) {
   return (
     <section className="mt-8 first:mt-0">
-      <h2 className="px-4 pb-2 text-label font-semibold uppercase tracking-wider text-text-muted sm:px-5">
+      <h2 className="px-4 pb-2 text-label text-text-muted sm:px-5">
         {title}
       </h2>
       <div className="divide-y divide-border-subtle border-y border-border-subtle">

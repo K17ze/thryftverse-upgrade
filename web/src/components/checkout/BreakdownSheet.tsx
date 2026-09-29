@@ -138,7 +138,7 @@ export function BreakdownSheet({
 
         <div className="flex items-baseline justify-between border-t border-border-subtle pt-3">
           <span className="text-price-list font-semibold text-text-primary">Total</span>
-          <span className="tnum text-screen-title font-bold text-text-primary">
+          <span className="tnum text-screen-title text-text-primary">
             {formatPrice(payableTotal)}
           </span>
         </div>

@@ -14,6 +14,21 @@ import type { AppIconName } from '@/components/ui/Icon';
 /** Sheets the settings index can open in place of a route. */
 export type SettingsSheetId = 'language' | 'verification' | 'report' | 'age' | 'accent' | 'density';
 
+const SHEET_IDS: readonly SettingsSheetId[] = [
+  'language',
+  'verification',
+  'report',
+  'age',
+  'accent',
+  'density',
+];
+
+/** Validates an untrusted value (e.g. the ?sheet= deep-link param the
+ *  desktop rail emits) into a known sheet id. */
+export function isSettingsSheetId(value: unknown): value is SettingsSheetId {
+  return typeof value === 'string' && (SHEET_IDS as readonly string[]).includes(value);
+}
+
 export type SettingsTarget =
   | { kind: 'route'; href: string }
   | { kind: 'sheet'; sheet: SettingsSheetId }
@@ -39,7 +54,7 @@ export const SETTINGS_DESTINATIONS: SettingsDestination[] = [
   { id: 'security', label: 'Security', section: 'Your account', icon: 'key', keywords: 'password sign in two factor 2fa sessions devices revoke passkey', target: { kind: 'route', href: '/settings/security' } },
   { id: 'recovery-codes', label: 'Recovery codes', section: 'Your account', icon: 'lockOpen', keywords: 'backup codes two factor 2fa recovery one-time', target: { kind: 'route', href: '/settings/security/recovery' } },
   { id: 'connected-accounts', label: 'Connected accounts', section: 'Your account', icon: 'link', keywords: 'google apple facebook oauth linked social sign in', target: { kind: 'route', href: '/settings/security/connected' } },
-  { id: 'account-control', label: 'Account control', section: 'Your account', icon: 'settings', keywords: 'deactivate delete download export status restrict', target: { kind: 'route', href: '/settings/security/control' } },
+  { id: 'account-control', label: 'Account control', section: 'Your account', icon: 'settings', keywords: 'delete download export restrict account control', target: { kind: 'route', href: '/settings/security/control' } },
   { id: 'verification', label: 'Verification', section: 'Your account', icon: 'verified', keywords: 'identity kyc id badge verified trust', target: { kind: 'sheet', sheet: 'verification' } },
   { id: 'age-confirmation', label: 'Age confirmation', section: 'Your account', icon: 'fingerprint', keywords: '18 adult age check', target: { kind: 'sheet', sheet: 'age' } },
   { id: 'privacy', label: 'Privacy', section: 'Your account', icon: 'shield', keywords: 'visibility blocked restricted safety chat who can message', target: { kind: 'route', href: '/settings/privacy' } },

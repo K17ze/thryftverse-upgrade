@@ -22,7 +22,7 @@ export function LookTile({ look, priority }: { look: Look; priority?: boolean })
           alt={look.title ?? 'Look'}
           aspectRatio={look.coverAspectRatio ?? 0.8}
           priority={priority}
-          sizes="(max-width: 640px) 33vw, (max-width: 1024px) 25vw, 20vw"
+          sizes="(max-width: 640px) 33vw, (max-width: 1024px) 25vw, (max-width: 1280px) 20vw, 190px"
           fallbackIcon="images"
         />
       </div>
@@ -50,7 +50,7 @@ export function LookTile({ look, priority }: { look: Look; priority?: boolean })
 export function LooksGridSkeleton({ count = 6 }: { count?: number }) {
   return (
     <div
-      className="grid grid-cols-3 gap-1.5 px-4 sm:grid-cols-4 sm:gap-2 sm:px-6 lg:grid-cols-5"
+      className="grid grid-cols-3 gap-1.5 px-4 sm:grid-cols-4 sm:gap-2 sm:px-6 lg:grid-cols-5 xl:grid-cols-6"
       aria-busy
       aria-label="Loading looks"
     >
@@ -97,9 +97,9 @@ export function LooksGrid({
     );
   }
   return (
-    <div className="grid grid-cols-3 gap-1.5 px-4 sm:grid-cols-4 sm:gap-2 sm:px-6 lg:grid-cols-5">
-      {looks.map((look, i) => (
-        <LookTile key={look.id} look={look} priority={i < 5} />
+    <div className="grid grid-cols-3 gap-1.5 px-4 sm:grid-cols-4 sm:gap-2 sm:px-6 lg:grid-cols-5 xl:grid-cols-6">
+      {looks.map((look) => (
+        <LookTile key={look.id} look={look} />
       ))}
     </div>
   );

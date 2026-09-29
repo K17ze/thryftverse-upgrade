@@ -92,10 +92,10 @@ export function CheckoutSuccess({ orderId }: { orderId: string }) {
       <span className="flex h-16 w-16 items-center justify-center rounded-full bg-success-subtle text-success-text">
         <Icon name="check" size={30} filled />
       </span>
-      <h1 className="mt-5 text-screen-title font-bold text-text-primary">Order placed</h1>
+      <h1 className="mt-5 text-screen-title text-text-primary">Order placed</h1>
       <p className="mt-2 text-body text-text-secondary">
         Your payment was successful. The seller has been asked to dispatch within{' '}
-        {DISPATCH_SLA_DAYS} working days.
+        {DISPATCH_SLA_DAYS} days.
       </p>
       <button
         type="button"

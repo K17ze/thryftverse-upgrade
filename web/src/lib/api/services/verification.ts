@@ -81,4 +81,57 @@ export async function saveDac7TaxInfo(
   return payload.taxInfo;
 }
 
+// ── KYC identity verification ────────────────────────────────────────────────
+
+/** Mirrors frontend/src/services/complianceApi.ts — the provider-hosted
+ *  session the real flow redirects to. Document capture happens on the
+ *  provider's page; ThryftVerse never handles the media. */
+export interface KycSession {
+  id: string;
+  verificationUrl: string | null;
+  vendor: string;
+  status: 'pending' | 'in_review' | 'approved' | 'declined' | 'expired';
+}
+
+export interface KycStatusResult {
+  status: 'not_started' | 'pending' | 'verified' | 'rejected' | 'expired';
+  level: 'none' | 'basic' | 'enhanced';
+  vendor: string | null;
+  documentStatus: 'unsubmitted' | 'submitted' | 'approved' | 'rejected';
+  livenessStatus: 'unsubmitted' | 'pending' | 'passed' | 'failed';
+  tradingEnabled: boolean;
+}
+
+/** GET /compliance/kyc-status/:userId — the account's real KYC state. */
+export async function fetchKycStatus(
+  userId: string,
+  signal?: AbortSignal,
+): Promise<KycStatusResult | null> {
+  const payload = await fetchJson<{ ok: boolean; kycStatus?: KycStatusResult }>(
+    `/compliance/kyc-status/${encodeURIComponent(userId)}`,
+    undefined,
+    { signal },
+  );
+  return payload.kycStatus ?? null;
+}
+
+/** POST /compliance/kyc-session — starts a provider-hosted verification.
+ *  `dateOfBirth` is ISO `YYYY-MM-DD`. */
+export async function createKycSession(data: {
+  legalName?: string;
+  dateOfBirth?: string;
+  countryCode?: string;
+}): Promise<KycSession> {
+  const payload = await fetchJson<{ ok: boolean; session?: KycSession }>(
+    '/compliance/kyc-session',
+    {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(data),
+    },
+  );
+  if (!payload.session) throw new Error('Verification session was not created');
+  return payload.session;
+}
+
 export type { VerificationDemandType };

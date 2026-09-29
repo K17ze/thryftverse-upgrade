@@ -83,6 +83,18 @@ let querySeq = 0;
 const nextQueryId = () =>
   `vq-${Date.now().toString(36)}-${(querySeq++).toString(36)}`;
 
+/** Serve disclosures from the last live POST /visual-search — the
+ *  retrieval method that actually produced the results, the backend's
+ *  own note line and the honest scope counts. Null in fixture mode,
+ *  before the first serve, and after any reset. */
+export interface VisualSearchServeMeta {
+  retrievalMeta: visualSearchService.VisualSearchRetrievalMeta | null;
+  similarityMethod: string | null;
+  note: string | null;
+  matchCount: number | null;
+  facetCounts: visualSearchService.VisualSearchFacetCounts | null;
+}
+
 export interface VisualSearchState {
   status: VisualSearchStatus;
   phase: AnalysisPhase;
@@ -99,6 +111,8 @@ export interface VisualSearchState {
   inactiveKinds: ReadonlySet<DetectedAttribute['kind']>;
   region: VisualSearchRegion | null;
   results: Listing[];
+  /** Live serve disclosures — how the backend actually matched. */
+  serveMeta: VisualSearchServeMeta | null;
   pickFile: (file: File) => void;
   /** Fetch a remote image and run the same pipeline as a picked file —
    *  powers the dropzone's pasted-URL input and ?image= deep links. */
@@ -127,6 +141,7 @@ export function useVisualSearch(): VisualSearchState {
   );
   const [region, setRegion] = useState<VisualSearchRegion | null>(null);
   const [results, setResults] = useState<Listing[]>([]);
+  const [serveMeta, setServeMeta] = useState<VisualSearchServeMeta | null>(null);
   const [urlLoading, setUrlLoading] = useState(false);
 
   // ── Owned resources + sequencing ──────────────────────────────────────
@@ -198,17 +213,29 @@ export function useVisualSearch(): VisualSearchState {
       setPhase('matching');
       if (!live()) return;
       let matched: Listing[];
+      let nextServeMeta: VisualSearchServeMeta | null = null;
       if (DATA_MODE === 'live' && fileRef.current) {
         // Server-side matching — the backend scores candidates over the real
         // catalogue. Base64 the picked file; forward the framed region and
-        // the still-active facet selections.
+        // the still-active facet selections. The serve's own disclosures
+        // (method/fallback/scope counts) come back with the items — they
+        // are the only honest account of what matched.
         const imageBase64 = await fileToBase64(fileRef.current);
         if (!live()) return;
-        matched = await visualSearchService.runVisualSearch({
+        const serve = await visualSearchService.runVisualSearch({
           imageBase64,
           region: regionRef.current ?? undefined,
           facets: facetsFromAttributes(nextAttrs, inactiveRef.current),
         });
+        if (!live()) return;
+        matched = serve.items;
+        nextServeMeta = {
+          retrievalMeta: serve.retrievalMeta ?? null,
+          similarityMethod: serve.similarityMethod ?? null,
+          note: serve.note ?? null,
+          matchCount: serve.matchCount ?? null,
+          facetCounts: serve.facetCounts ?? null,
+        };
       } else {
         await dwell('matching');
         if (!live()) return;
@@ -222,6 +249,7 @@ export function useVisualSearch(): VisualSearchState {
       setFeatures(nextFeatures);
       setAttributes(nextAttrs);
       setResults(matched);
+      setServeMeta(nextServeMeta);
       setStatus(matched.length > 0 ? 'populated' : 'empty');
     } catch {
       if (!live()) return;
@@ -236,6 +264,7 @@ export function useVisualSearch(): VisualSearchState {
       setFeatures(null);
       setAttributes([]);
       setResults([]);
+      setServeMeta(null);
     }
   }, []);
 
@@ -255,9 +284,17 @@ export function useVisualSearch(): VisualSearchState {
               facets: facetsFromAttributes(attributes, inactive),
             }),
           )
-          .then((matched) => {
+          .then((serve) => {
             if (!mountedRef.current) return;
+            const matched = serve.items;
             setResults(matched);
+            setServeMeta({
+              retrievalMeta: serve.retrievalMeta ?? null,
+              similarityMethod: serve.similarityMethod ?? null,
+              note: serve.note ?? null,
+              matchCount: serve.matchCount ?? null,
+              facetCounts: serve.facetCounts ?? null,
+            });
             setStatus(matched.length > 0 ? 'populated' : 'empty');
           })
           .catch(() => undefined);
@@ -299,6 +336,7 @@ export function useVisualSearch(): VisualSearchState {
       setInactiveKinds(new Set());
       setRegion(null);
       setResults([]);
+      setServeMeta(null);
       setQueryId(nextQueryId());
       void analyze('full');
     },
@@ -363,6 +401,7 @@ export function useVisualSearch(): VisualSearchState {
     setInactiveKinds(new Set());
     setRegion(null);
     setResults([]);
+    setServeMeta(null);
     setQueryId(null);
   }, [disposeImage]);
 
@@ -415,6 +454,7 @@ export function useVisualSearch(): VisualSearchState {
     inactiveKinds,
     region,
     results,
+    serveMeta,
     pickFile,
     pickImageUrl,
     urlLoading,

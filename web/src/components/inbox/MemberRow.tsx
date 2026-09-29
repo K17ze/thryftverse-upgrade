@@ -60,7 +60,7 @@ export function MemberRow({
               <Icon name="verified" filled size={13} className="shrink-0 text-commerce-trust" />
             ) : null}
             {badgeLabel ? (
-              <span className="rounded-sm border border-brand px-[5px] py-px text-micro font-semibold uppercase tracking-wide text-brand">
+              <span className="rounded-sm border border-brand px-[5px] py-px text-micro font-semibold uppercase tracking-[0.08em] text-brand">
                 {badgeLabel}
               </span>
             ) : null}

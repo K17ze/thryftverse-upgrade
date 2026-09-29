@@ -44,7 +44,7 @@ function DeliveryGlyph({ status }: { status: InboxDeliveryStatus }) {
   }
   if (effective === 'read') {
     return (
-      <span className="inline-flex shrink-0 text-brand" aria-label="Read">
+      <span className="inline-flex shrink-0 text-brand" role="img" aria-label="Read">
         <Icon name="check" size={13} />
         <Icon name="check" size={13} className="-ml-2.5" />
       </span>
@@ -52,7 +52,7 @@ function DeliveryGlyph({ status }: { status: InboxDeliveryStatus }) {
   }
   // sent + delivered — muted single/double check
   return (
-    <span className="inline-flex shrink-0 text-text-muted" aria-label={effective === 'delivered' ? 'Delivered' : 'Sent'}>
+    <span className="inline-flex shrink-0 text-text-muted" role="img" aria-label={effective === 'delivered' ? 'Delivered' : 'Sent'}>
       <Icon name="check" size={13} />
       {effective === 'delivered' ? <Icon name="check" size={13} className="-ml-2.5" /> : null}
     </span>
@@ -66,13 +66,19 @@ interface ConversationRowProps {
    *  for badge surfaces; the row keeps the badge visible-but-dimmed from
    *  the source record (mobile InboxConversationRow grammar). */
   rawUnread?: { unread: boolean; count: number };
+  /** Unsent composer draft — the mobile draftText grammar: a brand
+   *  "Draft" label leads and the draft text replaces the preview; the
+   *  unread badge drops (a thread you're drafting in isn't awaiting
+   *  your attention) while the delivery glyph still describes the last
+   *  message actually sent. */
+  draft?: string;
 }
 
-export function ConversationRow({ conversation: c, active, rawUnread }: ConversationRowProps) {
+export function ConversationRow({ conversation: c, active, rawUnread, draft }: ConversationRowProps) {
   const { user } = useSession();
   const group = isGroupConversation(c);
   const title = conversationTitle(c);
-  const preview = lastMessagePreview(c);
+  const preview = draft ?? lastMessagePreview(c);
   const delivery = deriveDeliveryStatus(c);
   const count = group ? memberCount(c) : 0;
   const { isMuted, isPinned } = useConversationPrefs();
@@ -86,9 +92,19 @@ export function ConversationRow({ conversation: c, active, rawUnread }: Conversa
   return (
     <Link
       href={`/inbox/${c.id}`}
+      data-conversation-row
       aria-current={active ? 'page' : undefined}
-      aria-label={`${title}${group && count ? `, group, ${count} members` : ''}${unread ? ', unread' : ''}${muted ? ', muted' : ''}`}
-      className={`pressable flex min-h-[var(--density-row-height)] items-center gap-3 px-4 py-[var(--density-row-py)] ${
+      aria-label={[
+        title,
+        group && count ? `group, ${count} members` : null,
+        draft ? `Draft: ${draft}` : preview || null,
+        formatInboxTimestamp(c.lastMessageTime),
+        unread ? 'unread' : null,
+        muted ? 'muted' : null,
+      ]
+        .filter(Boolean)
+        .join(', ')}
+      className={`pressable flex min-h-[var(--density-row-height)] items-center gap-3 px-4 py-[var(--density-row-py)] focus-visible:bg-row-pressed focus-visible:outline-none ${
         active ? 'bg-surface-alt' : 'hover:bg-row-pressed'
       }`}
     >
@@ -107,6 +123,7 @@ export function ConversationRow({ conversation: c, active, rawUnread }: Conversa
             {c.isOnline ? (
               <span
                 className="absolute -bottom-0.5 -right-0.5 h-3 w-3 rounded-full bg-success-text ring-2 ring-background"
+                role="img"
                 aria-label="Online"
               />
             ) : null}
@@ -148,21 +165,31 @@ export function ConversationRow({ conversation: c, active, rawUnread }: Conversa
               {count} {count === 1 ? 'member' : 'members'}
             </span>
           ) : null}
+          {draft ? (
+            <span className="shrink-0 text-meta font-semibold text-brand">
+              Draft
+            </span>
+          ) : null}
           {delivery ? <DeliveryGlyph status={delivery} /> : null}
           <span
             className={`clamp-1 flex-1 text-body ${
-              unread ? 'font-semibold text-text-primary' : 'text-text-secondary'
+              draft
+                ? 'text-text-secondary'
+                : unread
+                  ? 'font-semibold text-text-primary'
+                  : 'text-text-secondary'
             }`}
           >
             {preview}
           </span>
-          {unread ? (
+          {unread && !draft ? (
             <span
               className={`flex h-[18px] min-w-[18px] shrink-0 items-center justify-center rounded-full px-1 text-micro font-semibold ${
                 // Muted keeps the unread marker at a subdued weight —
                 // "unread" is still true, just quiet (mobile parity).
                 muted ? 'bg-surface-alt text-text-muted' : 'bg-brand text-text-inverse'
               }`}
+              role="img"
               aria-label={unreadCount > 1 ? `${unreadCount} unread` : 'Unread'}
             >
               {unreadCount > 1 ? (unreadCount > 99 ? '99+' : unreadCount) : null}

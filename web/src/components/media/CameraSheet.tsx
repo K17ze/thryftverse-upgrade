@@ -18,16 +18,11 @@ import { Icon } from '@/components/ui/Icon';
 import { IconButton } from '@/components/ui/IconButton';
 import { Sheet } from '@/components/ui/Sheet';
 import { captureVideoFrame } from '@/lib/media/imageEdit';
+import { isCameraCaptureSupported } from '@/lib/media/cameraSupport';
 
-/** getUserMedia needs a secure context AND the MediaDevices API. */
-export function isCameraCaptureSupported(): boolean {
-  return (
-    typeof window !== 'undefined' &&
-    window.isSecureContext === true &&
-    typeof navigator !== 'undefined' &&
-    !!navigator.mediaDevices?.getUserMedia
-  );
-}
+// Re-exported for existing importers — the canonical home is the tiny
+// cameraSupport module so capability-only consumers skip this graph.
+export { isCameraCaptureSupported };
 
 type CameraPhase =
   | 'starting' // permission request / stream spin-up

@@ -61,10 +61,30 @@ function DemandRow({ demand, isLast }: { demand: SellerVerificationDemand; isLas
               {demandTypeLabel(demand.demandType)}
             </p>
           </div>
+          {/* Status + deadline become real columns at lg — inbox-table
+              grammar instead of a stacked card. */}
+          <span className="hidden w-40 shrink-0 lg:block">
+            <Badge
+              variant={overdue ? 'danger' : meta.badge}
+              icon={overdue ? 'warning' : meta.icon}
+            >
+              {demandBadgeLabel(demand)}
+            </Badge>
+          </span>
+          <span
+            className={`tnum hidden w-40 shrink-0 text-right text-meta lg:block ${
+              deadlineText &&
+              (demand.status === 'failed' || overdue)
+                ? 'text-danger-text'
+                : 'text-text-muted'
+            }`}
+          >
+            {deadlineText ?? ''}
+          </span>
           <Icon name="forward" size={18} className="shrink-0 text-text-muted" />
         </div>
 
-        <div className="ml-14 mt-2 flex items-center justify-between gap-3">
+        <div className="ml-14 mt-2 flex items-center justify-between gap-3 lg:hidden">
           <Badge
             variant={overdue ? 'danger' : meta.badge}
             icon={overdue ? 'warning' : meta.icon}
@@ -153,7 +173,7 @@ export function DemandList() {
   const history = all.filter((d) => d.status !== 'pending');
 
   return (
-    <div className="mx-auto w-full max-w-[720px] px-4 pb-16 sm:px-6">
+    <div className="mx-auto w-full max-w-[720px] px-4 pb-16 sm:px-6 lg:max-w-[1024px]">
       <div className="flex items-center pt-2 md:pt-6">
         <IconButton
           name="back"
@@ -161,7 +181,7 @@ export function DemandList() {
           onClick={() => router.push('/verification')}
           className="-ml-2"
         />
-        <h1 className="ml-1 text-screen-title font-semibold text-text-primary">
+        <h1 className="ml-1 text-screen-title text-text-primary">
           Verification requests
         </h1>
       </div>

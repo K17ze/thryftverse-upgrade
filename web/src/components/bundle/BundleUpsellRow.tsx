@@ -31,7 +31,8 @@ import { useToast } from '@/components/ui/Toast';
 import { useSellerListings } from '@/lib/hooks/queries';
 import { useSession } from '@/lib/session/SessionProvider';
 import { useStore, useHydrated } from '@/lib/store/useStore';
-import { BUNDLE_RULE, BUNDLE_RULE_LABEL, listingById } from '@/lib/data/fixtures';
+import { BUNDLE_RULE, BUNDLE_RULE_LABEL } from '@/lib/data/fixtures';
+import { useResolvedListings } from '@/lib/hooks/home-modules';
 import { bundleProgressFor } from '@/lib/data/fixtures-commerce';
 import {
   extractClosetFacets,
@@ -97,17 +98,19 @@ export function BundleUpsellRow({ listing }: { listing: Listing }) {
 
   // Same-seller items already in the bag count toward the tier whether or
   // not they're staged in this rail — the progress line reads from these.
+  // Bag ids resolve through the shared id resolver (live ids fetch, miss
+  // drops) so the progress stays honest instead of undercounting.
+  const bagIds = useMemo(
+    () => (hydrated ? bag.map((b) => b.listingId) : []),
+    [hydrated, bag],
+  );
+  const { items: bagListings } = useResolvedListings(bagIds);
   const sellerBagListings = useMemo(
     () =>
-      hydrated
-        ? bag
-            .map((b) => listingById(b.listingId))
-            .filter(
-              (l): l is Listing =>
-                !!l && l.sellerId === listing.sellerId && !l.isSold,
-            )
-        : [],
-    [hydrated, bag, listing.sellerId],
+      bagListings.filter(
+        (l) => l.sellerId === listing.sellerId && !l.isSold,
+      ),
+    [bagListings, listing.sellerId],
   );
   const sellerBagCount = sellerBagListings.length;
   const sellerMissing = Math.max(0, BUNDLE_RULE.minItems - sellerBagCount);

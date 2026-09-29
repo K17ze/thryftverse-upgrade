@@ -14,7 +14,7 @@ import {
   useSaveVisualSearch,
   useVisualSearch,
 } from '@/lib/hooks/visual-search-queries';
-import { honestMatchNote } from './visualSearchEngine';
+import { honestMatchNote, liveMatchNote } from './visualSearchEngine';
 import { VisualSearchDropzone } from './VisualSearchDropzone';
 import { VisualSearchQueryPanel } from './VisualSearchQueryPanel';
 import { VisualSearchRefinementBar } from './VisualSearchRefinementBar';
@@ -59,7 +59,7 @@ export function VisualSearchClient() {
   return (
     <div className="mx-auto max-w-[1440px] px-4 pb-10 pt-5 sm:px-6">
       <div className="flex items-center justify-between gap-3">
-        <h1 className="text-screen-title font-bold text-text-primary">Search by photo</h1>
+        <h1 className="text-screen-title text-text-primary">Search by photo</h1>
         <Link
           href="/search"
           className="pressable flex items-center gap-1.5 rounded-md px-2 py-1.5 text-caption font-medium text-text-secondary hover:text-text-primary"
@@ -70,7 +70,7 @@ export function VisualSearchClient() {
       </div>
 
       {!isActive ? (
-        <div className="mt-10 sm:mt-16">
+        <div className="mt-10 sm:mt-16 lg:mt-20">
           <VisualSearchDropzone
             error={vs.error}
             onPick={vs.pickFile}
@@ -147,7 +147,14 @@ export function VisualSearchClient() {
               status={vs.status}
               phase={vs.phase}
               results={vs.results}
-              honestNote={honestMatchNote(vs.region !== null)}
+              honestNote={
+                // Live mode shows the serve's own account — retrievalMeta
+                // names what actually matched (heuristic vs filter-only
+                // fallback); fixture keeps the on-device note.
+                vs.serveMeta
+                  ? liveMatchNote(vs.serveMeta.retrievalMeta, vs.serveMeta.note)
+                  : honestMatchNote(vs.region !== null)
+              }
               hasRemovedAttributes={vs.inactiveKinds.size > 0}
               onRestoreAttributes={vs.resetAttributes}
               onChooseAnother={() => {

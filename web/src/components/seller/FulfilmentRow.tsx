@@ -19,11 +19,17 @@ export function FulfilmentRow({
   job,
   onPrintLabel,
   onMarkPosted,
+  onExtendDeadline,
   isMarking,
 }: {
   job: FulfilmentJob;
   onPrintLabel: (job: FulfilmentJob) => void;
-  onMarkPosted: (jobId: string) => void;
+  /** The job travels with the action — the queue decides whether the row
+   *  already carries tracking or must collect it first. */
+  onMarkPosted: (job: FulfilmentJob) => void;
+  /** Opens the extension sheet — only reachable while 'to-post' (the
+   *  server's 'paid' gate) and absent once a proposal is pending. */
+  onExtendDeadline?: (job: FulfilmentJob) => void;
   isMarking?: boolean;
 }) {
   const { show } = useToast();
@@ -33,6 +39,14 @@ export function FulfilmentRow({
     day: 'numeric',
     month: 'short',
   });
+  const pending = job.pendingExtension ?? null;
+  const pendingDeadline = pending?.proposedShipBy
+    ? new Date(pending.proposedShipBy).toLocaleDateString('en-GB', {
+        weekday: 'short',
+        day: 'numeric',
+        month: 'short',
+      })
+    : null;
 
   const copyTracking = async () => {
     if (!job.trackingNumber) return;
@@ -87,26 +101,55 @@ export function FulfilmentRow({
       </div>
 
       {overdue ? (
-        <Badge variant="danger" icon="warning" className="hidden shrink-0 md:inline-flex">
+        <Badge variant="danger" icon="warning" className="hidden shrink-0 md:inline-flex lg:hidden">
           Overdue
         </Badge>
       ) : null}
+      {/* Status slot — fixed-width column at lg so the action cell doesn't
+          drift between overdue and on-time rows. */}
+      <span className="hidden w-24 shrink-0 lg:block">
+        {overdue ? (
+          <Badge variant="danger" icon="warning">
+            Overdue
+          </Badge>
+        ) : null}
+      </span>
 
-      <div className="flex shrink-0 items-center justify-end gap-2">
+      <div className="flex shrink-0 items-center justify-end gap-2 lg:w-[240px]">
         {job.stage === 'to-post' ? (
-          <>
-            <Button variant="quiet" size="sm" onClick={() => onPrintLabel(job)}>
-              Print label
-            </Button>
-            <Button
-              variant="secondary"
-              size="sm"
-              onClick={() => onMarkPosted(job.id)}
-              disabled={isMarking}
-            >
-              Mark posted
-            </Button>
-          </>
+          <span className="flex flex-col items-end gap-1.5">
+            <span className="flex items-center gap-2">
+              <Button variant="quiet" size="sm" onClick={() => onPrintLabel(job)}>
+                Print label
+              </Button>
+              <Button
+                variant="secondary"
+                size="sm"
+                onClick={() => onMarkPosted(job)}
+                disabled={isMarking}
+              >
+                Mark posted
+              </Button>
+            </span>
+            {/* Extension affordance mirrors the native quiet toggle — while
+                a proposal awaits the buyer the row states it instead of
+                offering a second one. */}
+            {pending ? (
+              <span className="text-right text-meta text-text-muted">
+                {pendingDeadline
+                  ? `Extension requested · dispatch by ${pendingDeadline} · awaiting buyer`
+                  : 'Extension requested · awaiting buyer'}
+              </span>
+            ) : onExtendDeadline ? (
+              <button
+                type="button"
+                onClick={() => onExtendDeadline(job)}
+                className="pressable -mb-0.5 rounded-md px-1.5 py-0.5 text-meta font-semibold text-text-secondary hover:text-text-primary"
+              >
+                Need more time?
+              </button>
+            ) : null}
+          </span>
         ) : (
           <span className="flex min-w-0 flex-col items-end">
             {job.trackingNumber ? (

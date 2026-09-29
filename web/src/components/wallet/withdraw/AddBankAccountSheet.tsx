@@ -41,7 +41,7 @@ interface FieldErrors {
 const inputClass =
   'tnum h-12 w-full rounded-lg border border-border bg-input px-4 text-body text-input-text placeholder:text-text-muted focus:outline-none focus:border-text-muted';
 
-const labelClass = 'text-label font-semibold uppercase tracking-wider text-text-muted';
+const labelClass = 'text-label text-text-muted';
 
 export function AddBankAccountSheet({ open, onClose, accounts, onSave }: AddBankAccountSheetProps) {
   const [holderName, setHolderName] = useState('');

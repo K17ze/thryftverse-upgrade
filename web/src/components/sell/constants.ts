@@ -6,8 +6,26 @@
 import type { Listing, ListingCondition, User } from '@/lib/contracts/domain';
 import type { AppIconName } from '@/components/ui/Icon';
 import { LISTINGS } from '@/lib/data/fixtures';
+import {
+  canonicalCategoryId,
+  canonicalCondition,
+  canonicalSubcategoryId,
+  isKnownCategoryId,
+  isSizeRequiredCategory,
+} from './taxonomy';
 
-export const MAX_PHOTOS = 8;
+export {
+  allowedConditionsFor,
+  conditionAllowedFor,
+  isSizelessCategory,
+  isSizeRequiredCategory,
+  sizesForCategory,
+} from './taxonomy';
+
+/** Media cap — mirrors the mobile MAX_MEDIA_COUNT (SellScreen passes
+ *  `maxPhotos={10 - mediaDraftItems.length}`); images and video share the
+ *  same pool. */
+export const MAX_PHOTOS = 10;
 export const MAX_TAGS = 8;
 export const DESCRIPTION_MAX = 600;
 /**
@@ -83,15 +101,29 @@ export type SellErrors = Partial<
   >
 >;
 
-/** Prefill the draft from an existing listing — the ?edit=<id> path. */
+/**
+ * Prefill the draft from an existing listing — the ?edit=<id> path.
+ * Taxonomy values are canonicalised on the way in: the draft only ever
+ * carries ids the pickers can emit, so re-publishing an edited listing
+ * can't leak a dead fixture slug or a display-name subcategory. Values
+ * with no honest canonical equivalent come back empty — the picker shows
+ * unselected and the completeness gate asks for a re-pick.
+ */
 export function draftFromListing(listing: Listing): SellDraft {
+  const category = canonicalCategoryId(listing.category);
+  // Media rows carry the authoritative order + kind — images[] alone
+  // collapses video slots to their poster still, which would re-attach a
+  // video slot as a plain image on save. Prefer media uris when present.
+  const stagedUris = listing.media?.length
+    ? listing.media.map((m) => m.uri)
+    : listing.images;
   return {
-    photos: listing.images.filter(Boolean),
+    photos: stagedUris.filter(Boolean),
     title: listing.title ?? '',
     brand: listing.brand ?? '',
-    category: listing.category ?? '',
-    subcategory: listing.subcategory ?? '',
-    condition: listing.condition ?? '',
+    category,
+    subcategory: canonicalSubcategoryId(category, listing.subcategory),
+    condition: canonicalCondition(listing.condition),
     size: listing.size ?? '',
     description: listing.description ?? '',
     // Listings published through this flow carry tags forward.
@@ -144,7 +176,11 @@ export function listingSustainabilityTags(listing: Listing): string[] {
 }
 
 // ============================================================================
-// CONDITION — radio-card copy ported from the mobile condition picker
+// CONDITION — the canonical taxonomy set (taxonomy_nodes type='condition'),
+// radio-card copy ported from the mobile condition picker. The legacy
+// 'New without tags' option is gone: it isn't a canonical condition, so
+// new listings never emit it (stored legacy values canonicalise to
+// 'Very good' on hydrate — see canonicalCondition in ./taxonomy).
 // ============================================================================
 
 export interface ConditionOption {
@@ -154,7 +190,6 @@ export interface ConditionOption {
 
 export const CONDITION_OPTIONS: ConditionOption[] = [
   { value: 'New with tags', hint: 'Unworn, original tags attached' },
-  { value: 'New without tags', hint: 'Unworn, tags removed' },
   { value: 'Very good', hint: 'Lightly used, no visible flaws' },
   { value: 'Good', hint: 'Used, minor signs of wear' },
   { value: 'Satisfactory', hint: 'Visible wear, honestly described' },
@@ -213,7 +248,14 @@ export function postageSummary(
  * preview surface so sellers see the same media treatment buyers get.
  * Never published; the preview id never resolves outside this screen.
  */
-export function draftToPreviewListing(draft: SellDraft, seller: User): Listing {
+export function draftToPreviewListing(
+  draft: SellDraft,
+  seller: User,
+  /** Staged-media lookup (kind + poster) keyed by the draft's preview URL —
+   *  video slots project as their poster still, never a playable-source uri
+   *  into an <img> slot. */
+  mediaOf?: (src: string) => { kind?: 'image' | 'video'; poster?: string | null } | undefined,
+): Listing {
   const price = parsePriceInput(draft.price);
   // RRP only rides the preview when it's an honest "was" price — a value
   // at or under the ask would fake a discount, so it never reaches the
@@ -233,7 +275,24 @@ export function draftToPreviewListing(draft: SellDraft, seller: User): Listing {
     originalPrice: honestRrp,
     priceWithProtection:
       price != null ? Math.round((price + protectionFeeGbp(price)) * 100) / 100 : undefined,
-    images: draft.photos,
+    // Video slots project their poster still into images[] (the backend's
+    // own listingImageUrls semantics — media[] carries the real uri).
+    images: draft.photos
+      .map((src) => {
+        const m = mediaOf?.(src);
+        return m?.kind === 'video' ? (m.poster ?? src) : src;
+      })
+      .filter(Boolean),
+    media: draft.photos.length
+      ? draft.photos.map((src) => {
+          const m = mediaOf?.(src);
+          return {
+            kind: (m?.kind === 'video' ? 'video' : 'image') as 'image' | 'video',
+            uri: src,
+            poster: m?.poster ?? null,
+          };
+        })
+      : undefined,
     ...({ sustainabilityTags: [...draft.sustainabilityTags] } as Partial<ListingWithSellExtras>),
     likes: 0,
     views: 0,
@@ -257,42 +316,16 @@ export function draftToPreviewListing(draft: SellDraft, seller: User): Listing {
 }
 
 // ============================================================================
-// TAXONOMY — category slug → subcategory leaves + size grammar
+// TAXONOMY — the composer speaks canonical taxonomy ids, ported in
+// ./taxonomy from the shared contract (lib/contracts/taxonomy.ts) and the
+// category activation policy. Picker option builders take a node list so
+// live-fetched vocabularies and the seed share the same code path; the
+// size/condition helpers below are re-exported from there to keep this
+// file's import surface stable.
 // ============================================================================
 
-export const SUBCATEGORIES: Record<string, string[]> = {
-  women: ['Dresses', 'Tops', 'Knitwear', 'Coats', 'Jackets', 'Jeans', 'Trousers', 'Skirts', 'Boots', 'Shoes'],
-  men: ['T-shirts', 'Shirts', 'Hoodies', 'Knitwear', 'Jackets', 'Denim jackets', 'Leather jackets', 'Jeans', 'Trousers', 'Blazers'],
-  sneakers: ['Low tops', 'High tops', 'Boots', 'Sandals'],
-  bags: ['Shoulder bags', 'Totes', 'Crossbody bags', 'Backpacks', 'Clutches'],
-  accessories: ['Watches', 'Sunglasses', 'Jewellery', 'Scarves', 'Belts', 'Hats'],
-  vintage: ['T-shirts', 'Denim', 'Jackets', 'Dresses', 'Accessories'],
-  designer: ['Bags', 'Dresses', 'Shoes', 'Accessories', 'Ready-to-wear'],
-  streetwear: ['T-shirts', 'Hoodies', 'Sneakers', 'Jackets', 'Accessories'],
-};
-
-const CLOTHING_SIZES = ['XXS', 'XS', 'S', 'M', 'L', 'XL', 'XXL', 'UK 6', 'UK 8', 'UK 10', 'UK 12', 'UK 14', 'UK 16', 'One size'];
-const SHOE_SIZES = ['UK 4', 'UK 5', 'UK 6', 'UK 7', 'UK 8', 'UK 9', 'UK 10', 'UK 11', 'UK 12'];
-const ONE_SIZE = ['One size'];
-
-export function sizesForCategory(category: string): string[] {
-  if (category === 'sneakers') return SHOE_SIZES;
-  if (category === 'bags' || category === 'accessories') return ONE_SIZE;
-  if (!category) return [];
-  return CLOTHING_SIZES;
-}
-
-/** Categories that don't carry a meaningful size choice at all. */
-export function isSizelessCategory(category: string): boolean {
-  return category === 'bags' || category === 'accessories';
-}
-
-/** Mobile parity — the category activation policy requires size only for
- *  shoes (web 'sneakers'); every other category treats it as recommended. */
-export function isSizeRequiredCategory(category: string): boolean {
-  return category === 'sneakers';
-}
-
+/** Brand quick-picks — canonical brand node names (brand is a free-text
+ *  field; chips only shortcut the names buyers already search). */
 export const POPULAR_BRANDS = [
   'Nike',
   'Adidas',
@@ -300,10 +333,10 @@ export const POPULAR_BRANDS = [
   'Zara',
   'Ralph Lauren',
   'New Balance',
-  'COS',
-  'Carhartt WIP',
-  'Dr. Martens',
+  'H&M',
+  'Carhartt',
   'The North Face',
+  'Vans',
 ];
 
 // ============================================================================
@@ -394,9 +427,16 @@ export function missingPublishFields(draft: SellDraft): string[] {
   const missing: string[] = [];
   if (!draft.photos.length) missing.push('photos');
   if (draft.title.trim().length < 3) missing.push('title');
-  if (!draft.category) missing.push('category');
+  // Category is universally required — and must be a canonical root id a
+  // picker could have emitted (a dead fixture slug can't activate).
+  if (!draft.category || !isKnownCategoryId(draft.category)) missing.push('category');
+  // Condition is universally required (UNIVERSAL_REQUIRED in the policy).
   if (!draft.condition) missing.push('condition');
-  if (isSizeRequiredCategory(draft.category) && !draft.size) missing.push('size');
+  // Size is category-policy dependent: required under the shoes policy
+  // (subcategory *-shoes), recommended/hidden elsewhere.
+  if (isSizeRequiredCategory(draft.category, draft.subcategory) && !draft.size) {
+    missing.push('size');
+  }
   if (draft.description.trim().length < DESCRIPTION_MIN) missing.push('description');
   if (parsePriceInput(draft.price) == null) missing.push('price');
   return missing;

@@ -13,7 +13,7 @@
 import { useMemo, useState } from 'react';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
-import { SegmentedControl } from '@/components/feed/SegmentedControl';
+import { Tabs } from '@/components/ui/Tabs';
 import { EmptyState } from '@/components/ui/EmptyState';
 import { Icon } from '@/components/ui/Icon';
 import {
@@ -26,7 +26,11 @@ import {
   AuctionSupportingTile,
   type AttentionKind,
 } from '@/components/auctions';
-import { useAuctionBoard, useMyBids } from '@/lib/hooks/auction-queries';
+import {
+  useAuctionBoard,
+  useMyBids,
+  useWatchedAuctionBoard,
+} from '@/lib/hooks/auction-queries';
 import { useAuctionWatchlist } from '@/components/auctions/auctionWatchlist';
 import { useSession } from '@/lib/session/SessionProvider';
 import { useHydrated } from '@/lib/store/useStore';
@@ -68,6 +72,13 @@ export default function AuctionsPage() {
   const { watched } = useAuctionWatchlist();
   const { board } = useMyBids(user?.id ?? '');
   const [scope, setScope] = useState<Scope>('live');
+  // Watching is a server-side scope (watchedOnly) in live mode — fetched
+  // only while the scope is open; the local store stays the optimistic
+  // overlay. Fixture mode keeps the local-set intersection.
+  const watchedBoard = useWatchedAuctionBoard(watched, { enabled: scope === 'watching' });
+  /** Live-scope ordering — 'ending' is the default (time-sensitive lots
+   *  lead, real msToEnd ordering); 'bids' surfaces the contested lots. */
+  const [liveSort, setLiveSort] = useState<'ending' | 'bids'>('ending');
 
   const viewerStatus = useMemo(() => {
     const map = new Map<string, MyBidStatus>();
@@ -79,10 +90,18 @@ export default function AuctionsPage() {
 
   const scoped = useMemo(() => {
     if (scope === 'watching') {
-      return hydrated ? auctions.filter((a) => watched.has(a.id)) : [];
+      return hydrated ? watchedBoard.auctions : [];
     }
-    return auctions.filter((a) => a.lifecycle === scope);
-  }, [auctions, scope, watched, hydrated]);
+    const rows = auctions.filter((a) => a.lifecycle === scope);
+    if (scope === 'live' && liveSort === 'bids') {
+      // Most-contested first; the clock still breaks ties so the order
+      // never drifts away from urgency.
+      return [...rows].sort(
+        (a, b) => b.bidCount - a.bidCount || a.msToEnd - b.msToEnd,
+      );
+    }
+    return rows;
+  }, [auctions, scope, watchedBoard.auctions, hydrated, liveSort]);
 
   const counts = useMemo(() => {
     const c = { live: 0, upcoming: 0, ended: 0, watching: 0 };
@@ -110,7 +129,7 @@ export default function AuctionsPage() {
     <div className="mx-auto w-full max-w-[1280px] px-4 pb-16 pt-6 sm:px-6">
       <header className="flex flex-wrap items-end justify-between gap-3">
         <div>
-          <h1 className="text-screen-title font-bold text-text-primary">Auctions</h1>
+          <h1 className="text-screen-title text-text-primary">Auctions</h1>
           <p className="mt-1 text-body text-text-secondary">
             3–24h windows · proxy bidding · anti-snipe in the last two minutes
           </p>
@@ -132,13 +151,18 @@ export default function AuctionsPage() {
         </div>
       </header>
 
-      <div className="mt-5">
-        <SegmentedControl
-          options={SCOPES.map((s) => ({ ...s, count: counts[s.value] }))}
-          value={scope}
-          onChange={setScope}
-        />
-      </div>
+      <Tabs
+        className="-mx-4 mt-5 sm:-mx-6"
+        railClassName="px-1 sm:px-3"
+        tabs={SCOPES.map((s) => ({
+          key: s.value,
+          label: s.label,
+          count: counts[s.value],
+        }))}
+        active={scope}
+        onChange={setScope}
+        ariaLabel="Auction scopes"
+      />
 
       {/* Personal strip — the single auction asking for the viewer now */}
       {attention ? (
@@ -148,6 +172,35 @@ export default function AuctionsPage() {
             auction={attention.row.auction}
             myBid={attention.row.myBid}
           />
+        </div>
+      ) : null}
+
+      {/* Live-scope ordering — ending soonest is the default; the board
+          can flip to the contested lots. Same quiet toggle grammar as
+          the my-bids ending-soonest chip. */}
+      {scope === 'live' && !isLoading && !isError && scoped.length > 1 ? (
+        <div className="mt-4 flex items-center gap-2" role="group" aria-label="Sort live auctions">
+          {(
+            [
+              { key: 'ending' as const, label: 'Ending soon', icon: 'clock' as const },
+              { key: 'bids' as const, label: 'Most bids', icon: 'fire' as const },
+            ]
+          ).map((option) => (
+            <button
+              key={option.key}
+              type="button"
+              aria-pressed={liveSort === option.key}
+              onClick={() => setLiveSort(option.key)}
+              className={`pressable inline-flex h-9 items-center gap-1.5 rounded-full px-3.5 text-caption font-semibold ${
+                liveSort === option.key
+                  ? 'bg-brand-subtle text-text-primary'
+                  : 'bg-surface-alt text-text-secondary hover:text-text-primary'
+              }`}
+            >
+              <Icon name={option.icon} size={14} />
+              {option.label}
+            </button>
+          ))}
         </div>
       ) : null}
 
@@ -172,6 +225,16 @@ export default function AuctionsPage() {
           />
         ) : scope === 'watching' && !hydrated ? (
           <AuctionBoardSkeleton count={4} />
+        ) : scope === 'watching' && watchedBoard.isLoading ? (
+          <AuctionBoardSkeleton count={4} />
+        ) : scope === 'watching' && watchedBoard.isError ? (
+          <EmptyState
+            icon="alert"
+            title="Couldn't load auctions"
+            subtitle="Check your connection and try again."
+            actionLabel="Try again"
+            onAction={() => void watchedBoard.refetch()}
+          />
         ) : scoped.length === 0 ? (
           <EmptyState
             icon={scope === 'watching' ? 'eye' : 'auction'}
@@ -187,9 +250,9 @@ export default function AuctionsPage() {
         ) : scope === 'live' ? (
           <LiveScope auctions={scoped} />
         ) : scope === 'watching' ? (
-          <div className="grid grid-cols-2 gap-x-3 gap-y-8 md:grid-cols-3 xl:grid-cols-4">
+          <div className="grid grid-cols-2 gap-x-3 gap-y-8 md:grid-cols-3 xl:grid-cols-5">
             {scoped.map((auction, index) => (
-              <AuctionCard key={auction.id} auction={auction} priority={index < 4} />
+              <AuctionCard key={auction.id} auction={auction} priority={index < 5} />
             ))}
           </div>
         ) : (
@@ -250,7 +313,7 @@ function LiveScope({ auctions }: { auctions: ReturnType<typeof useAuctionBoard>[
         </div>
       </div>
       {continuation.length > 0 ? (
-        <div className="grid grid-cols-2 gap-x-3 gap-y-8 border-t border-border-subtle pt-6 md:grid-cols-3 xl:grid-cols-4">
+        <div className="grid grid-cols-2 gap-x-3 gap-y-8 border-t border-border-subtle pt-6 md:grid-cols-3 xl:grid-cols-5">
           {continuation.map((auction) => (
             <AuctionCard key={auction.id} auction={auction} />
           ))}

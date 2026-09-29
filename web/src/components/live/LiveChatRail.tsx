@@ -87,7 +87,7 @@ export function LiveChatRail({
                 {m.mine ? 'you' : m.user}
               </span>
               {m.seller ? (
-                <span className="ml-1.5 rounded-sm bg-white/15 px-1 py-px text-micro font-bold uppercase tracking-[0.08em] text-scrim-text-primary">
+                <span className="ml-1.5 rounded-sm bg-white/15 px-1 py-px text-micro font-semibold uppercase tracking-[0.08em] text-scrim-text-primary">
                   Host
                 </span>
               ) : null}

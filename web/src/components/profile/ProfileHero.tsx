@@ -31,10 +31,21 @@ import { FollowButton } from './FollowButton';
 import { ProfileOptionsMenu } from './ProfileOptionsMenu';
 import { RatingStars } from './RatingStars';
 import { useShare } from './useShare';
-import { memberSinceFor, verificationTierFor, VERIFICATION_BADGE } from './profileViewModel';
+import { formatMemberSince, memberSinceFor, verificationTierFor, VERIFICATION_BADGE } from './profileViewModel';
 
 /** Profile stat seams that can route somewhere when the parent opts in. */
 export type ProfileStatKey = 'items' | 'sold' | 'reviews';
+
+/** Viewer-scoped flags from the profile aggregate (live mode) — feeds the
+ *  options menu's mute/restrict/block row labels. */
+export interface ProfileViewerState {
+  isMuted?: boolean;
+  isRestricted?: boolean;
+  isBlocked?: boolean;
+  /** Server-side DM permission (blocks, messaging settings, privacy) —
+   *  false disables the Message CTA rather than failing on send. */
+  canMessage?: boolean;
+}
 
 interface ProfileHeroProps {
   user: User;
@@ -54,6 +65,9 @@ interface ProfileHeroProps {
    *  closet carries enough usable stills, the cover band composes a media
    *  mosaic of real listing covers instead of staying empty. */
   closetMedia?: Listing[];
+  /** Viewer relationship state — public variant only; lands on the
+   *  options menu when provided. */
+  viewer?: ProfileViewerState;
 }
 
 // ── Bio — linkified + see-more truncated, mirrors mobile BioText ──
@@ -173,21 +187,29 @@ function websiteHref(website: string): string {
   return /^https?:\/\//i.test(trimmed) ? trimmed : `https://${trimmed}`;
 }
 
-export function ProfileHero({ user, listingCount, forSaleCount, soldCount, variant, onStatPress, closetMedia }: ProfileHeroProps) {
+export function ProfileHero({ user, listingCount, forSaleCount, soldCount, variant, onStatPress, closetMedia, viewer }: ProfileHeroProps) {
   const router = useRouter();
   const { show } = useToast();
   const share = useShare();
   const { requireAuth, wall } = useSignupWall();
   const createConversation = useCreateConversation();
-  const memberSince = memberSinceFor(user.id);
+  // The live aggregate carries the real createdAt — the fixture lookup
+  // stays as the fixture-mode fallback (members carry no createdAt).
+  const memberSince = formatMemberSince(user.createdAt) ?? memberSinceFor(user.id);
   const verificationTier = verificationTierFor(user);
+  // Native grammar: the display name leads when the member set one; the
+  // @handle drops to the secondary line. Without a display name the
+  // username stays the identity anchor.
+  const displayName = user.displayName?.trim() || null;
 
-  // Cover band: the member's authored cover photo wins; a deep closet
-  // composes a media mosaic of its own listing covers; a thin closet
-  // degrades honestly to the identity-only hero.
+  // Cover band: authored cover media wins (a cover video plays a muted
+  // loop over the photo fallback); a deep closet composes a media mosaic
+  // of its own listing covers; a thin closet degrades honestly to the
+  // identity-only hero.
   const mosaicCells = useMemo(() => closetMosaicCells(closetMedia ?? []), [closetMedia]);
-  const showMosaic = !user.coverPhoto && mosaicCells.length >= CLOSET_MOSAIC_MIN;
-  const hasCoverBand = Boolean(user.coverPhoto) || showMosaic;
+  const hasCoverMedia = Boolean(user.coverPhoto || user.coverVideo);
+  const showMosaic = !hasCoverMedia && mosaicCells.length >= CLOSET_MOSAIC_MIN;
+  const hasCoverBand = hasCoverMedia || showMosaic;
 
   /** Instagram parity — Message creates the DM when none exists and
    *  deep-links straight into the thread, never just the inbox list. */
@@ -230,16 +252,41 @@ export function ProfileHero({ user, listingCount, forSaleCount, soldCount, varia
 
   return (
     <section aria-label={`@${user.username} profile`}>
-      {user.coverPhoto ? (
-        <div className="relative h-36 sm:h-48">
-          <AppImage
-            src={user.coverPhoto}
-            alt=""
-            fill
-            sizes="100vw"
-            className="h-full w-full"
-            priority
-          />
+      {/* Full-bleed cover band — the banner breaks out of the content
+          column to span the viewport edge-to-edge at every breakpoint
+          (eBay shop-banner / Depop cover grammar). The -translate breakout
+          is safe because the document root clips overflow-x. */}
+      {hasCoverMedia ? (
+        <div className="relative left-1/2 h-36 w-screen -translate-x-1/2 overflow-hidden sm:h-48 lg:h-64 xl:h-72">
+          {/* Contained-crop art direction: portrait covers keep the
+              upper-third subject instead of a dead-centre slice. Scoped
+              to lg+ so the mobile crop stays untouched. */}
+          {user.coverPhoto ? (
+            <AppImage
+              src={user.coverPhoto}
+              alt=""
+              fill
+              sizes="100vw"
+              imgClassName="lg:object-[50%_35%]"
+              className="h-full w-full"
+              priority
+            />
+          ) : null}
+          {/* Cover video — muted ambient loop layered over the photo,
+              which stays mounted as poster + load-error fallback
+              (mobile FlagshipProfileMedia coverVideoUri grammar). */}
+          {user.coverVideo ? (
+            <video
+              src={user.coverVideo}
+              poster={user.coverPhoto}
+              autoPlay
+              muted
+              loop
+              playsInline
+              aria-hidden="true"
+              className="absolute inset-0 h-full w-full object-cover lg:object-[50%_35%]"
+            />
+          ) : null}
           {/* Media scrims — top fade for floating-control contrast, bottom
               fade softens the avatar seam (mobile ProfileHeaderHero grammar). */}
           <div
@@ -261,22 +308,41 @@ export function ProfileHero({ user, listingCount, forSaleCount, soldCount, varia
       ) : null}
 
       <div className="px-4 sm:px-6">
+        {/* IG/Depop desktop grammar: a larger avatar column with the
+            identity block beside it — never a centered stack. The avatar
+            alone bridges the cover seam (half its diameter, mobile's seam
+            contract scaled to the 150px desktop anchor); the identity text
+            stays on the flat canvas below the cover — nothing competes
+            with the photo for contrast. */}
         <div
-          className={`flex items-start gap-4 sm:gap-6 ${
-            hasCoverBand ? '-mt-12' : 'pt-6'
+          className={`flex items-start gap-4 sm:gap-6 lg:gap-10 ${
+            hasCoverBand ? '-mt-12 lg:mt-0' : 'pt-6 lg:pt-8'
           }`}
         >
           <Avatar
             src={user.avatar}
             name={user.username}
             size={96}
-            className={hasCoverBand ? 'ring-4 ring-background' : 'ring-1 ring-border'}
+            className={`lg:hidden ${hasCoverBand ? 'ring-4 ring-background' : 'ring-1 ring-border'}`}
           />
+          {/* Desktop avatar — IG's ~150px identity anchor. Duplicated (not
+              CSS-scaled) so the image srcset resolves at the real size. */}
+          <span
+            className={`hidden shrink-0 lg:block ${hasCoverBand ? 'lg:-mt-[75px]' : ''}`}
+            aria-hidden="true"
+          >
+            <Avatar
+              src={user.avatar}
+              name={user.username}
+              size={150}
+              className={hasCoverBand ? 'ring-4 ring-background' : 'ring-1 ring-border'}
+            />
+          </span>
 
-          <div className="min-w-0 flex-1">
+          <div className={`min-w-0 flex-1 ${hasCoverBand ? 'lg:pt-5' : ''}`}>
             <div className="flex flex-wrap items-center gap-x-2 gap-y-1.5">
-              <h1 className="text-item-title font-bold text-text-primary sm:text-screen-title">
-                {user.username}
+              <h1 className="text-item-title font-bold text-text-primary sm:text-screen-title lg:text-hero">
+                {displayName ?? user.username}
               </h1>
               {user.isVerified ? (
                 <Icon
@@ -305,6 +371,12 @@ export function ProfileHero({ user, listingCount, forSaleCount, soldCount, varia
                 </Badge>
               ))}
             </div>
+
+            {/* Secondary handle — only when a display name owns the
+                headline (native ProfileHero grammar). */}
+            {displayName ? (
+              <p className="mt-0.5 text-body text-text-secondary">@{user.username}</p>
+            ) : null}
 
             {user.bio ? <BioText bio={user.bio} /> : null}
 
@@ -341,7 +413,7 @@ export function ProfileHero({ user, listingCount, forSaleCount, soldCount, varia
 
             {/* Stats strip — flat typography, not stat cards. Seams with a
                 destination are quiet buttons (mobile FRESH-06). */}
-            <div className="mt-3 flex flex-wrap items-center gap-x-5 gap-y-1.5">
+            <div className="mt-3 flex flex-wrap items-center gap-x-5 gap-y-1.5 lg:gap-x-7">
               {onStatPress ? (
                 <StatPress onPress={() => onStatPress('items')} label="View listings">
                   {itemsStat}
@@ -415,17 +487,21 @@ export function ProfileHero({ user, listingCount, forSaleCount, soldCount, varia
                 <>
                   {/* Message is the conversion action (the filled control);
                       Follow is the quiet stateful affordance — mobile hero
-                      grammar, not the IG pill row. */}
-                  <Button
-                    variant="primary"
-                    size="sm"
-                    icon="chat"
-                    className="mr-1"
-                    disabled={createConversation.isPending}
-                    onClick={() => void messageUser()}
-                  >
-                    Message
-                  </Button>
+                      grammar, not the IG pill row. `canMessage` is the
+                      server's DM permission — false hides the CTA rather
+                      than dead-ending on send (blocked/private accounts). */}
+                  {viewer?.canMessage !== false ? (
+                    <Button
+                      variant="primary"
+                      size="sm"
+                      icon="chat"
+                      className="mr-1"
+                      disabled={createConversation.isPending}
+                      onClick={() => void messageUser()}
+                    >
+                      Message
+                    </Button>
+                  ) : null}
                   <FollowButton
                     userId={user.id}
                     size="sm"
@@ -433,7 +509,7 @@ export function ProfileHero({ user, listingCount, forSaleCount, soldCount, varia
                     className="mr-1 min-w-[104px]"
                   />
                   <IconButton name="share" aria-label="Share profile" onClick={shareProfile} />
-                  <ProfileOptionsMenu user={user} />
+                  <ProfileOptionsMenu user={user} viewer={viewer} />
                 </>
               )}
             </div>

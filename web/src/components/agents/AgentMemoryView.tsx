@@ -27,7 +27,9 @@ import {
   AGENT_MEMORY_KIND_LABELS,
   type AgentMemory,
 } from '@/lib/contracts/agents';
+import { parseApiError } from '@/lib/api/http';
 import { useAgentBots, useAgentMemory, useAgentMemoryActions } from '@/lib/hooks/agents-queries';
+import { AgentsSignInWall, useAgentsAccess } from './AgentsGate';
 
 function MemorySkeleton() {
   return (
@@ -89,8 +91,9 @@ function MemoryRow({
 export function AgentMemoryView() {
   const router = useRouter();
   const { show } = useToast();
-  const { data, isLoading, isError, refetch } = useAgentMemory();
+  const { data, isLoading, isError, error, refetch } = useAgentMemory();
   const { data: bots } = useAgentBots();
+  const access = useAgentsAccess(error);
   const { setMemoryEnabled, setExtractionEnabled, forgetMemory, clearAllMemories } =
     useAgentMemoryActions();
 
@@ -158,100 +161,114 @@ export function AgentMemoryView() {
     <div className="pb-16">
       <div className="flex items-center gap-1 px-2 pt-1 sm:px-4">
         <IconButton name="back" aria-label="Back to agents" onClick={() => router.push('/agents')} />
-        <h1 className="flex-1 text-screen-title font-semibold text-text-primary">Agent memory</h1>
+        <h1 className="flex-1 text-screen-title text-text-primary">Agent memory</h1>
       </div>
       <p className="mt-1 px-4 text-caption text-text-secondary sm:px-6">
         What your agents remember between conversations — every fact is yours
         to inspect or forget.
       </p>
 
-      {isLoading ? (
+      {access === 'loading' || isLoading ? (
         <MemorySkeleton />
+      ) : access === 'blocked' ? (
+        <div className="mt-8">
+          <AgentsSignInWall title="Sign in to see agent memory" />
+        </div>
       ) : isError || !data || !settings ? (
         <div className="mt-8">
           <EmptyState
             icon="inbox"
             title="Couldn’t load memories"
-            subtitle="Your agent memory could not be reached. Try again."
+            subtitle={parseApiError(
+              error,
+              'Your agent memory could not be reached. Try again.',
+            ).message}
             actionLabel="Try again"
             onAction={() => void refetch()}
           />
         </div>
       ) : (
-        <>
-          <SettingsSection title="Controls">
-            <SettingsRow
-              icon="bookmark"
-              label="Remember me"
-              subtitle="Agents can recall what they have learned about you"
-              trailing={
-                <Switch
-                  checked={settings.memoryEnabled}
-                  onChange={(v) => void runToggle('memory', v)}
-                  disabled={syncing !== null}
-                  aria-label="Remember me"
-                />
-              }
-            />
-            <SettingsRow
-              icon="sparkles"
-              label="Learn from chats"
-              subtitle="Agents may save durable facts and preferences after a conversation"
-              trailing={
-                <Switch
-                  checked={settings.extractionEnabled}
-                  onChange={(v) => void runToggle('extraction', v)}
-                  disabled={syncing !== null || !settings.memoryEnabled}
-                  aria-label="Learn from chats"
-                />
-              }
-            />
-          </SettingsSection>
+        <div className="lg:mt-4 lg:grid lg:grid-cols-[320px_minmax(0,1fr)] lg:gap-x-12">
+          {/* Controls — a sticky rail at lg, first in flow on mobile. */}
+          <div className="lg:sticky lg:top-24 lg:self-start">
+            <SettingsSection title="Controls">
+              <SettingsRow
+                icon="bookmark"
+                label="Remember me"
+                subtitle="Agents can recall what they have learned about you"
+                trailing={
+                  <Switch
+                    checked={settings.memoryEnabled}
+                    onChange={(v) => void runToggle('memory', v)}
+                    disabled={syncing !== null}
+                    aria-label="Remember me"
+                  />
+                }
+              />
+              <SettingsRow
+                icon="sparkles"
+                label="Learn from chats"
+                subtitle="Agents may save durable facts and preferences after a conversation"
+                trailing={
+                  <Switch
+                    checked={settings.extractionEnabled}
+                    onChange={(v) => void runToggle('extraction', v)}
+                    disabled={syncing !== null || !settings.memoryEnabled}
+                    aria-label="Learn from chats"
+                  />
+                }
+              />
+            </SettingsSection>
+          </div>
 
-          <SettingsSection
-            title={memories.length > 0 ? `Remembered (${memories.length})` : 'Remembered'}
-          >
-            {memories.length === 0 ? (
-              <div className="px-4 py-6 sm:px-5">
-                <p className="text-body-emphasis text-text-primary">Nothing remembered yet</p>
-                <p className="mt-1.5 text-caption text-text-secondary">
-                  {settings.memoryEnabled
-                    ? 'When an agent learns something durable about you — a size, a preference, a standing rule — it appears here for you to review or forget.'
-                    : 'Memory is off. Turn on “Remember me” to let agents keep context across conversations.'}
+          {/* Remembered list + the clear-all danger zone — same DOM order
+              as mobile (controls → remembered → danger). */}
+          <div className="mt-8 min-w-0 lg:mt-0">
+            <SettingsSection
+              title={memories.length > 0 ? `Remembered (${memories.length})` : 'Remembered'}
+            >
+              {memories.length === 0 ? (
+                <div className="px-4 py-6 sm:px-5">
+                  <p className="text-body-emphasis text-text-primary">Nothing remembered yet</p>
+                  <p className="mt-1.5 text-caption text-text-secondary">
+                    {settings.memoryEnabled
+                      ? 'When an agent learns something durable about you — a size, a preference, a standing rule — it appears here for you to review or forget.'
+                      : 'Memory is off. Turn on “Remember me” to let agents keep context across conversations.'}
+                  </p>
+                </div>
+              ) : (
+                memories.map((m) => (
+                  <MemoryRow
+                    key={m.id}
+                    memory={m}
+                    botName={m.botId ? botById.get(m.botId) : undefined}
+                    onPress={() => requestForget(m)}
+                  />
+                ))
+              )}
+            </SettingsSection>
+
+            {/* Danger zone — only when there is something to destroy. */}
+            {memories.length > 0 ? (
+              <div className="mt-10 border-t border-b border-border-subtle px-4 py-4 sm:px-6">
+                <p className="text-body-emphasis font-medium text-text-primary">
+                  Clear all memories
                 </p>
+                <p className="mt-1 text-caption text-text-secondary">
+                  Every remembered fact, preference and rule is forgotten. Agents
+                  will not use them again.
+                </p>
+                <button
+                  type="button"
+                  onClick={requestClearAll}
+                  className="pressable mt-3 text-body-emphasis font-semibold text-danger-text"
+                >
+                  Clear all memories
+                </button>
               </div>
-            ) : (
-              memories.map((m) => (
-                <MemoryRow
-                  key={m.id}
-                  memory={m}
-                  botName={m.botId ? botById.get(m.botId) : undefined}
-                  onPress={() => requestForget(m)}
-                />
-              ))
-            )}
-          </SettingsSection>
-
-          {/* Danger zone — only when there is something to destroy. */}
-          {memories.length > 0 ? (
-            <div className="mt-10 border-t border-b border-border-subtle px-4 py-4 sm:px-6">
-              <p className="text-body-emphasis font-medium text-text-primary">
-                Clear all memories
-              </p>
-              <p className="mt-1 text-caption text-text-secondary">
-                Every remembered fact, preference and rule is forgotten. Agents
-                will not use them again.
-              </p>
-              <button
-                type="button"
-                onClick={requestClearAll}
-                className="pressable mt-3 text-body-emphasis font-semibold text-danger-text"
-              >
-                Clear all memories
-              </button>
-            </div>
-          ) : null}
-        </>
+            ) : null}
+          </div>
+        </div>
       )}
 
       <ConfirmSheet sheet={confirm} busy={busy} onDismiss={() => setConfirm(null)} />

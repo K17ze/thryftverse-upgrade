@@ -67,13 +67,17 @@ function SelectableRow({
       aria-label={label}
       tabIndex={disabled ? -1 : tabIndex}
       onClick={disabled ? undefined : onSelect}
-      className={`flex w-full items-center gap-3 py-3 text-left ${
-        disabled ? 'cursor-not-allowed opacity-50' : 'pressable'
+      className={`flex w-full items-center gap-3.5 rounded-lg px-3 py-3 text-left transition-colors ${
+        disabled
+          ? 'cursor-not-allowed opacity-50'
+          : selected
+            ? 'bg-surface-alt/70 ring-1 ring-border-subtle'
+            : 'pressable hover:bg-surface-alt/30'
       }`}
     >
       <span
         aria-hidden
-        className={`flex h-5 w-5 shrink-0 items-center justify-center rounded-full border ${
+        className={`flex h-5 w-5 shrink-0 items-center justify-center rounded-full border transition-colors ${
           selected ? 'border-brand bg-brand' : 'border-border'
         }`}
       >
@@ -202,6 +206,7 @@ export function PaymentPicker({
   onSelect,
   onAdd,
   walletOption,
+  cardTenderReason,
 }: {
   methods: PaymentMethod[];
   selectedId: string | null;
@@ -219,18 +224,24 @@ export function PaymentPicker({
     selected: boolean;
     onSelect: () => void;
   };
+  /** When set, every saved-card row renders disabled with this quiet
+   *  reason line — live mode uses it because card payment intents can
+   *  only be confirmed on the native surface (the confirm route is
+   *  admin-gated and the web has no Stripe.js rail). */
+  cardTenderReason?: string;
 }) {
+  const cardsDisabled = !!cardTenderReason;
   // The tabbable radio is the selected one when it's chargeable, else the
-  // first chargeable row — an expired selection can never hold the
-  // group's single tab stop.
+  // first chargeable row — an expired or disabled selection can never
+  // hold the group's single tab stop.
   const selectedChargeable = methods.some(
-    (m) => m.id === selectedId && !paymentMethodExpired(m),
+    (m) => m.id === selectedId && !paymentMethodExpired(m) && !cardsDisabled,
   );
   const rovingId = walletOption?.selected
     ? null
     : selectedChargeable
       ? selectedId
-      : methods.find((m) => !paymentMethodExpired(m))?.id;
+      : (methods.find((m) => !paymentMethodExpired(m) && !cardsDisabled)?.id ?? null);
   return (
     <section>
       <SectionHeader title="Payment method" addHref="/settings/payments" onAdd={onAdd} />
@@ -242,14 +253,15 @@ export function PaymentPicker({
       >
         {methods.map((pm) => {
           const expired = paymentMethodExpired(pm);
+          const unavailable = expired || cardsDisabled;
           return (
             <SelectableRow
               key={pm.id}
               selected={pm.id === selectedId}
               onSelect={() => onSelect(pm.id)}
-              label={`${cardBrandLabel(pm)}${expired ? ' (expired)' : ''}`}
-              disabled={expired}
-              tabIndex={!expired && pm.id === rovingId ? 0 : -1}
+              label={`${cardBrandLabel(pm)}${expired ? ' (expired)' : ''}${cardsDisabled && cardTenderReason ? ` — ${cardTenderReason}` : ''}`}
+              disabled={unavailable}
+              tabIndex={!unavailable && pm.id === rovingId ? 0 : -1}
             >
               <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-md bg-surface-alt text-text-secondary">
                 <Icon name={pm.type === 'card' ? 'card' : 'wallet'} size={18} />
@@ -279,7 +291,7 @@ export function PaymentPicker({
             selected={walletOption.selected}
             onSelect={walletOption.onSelect}
             label={`1ZE Wallet — ${Math.ceil(walletOption.available).toLocaleString()} 1ZE available, ${Math.ceil(walletOption.needed).toLocaleString()} 1ZE needed`}
-            tabIndex={walletOption.selected ? 0 : -1}
+            tabIndex={walletOption.selected || rovingId === null ? 0 : -1}
           >
             <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-md bg-surface-alt text-text-secondary">
               <Icon name="wallet" size={18} />
@@ -301,6 +313,12 @@ export function PaymentPicker({
           </SelectableRow>
         ) : null}
       </div>
+      {methods.length > 0 && cardTenderReason ? (
+        <p className="mt-1.5 flex items-center gap-1.5 px-3 text-caption text-text-muted">
+          <Icon name="info" size={13} className="shrink-0" />
+          {cardTenderReason}
+        </p>
+      ) : null}
       {methods.length === 0 && !walletOption ? (
         <p className="py-3 text-caption text-text-muted">
           No saved cards yet — add one to pay.

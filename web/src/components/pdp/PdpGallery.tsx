@@ -10,12 +10,13 @@
 
 import { useEffect, useRef, useState } from 'react';
 import Link from 'next/link';
+import dynamic from 'next/dynamic';
 import { AppImage } from '@/components/ui/AppImage';
 import { Icon } from '@/components/ui/Icon';
 import { SustainabilityChip } from '@/components/ui/Badge';
-import { PdpLightbox } from './PdpLightbox';
 import type { Listing } from '@/lib/contracts/domain';
 import { useAuctionBoard } from '@/lib/hooks/auction-queries';
+import { DATA_MODE } from '@/lib/api/client';
 import {
   countdownLabel,
   countdownUrgency,
@@ -28,6 +29,13 @@ import {
   DEFAULT_LISTING_MEDIA_ASPECT_RATIO,
   isUsableUri,
 } from '@/lib/utils/media';
+
+// Fullscreen viewer — mounts only behind the expand affordance, so its
+// chunk fetches on first open instead of riding every PDP.
+const PdpLightbox = dynamic(
+  () => import('./PdpLightbox').then((m) => m.PdpLightbox),
+  { ssr: false },
+);
 
 interface PdpGalleryProps {
   listing: Listing;
@@ -70,7 +78,7 @@ export function PdpGallery({ listing }: PdpGalleryProps) {
       {images.length > 1 ? (
         <div
           ref={desktopRailRef}
-          className="no-scrollbar hidden w-[72px] shrink-0 flex-col gap-2 lg:flex lg:max-h-[75vh] lg:overflow-y-auto"
+          className="no-scrollbar hidden w-[72px] shrink-0 flex-col gap-2 lg:flex lg:max-h-[75vh] lg:overflow-y-auto xl:w-[84px]"
           role="group"
           aria-label="Item photos"
         >
@@ -85,7 +93,7 @@ export function PdpGallery({ listing }: PdpGalleryProps) {
                 i === current ? 'ring-2 ring-brand' : 'opacity-70 hover:opacity-100'
               }`}
             >
-              <AppImage src={src} alt="" aspectRatio={0.8} sizes="72px" className="w-full" />
+              <AppImage src={src} alt="" aspectRatio={0.8} sizes="(min-width: 1280px) 84px, 72px" className="w-full" />
             </button>
           ))}
         </div>
@@ -109,7 +117,7 @@ export function PdpGallery({ listing }: PdpGalleryProps) {
               focalPoint={focalPoint}
               blurDataURL={primaryMedia?.lqip ?? null}
               priority
-              sizes="(max-width: 1024px) 100vw, 55vw"
+              sizes="(max-width: 1024px) 100vw, (max-width: 1440px) 62vw, 950px"
               className="w-full lg:max-h-[75vh]"
             />
 
@@ -149,8 +157,11 @@ export function PdpGallery({ listing }: PdpGalleryProps) {
           </button>
 
           {/* Time-bound urgency — only when a real auction window exists.
-              Never rendered for ordinary listings: no deadline, no chip. */}
-          <AuctionDeadlineChip listing={listing} />
+              Never rendered for ordinary listings: no deadline, no chip —
+              and no board fetch or 1s tick for listings without linkage. */}
+          {listing.auctionEndsAt != null || DATA_MODE !== 'live' ? (
+            <AuctionDeadlineChip listing={listing} />
+          ) : null}
         </div>
 
         {/* Thumbnail rail — mobile / tablet */}
@@ -201,6 +212,11 @@ export function PdpGallery({ listing }: PdpGalleryProps) {
  * listing is linked to a live/upcoming auction on the board (fixture or
  * live data), or the listing payload itself carries `auctionEndsAt`.
  * Everything else gets nothing — urgency is never fabricated.
+ *
+ * Mount is gated upstream (the media stage renders the chip only for
+ * listings with payload linkage, or fixture mode where the linkage lives
+ * only on the auction side) so the board query + 1s tick never run for
+ * ordinary live PDPs.
  *
  * Isolated component so the board's 1s tick re-renders the chip, not the
  * media stage.

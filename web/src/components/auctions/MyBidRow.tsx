@@ -54,11 +54,13 @@ export function MyBidRow({ row }: { row: MyBidRow }) {
 
         <div className="min-w-0 flex-1">
           <p className="clamp-1 text-body-emphasis text-text-primary">{auction.title}</p>
-          <p className={`mt-0.5 flex items-center gap-1 text-caption font-semibold ${info.tone}`}>
+          {/* Status + bid stack under the title below lg; from lg up they
+              lift into their own columns (the meta lines hide there). */}
+          <p className={`mt-0.5 flex items-center gap-1 text-caption font-semibold lg:hidden ${info.tone}`}>
             <Icon name={info.icon} size={13} />
             {info.label}
           </p>
-          <p className="tnum mt-0.5 text-meta text-text-secondary">
+          <p className="tnum mt-0.5 text-meta text-text-secondary lg:hidden">
             Your bid {formatPrice(myBid)}
             {status === 'outbid' || status === 'lost'
               ? ` · Top ${formatPrice(auction.currentBid)}`
@@ -67,7 +69,22 @@ export function MyBidRow({ row }: { row: MyBidRow }) {
           </p>
         </div>
 
-        <div className="flex shrink-0 flex-col items-end gap-1.5">
+        {/* Status column — desktop table cell. */}
+        <p className={`hidden w-32 shrink-0 items-center gap-1 text-caption font-semibold lg:flex ${info.tone}`}>
+          <Icon name={info.icon} size={13} />
+          {info.label}
+        </p>
+
+        {/* Bid column — desktop table cell. */}
+        <p className="tnum hidden w-48 shrink-0 text-meta text-text-secondary lg:block">
+          Your bid {formatPrice(myBid)}
+          {status === 'outbid' || status === 'lost'
+            ? ` · Top ${formatPrice(auction.currentBid)}`
+            : ''}
+          {status === 'lost' && outcome ? (ENDED_SUFFIX[outcome] ?? '') : ''}
+        </p>
+
+        <div className="flex shrink-0 flex-col items-end gap-1.5 lg:w-44">
           <span className="tnum text-caption text-text-secondary">
             {settled ? 'Ended' : countdownLabel(auction)}
           </span>

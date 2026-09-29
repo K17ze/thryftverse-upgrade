@@ -115,7 +115,7 @@ export function PdpRails({
                 <span className="flex items-center gap-1 text-body-emphasis font-semibold text-text-primary">
                   <span className="clamp-1">@{sellerUsername}</span>
                   {seller?.verified ? (
-                    <Icon name="verified" size={13} className="shrink-0 text-success-text" />
+                    <Icon name="verified" size={13} className="shrink-0 text-commerce-trust" />
                   ) : null}
                 </span>
                 <span className="mt-0.5 flex items-center gap-1 text-meta font-normal text-text-secondary">

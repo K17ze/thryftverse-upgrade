@@ -10,7 +10,6 @@
  */
 
 import type { User } from '@/lib/contracts/domain';
-import { CATEGORIES } from '@/lib/data/fixtures';
 import { Avatar } from '@/components/ui/Avatar';
 import { Badge } from '@/components/ui/Badge';
 import { Button } from '@/components/ui/Button';
@@ -18,6 +17,8 @@ import { Icon } from '@/components/ui/Icon';
 import { IconButton } from '@/components/ui/IconButton';
 import { PdpGallery } from '@/components/pdp/PdpGallery';
 import { formatCount, formatPrice } from '@/lib/utils/format';
+import { useTaxonomy } from '@/lib/hooks/sell/useTaxonomy';
+import { categoryNodeName } from './taxonomy';
 import {
   draftToPreviewListing,
   isSizelessCategory,
@@ -34,6 +35,12 @@ interface SellPreviewProps {
   publishing: boolean;
   /** True on the ?edit=<id> path — the commit action saves over the listing. */
   editing?: boolean;
+  /** The backend's real failure reason from the last publish attempt —
+   *  rendered verbatim so media/validation/stale-edit failures surface
+   *  instead of a generic connection error. */
+  error?: string | null;
+  /** Staged-media lookup — video slots project their poster still. */
+  mediaOf?: (src: string) => { kind?: 'image' | 'video'; poster?: string | null } | undefined;
   onBack: () => void;
   onPublish: () => void;
 }
@@ -60,23 +67,27 @@ function shippingSpecs(draft: SellDraft): [string, string][] {
   ];
 }
 
-export function SellPreview({ draft, seller, publishing, editing, onBack, onPublish }: SellPreviewProps) {
-  const listing = draftToPreviewListing(draft, seller);
+export function SellPreview({ draft, seller, publishing, editing, error, mediaOf, onBack, onPublish }: SellPreviewProps) {
+  const listing = draftToPreviewListing(draft, seller, mediaOf);
+  const { taxonomy } = useTaxonomy();
   const price = parsePriceInput(draft.price);
   const hasTitle = draft.title.trim().length > 0;
-  const categoryName = CATEGORIES.find((c) => c.slug === draft.category)?.name;
+  // The draft carries canonical taxonomy ids — resolve names for display
+  // (never render the id itself).
+  const categoryName = categoryNodeName(taxonomy.categories, draft.category);
+  const subcategoryName = categoryNodeName(taxonomy.categories, draft.subcategory);
 
   const facts: [string, string][] = [
     ['Condition', draft.condition || '—'],
-    ['Size', draft.size || (isSizelessCategory(draft.category) ? 'One size' : '—')],
-    ['Category', draft.subcategory || categoryName || '—'],
+    ['Size', draft.size || (isSizelessCategory(draft.category, draft.subcategory) ? 'One size' : '—')],
+    ['Category', subcategoryName || categoryName || '—'],
   ];
 
   const details: [string, string][] = [];
   if (draft.brand.trim()) details.push(['Brand', draft.brand.trim()]);
   details.push(['Size', draft.size || 'One size']);
   if (draft.condition) details.push(['Condition', draft.condition]);
-  if (categoryName) details.push(['Category', draft.subcategory ? `${categoryName} — ${draft.subcategory}` : categoryName]);
+  if (categoryName) details.push(['Category', subcategoryName ? `${categoryName} — ${subcategoryName}` : categoryName]);
 
   const shipping = shippingSpecs(draft);
   const methodKnown = draft.shippingMethod !== '';
@@ -97,7 +108,7 @@ export function SellPreview({ draft, seller, publishing, editing, onBack, onPubl
       <header className="flex items-center justify-between gap-4 pb-6 pt-8">
         <div className="flex min-w-0 items-center gap-3">
           <IconButton name="back" aria-label="Back to editing" onClick={onBack} className="-ml-2" />
-          <h1 className="clamp-1 text-screen-title font-bold text-text-primary">
+          <h1 className="clamp-1 text-screen-title text-text-primary">
             How buyers see it
           </h1>
         </div>
@@ -120,7 +131,7 @@ export function SellPreview({ draft, seller, publishing, editing, onBack, onPubl
         {/* Info column — BuyPanel's grammar minus the commerce actions. */}
         <div className="flex min-w-0 flex-col">
           {draft.brand.trim() ? (
-            <span className="text-label font-semibold uppercase tracking-wide text-text-secondary">
+            <span className="text-label text-text-secondary">
               {draft.brand.trim()}
             </span>
           ) : null}
@@ -189,7 +200,7 @@ export function SellPreview({ draft, seller, publishing, editing, onBack, onPubl
               <p className="flex items-center gap-1 text-body-emphasis text-text-primary">
                 <span className="clamp-1">@{seller.username}</span>
                 {seller.isVerified ? (
-                  <Icon name="verified" size={13} className="shrink-0 text-success-text" />
+                  <Icon name="verified" size={13} className="shrink-0 text-commerce-trust" />
                 ) : null}
               </p>
               <p className="mt-0.5 flex items-center gap-1 text-meta text-text-secondary">
@@ -294,9 +305,18 @@ export function SellPreview({ draft, seller, publishing, editing, onBack, onPubl
           How it sits in discovery, next to everything else.
         </p>
         <div className="mt-4 max-w-[220px]">
-          <SellPreviewCard draft={draft} seller={seller} />
+          <SellPreviewCard draft={draft} seller={seller} mediaOf={mediaOf} />
         </div>
       </section>
+
+      {/* Publish failure — the server's own message (validation, stale
+          edit, media still processing, moderation). Never a generic
+          "check your connection" that blames the wrong layer. */}
+      {error ? (
+        <p role="alert" className="mt-6 text-body text-danger-text">
+          {error}
+        </p>
+      ) : null}
 
       {/* Commit row — the mobile preview footer's job: back to the editor,
           or publish. */}

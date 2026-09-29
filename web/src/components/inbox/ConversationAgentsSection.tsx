@@ -231,7 +231,7 @@ export function ConversationAgentsSection({
         <>
           {connected.length > 0 ? (
             <div>
-              <p className="px-4 pb-1 text-micro font-semibold uppercase tracking-wide text-text-muted">
+              <p className="px-4 pb-1 text-micro font-semibold uppercase tracking-[0.08em] text-text-muted">
                 Connected
               </p>
               {connected.map((bot, i) =>
@@ -241,7 +241,7 @@ export function ConversationAgentsSection({
           ) : null}
           {available.length > 0 ? (
             <div className={connected.length > 0 ? 'mt-4' : ''}>
-              <p className="px-4 pb-1 text-micro font-semibold uppercase tracking-wide text-text-muted">
+              <p className="px-4 pb-1 text-micro font-semibold uppercase tracking-[0.08em] text-text-muted">
                 Available
               </p>
               {available.map((bot, i) =>

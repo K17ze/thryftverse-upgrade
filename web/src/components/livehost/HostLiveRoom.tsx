@@ -82,7 +82,7 @@ export function HostLiveRoom({ stream, candidates, onPinsChange, onEnd }: HostLi
   };
 
   return (
-    <div className="mx-auto w-full max-w-[1200px] px-4 pb-12 pt-4 sm:px-6">
+    <div className="mx-auto w-full max-w-[1440px] px-4 pb-12 pt-4 sm:px-6">
       {/* Console chrome — exit left, end right (mobile grammar). */}
       <div className="flex items-center gap-2">
         <Link
@@ -110,7 +110,7 @@ export function HostLiveRoom({ stream, candidates, onPinsChange, onEnd }: HostLi
               fill
               priority
               className="h-full w-full"
-              sizes="(max-width: 1024px) 100vw, 800px"
+              sizes="(max-width: 1024px) 100vw, 1024px"
             />
             <div className="absolute inset-x-0 top-0 flex items-start justify-between p-3">
               <div className="flex items-center gap-1.5">

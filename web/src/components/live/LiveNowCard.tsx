@@ -7,7 +7,7 @@
  */
 
 import type { LiveSession } from '@/lib/data/fixtures-media';
-import { userById } from '@/lib/data/fixtures';
+import { liveSellerOf } from './useLiveSessions';
 import { AppImage } from '@/components/ui/AppImage';
 import { Avatar } from '@/components/ui/Avatar';
 import { Icon } from '@/components/ui/Icon';
@@ -22,7 +22,7 @@ interface LiveNowCardProps {
 }
 
 export function LiveNowCard({ session, onWatch, variant = 'card' }: LiveNowCardProps) {
-  const seller = userById(session.sellerId);
+  const seller = liveSellerOf(session);
   const hero = variant === 'hero';
 
   return (
@@ -69,6 +69,13 @@ export function LiveNowCard({ session, onWatch, variant = 'card' }: LiveNowCardP
                   </span>
                   {seller?.isVerified ? (
                     <Icon name="verified" size={14} className="text-scrim-text-primary" filled />
+                  ) : null}
+                  {/* Category context — real session field; live-mode rooms
+                      carry none, so it simply doesn't render there. */}
+                  {session.category ? (
+                    <span className="clamp-1 min-w-0 text-meta text-scrim-text-secondary">
+                      · {session.category}
+                    </span>
                   ) : null}
                 </div>
                 <h3

@@ -7,10 +7,20 @@
  * mutate the cache so tickets survive in-app navigation for the whole
  * client session. A hard reload re-seeds — honest fixture-mode behaviour.
  *
+ * Live mode merges the two real server models: support cases (GET
+ * /support/cases — ops-desk records whose thread derives from the case's
+ * public event log) and order-bound support tickets (GET
+ * /support/tickets). Case detail is a separate read (GET
+ * /support/cases/:id returns the events) — useSupportCaseDetail fetches
+ * it and merges the full record back into the list cache, preserving any
+ * in-flight optimistic replies.
+ *
  * Guests never see the fixture seeds: they belong to the demo identity, so
- * a signed-out session starts from an empty case list.
+ * a signed-out session starts from an empty case list — and the query is
+ * disabled entirely (`enabled: !!user`) so it never 401-churns.
  */
 
+import { useEffect } from 'react';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import type {
   SupportTicket,
@@ -24,6 +34,7 @@ import * as supportService from '@/lib/api/services/support';
 import { useSession } from '@/lib/session/SessionProvider';
 
 const TICKETS_KEY = ['support-tickets'] as const;
+const CASE_KEY = 'support-case';
 
 const tick = (ms = 360) => new Promise((r) => setTimeout(r, ms));
 /** Optimistic-send settle delay — fixture mode only, mirrors the composer. */
@@ -34,7 +45,13 @@ async function fetchTickets(isGuest: boolean): Promise<SupportTicket[]> {
   // and a live fetch would just 401.
   if (isGuest) return [];
   if (DATA_MODE === 'live') {
-    return supportService.fetchSupportCases();
+    // Cases and tickets are two server models behind one list — fetch
+    // both, merge newest-first.
+    const [cases, tickets] = await Promise.all([
+      supportService.fetchSupportCases(),
+      supportService.fetchSupportTickets(),
+    ]);
+    return [...cases, ...tickets].sort((a, b) => b.createdAt.localeCompare(a.createdAt));
   }
   await tick();
   return SUPPORT_TICKETS.map((t) => ({ ...t }));
@@ -51,17 +68,74 @@ const ticketsKey = (isGuest: boolean) =>
   [...TICKETS_KEY, isGuest ? 'guest' : 'authed'] as const;
 
 export function useSupportTickets() {
-  const { isGuest } = useSession();
+  const { user, isGuest } = useSession();
   return useQuery({
     queryKey: ticketsKey(isGuest),
     queryFn: () => fetchTickets(isGuest),
+    // Guest gate — the list is account-bound; without this the query
+    // 401-churns before the sign-in wall.
+    enabled: !!user,
     staleTime: DATA_MODE === 'live' ? undefined : Infinity,
     gcTime: DATA_MODE === 'live' ? undefined : Infinity,
   });
 }
 
+/**
+ * Case detail — GET /support/cases/:id carries the public event log the
+ * thread and activity views derive from (the list read returns none).
+ * Order-bound tickets (`ticket_` ids) have no detail route — their list
+ * row is the whole record. The fetched case merges into the ticket-list
+ * cache so every consumer keeps a single source of truth.
+ */
+export function useSupportCaseDetail(caseId: string) {
+  const queryClient = useQueryClient();
+  const { user, isGuest } = useSession();
+  const key = ticketsKey(isGuest);
+
+  const query = useQuery({
+    queryKey: [CASE_KEY, isGuest ? 'guest' : 'authed', caseId],
+    queryFn: ({ signal }) => supportService.fetchSupportCase(caseId, signal),
+    enabled:
+      DATA_MODE === 'live' && !!user && !caseId.startsWith('ticket_'),
+    staleTime: 15_000,
+  });
+
+  const detail = query.data;
+  useEffect(() => {
+    if (!detail) return;
+    queryClient.setQueryData<SupportTicket[]>(key, (old) => {
+      if (!old) return [detail];
+      const existing = old.find((t) => t.id === detail.id);
+      if (!existing) return [detail, ...old];
+      return old.map((t) =>
+        t.id === detail.id
+          ? {
+              ...detail,
+              // Keep in-flight optimistic sends — the server event log
+              // doesn't carry them yet.
+              messages: [
+                ...detail.messages,
+                ...t.messages.filter(
+                  (m) => m.status === 'sending' || m.status === 'failed',
+                ),
+              ],
+            }
+          : t,
+      );
+    });
+  }, [detail, key, queryClient]);
+
+  return query;
+}
+
 export interface NewTicketInput {
   topicId: SupportTopicId;
+  /**
+   * The real order id this request is bound to — live mode POSTs it as
+   * `orderId` to /support/tickets, which rejects ids the caller isn't a
+   * party to. There is no unbound case-create route; a null value cannot
+   * create a live ticket.
+   */
   orderRef: string | null;
   message: string;
   /** Evidence photo URLs — uploaded media URLs in live mode, session-local
@@ -104,6 +178,15 @@ export function useSupportActions() {
     }));
   };
 
+  const invalidateTicket = (ticketId: string) => {
+    void queryClient.invalidateQueries({ queryKey: TICKETS_KEY });
+    // The reply lives in the case's event log — refetch the detail read
+    // so the new customer_message event lands in the thread.
+    void queryClient.invalidateQueries({
+      queryKey: [CASE_KEY, isGuest ? 'guest' : 'authed', ticketId],
+    });
+  };
+
   /**
    * Resolve an optimistic send. Live mode trusts the POST only — resolve
    * marks the line sent, reject marks it failed (the row offers retry).
@@ -115,7 +198,7 @@ export function useSupportActions() {
         .postSupportCaseMessage(ticketId, body)
         .then(() => {
           setMessageStatus(ticketId, messageId, 'sent');
-          void queryClient.invalidateQueries({ queryKey: TICKETS_KEY });
+          invalidateTicket(ticketId);
         })
         .catch(() => setMessageStatus(ticketId, messageId, 'failed'));
       return;
@@ -127,13 +210,37 @@ export function useSupportActions() {
   };
 
   return {
-    /** Create a case — live mode posts to /support/cases and invalidates;
-     *  fixture mode writes the session cache for navigation. */
+    /**
+     * Open a support request — live mode POSTs /support/tickets
+     * (order-bound: orderRef must carry a real order id) and seeds the
+     * returned row into the cache so the thread renders immediately.
+     * Fixture mode writes the session cache for navigation.
+     */
     createTicket: (input: NewTicketInput): Promise<SupportTicket> | SupportTicket => {
       if (DATA_MODE === 'live') {
+        const orderId = input.orderRef?.trim();
+        // The ticket model is order-bound — an unbound request cannot be
+        // created. Callers without an order must not reach this path.
+        if (!orderId) {
+          return Promise.reject(
+            new Error('A support request must be tied to an order.'),
+          );
+        }
+        const topic = topicById(input.topicId);
         return supportService
-          .createSupportCase({ ...input, evidenceMediaUrls: input.evidenceUris })
+          .createSupportTicket({
+            orderId,
+            topicId: input.topicId,
+            topicLabel: topic?.label ?? 'Support',
+            details: input.message.trim(),
+            evidenceMediaUrls: input.evidenceUris,
+          })
           .then((created) => {
+            update((tickets) =>
+              tickets.some((t) => t.id === created.id)
+                ? tickets
+                : [created, ...tickets],
+            );
             void queryClient.invalidateQueries({ queryKey: TICKETS_KEY });
             return created;
           });
@@ -148,9 +255,10 @@ export function useSupportActions() {
       const ticket: SupportTicket = {
         id,
         ref: id.toUpperCase(),
+        conversationId: null,
         topicId: input.topicId,
         topicLabel: topic?.label ?? 'Support',
-        orderRef: input.orderRef?.trim() ? input.orderRef.trim() : null,
+        orderId: input.orderRef?.trim() ? input.orderRef.trim() : null,
         evidence: evidence.length ? evidence : undefined,
         status: 'open',
         priority: 'normal',
@@ -316,15 +424,21 @@ export function useSupportActions() {
     },
 
     /**
-     * Contest a proposed resolution. Live mode POSTs the real case-appeal
-     * endpoint (/support/cases/:id/appeal) — a specialist reopens review.
-     * Fixture mode writes the equivalent local transition.
+     * Contest a proposed resolution — live mode POSTs the real case-appeal
+     * endpoint (/support/cases/:id/appeal) and refetches so the
+     * appeal_requested event lands in the activity log. The schema
+     * requires a non-empty reason; an empty textarea sends the same
+     * default the native screen posts. Fixture mode writes the
+     * equivalent local transition.
      */
     contestResolution: async (ticketId: string, reason: string): Promise<boolean> => {
       if (DATA_MODE === 'live') {
         try {
-          await supportService.appealSupportCase(ticketId, reason);
-          await queryClient.invalidateQueries({ queryKey: TICKETS_KEY });
+          await supportService.appealSupportCase(
+            ticketId,
+            reason.trim() || 'Appeal requested by customer.',
+          );
+          invalidateTicket(ticketId);
           return true;
         } catch {
           return false;
@@ -356,11 +470,16 @@ export function useSupportActions() {
       return true;
     },
 
-    /** CSAT — live mode posts to /support/cases/:id/feedback and only
-     *  records the rating when the server accepts it. */
+    /**
+     * CSAT — live mode posts to /support/conversations/:id/feedback using
+     * the case's conversationId (feedback lives on the conversation, not
+     * the case) and only records the rating when the server accepts it.
+     * Cases without a conversationId can't take feedback — the prompt is
+     * hidden upstream.
+     */
     submitCsat: async (
       ticketId: string,
-      rating: number,
+      rating: 'helpful' | 'unhelpful',
       note: string,
     ): Promise<boolean> => {
       const apply = () =>
@@ -370,8 +489,15 @@ export function useSupportActions() {
           updatedAt: new Date().toISOString(),
         }));
       if (DATA_MODE === 'live') {
+        const ticket = queryClient
+          .getQueryData<SupportTicket[]>(key)
+          ?.find((t) => t.id === ticketId);
+        if (!ticket?.conversationId) return false;
         try {
-          await supportService.submitSupportCsat(ticketId, { rating, note: note.trim() });
+          await supportService.submitConversationFeedback(ticket.conversationId, {
+            rating,
+            reason: note.trim() || undefined,
+          });
           apply();
           return true;
         } catch {

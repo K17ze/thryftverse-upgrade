@@ -2,14 +2,16 @@
 
 /**
  * /pulse — vertical short-form commerce feed. Full-bleed media cards in
- * a snap-scroll column: creator posts, live auctions, fresh drops and
- * price drops derived from real fixtures (mobile PulseFeedScreen model).
- * Media is images — honest fixture mode, no fabricated video chrome.
+ * a snap-scroll column: live auctions, fresh drops and price drops —
+ * composed from GET /auctions + GET /listings in live mode, from the
+ * bundled dataset (plus authored creator posts) in fixture mode.
+ * Media is images — honest modes only, no fabricated video chrome.
  */
 
 import { useRouter } from 'next/navigation';
 import { useQuery } from '@tanstack/react-query';
-import { buildPulseFeed } from '@/components/pulse/pulseModel';
+import { DATA_MODE } from '@/lib/api/client';
+import { buildPulseFeed, buildPulseFeedLive } from '@/components/pulse/pulseModel';
 import { PulseFeed } from '@/components/pulse/PulseFeed';
 import { PulseFeedSkeleton } from '@/components/pulse/PulseFeedSkeleton';
 import { EmptyState } from '@/components/ui/EmptyState';
@@ -18,8 +20,9 @@ const tick = (ms = 320) => new Promise((r) => setTimeout(r, ms));
 
 function usePulseFeed() {
   return useQuery({
-    queryKey: ['pulse-feed'],
-    queryFn: async () => {
+    queryKey: ['pulse-feed', DATA_MODE],
+    queryFn: async ({ signal }) => {
+      if (DATA_MODE === 'live') return buildPulseFeedLive(Date.now(), signal);
       await tick();
       return buildPulseFeed();
     },

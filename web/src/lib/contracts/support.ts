@@ -61,20 +61,33 @@ export interface SupportTicketResolution {
   note: string;
 }
 
+/** CSAT is the server's binary vocabulary (POST
+ *  /support/conversations/:id/feedback) — not a star scale. */
 export interface SupportTicketCsat {
-  rating: number;
+  rating: 'helpful' | 'unhelpful';
   note: string;
 }
 
 export interface SupportTicket {
   id: string;
-  /** Display reference, e.g. TV-48213. */
+  /** The reference shown to the user. Live rows use the record id —
+   *  the id IS the reference; `caseRefLabel` renders the short form. */
   ref: string;
+  /** The conversation this case belongs to — the CSAT feedback join key
+   *  (POST /support/conversations/:id/feedback). Null on order-bound
+   *  ticket rows, which carry no conversation. */
+  conversationId: string | null;
+  /** Raw backend operational state (new|triaged|awaiting_customer|queued|
+   *  in_review|awaiting_external|resolved|closed) — `status` folds it into
+   *  the 4-state UI vocabulary; this keeps the truthful label available. */
+  operationalState?: string | null;
   topicId: SupportTopicId;
   topicLabel: string;
-  /** Order-scoped cases link to the commerce order detail. */
-  orderRef: string | null;
-  /** Non-order context (listing, payout) — folded with orderRef by
+  /** Order-bound tickets carry the real order id (the join key for the
+   *  order page's open-ticket indicator); order-linked cases resolve it
+   *  from the case's context links. */
+  orderId: string | null;
+  /** Non-order context (listing, payout) — folded with orderId by
    *  contextLinksFor so the thread renders one deduped link set. */
   contextLinks?: SupportContextLink[];
   /** Evidence attached to the case — renders the evidence block + the
@@ -132,6 +145,46 @@ export function topicById(id: string): SupportTopic | undefined {
   return SUPPORT_TOPICS.find((t) => t.id === id);
 }
 
+/**
+ * Display form of a case/ticket reference. The id IS the reference — long
+ * server ids (`case_…`, `ticket_…`) render as the last-8 short code, the
+ * same `#` grammar the native SupportCaseDetailScreen header uses.
+ */
+export function caseRefLabel(ref: string): string {
+  return ref.length > 12 ? `#${ref.slice(-8).toUpperCase()}` : ref;
+}
+
+/**
+ * Raw operationalState → customer-facing label, 1:1 with the native
+ * STATE_DISPLAY map. Unknown states humanize rather than lie.
+ */
+export function operationalStateLabel(state: string): string {
+  switch (state) {
+    case 'new':
+      return 'New';
+    case 'triaged':
+      return 'Triaged';
+    case 'awaiting_customer':
+    case 'waiting_on_customer':
+      return 'Awaiting your response';
+    case 'queued':
+      return 'In queue';
+    case 'in_review':
+      return 'Under review';
+    case 'awaiting_external':
+    case 'waiting_on_internal':
+      return 'Awaiting external party';
+    case 'resolved':
+      return 'Resolved';
+    case 'closed':
+      return 'Closed';
+    default:
+      return state
+        .replace(/_/g, ' ')
+        .replace(/\b\w/g, (c) => c.toUpperCase());
+  }
+}
+
 /** Status → label + badge variant + icon, one mapping for hub and thread. */
 export function statusMeta(status: SupportTicketStatus): {
   label: string;
@@ -151,7 +204,7 @@ export function statusMeta(status: SupportTicketStatus): {
 }
 
 /**
- * The linked order/listing/payout set for the context bar — orderRef folds
+ * The linked order/listing/payout set for the context bar — orderId folds
  * into the same row grammar as mobile's extractContextLinks, deduped.
  */
 export function contextLinksFor(ticket: SupportTicket): SupportContextLink[] {
@@ -162,7 +215,7 @@ export function contextLinksFor(ticket: SupportTicket): SupportContextLink[] {
     seen.add(`${kind}:${id}`);
     links.push({ kind, id });
   };
-  push('order', ticket.orderRef);
+  push('order', ticket.orderId);
   for (const link of ticket.contextLinks ?? []) push(link.kind, link.id);
   return links;
 }

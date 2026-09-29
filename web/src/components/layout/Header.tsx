@@ -13,7 +13,7 @@ import { Logo } from './Logo';
 import { DepartmentNav, NAV } from './DepartmentNav';
 import {
   SearchSuggestions,
-  buildSuggestionOptions,
+  useSuggestionOptions,
   suggestionOptionId,
   type SuggestionOption,
 } from './SearchSuggestions';
@@ -23,10 +23,11 @@ import { AccountMenu } from './AccountMenu';
 import { Button } from '@/components/ui/Button';
 import { useSession } from '@/lib/session/SessionProvider';
 import { useSignupWall } from '@/components/auth/SignupWall';
-import { useConversations, useNotificationEntries } from '@/lib/hooks/queries';
+import {
+  useUnreadConversationCount,
+  useUnreadNotificationCount,
+} from '@/lib/hooks/queries';
 import { useStore, useHydrated } from '@/lib/store/useStore';
-import { useInboxPrefs } from '@/lib/store/inboxPrefs';
-import { useNotificationCursor } from '@/lib/store/notificationCursor';
 import { useRecentSearches } from '@/components/search/searchHistory';
 import { useLocale } from '@/lib/i18n';
 
@@ -39,7 +40,7 @@ function CountBadge({ count, tone = 'alert' }: { count: number; tone?: 'alert' |
   if (count <= 0) return null;
   return (
     <span
-      className={`tnum pointer-events-none absolute right-0.5 top-0.5 flex h-4 min-w-4 items-center justify-center rounded-full px-1 text-[10px] font-bold leading-none ${
+      className={`tnum pointer-events-none absolute right-0.5 top-0.5 flex h-4 min-w-4 items-center justify-center rounded-full px-1 text-micro font-bold leading-none ${
         tone === 'alert' ? 'bg-danger text-scrim-text-primary' : 'bg-brand text-text-inverse'
       }`}
       aria-hidden
@@ -55,9 +56,11 @@ export function Header() {
   const { t } = useLocale();
   const { isGuest } = useSession();
   const { requireAuth, wall } = useSignupWall();
-  const { data: conversations } = useConversations();
-  const { data: notifEntries } = useNotificationEntries();
-  const clearedNotifIds = useNotificationCursor((s) => s.clearedIds);
+  // Count-only badge reads — the notification endpoint is a scalar; the
+  // chat badge derives from the shared conversations cache (no count
+  // endpoint exists on the backend — see queries.ts).
+  const { data: unreadChatCount } = useUnreadConversationCount();
+  const { data: unreadNotifCount } = useUnreadNotificationCount();
   const hydrated = useHydrated();
   const bagCount = useStore((s) => s.bag.length);
   const [q, setQ] = useState('');
@@ -66,23 +69,13 @@ export function Header() {
   const searchBoxRef = useRef<HTMLDivElement>(null);
   const { recent, add: addRecent, remove: removeRecent } = useRecentSearches();
 
-  const requestResolutions = useInboxPrefs((s) => s.requests);
-  // Muted threads report unread: false through useConversations, and
-  // message requests never inflate the unread count — pending requests
-  // add as their own count, like mobile's TabNavigator badge.
-  const unreadChats =
-    (conversations ?? []).filter((c) => c.unread && !c.isRequest).length +
-    (conversations ?? []).filter(
-      (c) => c.isRequest && !(hydrated && requestResolutions[c.id]),
-    ).length;
-  // Structured feed unreads minus the persisted read overlay — zero until
-  // hydration so SSR and the first client render agree.
-  const unreadNotifs = hydrated
-    ? (notifEntries ?? []).filter((n) => n.unread && !clearedNotifIds.includes(n.id)).length
-    : 0;
+  // Mute/request accounting and the read overlay live inside the count
+  // hooks — the badge never touches row payloads.
+  const unreadChats = unreadChatCount ?? 0;
+  const unreadNotifs = unreadNotifCount ?? 0;
   const bagTotal = hydrated ? bagCount : 0;
 
-  const suggestions = buildSuggestionOptions(q, recent);
+  const suggestions = useSuggestionOptions(q, recent);
 
   const closeSuggestions = () => {
     setSearchOpen(false);

@@ -7,7 +7,7 @@
  * Unknown slugs get a designed empty state, not a 404.
  */
 
-import { useMemo } from 'react';
+import { useCallback, useMemo } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
 import { Chip } from '@/components/ui/Chip';
 import { EmptyState } from '@/components/ui/EmptyState';
@@ -15,6 +15,7 @@ import { RefinedResults } from './RefinedResults';
 import { useFacetParams } from './useFacetParams';
 import { useSortParam } from './useSortParam';
 import { CATEGORIES } from '@/lib/data/fixtures';
+import { DATA_MODE } from '@/lib/api/client';
 import { useListings } from '@/lib/hooks/queries';
 import { subcategoriesFor } from './taxonomy';
 
@@ -30,12 +31,42 @@ export function CategoryClient({ slug }: { slug: string }) {
   const activeSub =
     subs.find((s) => s.toLowerCase() === subParam?.toLowerCase()) ?? null;
 
-  const { data, isLoading, isError, refetch } = useListings(
-    category ? slug : undefined,
+  // The page IS the category scope — a stray ?category= facet param would
+  // only intersect to empty, so it's stripped before the request (and
+  // its group is hidden from the rail/sheet regardless).
+  const effectiveFilters = useMemo(
+    () =>
+      filters.categories.length > 0
+        ? { ...filters, categories: [] }
+        : filters,
+    [filters],
   );
 
+  // Sub-scope, facets and sort ride the wire in live mode — the server
+  // owns the set, the order and the count.
+  const {
+    data,
+    isLoading,
+    isError,
+    refetch,
+    hasNextPage,
+    fetchNextPage,
+    isFetchingNextPage,
+  } = useListings(
+    category ? slug : undefined,
+    undefined,
+    {
+      filters: effectiveFilters,
+      sort,
+      subcategory: activeSub ?? undefined,
+    },
+  );
+  const loadMore = useCallback(() => void fetchNextPage(), [fetchNextPage]);
+
   const listings = useMemo(() => {
-    const all = data ?? [];
+    const all = data?.items ?? [];
+    // Idempotent — live mode already scoped server-side; kept so fixture
+    // and any partial rows still land on the right sub.
     if (!activeSub) return all;
     return all.filter(
       (l) => l.subcategory?.toLowerCase() === activeSub.toLowerCase(),
@@ -68,7 +99,7 @@ export function CategoryClient({ slug }: { slug: string }) {
   return (
     <div className="mx-auto max-w-[1440px]">
       <header className="px-4 pb-1 pt-6 sm:px-6">
-        <h1 className="text-screen-title font-bold text-text-primary">
+        <h1 className="text-screen-title text-text-primary">
           {category.name}
         </h1>
       </header>
@@ -101,16 +132,14 @@ export function CategoryClient({ slug }: { slug: string }) {
         isLoading={isLoading}
         isError={isError}
         onRetry={() => void refetch()}
-        // The page IS the category scope — a stray ?category= facet param
-        // would only intersect to empty, so the facet is stripped here
-        // (its group is hidden from the rail/sheet regardless).
-        filters={
-          filters.categories.length > 0
-            ? { ...filters, categories: [] }
-            : filters
-        }
+        filters={effectiveFilters}
         onFiltersChange={setFilters}
         hideCategoryFilter
+        serverOrdered={DATA_MODE === 'live'}
+        totalCount={data?.total ?? null}
+        hasMore={DATA_MODE === 'live' && hasNextPage === true}
+        onLoadMore={loadMore}
+        isLoadingMore={isFetchingNextPage}
         sort={sort}
         onSortChange={setSort}
         heading={(n) =>

@@ -56,6 +56,7 @@ function statusBadge(status: ManagedListingRow['status']) {
   // Paused is a deliberate seller state, not a fault — neutral badge,
   // the row keeps Resume instead of masquerading as active.
   if (status === 'paused') return <Badge variant="neutral">Paused</Badge>;
+  if (status === 'held') return <Badge variant="neutral">On hold</Badge>;
   return <Badge variant="success">Active</Badge>;
 }
 
@@ -68,6 +69,8 @@ function statusWord(status: ManagedListingRow['status']): string {
       return 'Paused';
     case 'draft':
       return 'Draft';
+    case 'held':
+      return 'On hold';
     default:
       return 'Sold';
   }
@@ -132,10 +135,12 @@ function Row({
   now: number;
   selected: boolean;
   onToggleSelected: (row: ManagedListingRow) => void;
-  onBump: (row: ManagedListingRow) => void;
+  /** Absent when the backend has no bump mechanic — no dead affordance. */
+  onBump?: (row: ManagedListingRow) => void;
   onRequestMarkSold: (row: ManagedListingRow) => void;
   onRequestDelete: (row: ManagedListingRow) => void;
-  onRelist: (row: ManagedListingRow) => void;
+  /** Absent in live mode — 'sold' is a terminal status; relist can't run. */
+  onRelist?: (row: ManagedListingRow) => void;
   onResume: (row: ManagedListingRow) => void;
   onViewStats: (row: ManagedListingRow) => void;
 }) {
@@ -203,8 +208,12 @@ function Row({
             {statusWord(row.status)} ·{' '}
           </span>
           {row.imported ? <span className="sm:hidden">Imported · </span> : null}
-          {listing.price > 0 ? formatPrice(listing.price) : 'No price yet'}
-          {meta.length ? ` · ${meta.join(' · ')}` : ''}
+          {/* Price leaves the meta line at lg — it has its own column. */}
+          <span className="lg:hidden">
+            {listing.price > 0 ? formatPrice(listing.price) : 'No price yet'}
+            {meta.length ? ' · ' : ''}
+          </span>
+          {meta.join(' · ')}
           {!draft ? (
             <span className="md:hidden">
               {' '}
@@ -245,7 +254,7 @@ function Row({
         </button>
       )}
 
-      <div className="hidden shrink-0 flex-col items-start gap-1 sm:flex">
+      <div className="hidden shrink-0 flex-col items-start gap-1 sm:flex lg:w-40">
         <span className="flex items-center gap-1.5">
           {statusBadge(row.status)}
           {row.imported ? <Badge variant="neutral">Imported</Badge> : null}
@@ -255,8 +264,13 @@ function Row({
         </span>
       </div>
 
-      <div className="flex shrink-0 flex-wrap items-center justify-end gap-1">
-        {row.status === 'active' ? (
+      {/* Price — own column at lg (it leaves the meta line there). */}
+      <span className="tnum hidden w-24 shrink-0 text-right text-body-emphasis font-semibold text-text-primary lg:block">
+        {listing.price > 0 ? formatPrice(listing.price) : '—'}
+      </span>
+
+      <div className="flex shrink-0 flex-wrap items-center justify-end gap-1 lg:w-[280px]">
+        {row.status === 'active' && onBump ? (
           <Button
             variant="secondary"
             size="sm"
@@ -306,7 +320,7 @@ function Row({
           </button>
         ) : null}
 
-        {row.status === 'sold' ? (
+        {row.status === 'sold' && onRelist ? (
           <button
             type="button"
             onClick={() => onRelist(row)}
@@ -399,10 +413,12 @@ export function ListingManagementTable({
   onBulkDelete: (rows: ManagedListingRow[]) => void;
   /** Opens the bulk-edit sheet with the editable subset of the selection. */
   onBulkEdit?: (rows: ManagedListingRow[]) => void;
-  onBump: (row: ManagedListingRow) => void;
+  /** Absent when the backend has no bump mechanic (live mode). */
+  onBump?: (row: ManagedListingRow) => void;
   onMarkSold: (row: ManagedListingRow) => void;
   onDeleteDraft: (row: ManagedListingRow) => void;
-  onRelist: (row: ManagedListingRow) => void;
+  /** Absent in live mode — 'sold' is terminal; relisting can't run. */
+  onRelist?: (row: ManagedListingRow) => void;
   onResume: (row: ManagedListingRow) => void;
   onViewStats: (row: ManagedListingRow) => void;
 }) {
@@ -451,10 +467,12 @@ export function ListingManagementTable({
     }
     return {
       title: 'Mark as sold?',
-      body: `“${target.row.listing.title}” will show as sold and come off the public shelf. You can relist it anytime.`,
+      body: onRelist
+        ? `“${target.row.listing.title}” will show as sold and come off the public shelf. You can relist it anytime.`
+        : `“${target.row.listing.title}” will show as sold and come off the public shelf — sold is permanent, it can't be relisted.`,
       action: 'Mark sold',
     };
-  }, [target]);
+  }, [target, onRelist]);
 
   const confirm = () => {
     if (!target) return;
@@ -528,6 +546,32 @@ export function ListingManagementTable({
         )}
       </div>
 
+      {/* Column header — desktop table grammar. Mirrors the row geometry
+          below (checkbox bleed, 56px thumb, then the flex columns); visual
+          signpost only, the <ul> rows carry the semantics. */}
+      <div
+        aria-hidden="true"
+        className="hidden items-center gap-3.5 border-b border-border-subtle pb-2 lg:flex"
+      >
+        <span className="-ml-2 w-9 shrink-0" />
+        <span className="w-14 shrink-0" />
+        <span className="min-w-0 flex-1 text-label text-text-muted">
+          Item
+        </span>
+        <span className="w-24 shrink-0 text-label text-text-muted">
+          Stats
+        </span>
+        <span className="w-40 shrink-0 text-label text-text-muted">
+          Status
+        </span>
+        <span className="w-24 shrink-0 text-right text-label text-text-muted">
+          Price
+        </span>
+        <span className="w-[280px] shrink-0 text-right text-label text-text-muted">
+          Actions
+        </span>
+      </div>
+
       <ul className="divide-y divide-border-subtle border-b border-border-subtle">
         {rows.map((row) => (
           <Row
@@ -551,6 +595,7 @@ export function ListingManagementTable({
         open={target != null}
         onClose={() => setTarget(null)}
         title={confirmCopy?.title}
+        ariaLabel="Listing action"
         maxWidth={420}
       >
         <div className="px-5 py-5">

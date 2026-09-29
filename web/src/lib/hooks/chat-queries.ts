@@ -19,12 +19,14 @@
  */
 
 import { useCallback, useEffect, useRef, useState } from 'react';
-import { useQueryClient } from '@tanstack/react-query';
+import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { DATA_MODE } from '@/lib/api/client';
 import * as chatService from '@/lib/api/services/chat';
 import { appendFixtureMessage, CONVERSATIONS } from '@/lib/data/fixtures';
 import { isLocalMediaUri } from '@/lib/utils/media';
 import { useSession } from '@/lib/session/SessionProvider';
+import { useQuickReplies, type QuickReply } from '@/lib/store/quickReplies';
+import { useHydrated } from '@/lib/store/useStore';
 import { useToast } from '@/components/ui/Toast';
 import type { Conversation, Message } from '@/lib/contracts/domain';
 
@@ -708,4 +710,124 @@ export async function reportChatMessage(
   } catch {
     return false;
   }
+}
+
+// ── Quick replies — /chat/quick-replies in live mode, local store else ─────
+
+/**
+ * Quick replies — the Composer's bolt-menu source and the seller-hub
+ * manage surface read the same list.
+ *
+ * Live + signed in: GET /chat/quick-replies is the truth (the web
+ * view-model maps the server's `body` onto the Composer's `message`
+ * field — consumption shape unchanged). Live + guest and fixture mode:
+ * the persisted local store stays the path — replies are a device-local
+ * convenience there, never a fake "synced" claim. While the live session
+ * is still resolving, the hook reports loading rather than flashing the
+ * local store ahead of the account's own replies.
+ */
+export function useQuickRepliesData(): {
+  replies: QuickReply[];
+  isLoading: boolean;
+  isError: boolean;
+  refetch: () => void;
+  /** True when reads/writes go to /chat/quick-replies. */
+  serverBacked: boolean;
+} {
+  const { user, sessionLoading } = useSession();
+  const hydrated = useHydrated();
+  const localReplies = useQuickReplies((s) => s.replies);
+  const serverBacked = DATA_MODE === 'live' && Boolean(user?.id);
+
+  const query = useQuery({
+    queryKey: ['quick-replies', DATA_MODE, user?.id],
+    queryFn: async (): Promise<QuickReply[]> => {
+      const items = await chatService.fetchQuickReplies();
+      return items.map((r) => ({ id: r.id, title: r.title, message: r.body }));
+    },
+    enabled: serverBacked,
+    staleTime: 30_000,
+  });
+
+  if (DATA_MODE === 'live' && sessionLoading) {
+    return {
+      replies: [],
+      isLoading: true,
+      isError: false,
+      refetch: () => void query.refetch(),
+      serverBacked: false,
+    };
+  }
+  if (serverBacked) {
+    return {
+      replies: query.data ?? [],
+      isLoading: query.isLoading,
+      isError: query.isError,
+      refetch: () => void query.refetch(),
+      serverBacked: true,
+    };
+  }
+  return {
+    replies: localReplies,
+    isLoading: !hydrated,
+    isError: false,
+    refetch: () => {},
+    serverBacked: false,
+  };
+}
+
+/**
+ * Quick-reply writes — the seller-hub manage surface's add/edit/delete.
+ * Server-backed sessions hit POST/PUT/DELETE /chat/quick-replies and
+ * invalidate the query; the local store stays the fixture/guest path.
+ * These are plain async fns (not useMutation) so the caller owns pending
+ * state and honest failure toasts — a rejected write must surface, never
+ * pretend to land.
+ */
+export function useQuickReplyMutations(): {
+  serverBacked: boolean;
+  add: (input: { title: string; message: string }) => Promise<void>;
+  update: (id: string, input: { title: string; message: string }) => Promise<void>;
+  remove: (id: string) => Promise<void>;
+} {
+  const qc = useQueryClient();
+  const { user } = useSession();
+  const serverBacked = DATA_MODE === 'live' && Boolean(user?.id);
+
+  return {
+    serverBacked,
+    add: async (input) => {
+      if (serverBacked) {
+        // The seller-hub surface owns this list — new replies file under
+        // the seller role, matching the mobile manage screen.
+        await chatService.createQuickReply({
+          role: 'seller',
+          title: input.title,
+          body: input.message,
+        });
+        await qc.invalidateQueries({ queryKey: ['quick-replies'] });
+        return;
+      }
+      useQuickReplies.getState().add(input);
+    },
+    update: async (id, input) => {
+      if (serverBacked) {
+        await chatService.updateQuickReply(id, {
+          title: input.title,
+          body: input.message,
+        });
+        await qc.invalidateQueries({ queryKey: ['quick-replies'] });
+        return;
+      }
+      useQuickReplies.getState().update(id, input);
+    },
+    remove: async (id) => {
+      if (serverBacked) {
+        await chatService.deleteQuickReply(id);
+        await qc.invalidateQueries({ queryKey: ['quick-replies'] });
+        return;
+      }
+      useQuickReplies.getState().remove(id);
+    },
+  };
 }

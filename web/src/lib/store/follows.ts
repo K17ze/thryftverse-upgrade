@@ -13,6 +13,7 @@ import { create } from 'zustand';
 import { persist, createJSONStorage } from 'zustand/middleware';
 import { DATA_MODE } from '@/lib/api/client';
 import { fetchFollowingIds, followUser, unfollowUser } from '@/lib/api/services/users';
+import { sessionEpoch, sessionIdentityIsCurrent } from '@/lib/session/identityEpoch';
 
 /** Demo-session seed — fixture mode only. Seeding a live account with
  *  fixture ids would mark strangers "followed" who the member never
@@ -24,6 +25,12 @@ interface FollowsState {
   followingIds: string[];
   toggleFollow: (userId: string) => void;
   isFollowing: (userId: string) => boolean;
+  /** Live-mode seed — union server-observed "viewer follows" edges into
+   *  the persisted set (follow lists carry per-row isFollowing). Union-
+   *  only: a wire `false` can't outrank an optimistic toggle already
+   *  applied locally, and hydrateFollows remains the wholesale
+   *  reconciliation on session resolve. */
+  seedFollowing: (userIds: string[]) => void;
 }
 
 export const useFollows = create<FollowsState>()(
@@ -45,6 +52,14 @@ export const useFollows = create<FollowsState>()(
         );
       },
       isFollowing: (userId) => get().followingIds.includes(userId),
+      seedFollowing: (userIds) => {
+        if (userIds.length === 0) return;
+        const before = get().followingIds;
+        const next = new Set(before);
+        for (const id of userIds) next.add(id);
+        if (next.size === before.length) return;
+        set({ followingIds: [...next] });
+      },
     }),
     {
       name: 'thryftverse.web.follows',
@@ -58,11 +73,17 @@ export const useFollows = create<FollowsState>()(
  * Live mode: pull the server-authoritative following list once the session
  * resolves. Called from the session provider next to hydrateSavedLists —
  * no-ops in fixture mode; a failed read keeps the local set.
+ *
+ * The write is sequenced by the session epoch: if the identity changed
+ * (logout, expiry, another account) while the read was in flight, the
+ * resolved ids are dropped rather than written onto the new session.
  */
 export async function hydrateFollows(userId: string): Promise<void> {
   if (DATA_MODE !== 'live') return;
+  const epoch = sessionEpoch();
   try {
     const ids = await fetchFollowingIds(userId);
+    if (!sessionIdentityIsCurrent(userId, epoch)) return;
     useFollows.setState({ followingIds: ids });
   } catch {
     // Guest or offline — keep the local list.

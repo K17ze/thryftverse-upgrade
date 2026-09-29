@@ -10,8 +10,7 @@
  */
 
 import Link from 'next/link';
-import { useRouter } from 'next/navigation';
-import { useEffect, useRef, useState } from 'react';
+import { memo, useEffect, useRef, useState } from 'react';
 import type { DiscoveryListingSummary } from '@/lib/contracts/domain';
 import { AppImage } from '@/components/ui/AppImage';
 import { Avatar } from '@/components/ui/Avatar';
@@ -40,10 +39,19 @@ interface ProductTileProps {
   priority?: boolean;
 }
 
-export function ProductTile({ item, aspectRatio, visualOnly, priority }: ProductTileProps) {
-  const router = useRouter();
+/**
+ * Memoized — the grid's hottest leaf. A toast, a save elsewhere in the
+ * feed, or a sibling's hover state re-renders the grid container; the
+ * tile's props (item reference + primitives) don't change, so the tile
+ * skips its media + metadata render. Requires callers to keep `item`
+ * references stable (feed units are memoized upstream) and callbacks
+ * already live in stores, not props.
+ */
+function ProductTileImpl({ item, aspectRatio, visualOnly, priority }: ProductTileProps) {
   const { show } = useToast();
-  const { requireAuth, wall } = useSignupWall();
+  // The gate comes from the app-level SignupWallProvider — per-tile wall
+  // state (and its sheet) lived here once; the provider owns it now.
+  const { requireAuth } = useSignupWall();
   const hydrated = useHydrated();
   const wishlisted = useStore((s) => s.wishlist.includes(item.id));
   const toggleFav = useStore((s) => s.toggleWishlist);
@@ -69,8 +77,15 @@ export function ProductTile({ item, aspectRatio, visualOnly, priority }: Product
 
   const sellerUsername = item.seller?.username ?? null;
   const isPaused = item.status === 'paused';
+  // Same real-drop contract as components/closet/closetFilters
+  // (listingHasPriceDrop): sold items never carry the signal; the badge
+  // only renders when a genuine previous price exists.
   const hasPriceDrop =
-    typeof item.originalPrice === 'number' && item.price != null && item.originalPrice > item.price;
+    !item.isSold &&
+    item.status !== 'sold' &&
+    typeof item.originalPrice === 'number' &&
+    item.price != null &&
+    item.originalPrice > item.price;
   const priceDropPercent = hasPriceDrop
     ? Math.round(((item.originalPrice! - item.price!) / item.originalPrice!) * 100)
     : 0;
@@ -81,22 +96,33 @@ export function ProductTile({ item, aspectRatio, visualOnly, priority }: Product
     e.preventDefault();
     e.stopPropagation();
     if (!requireAuth('save_item')) return;
-    toggleFav(item.id);
-    if (!isFav) show('Added to wishlist', 'success');
+    const adding = !isFav;
+    // The heart flips optimistically; the confirmation waits for the
+    // write — a failed sync rolls the toggle back and says so.
+    void toggleFav(item.id).then((ok) => {
+      if (ok) {
+        if (adding) show('Added to wishlist', 'success');
+      } else {
+        show('Couldn’t sync — your wishlist was restored', 'error');
+      }
+    });
   };
 
   const handleSave = (e: React.MouseEvent) => {
     e.preventDefault();
     e.stopPropagation();
     if (!requireAuth('save_item')) return;
-    toggleSaved(item.id);
-    show(isSaved ? 'Removed from saved' : 'Added to saved', 'info');
-  };
-
-  const openSeller = (e: React.MouseEvent | React.KeyboardEvent) => {
-    e.preventDefault();
-    e.stopPropagation();
-    router.push(`/u/${sellerUsername}`);
+    const removing = isSaved;
+    void toggleSaved(item.id).then((ok) => {
+      show(
+        ok
+          ? removing
+            ? 'Removed from saved'
+            : 'Added to saved'
+          : 'Couldn’t sync — saved items restored',
+        ok ? 'info' : 'error',
+      );
+    });
   };
 
   // Native share sheet → clipboard fallback — mirrors SellSuccess/ProfileHero.
@@ -153,7 +179,7 @@ export function ProductTile({ item, aspectRatio, visualOnly, priority }: Product
             </span>
           </>
         ) : isPaused ? (
-          <span className="absolute left-2 top-2 rounded-md bg-overlay px-2 py-1 text-meta font-semibold uppercase tracking-[0.08em] text-scrim-text-primary">
+          <span className="absolute left-2 top-2 rounded-md bg-overlay px-2 py-1 text-meta font-semibold uppercase tracking-wide text-scrim-text-primary">
             Paused
           </span>
         ) : null}
@@ -161,7 +187,7 @@ export function ProductTile({ item, aspectRatio, visualOnly, priority }: Product
         {/* Badge cascade — price drop wins over sustainability chip; both
             stay off paused items (a sale badge on an unpurchasable tile
             would overstate it). */}
-        {!item.isSold && !isPaused && hasPriceDrop ? (
+        {!isPaused && hasPriceDrop ? (
           <span className="absolute left-2 top-2 rounded-md bg-overlay px-2 py-1 text-meta font-semibold text-scrim-text-primary">
             -{priceDropPercent}%
           </span>
@@ -191,7 +217,7 @@ export function ProductTile({ item, aspectRatio, visualOnly, priority }: Product
             suppress save/wishlist/share (native ClosetMediaMosaic ~219 —
             the item is gone; the tile stays navigable and the PDP gates
             purchase honestly), while feed tuning still applies. */}
-        <div className="quick-actions absolute bottom-0 right-0 z-10 flex items-center transition-opacity">
+        <div className="quick-actions absolute bottom-0 right-0 z-elevated flex items-center transition-opacity">
           {/* Feed controls — renders only inside a feed surface
               (FeedControlsProvider); null everywhere else. */}
           <FeedItemMenu item={item} />
@@ -245,7 +271,7 @@ export function ProductTile({ item, aspectRatio, visualOnly, priority }: Product
             <span className="text-meta font-medium text-text-muted">{item.disclosure}</span>
           ) : null}
           {item.brand ? (
-            <span className="clamp-1 text-label font-semibold uppercase tracking-wide text-text-secondary">
+            <span className="clamp-1 text-label text-text-secondary">
               {item.brand}
             </span>
           ) : null}
@@ -261,21 +287,18 @@ export function ProductTile({ item, aspectRatio, visualOnly, priority }: Product
             </span>
           ) : null}
           {sellerUsername ? (
-            <span
-              role="link"
-              tabIndex={0}
-              onClick={openSeller}
-              onKeyDown={(e) => {
-                if (e.key === 'Enter') openSeller(e);
-              }}
-              className="relative z-10 mt-0.5 flex cursor-pointer items-center gap-1.5 self-start rounded-sm text-text-secondary hover:text-text-primary"
+            /* Real link — middle-click/context-menu/Enter all work;
+               z-elevated lifts it over the tile's stretched link. */
+            <Link
+              href={`/u/${sellerUsername}`}
+              className="relative z-elevated mt-0.5 flex items-center gap-1.5 self-start rounded-sm text-text-secondary hover:text-text-primary"
             >
               <Avatar src={item.seller?.avatar} name={sellerUsername} size={20} />
               <span className="clamp-1 text-meta font-medium">@{sellerUsername}</span>
               {item.seller?.verified ? (
-                <Icon name="verified" size={11} className="text-success-text" />
+                <Icon name="verified" size={11} className="text-commerce-trust" />
               ) : null}
-            </span>
+            </Link>
           ) : null}
         </div>
       ) : null}
@@ -288,11 +311,11 @@ export function ProductTile({ item, aspectRatio, visualOnly, priority }: Product
           item.price != null ? `, ${formatPrice(item.price)}` : ''
         }${item.condition ? `, ${item.condition}` : ''}${item.isSold ? ', Sold' : ''}`}
       />
-
-      {wall}
     </article>
   );
 }
+
+export const ProductTile = memo(ProductTileImpl);
 
 /**
  * TileVideo — feed video grammar, mirrors the mobile feed's viewability
@@ -372,11 +395,27 @@ function TileVideo({
         onPlaying={() => setPlaying(true)}
         onPause={() => setPlaying(false)}
       />
-      {playing ? null : (
-        <span className="absolute right-1.5 top-1.5 inline-flex items-center rounded-md bg-overlay px-1.5 py-1 text-scrim-text-primary">
-          <Icon name="play" filled size={11} />
-        </span>
-      )}
+      {/* Pause toggle — WCAG 2.2.2: an auto-playing loop needs a user
+          stop. The badge becomes the control: paused shows play,
+          playing surfaces pause on hover/focus. */}
+      <button
+        type="button"
+        aria-label={playing ? 'Pause video' : 'Play video'}
+        aria-pressed={playing}
+        onClick={(e) => {
+          e.preventDefault();
+          e.stopPropagation();
+          const video = videoRef.current;
+          if (!video) return;
+          if (video.paused) void video.play().catch(() => undefined);
+          else video.pause();
+        }}
+        className={`absolute right-1.5 top-1.5 z-elevated inline-flex items-center rounded-md bg-overlay px-1.5 py-1 text-scrim-text-primary transition-opacity ${
+          playing ? 'opacity-0 group-hover:opacity-100 focus-visible:opacity-100' : ''
+        }`}
+      >
+        <Icon name={playing ? 'pause' : 'play'} filled size={11} />
+      </button>
     </div>
   );
 }

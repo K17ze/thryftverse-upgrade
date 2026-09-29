@@ -51,11 +51,17 @@ const searchListingsQuerySchema = z.object({
   condition: z.string().min(1).optional(),
   size: z.string().min(1).optional(),
   /** Multi-value filters: comma-separated lists matching the Filter
-   *  sheet's multi-select contract (brands[], sizes[]). */
+   *  sheet's multi-select contract (brands[], sizes[], categories[],
+   *  conditions[]). */
+  categories: z.string().min(1).optional(),
+  conditions: z.string().min(1).optional(),
   brands: z.string().min(1).optional(),
   sizes: z.string().min(1).optional(),
   priceMin: z.coerce.number().min(0).optional(),
   priceMax: z.coerce.number().min(0).optional(),
+  /** The filter sheet's "Sold items" toggle — widens the status match
+   *  beyond active rows. */
+  includeSold: z.coerce.boolean().optional().default(false),
   sustainableOnly: z.coerce.boolean().optional().default(false),
   sort: z.enum(['relevance', 'recent', 'price_asc', 'price_desc', 'most_liked', 'ending_soon']).default('relevance'),
   page: z.coerce.number().int().min(1).max(100).default(1),
@@ -81,6 +87,9 @@ async function computeSearchResults(
   page: number,
   searchPolicyVersion: string,
   sustainableOnly: boolean,
+  categories: string[] | undefined = undefined,
+  conditions: string[] | undefined = undefined,
+  includeSold: boolean = false,
 ): Promise<Omit<CachedSearchResult, 'cachedAt' | 'fromCache' | 'stale'>> {
   const offset = (page - 1) * limit;
 
@@ -89,11 +98,20 @@ async function computeSearchResults(
   const filterArgs: unknown[] = [];
   let filterIdx = 2; // $1 is the query text
 
-  if (category) {
-    filterConditions.push(`l.category = $${filterIdx++}`);
+  if (categories && categories.length > 0) {
+    // The filter sheet's multi-select — case-insensitive so URL slugs
+    // ('women') and stored values ('Women') agree.
+    filterConditions.push(`LOWER(l.category) = ANY($${filterIdx++})`);
+    filterArgs.push(categories.map((c) => c.toLowerCase()));
+  } else if (category) {
+    // Slug-tolerant single match — same LOWER() grammar as /listings.
+    filterConditions.push(`LOWER(l.category) = LOWER($${filterIdx++})`);
     filterArgs.push(category);
   }
-  if (condition) {
+  if (conditions && conditions.length > 0) {
+    filterConditions.push(`l.condition = ANY($${filterIdx++})`);
+    filterArgs.push(conditions);
+  } else if (condition) {
     filterConditions.push(`l.condition = $${filterIdx++}`);
     filterArgs.push(condition);
   }
@@ -124,6 +142,12 @@ async function computeSearchResults(
   const filterClause = filterConditions.length > 0
     ? `AND ${filterConditions.join(' AND ')}`
     : '';
+
+  // Status scope — 'Sold items' widens the match to the sold ledger;
+  // sponsored slots keep their own active-only contract regardless.
+  const statusClause = includeSold
+    ? `l.status IN ('active', 'sold')`
+    : `l.status = 'active'`;
 
   // Determine ORDER BY based on sort option
   const extraJoins: string[] = [];
@@ -206,7 +230,7 @@ async function computeSearchResults(
       FROM listings l
       LEFT JOIN users u ON u.id = l.seller_id
       ${extraJoins.join('\n      ')}
-      WHERE l.status = 'active'
+      WHERE ${statusClause}
         AND (
           l.search_vector @@ websearch_to_tsquery('simple', f_unaccent($1))
           OR POSITION(f_unaccent(lower($1)) IN f_unaccent(lower(COALESCE(l.brand, '')))) > 0
@@ -222,6 +246,30 @@ async function computeSearchResults(
     [q, ...filterArgs, limit, offset]
   );
 
+  // Truthful match count — the same WHERE the page ran under, minus
+  // ordering/pagination, so clients can report "N results" over the
+  // catalogue rather than the fetched page length.
+  const countResult = await dbPool.query<{ total: number }>(
+    `
+      SELECT COUNT(DISTINCT l.id)::int AS total
+      FROM listings l
+      LEFT JOIN users u ON u.id = l.seller_id
+      ${extraJoins.join('\n      ')}
+      WHERE ${statusClause}
+        AND (
+          l.search_vector @@ websearch_to_tsquery('simple', f_unaccent($1))
+          OR POSITION(f_unaccent(lower($1)) IN f_unaccent(lower(COALESCE(l.brand, '')))) > 0
+          OR POSITION(f_unaccent(lower($1)) IN f_unaccent(lower(COALESCE(l.category, '')))) > 0
+          OR POSITION(f_unaccent(lower($1)) IN f_unaccent(lower(COALESCE(l.size, '')))) > 0
+          OR POSITION(f_unaccent(lower($1)) IN f_unaccent(lower(COALESCE(l.condition, '')))) > 0
+        )
+        ${reachExcludedSql('u')}
+        ${filterClause}
+    `,
+    [q, ...filterArgs]
+  );
+  const total = countResult.rows[0]?.total ?? 0;
+
   if (result.rowCount && result.rowCount > 0) {
     const mediaByListing = await loadListingMedia(
       dbPool,
@@ -235,6 +283,7 @@ async function computeSearchResults(
     return {
       ok: true,
       query: q,
+      total,
       decision: {
         policyVersion: searchPolicyVersion,
         capabilityLevel: 'postgres_lexical',
@@ -318,7 +367,7 @@ async function computeSearchResults(
       FROM listings l
       LEFT JOIN users u ON u.id = l.seller_id
       ${extraJoins.join('\n      ')}
-      WHERE l.status = 'active'
+      WHERE ${statusClause}
         AND (
           POSITION(f_unaccent(lower($1)) IN f_unaccent(lower(l.title))) > 0
           OR POSITION(f_unaccent(lower($1)) IN f_unaccent(lower(l.description))) > 0
@@ -334,6 +383,30 @@ async function computeSearchResults(
     `,
     [q, ...filterArgs, limit, offset]
   );
+
+  // Same honest count for the fallback path — its WHERE is the substring
+  // (+trigram) predicate, so it is counted separately.
+  const fallbackCountResult = await dbPool.query<{ total: number }>(
+    `
+      SELECT COUNT(DISTINCT l.id)::int AS total
+      FROM listings l
+      LEFT JOIN users u ON u.id = l.seller_id
+      ${extraJoins.join('\n      ')}
+      WHERE ${statusClause}
+        AND (
+          POSITION(f_unaccent(lower($1)) IN f_unaccent(lower(l.title))) > 0
+          OR POSITION(f_unaccent(lower($1)) IN f_unaccent(lower(l.description))) > 0
+          OR POSITION(f_unaccent(lower($1)) IN f_unaccent(lower(COALESCE(l.brand, '')))) > 0
+          OR POSITION(f_unaccent(lower($1)) IN f_unaccent(lower(COALESCE(l.category, '')))) > 0
+          OR POSITION(f_unaccent(lower($1)) IN f_unaccent(lower(COALESCE(l.size, '')))) > 0
+          OR POSITION(f_unaccent(lower($1)) IN f_unaccent(lower(COALESCE(l.condition, '')))) > 0${trgmClause}
+        )
+        ${reachExcludedSql('u')}
+        ${filterClause}
+    `,
+    [q, ...filterArgs]
+  );
+  const fallbackTotal = fallbackCountResult.rows[0]?.total ?? 0;
 
   const fallbackMediaByListing = await loadListingMedia(
     dbPool,
@@ -355,6 +428,7 @@ async function computeSearchResults(
     ok: true,
     query: q,
     fallback: true,
+    total: fallbackTotal,
     decision: {
       policyVersion: searchPolicyVersion,
       capabilityLevel: 'postgres_lexical',
@@ -482,7 +556,9 @@ export const registerSearchExtendedRoutes = ({
     q: string,
     filters: {
       category?: string;
+      categories?: string[];
       condition?: string;
+      conditions?: string[];
       size?: string;
       brands?: string[];
       sizes?: string[];
@@ -500,7 +576,9 @@ export const registerSearchExtendedRoutes = ({
         query: q,
         filters: {
           category: filters.category ?? null,
+          categories: filters.categories ?? null,
           condition: filters.condition ?? null,
+          conditions: filters.conditions ?? null,
           size: filters.size ?? null,
           brands: filters.brands ?? null,
           sizes: filters.sizes ?? null,
@@ -540,7 +618,7 @@ export const registerSearchExtendedRoutes = ({
   };
 
   app.get('/search/listings', async (request) => {
-    const { q, limit, category, condition, size, brands, sizes, priceMin, priceMax, sustainableOnly, sort, page } =
+    const { q, limit, category, condition, size, categories, conditions, brands, sizes, priceMin, priceMax, includeSold, sustainableOnly, sort, page } =
       searchListingsQuerySchema.parse(request.query);
     const searchPolicyVersion = 'listing-search-postgres-v3.1';
     const startTime = Date.now();
@@ -549,12 +627,16 @@ export const registerSearchExtendedRoutes = ({
     // arrays (sorted for stable cache-key hashing).
     const brandList = brands ? brands.split(',').map((b) => b.trim()).filter(Boolean).sort() : undefined;
     const sizeList = sizes ? sizes.split(',').map((s) => s.trim()).filter(Boolean).sort() : undefined;
+    const categoryList = categories ? categories.split(',').map((c) => c.trim()).filter(Boolean).sort() : undefined;
+    const conditionList = conditions ? conditions.split(',').map((c) => c.trim()).filter(Boolean).sort() : undefined;
 
     // The same filter set the organic query applied — sponsored units are
     // held to it too (see applyPromotedSlots).
     const promotionFilters = {
       category,
+      categories: categoryList,
       condition,
+      conditions: conditionList,
       size,
       brands: brandList,
       sizes: sizeList,
@@ -568,13 +650,16 @@ export const registerSearchExtendedRoutes = ({
       q,
       filters: {
         category,
+        categories: categoryList,
         condition,
+        conditions: conditionList,
         size,
         brands: brandList,
         sizes: sizeList,
         priceMin,
         priceMax,
         sustainableOnly,
+        includeSold,
       },
       sort,
       page,
@@ -585,7 +670,7 @@ export const registerSearchExtendedRoutes = ({
     const revalidate = async (): Promise<void> => {
       const freshResult = await computeSearchResults(
         readDb, q, limit, category, condition, size, brandList, sizeList, priceMin, priceMax, sort, page,
-        searchPolicyVersion, sustainableOnly,
+        searchPolicyVersion, sustainableOnly, categoryList, conditionList, includeSold,
       );
       await setCachedSearchResult(redis, cacheParams, freshResult);
     };
@@ -615,7 +700,7 @@ export const registerSearchExtendedRoutes = ({
     // ── Cache miss: compute results from DB ──
     const computed = await computeSearchResults(
       readDb, q, limit, category, condition, size, brandList, sizeList, priceMin, priceMax, sort, page,
-      searchPolicyVersion, sustainableOnly,
+      searchPolicyVersion, sustainableOnly, categoryList, conditionList, includeSold,
     );
 
     const responseTimeMs = Date.now() - startTime;

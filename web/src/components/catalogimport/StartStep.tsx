@@ -78,7 +78,7 @@ export function StartStep({ draftsCount, onSourceReady, onViewDrafts }: StartSte
 
   return (
     <div>
-      <h1 className="text-screen-title font-bold text-text-primary">
+      <h1 className="text-screen-title text-text-primary">
         Bring your shop to ThryftVerse
       </h1>
       <p className="mt-2 max-w-md text-body text-text-secondary">

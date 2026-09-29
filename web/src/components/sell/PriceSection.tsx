@@ -5,9 +5,10 @@
  * hint from category comparables, and the buyer-protection fee preview.
  */
 
-import { CATEGORIES } from '@/lib/data/fixtures';
 import { Icon } from '@/components/ui/Icon';
 import { formatPrice } from '@/lib/utils/format';
+import { useTaxonomy } from '@/lib/hooks/sell/useTaxonomy';
+import { categoryNodeName } from './taxonomy';
 import {
   PRICE_POSITION_COPY,
   parsePriceInput,
@@ -32,7 +33,8 @@ export function PriceSection({ draft, errors, update, clearError }: PriceSection
   const price = parsePriceInput(draft.price);
   const originalPrice = parsePriceInput(draft.originalPrice);
   const comps = priceCompsFor(draft.category);
-  const categoryName = CATEGORIES.find((c) => c.slug === draft.category)?.name;
+  const { taxonomy } = useTaxonomy();
+  const categoryName = categoryNodeName(taxonomy.categories, draft.category);
   const position = price != null ? pricePosition(price, draft.category) : null;
   const fee = price != null ? protectionFeeGbp(price) : 0;
   const buyerPays = price != null ? price + fee : null;

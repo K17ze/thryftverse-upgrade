@@ -9,7 +9,7 @@ import { Skeleton } from '@/components/ui/Skeleton';
 
 export function ReviewSkeleton() {
   return (
-    <div className="mx-auto max-w-[720px] px-4 py-8 sm:px-6" aria-busy aria-label="Loading review">
+    <div className="mx-auto max-w-2xl px-4 py-8 sm:px-6" aria-busy aria-label="Loading review">
       <Skeleton className="h-5 w-40" />
       <Skeleton className="mt-3 h-8 w-32" />
       <div className="mt-6 flex items-center gap-3 border-b border-border-subtle pb-4">

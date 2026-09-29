@@ -6,7 +6,7 @@
  */
 
 import type { LiveSession } from '@/lib/data/fixtures-media';
-import { userById } from '@/lib/data/fixtures';
+import { liveSellerOf } from './useLiveSessions';
 import { AppImage } from '@/components/ui/AppImage';
 import { Icon } from '@/components/ui/Icon';
 
@@ -17,15 +17,15 @@ interface ReplaysGridProps {
 
 export function ReplaysGrid({ sessions, onPlay }: ReplaysGridProps) {
   return (
-    <div className="grid grid-cols-2 gap-x-4 gap-y-6 sm:grid-cols-3 lg:grid-cols-4">
+    <div className="grid grid-cols-2 gap-x-4 gap-y-6 sm:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5">
       {sessions.map((s) => {
-        const seller = userById(s.sellerId);
+        const seller = liveSellerOf(s);
         return (
           <article key={s.id}>
             <button
               type="button"
               onClick={() => onPlay(s)}
-              aria-label={`Replay ${s.title} by @${seller?.username ?? 'seller'}`}
+              aria-label={`Replay ${s.title}${seller?.username ? ` by @${seller.username}` : ''}`}
               className="pressable group block w-full text-left"
             >
               <div className="relative aspect-[4/5] w-full overflow-hidden rounded-lg bg-surface-alt">
@@ -47,7 +47,9 @@ export function ReplaysGrid({ sessions, onPlay }: ReplaysGridProps) {
               </div>
               <div className="px-0.5 pt-2">
                 <h3 className="clamp-2 text-body font-medium text-text-primary">{s.title}</h3>
-                <p className="mt-1 text-meta text-text-muted">@{seller?.username ?? 'seller'}</p>
+                {seller?.username ? (
+                  <p className="mt-1 text-meta text-text-muted">@{seller.username}</p>
+                ) : null}
               </div>
             </button>
           </article>

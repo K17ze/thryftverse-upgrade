@@ -43,7 +43,7 @@ function Section({ title, children }: { title: string; children: React.ReactNode
 export default function SustainabilityPage() {
   return (
     <div className="mx-auto w-full max-w-[720px] px-4 pb-20 pt-10 sm:px-6 md:pt-14">
-      <p className="text-label font-semibold uppercase tracking-[0.14em] text-text-muted">
+      <p className="text-label text-text-muted">
         Sustainability
       </p>
       <h1 className="mt-3 text-display font-bold tracking-tight text-text-primary">

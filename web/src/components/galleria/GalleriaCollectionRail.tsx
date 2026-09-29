@@ -25,7 +25,7 @@ function CollectionCard({
   onOpen: () => void;
 }) {
   return (
-    <article className="w-[72vw] min-w-[240px] max-w-[320px] shrink-0 snap-start sm:w-[320px]">
+    <article className="w-[72vw] min-w-[240px] max-w-[320px] shrink-0 snap-start sm:w-[320px] lg:w-[380px] lg:max-w-[380px]">
       <button
         type="button"
         onClick={onOpen}
@@ -40,13 +40,13 @@ function CollectionCard({
             aspectRatio={collection.aspectRatio}
             focalPoint={collection.focalPoint}
             className="h-full w-full"
-            sizes="(max-width: 640px) 72vw, 320px"
+            sizes="(max-width: 640px) 72vw, (max-width: 1024px) 320px, 380px"
           />
           {/* Media scrim */}
           <div className="absolute inset-0 bg-gradient-to-t from-black/70 via-black/15 to-transparent" />
 
           <div className="absolute inset-x-0 bottom-0 p-4">
-            <p className="text-label font-semibold uppercase tracking-[0.14em] text-scrim-text-secondary">
+            <p className="text-label text-scrim-text-secondary">
               {collection.theme}
             </p>
             <h3 className="clamp-2 mt-1.5 text-editorial-title text-scrim-text-primary">

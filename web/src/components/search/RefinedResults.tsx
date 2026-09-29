@@ -40,6 +40,7 @@ import {
 import { FilterSheet } from '@/components/filters/FilterSheet';
 import { useMediaQuery } from '@/components/filters/useMediaQuery';
 import { useResultColumns } from '@/components/filters/useResultColumns';
+import { useLoadMoreSentinel } from '@/lib/hooks/useLoadMoreSentinel';
 import { COLOR_VOCAB } from '@/components/visualsearch/visualSearchTypes';
 import { relatedSearches } from './searchMatch';
 import { RefinementRail } from './RefinementRail';
@@ -72,6 +73,19 @@ interface RefinedResultsProps {
   onFiltersChange: (next: ListingFilters) => void;
   /** Best-match score per listing id — ranks the default relevance sort. */
   relevanceScores?: ReadonlyMap<string, number>;
+  /** Live mode: the backend already filtered, ranked and counted the
+   *  full catalogue. Client sorting is skipped (server order is the
+   *  order); the facet pass still runs for client-only dimensions
+   *  (colours) and stays idempotent for the forwarded ones. */
+  serverOrdered?: boolean;
+  /** Catalogue-wide match count from the backend — the heading reads it
+   *  instead of the loaded-page length when present. */
+  totalCount?: number | null;
+  /** Infinite scroll — the host wires its query's nextCursor; the
+   *  sentinel renders at the grid tail while `hasMore` is true. */
+  hasMore?: boolean;
+  onLoadMore?: () => void;
+  isLoadingMore?: boolean;
   /** The active query — excluded from the related-searches row. */
   query?: string;
   /** Controlled sort — the page persists it in the URL. */
@@ -105,6 +119,11 @@ export function RefinedResults({
   filters,
   onFiltersChange,
   relevanceScores,
+  serverOrdered = false,
+  totalCount = null,
+  hasMore = false,
+  onLoadMore,
+  isLoadingMore = false,
   query,
   sort,
   onSortChange,
@@ -116,17 +135,34 @@ export function RefinedResults({
   emptyActionLabel,
   onEmptyAction,
 }: RefinedResultsProps) {
-  const columns = useResultColumns();
+  const baseColumns = useResultColumns();
+  const [dense, setDense] = useState(false);
+  const columns = dense ? Math.min(5, baseColumns + 1) : baseColumns;
+  const sentinelRef = useLoadMoreSentinel(
+    hasMore && !isLoadingMore && !!onLoadMore,
+    onLoadMore,
+  );
   const [sheetOpen, setSheetOpen] = useState(false);
   // One facet surface per viewport — the lg rail owns desktop; the sheet
   // only exists below lg (and auto-dismisses across a resize crossing).
   const isDesktop = useMediaQuery('(min-width: 1024px)');
 
-  const filtered = useMemo(
-    () => sortListings(applyListingFilters(listings, filters), sort, relevanceScores),
-    [listings, filters, sort, relevanceScores],
-  );
+  const filtered = useMemo(() => {
+    const narrowed = applyListingFilters(listings, filters);
+    // Server-ordered pages keep their rank — a client re-sort would only
+    // order the loaded subset and fight pagination.
+    return serverOrdered ? narrowed : sortListings(narrowed, sort, relevanceScores);
+  }, [listings, filters, sort, relevanceScores, serverOrdered]);
   const activeCount = countActiveFilters(filters);
+  // The toolbar count — the backend's catalogue total when it reports
+  // one, otherwise the loaded set's length. Exception: colour is a
+  // client-only facet (no backend param exists), so over a server-ordered
+  // set the honest count is the filtered subset the grid actually shows,
+  // not the catalogue total.
+  const displayCount =
+    serverOrdered && filters.colours.length > 0
+      ? filtered.length
+      : (totalCount ?? filtered.length);
 
   const units = useMemo<DiscoveryFeedUnit[]>(
     () =>
@@ -231,7 +267,7 @@ export function RefinedResults({
   );
 
   return (
-    <div className="lg:grid lg:grid-cols-[236px_minmax(0,1fr)] lg:gap-7">
+    <div className="lg:grid lg:grid-cols-[248px_minmax(0,1fr)] lg:gap-8 xl:grid-cols-[272px_minmax(0,1fr)]">
       {/* Refinement rail — desktop only; sticky under the 64px header. */}
       <aside className="hidden lg:block lg:pl-6" aria-label="Refinements">
         <div className="no-scrollbar sticky top-16 max-h-[calc(100vh-4rem)] overflow-y-auto pb-8 pr-1">
@@ -245,10 +281,25 @@ export function RefinedResults({
         <div className="sticky top-14 z-elevated border-b border-border-subtle bg-background/95 backdrop-blur-sm md:top-16">
           <div className="flex flex-wrap items-center justify-between gap-x-3 gap-y-2 px-4 pb-2.5 pt-2 sm:px-6">
             <div className="min-w-0 flex-1">
-              {heading(isLoading ? null : filtered.length)}
+              {heading(isLoading ? null : displayCount)}
             </div>
             <div className="flex shrink-0 items-center gap-1.5">
               <SortDropdown value={sort} onChange={onSortChange} />
+              <button
+                type="button"
+                aria-pressed={dense}
+                aria-label={dense ? 'Switch to standard view' : 'Switch to compact view'}
+                title={dense ? 'Standard view' : 'Compact view'}
+                onClick={() => setDense((d) => !d)}
+                className={`pressable hidden h-8 items-center gap-1.5 rounded-md border px-2.5 text-caption font-semibold transition-colors sm:inline-flex ${
+                  dense
+                    ? 'border-border bg-surface-alt text-text-primary'
+                    : 'border-border-subtle bg-surface text-text-secondary hover:text-text-primary'
+                }`}
+              >
+                <Icon name="dashboard" size={14} />
+                <span>{dense ? 'Compact' : 'Standard'}</span>
+              </button>
               <Button
                 variant="secondary"
                 size="sm"
@@ -333,6 +384,18 @@ export function RefinedResults({
             )}
           </StateGate>
 
+          {/* Load-more sentinel — walks the server's cursor while pages
+              remain. A fetching tail reads as a quiet status, not a
+              spinner storm. */}
+          {hasMore ? (
+            <div ref={sentinelRef} className="h-px" aria-hidden />
+          ) : null}
+          {isLoadingMore ? (
+            <p role="status" className="px-4 pt-4 text-center text-caption text-text-muted sm:px-6">
+              Loading more…
+            </p>
+          ) : null}
+
           {/* Searches related to — trailing row on populated sets, terms
               sourced from the result set itself. */}
           {!isLoading && !isError && units.length > 0 && related.length > 0 ? (
@@ -340,7 +403,7 @@ export function RefinedResults({
               aria-label="Related searches"
               className="px-4 pb-10 pt-9 sm:px-6"
             >
-              <h2 className="text-label font-semibold uppercase tracking-wide text-text-muted">
+              <h2 className="text-label text-text-muted">
                 Related searches
               </h2>
               <div className="mt-2.5 flex flex-wrap gap-1.5">
@@ -366,7 +429,7 @@ export function RefinedResults({
           listings={listings}
           filters={filters}
           onChange={onFiltersChange}
-          resultCount={filtered.length}
+          resultCount={displayCount}
           hideCategory={hideCategoryFilter}
           onSaveSearch={onSaveSearch ? () => onSaveSearch(filters) : undefined}
         />

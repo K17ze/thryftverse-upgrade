@@ -3,7 +3,7 @@ import { Skeleton } from '@/components/ui/Skeleton';
 /** AssetDetailSkeleton — mirrors the terminal geometry while queries settle. */
 export function AssetDetailSkeleton() {
   return (
-    <div className="mx-auto w-full max-w-6xl px-4 pb-24 pt-6 sm:px-6 md:pt-8" aria-busy="true">
+    <div className="mx-auto w-full max-w-6xl px-4 pb-24 pt-6 sm:px-6 md:pt-8 lg:max-w-[1440px]" aria-busy="true">
       <Skeleton className="h-5 w-24" />
 
       <div className="mt-5 flex items-start gap-4">
@@ -15,8 +15,8 @@ export function AssetDetailSkeleton() {
         </div>
       </div>
 
-      <div className="mt-8 grid gap-10 lg:grid-cols-12">
-        <div className="lg:col-span-7">
+      <div className="mt-8 grid gap-10 lg:grid-cols-[minmax(0,1fr)_400px]">
+        <div className="min-w-0">
           {/* Quote hero + signed move */}
           <Skeleton className="h-8 w-44" />
           <Skeleton className="mt-2 h-4 w-32" />
@@ -48,7 +48,7 @@ export function AssetDetailSkeleton() {
           </div>
         </div>
 
-        <div className="lg:col-span-5">
+        <div className="min-w-0">
           <Skeleton className="h-11 w-full rounded-md" />
           <Skeleton className="mt-4 h-10 w-full rounded-full" />
           <Skeleton className="mt-4 h-11 w-full rounded-lg" />

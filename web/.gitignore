@@ -8,3 +8,7 @@ next-env.d.ts
 qa-scratch/
 qa-shots/
 *.log
+*.png
+scripts/test-*.mjs
+scripts/inspect-*.mjs
+scripts/dx2-*.mjs

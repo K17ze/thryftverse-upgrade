@@ -14,18 +14,32 @@
  * the one figure that is real here — delivered orders involving the
  * member — and says plainly that verified CO₂e isn't connected. Per EU
  * Directive 2024/825 no carbon-neutral shipping claim is offered.
+ *
+ * Live + signed-in sessions sync the preference slice through
+ * GET/PUT /users/me/sustainability-preferences: the store is the
+ * optimistic mirror hydrated from server truth and a failed write
+ * restores the pre-write posture. Guest and fixture sessions keep the
+ * device-local path and the copy says so.
  */
 
-import { useMemo, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
+import { useQuery } from '@tanstack/react-query';
 import { SettingsSection } from './SettingsSection';
 import { Switch } from './Switch';
 import { Chip } from '@/components/ui/Chip';
 import { Icon } from '@/components/ui/Icon';
 import { Skeleton } from '@/components/ui/Skeleton';
+import { useToast } from '@/components/ui/Toast';
 import { useHydrated } from '@/lib/store/useStore';
 import { useSession } from '@/lib/session/SessionProvider';
 import { useSettingsPrefs, type SustainabilityPrefs } from '@/lib/store/settingsPrefs';
+import { DATA_MODE } from '@/lib/api/client';
+import { parseApiError } from '@/lib/api/http';
+import * as usersService from '@/lib/api/services/users';
+import { useCommerceOrders } from '@/lib/hooks/queries';
 import { ORDERS } from '@/lib/data/fixtures';
+
+const LIVE = DATA_MODE === 'live';
 
 const CARBON_TARGETS: (number | null)[] = [null, 10, 25, 50, 100, 250];
 const RATIO_TARGETS: (number | null)[] = [null, 25, 50, 75, 100];
@@ -111,26 +125,69 @@ function GoalChips<T extends number | null>({
 
 export function SustainabilityView() {
   const hydrated = useHydrated();
-  const { user } = useSession();
+  const { user, isGuest, sessionLoading } = useSession();
+  const { show } = useToast();
   const sustainability = useSettingsPrefs((s) => s.sustainability);
   const setSustainability = useSettingsPrefs((s) => s.setSustainability);
   const [methodologyOpen, setMethodologyOpen] = useState(false);
 
-  // Real figure available in fixture mode: completed resales involving the
-  // member — buying and selling both keep an item in circulation. The 'me'
-  // records belong to the demo account only — guests and live accounts get
-  // an honest zero, not a stranger's impact.
-  const keptInCirculation = useMemo(
-    () =>
-      user?.id === 'me'
-        ? ORDERS.filter(
-            (o) => (o.buyerId === 'me' || o.sellerId === 'me') && o.status === 'delivered',
-          ).length
-        : 0,
-    [user?.id],
-  );
+  // The account wire only exists for an authed live session — guests and
+  // fixture mode keep the device-local mirror.
+  const syncs = LIVE && !isGuest;
+  const livePrefs = useQuery({
+    queryKey: ['users', 'me', 'sustainability-preferences'],
+    queryFn: ({ signal }) => usersService.fetchSustainabilityPreferences(signal),
+    enabled: syncs,
+    staleTime: 30_000,
+  });
 
-  const set = (patch: Partial<SustainabilityPrefs>) => setSustainability(patch);
+  // Reconcile server truth into the mirror whenever the read lands — the
+  // service emits the full shape, so a merge lands it verbatim.
+  useEffect(() => {
+    if (livePrefs.data) setSustainability(livePrefs.data);
+  }, [livePrefs.data, setSustainability]);
+
+  // Network/server failures carry no user-facing detail beyond "it didn't
+  // save" — the offline classifier is the only message worth surfacing.
+  const syncError = (error: unknown, fallback: string) => {
+    const parsed = parseApiError(error);
+    show(parsed.isNetworkError ? parsed.message : fallback, 'error');
+  };
+
+  /** Optimistic patch → PUT the touched fields; a failed write restores
+   *  the exact pre-write object. Note: the server's COALESCE upsert
+   *  treats a null goal as "keep existing", so clearing a target can't
+   *  round-trip — same limitation as mobile. */
+  const set = (patch: Partial<SustainabilityPrefs>) => {
+    const before = useSettingsPrefs.getState().sustainability;
+    setSustainability(patch);
+    if (!syncs) return;
+    void usersService.updateSustainabilityPreferences(patch).catch((error) => {
+      setSustainability(before);
+      syncError(error, 'Couldn’t save — the preferences were restored');
+    });
+  };
+
+  // The mirror is the optimistic layer — show it only once persisted
+  // state, the session, and the account read have all resolved.
+  const ready = hydrated && !(LIVE && sessionLoading) && !(syncs && livePrefs.isLoading);
+
+  // Real figure: completed resales involving the member — buying and
+  // selling both keep an item in circulation. Live mode counts the
+  // viewer's real delivered orders (the commerce list is already
+  // viewer-scoped); fixture mode counts the demo account's records —
+  // guests and other accounts get an honest zero, not a stranger's impact.
+  const { data: orders } = useCommerceOrders();
+  const keptInCirculation = useMemo(() => {
+    if (LIVE) {
+      return (orders ?? []).filter((o) => o.status === 'delivered').length;
+    }
+    return user?.id === 'me'
+      ? ORDERS.filter(
+          (o) => (o.buyerId === 'me' || o.sellerId === 'me') && o.status === 'delivered',
+        ).length
+      : 0;
+  }, [orders, user?.id]);
 
   return (
     <>
@@ -162,7 +219,7 @@ export function SustainabilityView() {
 
       {/* Goals — chip pickers matching mobile's target options. */}
       <SettingsSection title="Sustainability goals">
-        {hydrated ? (
+        {ready ? (
           <>
             <div className="px-4 py-3.5 sm:px-5">
               <p className="text-body-emphasis text-text-primary">Carbon saving target</p>
@@ -200,7 +257,7 @@ export function SustainabilityView() {
 
       {TOGGLE_GROUPS.map((group) => (
         <SettingsSection key={group.section} title={group.section}>
-          {hydrated ? (
+          {ready ? (
             group.rows.map((row) => (
               <div
                 key={row.key}
@@ -249,8 +306,11 @@ export function SustainabilityView() {
       </div>
 
       <p className="px-4 pt-4 text-caption text-text-muted sm:px-5">
-        Preferences are stored on this device in this preview. In the app they
-        sync to your account and shape feeds, badges and packaging requests.
+        {syncs
+          ? 'Preferences sync to your account and shape feeds, badges and packaging requests.'
+          : LIVE
+            ? 'Preferences are stored on this device — sign in to sync them to your account.'
+            : 'In this preview, preferences are stored on this device; signed-in accounts sync them across devices and they shape feeds, badges and packaging requests.'}
       </p>
     </>
   );

@@ -42,7 +42,7 @@ export function ProgressStep({ source, onDone }: ProgressStepProps) {
 
   return (
     <div className="flex min-h-[48vh] flex-col items-center justify-center text-center">
-      <h1 className="text-screen-title font-bold text-text-primary">
+      <h1 className="text-screen-title text-text-primary">
         Importing your catalogue
       </h1>
       <p className="mt-2 text-body text-text-secondary">

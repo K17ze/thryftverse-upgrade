@@ -4,10 +4,11 @@
  * display floor are filtered (same as mobile `mapBackendListings`).
  */
 
-import { fetchJson } from '../http';
+import { fetchJson, getAuthSession } from '../http';
 import {
   mapBackendListingToListing,
   mapBackendListings,
+  mapInventoryListings,
   normalizeReturnPolicy,
   type BackendListingRow,
 } from '../mappers';
@@ -23,6 +24,9 @@ interface ListResponse {
 export interface ListingPage {
   items: Listing[];
   nextCursor: string | null;
+  /** Catalogue-wide match count when the backend reports it — absent
+   *  (null) means the surface falls back to the loaded count. */
+  total?: number | null;
 }
 
 function toQuery(params: Record<string, string | number | boolean | undefined | null>) {
@@ -39,51 +43,123 @@ function extractRows(payload: ListResponse): BackendListingRow[] {
   return payload.items ?? payload.listings ?? [];
 }
 
+interface ListingsQueryParams {
+  q?: string;
+  category?: string;
+  /** Multi-select facets — CSV on the wire (backend `ANY` semantics). */
+  categories?: string[];
+  subcategory?: string;
+  brand?: string;
+  brands?: string[];
+  size?: string;
+  sizes?: string[];
+  condition?: string;
+  conditions?: string[];
+  includeSold?: boolean;
+  minPrice?: number;
+  maxPrice?: number;
+  sustainableOnly?: boolean;
+  sort?: string;
+  cursor?: string;
+  limit?: number;
+  sellerId?: string;
+}
+
+/** GET /listings — the browse contract: cursor pagination, slug-tolerant
+ *  category, CSV facets, richer rows. Handles queryless browse AND short
+ *  queries (q min 1) that /search/listings would reject. */
 export async function fetchListings(
-  params: {
-    q?: string;
-    category?: string;
-    brand?: string;
-    size?: string;
-    minPrice?: number;
-    maxPrice?: number;
-    condition?: string;
-    sort?: string;
-    cursor?: string;
-    limit?: number;
-    sellerId?: string;
-  } = {},
+  params: ListingsQueryParams = {},
   signal?: AbortSignal,
 ): Promise<ListingPage> {
-  const payload = await fetchJson<ListResponse>(`/listings${toQuery(params)}`, undefined, { signal });
+  const { categories, brands, sizes, conditions, includeSold, sustainableOnly, ...rest } = params;
+  const payload = await fetchJson<ListResponse & { total?: number | null }>(
+    `/listings${toQuery({
+      ...rest,
+      categories: categories?.length ? categories.join(',') : undefined,
+      brands: brands?.length ? brands.join(',') : undefined,
+      sizes: sizes?.length ? sizes.join(',') : undefined,
+      conditions: conditions?.length ? conditions.join(',') : undefined,
+      includeSold: includeSold || undefined,
+      sustainableOnly: sustainableOnly || undefined,
+    })}`,
+    undefined,
+    { signal },
+  );
   return {
     items: mapBackendListings(extractRows(payload)),
     nextCursor: payload.nextCursor ?? null,
+    total: typeof payload.total === 'number' ? payload.total : null,
   };
 }
 
+/** GET /search/listings — the text-search contract (q min 2, ranked).
+ *  Page-based on the wire; the `cursor` param IS the page number as a
+ *  string, so `useInfiniteQuery` and the sentinel stay untouched. A full
+ *  page implies another page — the same hasMore rule native applies. */
 export async function searchListings(
   params: {
     q?: string;
     category?: string;
-    brand?: string;
-    size?: string;
-    minPrice?: number;
-    maxPrice?: number;
-    condition?: string;
+    categories?: string[];
+    conditions?: string[];
+    brands?: string[];
+    sizes?: string[];
+    priceMin?: number;
+    priceMax?: number;
+    includeSold?: boolean;
+    sustainableOnly?: boolean;
     sort?: string;
     cursor?: string;
     limit?: number;
   } = {},
   signal?: AbortSignal,
 ): Promise<ListingPage> {
-  const payload = await fetchJson<ListResponse>(`/search/listings${toQuery(params)}`, undefined, {
-    signal,
-  });
+  const page = params.cursor ? Math.max(1, Number.parseInt(params.cursor, 10) || 1) : 1;
+  const limit = params.limit ?? 24;
+  const payload = await fetchJson<ListResponse & { total?: number | null }>(
+    `/search/listings${toQuery({
+      q: params.q,
+      category: params.category,
+      categories: params.categories?.length ? params.categories.join(',') : undefined,
+      conditions: params.conditions?.length ? params.conditions.join(',') : undefined,
+      brands: params.brands?.length ? params.brands.join(',') : undefined,
+      sizes: params.sizes?.length ? params.sizes.join(',') : undefined,
+      priceMin: params.priceMin,
+      priceMax: params.priceMax,
+      includeSold: params.includeSold || undefined,
+      sustainableOnly: params.sustainableOnly || undefined,
+      sort: params.sort,
+      page,
+      limit,
+    })}`,
+    undefined,
+    { signal },
+  );
+  const items = mapBackendListings(extractRows(payload));
   return {
-    items: mapBackendListings(extractRows(payload)),
-    nextCursor: payload.nextCursor ?? null,
+    items,
+    nextCursor: items.length >= limit ? String(page + 1) : null,
+    total: typeof payload.total === 'number' ? payload.total : null,
   };
+}
+
+/** GET /search/trending — real trending queries from the backend's
+ *  query-frequency tracker (searchExtended.ts). Mirrors mobile
+ *  feedApi.fetchTrendingSearches — returns [] when there is no real
+ *  trend data; callers must not fabricate trends in that case. */
+export async function fetchTrendingSearches(
+  limit = 6,
+  signal?: AbortSignal,
+): Promise<string[]> {
+  const payload = await fetchJson<{ ok: boolean; items?: { query?: string }[] }>(
+    `/search/trending?limit=${Math.min(Math.max(limit, 1), 20)}`,
+    undefined,
+    { signal },
+  );
+  return (payload.items ?? [])
+    .map((i) => i.query)
+    .filter((q): q is string => typeof q === 'string' && q.length > 0);
 }
 
 export interface ListingDetailResponse {
@@ -105,6 +181,18 @@ interface ListingCommerceWire {
   estimatedDeliveryEnd?: string | null;
   returnPolicy?: unknown;
   dispatchSlaDays?: number | null;
+  /** Real authentication pipeline state — the detail route resolves it
+   *  from the auth-request projection; absent claim = no claim. */
+  authenticity?: {
+    status?: 'not_offered' | 'eligible' | 'in_progress' | 'verified' | null;
+    label?: string | null;
+  } | null;
+  /** The platform policy the PDP discloses — server-authored copy. */
+  protectionPolicy?: {
+    available?: boolean | null;
+    label?: string | null;
+    summary?: string | null;
+  } | null;
 }
 
 function finiteNumber(value: unknown): number | null {
@@ -156,7 +244,53 @@ function mergeListingCommerce(listing: Listing, commerce: unknown): Listing {
   if (merged.priceWithProtection == null && item !== null && fee !== null) {
     merged.priceWithProtection = Math.round((item + fee) * 100) / 100;
   }
+
+  // Authenticity + protection policy — the backend's claims, verbatim.
+  const authStatus = c.authenticity?.status;
+  if (
+    merged.authenticity == null &&
+    (authStatus === 'not_offered' ||
+      authStatus === 'eligible' ||
+      authStatus === 'in_progress' ||
+      authStatus === 'verified')
+  ) {
+    merged.authenticity = {
+      status: authStatus,
+      label:
+        typeof c.authenticity?.label === 'string' && c.authenticity.label
+          ? c.authenticity.label
+          : undefined,
+    };
+  }
+  if (merged.protectionPolicy == null && c.protectionPolicy?.available === true) {
+    merged.protectionPolicy = {
+      available: true,
+      label: c.protectionPolicy.label ?? null,
+      summary: c.protectionPolicy.summary ?? null,
+    };
+  }
   return merged;
+}
+
+/**
+ * POST /listings/:id/view — qualified detail view → the interactions
+ * table feeding seller analytics (mobile useItemDetailData fires the
+ * same write on item resolve). Fire-and-forget at call sites; the
+ * server is idempotent and skips self-views/non-public listings.
+ */
+export async function trackListingView(
+  listingId: string,
+  options?: { qualified?: boolean; idempotencyKey?: string },
+): Promise<void> {
+  try {
+    await fetchJson(`/listings/${encodeURIComponent(listingId)}/view`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ qualified: options?.qualified ?? true }),
+    });
+  } catch {
+    // Analytics must never break the viewing flow.
+  }
 }
 
 export async function fetchListingById(
@@ -203,62 +337,184 @@ export async function fetchSellerListings(
   };
 }
 
+/** The seller's own inventory — GET /users/:id/listings (mobile
+ *  fetchUserListingsFromApi). No status filter: the owner reads drafts,
+ *  paused and sold rows, not just the public 'active' set. */
 export async function fetchMyListings(
   params: { cursor?: string; limit?: number } = {},
   signal?: AbortSignal,
 ): Promise<ListingPage> {
+  const session = await getAuthSession();
+  if (!session?.userId) throw new Error('No authenticated user');
   const payload = await fetchJson<ListResponse>(
-    `/listings/mine${toQuery(params)}`,
+    `/users/${encodeURIComponent(session.userId)}/listings${toQuery({ limit: 200, ...params })}`,
     undefined,
     { signal },
   );
   return {
-    items: mapBackendListings(extractRows(payload)),
+    items: mapInventoryListings(extractRows(payload)),
     nextCursor: payload.nextCursor ?? null,
   };
 }
 
+/**
+ * POST /listings — the backend schema (index.ts) requires `id`, `sellerId`,
+ * `title`, `description`, `priceGbp` and accepts the field set below. The
+ * client mints `id` once per publish attempt (a stable UUID) so a retried
+ * create is a byte-identical idempotent replay — the backend upserts by id
+ * instead of producing a duplicate listing.
+ *
+ * `images` is NOT a schema field: media attaches through POST
+ * /listing-images after the row exists (see {@link attachListingImage}).
+ * The cover rides as `imageUrl` + `coverFinalizationId` — a cover URL the
+ * backend can't match to a verified upload finalization is refused (422).
+ */
 export interface CreateListingInput {
+  /** Client-minted stable id — reused verbatim across retries. */
+  id: string;
+  sellerId: string;
   title: string;
   description: string;
   priceGbp: number;
-  category: string;
+  /** Cover media's verified public URL. */
+  imageUrl?: string;
+  /** Finalization id proving the cover upload — required with imageUrl. */
+  coverFinalizationId?: string;
+  status?: 'draft' | 'active' | 'paused' | 'sold' | 'deleted';
+  category?: string;
   subcategory?: string;
   brand?: string;
   size?: string;
-  condition: string;
-  images?: string[];
+  condition?: string;
+  originalPriceGbp?: number;
   shippingMethod?: string;
   shippingPayer?: string;
 }
 
-export async function createListing(input: CreateListingInput): Promise<string> {
-  const payload = await fetchJson<{ ok: boolean; listing?: { id: string }; id?: string }>(
-    '/listings',
-    {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify(input),
-    },
-  );
-  const id = payload.listing?.id ?? payload.id;
-  if (!id) throw new Error('Listing created but no id returned');
-  return id;
+export interface CreateListingResult {
+  /** The listing id — echoed back from the client-supplied id. */
+  listingId: string;
+  /** Truthful landing status — 'risk_pending' when the publish gate held
+   *  the listing for review rather than activating it. */
+  status?: string;
+}
+
+export async function createListing(input: CreateListingInput): Promise<CreateListingResult> {
+  const payload = await fetchJson<{
+    ok: boolean;
+    listingId?: string;
+    status?: string;
+    error?: string;
+  }>('/listings', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(input),
+  });
+  if (!payload.ok || !payload.listingId) {
+    throw new Error(payload.error ?? 'Listing created but no id returned');
+  }
+  return { listingId: payload.listingId, status: payload.status };
 }
 
 /**
- * PATCH /listings/:id — the same field vocabulary create accepts plus
- * `status` ('active' | 'sold' | 'paused' | 'deleted'), mirroring the mobile
- * patchListingOnApi path used for mark-sold/relist and single edits.
+ * PATCH /listings/:id — the listingPatchSchema field whitelist
+ * (backend/api/src/lib/listingPatch.ts) plus `status` transitions and the
+ * `expectedUpdatedAt` optimistic-concurrency token: the `updatedAt` the
+ * editor read. The write is refused with 409 LISTING_STALE when the row
+ * moved since — pass the value from fetchListingById whenever editing a
+ * loaded listing. `attachmentOrder`/`coverMediaId`/`removedAttachmentIds`
+ * are NOT in the schema — cover changes carry via imageUrl +
+ * coverFinalizationId, and media add/remove goes through /listing-images.
  */
+export interface ListingPatchInput {
+  title?: string;
+  description?: string;
+  priceGbp?: number;
+  imageUrl?: string;
+  coverFinalizationId?: string;
+  status?: string;
+  category?: string;
+  brand?: string;
+  size?: string;
+  condition?: string;
+  originalPriceGbp?: number;
+  shippingMethod?: string;
+  shippingPayer?: string;
+  expectedUpdatedAt?: string;
+}
+
+export interface PatchListingResult {
+  listingId: string;
+  status?: string;
+  /** The row's new updatedAt — the next save's expectedUpdatedAt. */
+  updatedAt?: string;
+}
+
 export async function patchListing(
   id: string,
-  patch: Partial<CreateListingInput> & { status?: string },
-): Promise<void> {
-  await fetchJson<{ ok: boolean }>(`/listings/${encodeURIComponent(id)}`, {
+  patch: ListingPatchInput,
+): Promise<PatchListingResult> {
+  const payload = await fetchJson<{
+    ok: boolean;
+    listingId?: string;
+    status?: string;
+    updatedAt?: string;
+    error?: string;
+  }>(`/listings/${encodeURIComponent(id)}`, {
     method: 'PATCH',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify(patch),
+  });
+  return {
+    listingId: payload.listingId ?? id,
+    status: payload.status,
+    updatedAt: payload.updatedAt,
+  };
+}
+
+/**
+ * POST /listing-images — attach one verified upload to a listing row.
+ * The backend re-checks the finalization (ownership, finalized status and
+ * that `imageUrl` matches the upload's public/canonical URL), so callers
+ * must send the same publicUrl the finalize receipt returned.
+ * Idempotent on `id` — mint a deterministic id per (listing, slot) so a
+ * publish retry re-drives the same upsert instead of duplicating rows.
+ */
+export interface ListingImageAttachInput {
+  /** Attachment row id — stable per (listingId, position) for retries. */
+  id: string;
+  listingId: string;
+  imageUrl: string;
+  sortOrder: number;
+  mediaType?: 'image' | 'video';
+  finalizationId: string;
+  /** Post-orientation pixel dims — the backend prefers its own
+   *  pipeline-measured values when present. */
+  mediaWidth?: number;
+  mediaHeight?: number;
+  /** Poster still for video media — a client-rendered frame upload. */
+  posterUrl?: string | null;
+  blurhash?: string | null;
+  focalX?: number | null;
+  focalY?: number | null;
+}
+
+export async function attachListingImage(
+  body: ListingImageAttachInput,
+): Promise<{ ok: boolean }> {
+  return fetchJson<{ ok: boolean }>('/listing-images', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(body),
+  });
+}
+
+/** DELETE /listings/:id — mobile deleteListingOnApi. Owner-scoped; the
+ *  canonical lifecycle allows it from active/paused/draft and rejects
+ *  from terminal states, so callers get a truthful error, not a fake ok. */
+export async function deleteListing(id: string): Promise<void> {
+  await fetchJson<{ ok: boolean }>(`/listings/${encodeURIComponent(id)}`, {
+    method: 'DELETE',
   });
 }
 

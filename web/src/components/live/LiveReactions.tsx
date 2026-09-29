@@ -10,6 +10,7 @@
 
 import { useCallback, useEffect, useRef, useState, type CSSProperties } from 'react';
 import type { LiveSession } from '@/lib/data/fixtures-media';
+import { DATA_MODE } from '@/lib/api/client';
 import { Icon } from '@/components/ui/Icon';
 import { seededRandom } from './useLivePresence';
 import { formatCount } from '@/lib/utils/format';
@@ -64,9 +65,11 @@ export function LiveReactions({ session }: { session: LiveSession }) {
     if (mine) setSent((c) => c + 1);
   }, []);
 
-  // Ambient trickle — presence from the crowd, live sessions only.
+  // Ambient trickle — crowd presence is authored fixture theatre and runs
+  // on fixture/demo shows only. A real live session gets no invented
+  // reactions: the only glyphs that float there are ones the viewer sent.
   useEffect(() => {
-    if (!live) return;
+    if (!live || DATA_MODE === 'live') return;
     const id = window.setInterval(() => spawn(false), AMBIENT_MS);
     return () => window.clearInterval(id);
   }, [live, spawn]);

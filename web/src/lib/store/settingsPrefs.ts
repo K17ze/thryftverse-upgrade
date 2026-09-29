@@ -7,9 +7,13 @@
  * snapshots), quiet hours, profile-privacy flags, blocked/restricted
  * account lists, two-factor state and data-consent flags.
  *
- * On mobile these write through to the preferences/consent APIs; on web
- * they persist locally — the authoritative backend sync is called out
- * honestly on each screen.
+ * Live mode mirrors several slices to account endpoints — the push
+ * matrix + quiet hours via GET/PUT /notifications/preferences, the email
+ * matrix via GET/PUT /users/me/email-preferences, personalisation via
+ * GET/PATCH /users/me/personalisation, and sustainability via
+ * GET/PUT /users/me/sustainability-preferences. This store is the
+ * optimistic mirror and the fixture/guest-mode truth; the slices with
+ * no wire persist locally and say so on their screens.
  */
 
 import { create } from 'zustand';
@@ -20,6 +24,13 @@ import {
   type PasskeyRecord,
   type PersonalisationPreferences,
 } from '@/lib/contracts/settings';
+import type {
+  NotificationPreferences,
+  NotificationPreviewPolicy,
+  NotificationPushCategory,
+} from '@/lib/api/services/notifications';
+import type { PrivacyConsent } from '@/lib/api/services/users';
+import type { EmailPreferences } from '@/lib/api/services/users';
 
 export type NotificationPrefKey =
   // Essential (email only, locked on)
@@ -52,7 +63,15 @@ export interface QuietHours {
   endHour: number;
 }
 
-export type PrivacyFlag = 'showCloset' | 'showSaved' | 'allowMessages' | 'showActivity';
+export type PrivacyFlag =
+  | 'showCloset'
+  | 'showSaved'
+  | 'allowMessages'
+  | 'showActivity'
+  /** Server-backed flags — live mode mirrors PATCH /users/me/preferences
+   *  (privateProfile) and PATCH /users/me/search-visibility. */
+  | 'privateProfile'
+  | 'searchVisible';
 
 export type DataFlag = 'personalisedAds' | 'analytics' | 'recommendations' | 'thirdPartySharing';
 
@@ -83,7 +102,7 @@ const DEFAULT_SUSTAINABILITY: SustainabilityPrefs = {
   localFirst: false,
 };
 
-type PrefMap = Record<NotificationPrefKey, boolean>;
+export type PrefMap = Record<NotificationPrefKey, boolean>;
 
 const DEFAULT_PUSH: PrefMap = {
   securityAlerts: false, // email-only category
@@ -121,6 +140,92 @@ const DEFAULT_EMAIL: PrefMap = {
 
 const DEFAULT_QUIET_HOURS: QuietHours = { enabled: false, startHour: 22, endHour: 8 };
 
+// ── Wire sync (GET/PUT /notifications/preferences) ──────────────────────────
+
+/**
+ * Web pref key → wire push category. The server vocabulary is coarser
+ * than the web matrix: dispatch reminders fold into `orderUpdates`
+ * (dispatch_* events gate on it), `likes`, `savedSearchAlerts` and
+ * `comments` share `wishlist` (like-your-item, saved_search_match and
+ * the review_/reply family all ride it), and `marketing` reads as
+ * `news`. Only `securityAlerts` — the locked, email-only row — has no
+ * seat here; the email channel has its own endpoint and mapping
+ * (EMAIL_PREF_WIRE_FIELD below).
+ */
+export const PUSH_PREF_WIRE_CATEGORY = {
+  orderUpdates: 'orderUpdates',
+  fulfilmentReminders: 'orderUpdates',
+  likes: 'wishlist',
+  offers: 'offers',
+  priceDrops: 'priceDrops',
+  savedSearchAlerts: 'wishlist',
+  followers: 'followers',
+  comments: 'wishlist',
+  messages: 'messages',
+  auctionAlerts: 'auctionAlerts',
+  marketing: 'news',
+} as const satisfies Partial<Record<NotificationPrefKey, NotificationPushCategory>>;
+
+/** Wire category → mapped web keys (every wire category has ≥1). */
+const WIRE_CATEGORY_PREFS = new Map<NotificationPushCategory, NotificationPrefKey[]>();
+for (const [key, category] of Object.entries(PUSH_PREF_WIRE_CATEGORY)) {
+  const keys = WIRE_CATEGORY_PREFS.get(category) ?? [];
+  keys.push(key as NotificationPrefKey);
+  WIRE_CATEGORY_PREFS.set(category, keys);
+}
+
+/**
+ * Project the local push map onto the wire categories for a PUT — a
+ * category stays enabled while any mapped toggle is on (the same `some`
+ * posture the channel masters report). Inside a shared bucket a
+ * granular opt-out is intent only: the wire can't split it, so the
+ * bucket keeps delivering until every member is off.
+ */
+export function wirePushPreferences(
+  push: PrefMap,
+): Partial<Record<NotificationPushCategory, boolean>> {
+  const out: Partial<Record<NotificationPushCategory, boolean>> = {};
+  for (const [category, keys] of WIRE_CATEGORY_PREFS) {
+    out[category] = keys.some((k) => push[k]);
+  }
+  return out;
+}
+
+// ── Email wire sync (GET/PUT /users/me/email-preferences) ───────────────────
+
+/**
+ * Web pref key → wire email field. Unlike push, the email wire is 1:1
+ * with the matrix rows that carry an email seat: `savedSearchAlerts`
+ * rides `newListingsFromFollowing` (the server's "new listings" bucket —
+ * mobile labels the same row "New listings"), and the push-only keys
+ * (fulfilmentReminders, likes, offers, followers, comments) have no
+ * email field at all.
+ */
+export const EMAIL_PREF_WIRE_FIELD = {
+  securityAlerts: 'securityAlerts',
+  orderUpdates: 'orderUpdates',
+  priceDrops: 'priceDropAlerts',
+  savedSearchAlerts: 'newListingsFromFollowing',
+  messages: 'messageNotifications',
+  auctionAlerts: 'auctionAlerts',
+  coownDistributions: 'distributionNotices',
+  coownCorporateActions: 'corporateActionNotices',
+  marketing: 'marketing',
+} as const satisfies Partial<Record<NotificationPrefKey, keyof EmailPreferences>>;
+
+/**
+ * Project the local email map onto the wire fields for a PUT — the
+ * mapping is 1:1, so the whole map ships verbatim; a single toggle and
+ * the channel master write the same shape.
+ */
+export function wireEmailPreferences(email: PrefMap): EmailPreferences {
+  const out = {} as EmailPreferences;
+  for (const [key, field] of Object.entries(EMAIL_PREF_WIRE_FIELD)) {
+    out[field] = email[key as NotificationPrefKey];
+  }
+  return out;
+}
+
 interface SettingsPrefsState {
   // ── Notification matrix ──
   push: PrefMap;
@@ -138,20 +243,56 @@ interface SettingsPrefsState {
   quietHours: QuietHours;
   setQuietHours: (patch: Partial<QuietHours>) => void;
 
+  /**
+   * Server-persisted lock-screen preview policy, hydrated from
+   * GET /notifications/preferences. The web surface has no editor for
+   * it, so the mirror is never written back — a stale local value must
+   * not stomp a mobile-set posture.
+   */
+  previewPolicy: NotificationPreviewPolicy;
+  /**
+   * Reconcile GET /notifications/preferences into the local mirror
+   * (live mode). The wire is coarser than the matrix: a disabled
+   * category forces every mapped key off; an enabled one keeps the
+   * local split unless nothing local claims the bucket — then the
+   * whole group lights up, since the bucket IS delivering.
+   */
+  syncNotificationPrefs: (server: NotificationPreferences) => void;
+  /**
+   * Reconcile GET /users/me/email-preferences into the email mirror
+   * (live mode). The wire is 1:1 with the mapped rows, so each server
+   * value lands verbatim on its key.
+   */
+  syncEmailPrefs: (server: EmailPreferences) => void;
+  /**
+   * Whole-channel rollback for a failed live write — restores the exact
+   * pre-write map and its pause snapshot in one commit.
+   */
+  restoreChannelPrefs: (channel: NotifChannel, map: PrefMap, paused: PrefMap | null) => void;
+
   // ── Profile privacy ──
   showCloset: boolean;
   showSaved: boolean;
   allowMessages: boolean;
   showActivity: boolean;
+  /** Only followers see the closet, looks and boards (private_profile). */
+  privateProfile: boolean;
+  /** Member-search discoverability (search_visibility). */
+  searchVisible: boolean;
   setPrivacyFlag: (key: PrivacyFlag, enabled: boolean) => void;
 
-  /** Blocked/restricted user ids (fixtures — 'u*' ids, never 'me'). */
+  /** Blocked/restricted/muted user ids (fixtures — 'u*' ids, never 'me').
+   *  Live mode hydrates each list from its own GET /users/me/*-users
+   *  endpoint; these stay the fixture truth + optimistic mirror. */
   blockedIds: string[];
   restrictedIds: string[];
+  mutedIds: string[];
   blockUser: (id: string) => void;
   unblockUser: (id: string) => void;
   restrictUser: (id: string) => void;
   unrestrictUser: (id: string) => void;
+  muteUser: (id: string) => void;
+  unmuteUser: (id: string) => void;
 
   // ── Security ──
   twoFactorEnabled: boolean;
@@ -200,6 +341,12 @@ interface SettingsPrefsState {
   recommendations: boolean;
   thirdPartySharing: boolean;
   setDataFlag: (key: DataFlag, enabled: boolean) => void;
+  /**
+   * Reconcile GET /users/me/consent into the local mirror (live mode).
+   * The wire's `analyticsOptOut` is opt-OUT while `analytics` here is
+   * opt-IN — the hydrate inverts it; the other three map straight.
+   */
+  syncDataConsent: (server: PrivacyConsent) => void;
 
   // ── Accessibility ──
   /** Applied as a root zoom — scales text and interface on this device. */
@@ -252,14 +399,66 @@ export const useSettingsPrefs = create<SettingsPrefsState>()(
       quietHours: DEFAULT_QUIET_HOURS,
       setQuietHours: (patch) => set((s) => ({ quietHours: { ...s.quietHours, ...patch } })),
 
+      previewPolicy: 'full',
+      syncNotificationPrefs: (server) =>
+        set((s) => {
+          const push = { ...s.push };
+          for (const [category, keys] of WIRE_CATEGORY_PREFS) {
+            const value = server.preferences[category];
+            if (value === false) {
+              for (const k of keys) push[k] = false;
+            } else if (value === true && keys.every((k) => !push[k])) {
+              for (const k of keys) push[k] = true;
+            }
+            // value === true with some local key on → keep the granular
+            // split; the wire can't express it and the mix already
+            // satisfies the bucket.
+          }
+          const quiet = server.quietHours;
+          return {
+            push,
+            // quietHours arrives null when the account holds no window —
+            // the honest mirror is disabled with the local bounds kept,
+            // never a "silenced" posture the server isn't applying.
+            quietHours: quiet
+              ? {
+                  enabled: quiet.enabled,
+                  startHour: quiet.startHour,
+                  endHour: quiet.endHour,
+                }
+              : { ...s.quietHours, enabled: false },
+            previewPolicy: server.previewPolicy ?? s.previewPolicy,
+          };
+        }),
+      syncEmailPrefs: (server) =>
+        set((s) => {
+          const email = { ...s.email };
+          for (const [key, field] of Object.entries(EMAIL_PREF_WIRE_FIELD)) {
+            const value = server[field];
+            if (typeof value === 'boolean') {
+              email[key as NotificationPrefKey] = value;
+            }
+          }
+          return { email };
+        }),
+      restoreChannelPrefs: (channel, map, paused) =>
+        set(() =>
+          channel === 'push'
+            ? { push: { ...map }, pausedPush: paused ? { ...paused } : null }
+            : { email: { ...map }, pausedEmail: paused ? { ...paused } : null },
+        ),
+
       showCloset: true,
       showSaved: true,
       allowMessages: true,
       showActivity: true,
+      privateProfile: false,
+      searchVisible: true,
       setPrivacyFlag: (key, enabled) => set({ [key]: enabled } as Partial<SettingsPrefsState>),
 
       blockedIds: ['u4'],
       restrictedIds: ['u2'],
+      mutedIds: [],
       blockUser: (id) =>
         set((s) => (id === 'me' || s.blockedIds.includes(id) ? s : { blockedIds: [...s.blockedIds, id] })),
       unblockUser: (id) => set((s) => ({ blockedIds: s.blockedIds.filter((x) => x !== id) })),
@@ -268,6 +467,11 @@ export const useSettingsPrefs = create<SettingsPrefsState>()(
           id === 'me' || s.restrictedIds.includes(id) ? s : { restrictedIds: [...s.restrictedIds, id] },
         ),
       unrestrictUser: (id) => set((s) => ({ restrictedIds: s.restrictedIds.filter((x) => x !== id) })),
+      muteUser: (id) =>
+        set((s) =>
+          id === 'me' || s.mutedIds.includes(id) ? s : { mutedIds: [...s.mutedIds, id] },
+        ),
+      unmuteUser: (id) => set((s) => ({ mutedIds: s.mutedIds.filter((x) => x !== id) })),
 
       twoFactorEnabled: false,
       setTwoFactorEnabled: (enabled) => set({ twoFactorEnabled: enabled }),
@@ -344,6 +548,13 @@ export const useSettingsPrefs = create<SettingsPrefsState>()(
       recommendations: true,
       thirdPartySharing: false,
       setDataFlag: (key, enabled) => set({ [key]: enabled } as Partial<SettingsPrefsState>),
+      syncDataConsent: (server) =>
+        set({
+          personalisedAds: server.personalisedAds,
+          recommendations: server.recommendationPersonalisation,
+          thirdPartySharing: server.partnerSharing,
+          analytics: !server.analyticsOptOut,
+        }),
 
       textSize: 'medium',
       reduceMotion: false,
@@ -369,12 +580,16 @@ export const useSettingsPrefs = create<SettingsPrefsState>()(
         pausedPush: s.pausedPush,
         pausedEmail: s.pausedEmail,
         quietHours: s.quietHours,
+        previewPolicy: s.previewPolicy,
         showCloset: s.showCloset,
         showSaved: s.showSaved,
         allowMessages: s.allowMessages,
         showActivity: s.showActivity,
+        privateProfile: s.privateProfile,
+        searchVisible: s.searchVisible,
         blockedIds: s.blockedIds,
         restrictedIds: s.restrictedIds,
+        mutedIds: s.mutedIds,
         twoFactorEnabled: s.twoFactorEnabled,
         revokedSessionIds: s.revokedSessionIds,
         unlinkedAccountIds: s.unlinkedAccountIds,
@@ -403,6 +618,26 @@ export const useSettingsPrefs = create<SettingsPrefsState>()(
  * honest master posture (mirrors mobile's enabledCount > 0). */
 export function channelAnyEnabled(prefs: PrefMap, keys: NotificationPrefKey[]): boolean {
   return keys.some((k) => prefs[k]);
+}
+
+/**
+ * Local consent flags → PATCH /users/me/consent body. The route writes
+ * every column per call — omitted fields reset to schema defaults rather
+ * than being preserved — so the body must always carry the full
+ * projection. `analytics` (opt-in) inverts onto `analyticsOptOut`.
+ */
+export function wirePrivacyConsent(s: {
+  personalisedAds: boolean;
+  analytics: boolean;
+  recommendations: boolean;
+  thirdPartySharing: boolean;
+}): Omit<PrivacyConsent, 'updatedAt'> {
+  return {
+    personalisedAds: s.personalisedAds,
+    recommendationPersonalisation: s.recommendations,
+    partnerSharing: s.thirdPartySharing,
+    analyticsOptOut: !s.analytics,
+  };
 }
 
 /**

@@ -3,13 +3,7 @@
 import { Badge } from '@/components/ui/Badge';
 import type { DistributionReceipt } from '@/lib/contracts/coown';
 import { formatDate } from '@/lib/utils/format';
-import { gbp } from './format';
-
-const KIND_LABEL = {
-  rental_income: 'Rental income',
-  resale_gain: 'Resale gain',
-  licensing: 'Licensing',
-} as const;
+import { distributionKindLabel, distributionStatusLabel, distributionStatusVariant, gbp } from './format';
 
 /**
  * Income receipts — what the viewer was actually paid (or is owed), one
@@ -57,26 +51,26 @@ export function DistributionsTable({
                       {assetTitle(r.assetId)}
                     </p>
                     <p className="mt-0.5 text-meta text-text-secondary tnum">
-                      {KIND_LABEL[r.kind]} · {r.unitsHeld} {r.unitsHeld === 1 ? 'unit' : 'units'} × {gbp(r.amountPerUnitGbp)}
+                      {distributionKindLabel(r)} · {r.unitsHeld} {r.unitsHeld === 1 ? 'unit' : 'units'} × {gbp(r.amountPerUnitGbp)}
                     </p>
                   </div>
                   <div className="shrink-0 text-right">
                     <p className="text-body-emphasis text-text-primary tnum">{gbp(r.totalGbp)}</p>
-                    <Badge variant={r.status === 'paid' ? 'success' : 'warning'} className="mt-1">
-                      {r.status === 'paid' ? 'Paid' : 'Scheduled'}
+                    <Badge variant={distributionStatusVariant(r.status)} className="mt-1">
+                      {distributionStatusLabel(r.status)}
                     </Badge>
                   </div>
                 </div>
                 {/* Desktop */}
                 <div className="hidden items-center gap-4 px-1 py-3.5 md:grid md:grid-cols-[minmax(0,1fr)_8rem_9rem_6.5rem_6rem_7rem]">
                   <p className="clamp-1 text-body-emphasis font-semibold text-text-primary">{assetTitle(r.assetId)}</p>
-                  <p className="text-body text-text-secondary">{KIND_LABEL[r.kind]}</p>
+                  <p className="text-body text-text-secondary">{distributionKindLabel(r)}</p>
                   <p className="text-right text-body text-text-secondary tnum">
                     {r.unitsHeld} × {gbp(r.amountPerUnitGbp)}
                   </p>
                   <p className="text-right text-body text-text-primary tnum">{gbp(r.totalGbp)}</p>
-                  <Badge variant={r.status === 'paid' ? 'success' : 'warning'}>
-                    {r.status === 'paid' ? 'Paid' : 'Scheduled'}
+                  <Badge variant={distributionStatusVariant(r.status)}>
+                    {distributionStatusLabel(r.status)}
                   </Badge>
                   <p className="text-right text-body text-text-secondary tnum">
                     {formatDate(r.paidAt ?? r.exDate)}

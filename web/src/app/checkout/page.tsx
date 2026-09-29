@@ -4,7 +4,10 @@
  * /checkout — delivery address, per-parcel delivery speed, payment method
  * (card or the 1ZE wallet), verification add-on, order summary and the Pay
  * action. ?item=<id> checks out a single listing (Buy now); with no param
- * it consumes the bag.
+ * it consumes the bag; ?order=<id> resumes an unpaid 'created' order —
+ * the order-bound checkout native runs when OrderDetail's pay action
+ * lands here (selections re-bind via PATCH /orders/:id/checkout only when
+ * they diverge from the stored ones, then the payment intent re-attaches).
  *
  * Mobile parity notes (CheckoutScreen): the delivery row opens a quote
  * selector only when the parcel has more than one quote; verification is
@@ -17,7 +20,7 @@
 import { Suspense, useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import Link from 'next/link';
 import { useRouter, useSearchParams } from 'next/navigation';
-import { useQueryClient } from '@tanstack/react-query';
+import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { Button } from '@/components/ui/Button';
 import { EmptyState } from '@/components/ui/EmptyState';
 import { Icon } from '@/components/ui/Icon';
@@ -52,7 +55,8 @@ import { intentSettlement, waitForPaymentSettlement } from '@/lib/commerce/payme
 import { DATA_MODE } from '@/lib/api/client';
 import * as commerceService from '@/lib/api/services/commerce';
 import * as checkoutService from '@/lib/api/services/checkout';
-import type { CommerceOrder, Listing } from '@/lib/contracts/domain';
+import { parseApiError } from '@/lib/api/http';
+import type { Listing } from '@/lib/contracts/domain';
 import {
   AddressPicker,
   PaymentPicker,
@@ -86,6 +90,9 @@ function CheckoutInner() {
   const params = useSearchParams();
   const qc = useQueryClient();
   const itemId = params.get('item');
+  // Order-bound resume — live only (the fixture overlay flips 'created'
+  // orders in place, so no web resume link exists there).
+  const resumeOrderId = params.get('order');
 
   const bag = useStore((s) => s.bag);
   const removeFromBag = useStore((s) => s.removeFromBag);
@@ -110,7 +117,23 @@ function CheckoutInner() {
   const { data: wallet } = useWalletData();
   const izeSettled = wallet?.ize ? Math.max(0, wallet.ize.settled - wallet.ize.reserved) : 0;
 
-  const { data: single, isLoading: itemLoading } = useListing(itemId ?? '');
+  // The resume order — GET /orders/:id is the source of truth for the
+  // bound selections (address, payment method, carrier, totals) and the
+  // payability verdict ('created' is the only resumable status).
+  const {
+    data: boundOrder,
+    isLoading: orderLoading,
+    isError: orderLoadFailed,
+    refetch: refetchBoundOrder,
+  } = useQuery({
+    queryKey: ['order', resumeOrderId],
+    queryFn: ({ signal }) => commerceService.fetchOrderById(resumeOrderId!, signal),
+    enabled: DATA_MODE === 'live' && !!resumeOrderId,
+  });
+
+  const { data: single, isLoading: itemLoading } = useListing(
+    itemId ?? boundOrder?.listingId ?? '',
+  );
   // Live away-state resolves from the seller trust summary — the listing
   // payload alone never carries holidayMode/reachState.
   const sellerTrustQuery = useSellerTrustSummary(single?.sellerId);
@@ -126,9 +149,17 @@ function CheckoutInner() {
   // Bag checkout resolves entries the same way /bag does — live ids go to
   // GET /listings/:id; fixture ids map onto the catalogue. An unresolvable
   // live id drops out of the order rather than shipping a fixture row.
-  const bagResolved = useBagListings(itemId ? NO_BAG_ENTRIES : bag);
+  const bagResolved = useBagListings(
+    itemId || resumeOrderId ? NO_BAG_ENTRIES : bag,
+  );
 
   const items = useMemo<Listing[]>(() => {
+    if (resumeOrderId) {
+      // Order-bound: the order is the source of truth — its listing may
+      // be paused or sold (buyer-invisible), so the Buy-now capability
+      // gate never applies to a resume.
+      return single ? [single] : [];
+    }
     if (itemId) {
       // Direct checkout honours the same capability gate as the PDP — a
       // sold/paused/away listing that raced the navigation never reaches
@@ -136,7 +167,7 @@ function CheckoutInner() {
       return single && listingCapabilities(single, user?.id, sellerTrust).canBuy ? [single] : [];
     }
     return bagResolved.items;
-  }, [itemId, single, bagResolved.items, user?.id, sellerTrust]);
+  }, [resumeOrderId, itemId, single, bagResolved.items, user?.id, sellerTrust]);
 
   const groups = useMemo(() => sellerGroups(items), [items]);
 
@@ -207,7 +238,20 @@ function CheckoutInner() {
               // send the same addressId for the quote to validate.
               addressId: addressNum,
               destinationPostcode,
-              declaredValueGbp: item.price > 0 ? item.price : undefined,
+              // Order-bound resume: the server sorts the order's stored
+              // carrier first, and insures the locked subtotal rather than
+              // the listing's current shelf price.
+              preferredCarrierId: boundOrder
+                ? (boundOrder.shippingCarrierId ??
+                  boundOrder.fulfilmentSnapshot?.carrierId ??
+                  undefined)
+                : undefined,
+              declaredValueGbp:
+                boundOrder && item.id === boundOrder.listingId
+                  ? (boundOrder.subtotalGbp ?? undefined)
+                  : item.price > 0
+                    ? item.price
+                    : undefined,
             });
             if (res.ok && res.quotes.length > 0) {
               next[item.id] = res.quotes.map((q) => ({
@@ -235,7 +279,7 @@ function CheckoutInner() {
       cancelled = true;
     };
     // items/groups share the same listing set — key on items directly.
-  }, [items, user?.id, selectedAddress, liveAddressNumericId, quoteRefreshKey]);
+  }, [items, user?.id, selectedAddress, liveAddressNumericId, quoteRefreshKey, boundOrder]);
 
   /** The parcel's effective live quote — the buyer's carrier pick matched
    *  inside the FRESH quote list (a stale selection object carries a dead
@@ -288,22 +332,66 @@ function CheckoutInner() {
   const instrumentsReady = DATA_MODE === 'live' ? !instrumentsLoading : hydrated;
   useEffect(() => {
     if (!instrumentsReady) return;
-    setAddressId((id) =>
-      id && addresses.some((a) => a.id === id)
-        ? id
-        : (defaultAddress?.id ?? addresses[0]?.id ?? null),
-    );
+    // Order-bound resume seeds the order's own stored refs first — they
+    // are the truth the re-bind compares against (native hydration prefers
+    // boundOrder.addressId over the account default).
+    const boundAddressId =
+      boundOrder?.addressId != null
+        ? (addresses.find((a) => a.id === String(boundOrder.addressId))?.id ?? null)
+        : null;
+    setAddressId((id) => {
+      if (id && addresses.some((a) => a.id === id)) {
+        // A deliberate pick (or an already-seeded bound ref) stays — only
+        // the untouched auto-default yields to the order's own address.
+        const autoSeed = defaultAddress?.id ?? addresses[0]?.id ?? null;
+        return boundAddressId && id === autoSeed ? boundAddressId : id;
+      }
+      return boundAddressId ?? defaultAddress?.id ?? addresses[0]?.id ?? null;
+    });
     // An expired card can never seed the selection — the picker renders
     // it disabled, so defaulting to it would silently produce an unpayable
-    // state. Fall to the first chargeable method.
-    setPaymentId((id) =>
-      id && paymentMethods.some((p) => p.id === id && !paymentMethodExpired(p))
-        ? id
-        : (paymentMethods.find((p) => p.isDefault && !paymentMethodExpired(p))?.id ??
-          paymentMethods.find((p) => !paymentMethodExpired(p))?.id ??
-          null),
+    // state. Fall to the first chargeable method. In live mode no card is
+    // chargeable web-side at all (the picker disables every card row —
+    // intents can only be confirmed natively), so seeding stays empty.
+    if (DATA_MODE !== 'live') {
+      setPaymentId((id) =>
+        id && paymentMethods.some((p) => p.id === id && !paymentMethodExpired(p))
+          ? id
+          : (paymentMethods.find((p) => p.isDefault && !paymentMethodExpired(p))?.id ??
+            paymentMethods.find((p) => !paymentMethodExpired(p))?.id ??
+            null),
+      );
+    }
+  }, [instrumentsReady, addresses, paymentMethods, defaultAddress, boundOrder]);
+
+  // Order-bound seeds — the stored verification flag and the carrier the
+  // order's quote charged (the delivery selection only needs the carrierId
+  // hint; liveParcelQuote re-matches it inside the fresh quote list, so a
+  // drifted or expired quote id never reaches the PATCH).
+  useEffect(() => {
+    if (!boundOrder) return;
+    setVerificationRequested(boundOrder.verificationRequested === true);
+    const boundCarrier =
+      boundOrder.shippingCarrierId ?? boundOrder.fulfilmentSnapshot?.carrierId ?? null;
+    if (!boundCarrier) return;
+    setDelivery((prev) =>
+      prev[boundOrder.sellerId]
+        ? prev
+        : {
+            ...prev,
+            [boundOrder.sellerId]: {
+              quoteId: '',
+              carrierId: boundCarrier,
+              serviceName: boundOrder.fulfilmentSnapshot?.serviceName ?? '',
+              priceFromGbp: boundOrder.postageFeeGbp ?? 0,
+              etaMinDays: 0,
+              etaMaxDays: 0,
+              tracking: false,
+              live: false,
+            },
+          },
     );
-  }, [instrumentsReady, addresses, paymentMethods, defaultAddress]);
+  }, [boundOrder]);
 
   const paying = payStage !== null;
   const [orderId, setOrderId] = useState<string | null>(null);
@@ -315,7 +403,9 @@ function CheckoutInner() {
 
   const loading = itemId
     ? itemLoading || sellerTrustPending || instrumentsLoading
-    : !hydrated || bagResolved.isLoading || instrumentsLoading;
+    : resumeOrderId
+      ? orderLoading || itemLoading || instrumentsLoading
+      : !hydrated || bagResolved.isLoading || instrumentsLoading;
 
   // The ledger derives from the delivery selection — picking Tracked 24
   // re-prices the parcel here, in the summary and on the recorded order.
@@ -331,12 +421,30 @@ function CheckoutInner() {
     }
     return out;
   }, [delivery, groups, liveParcelQuote]);
-  const totals = useMemo(
-    () => checkoutTotalsWithDelivery(items, effectiveDelivery),
-    [items, effectiveDelivery],
+  const totals = useMemo(() => {
+    const t = checkoutTotalsWithDelivery(items, effectiveDelivery);
+    if (!boundOrder) return t;
+    // Order-bound: the server's locked charge lines are authoritative —
+    // the listing price may have moved since the order was created
+    // (accepted offer, price edit), so item and protection lines come off
+    // the order; postage still follows the currently selected quote.
+    const itemsSum = boundOrder.subtotalGbp ?? t.items;
+    const protectionFee = boundOrder.buyerProtectionFeeGbp ?? t.protectionFee;
+    return {
+      ...t,
+      items: itemsSum,
+      protectionFee,
+      total: round(itemsSum + protectionFee + t.shippingFee),
+    };
+  }, [items, effectiveDelivery, boundOrder]);
+  // BUNDLE_RULE — same seller-group math the bag shows; 0 for ?item=
+  // buys. Live mode: the backend charges listing.price_gbp in full per
+  // item (native BundleBagScreen declines to fabricate tiers for the same
+  // reason), so a live payable total subtracts nothing the wire won't.
+  const bundleDiscount = useMemo(
+    () => (DATA_MODE === 'live' ? 0 : bundleDiscountFor(items)),
+    [items],
   );
-  // BUNDLE_RULE — same seller-group math the bag shows; 0 for ?item= buys.
-  const bundleDiscount = useMemo(() => bundleDiscountFor(items), [items]);
   const payableTotal = round(totals.total - bundleDiscount);
 
   // Authentication threshold — an order containing a qualifying item is
@@ -356,6 +464,14 @@ function CheckoutInner() {
           onSelect: () => setUseOneze(true),
         }
       : undefined;
+
+  // Live card intents park unconfirmed — the 1ZE wallet is the only
+  // web-completable tender, so select it as soon as it exists rather than
+  // leaving the buyer on a tender that can never finish.
+  const hasWalletTender = !!walletOption;
+  useEffect(() => {
+    if (DATA_MODE === 'live' && hasWalletTender) setUseOneze(true);
+  }, [hasWalletTender]);
 
   const selectedPayment = paymentMethods.find((p) => p.id === paymentId) ?? null;
   const steps = computeCheckoutSteps({
@@ -381,7 +497,10 @@ function CheckoutInner() {
     items.length > 0 &&
     !!addressId &&
     liveQuotesReady &&
-    (useOneze ? izeSettled >= onezeRequired : !!paymentId) &&
+    // Live card intents can never confirm on web (the only confirm route
+    // is admin-gated; there is no Stripe.js rail) — the wallet is the
+    // only completable tender. Fixture keeps the full card demo.
+    (useOneze ? izeSettled >= onezeRequired : DATA_MODE !== 'live' && !!paymentId) &&
     !paying;
 
   const partialDataPrompt = buildPartialDataPrompt({
@@ -459,6 +578,101 @@ function CheckoutInner() {
           !useOneze && paymentId && Number.isFinite(Number(paymentId))
             ? Number(paymentId)
             : undefined;
+
+        // ── Order-bound resume — the order already exists at its locked
+        // price. Never POST /orders: re-bind the buyer's current
+        // selections via PATCH /orders/:id/checkout only when they diverge
+        // from the stored ones (native alreadyBound), then re-attach the
+        // payment intent — createCommercePaymentIntent is idempotent per
+        // order, so it re-serves the bound intent when one exists.
+        if (boundOrder) {
+          const boundItem = items[0];
+          const boundParcel = parcels[0];
+          if (!boundItem || !boundParcel) throw new Error('order item unavailable');
+          const wantedCarrier = boundParcel.selected?.carrierId;
+          const cached = liveQuotes[boundItem.id] ?? [];
+          let bound: { quoteId: string; carrierId: string } | null =
+            cached.find((q) => q.quoteId && q.carrierId === wantedCarrier) ??
+            cached.find((q) => q.quoteId) ??
+            null;
+          // Seller-paid parcels carry no buyer-paid quote selection — the
+          // order's stored carrier/postage are the baseline then.
+          const postageFee = boundParcel.sellerCovered
+            ? 0
+            : (boundParcel.selected?.priceFromGbp ?? 0);
+          const carrierForOrder = boundParcel.sellerCovered
+            ? (boundOrder.shippingCarrierId ?? null)
+            : (wantedCarrier ?? null);
+          const alreadyBound =
+            boundOrder.addressId != null &&
+            boundOrder.addressId === orderAddressId &&
+            (boundOrder.shippingCarrierId ?? null) === carrierForOrder &&
+            boundOrder.postageFeeGbp === postageFee &&
+            (boundOrder.paymentMethodId ?? null) === (numericPaymentId ?? null) &&
+            (boundOrder.verificationRequested ?? false) === verification;
+          if (!alreadyBound) {
+            // A changed selection needs a server-persisted quote bound to
+            // THIS listing + address + carrier — same rule as order
+            // creation (SHIPPING_QUOTE_INVALID otherwise).
+            if (!bound) {
+              const res = await checkoutService.fetchCheckoutShippingQuote({
+                buyerId,
+                listingId: boundItem.id,
+                sellerId: boundItem.sellerId,
+                addressId: orderAddressId,
+                destinationPostcode: selectedAddress?.postcode,
+                preferredCarrierId: wantedCarrier,
+                declaredValueGbp: boundOrder.subtotalGbp ?? undefined,
+              });
+              const fresh =
+                res.quotes.find((q) => q.quoteId && q.carrierId === wantedCarrier) ??
+                (res.recommendedQuote?.quoteId ? res.recommendedQuote : null) ??
+                res.quotes.find((q) => q.quoteId) ??
+                null;
+              bound =
+                fresh?.quoteId && fresh.carrierId
+                  ? { quoteId: fresh.quoteId, carrierId: fresh.carrierId }
+                  : null;
+            }
+            if (!bound?.quoteId) throw new Error('no shipping quote');
+            await commerceService.completeOrderCheckout(boundOrder.id, {
+              addressId: orderAddressId,
+              paymentMethodId: numericPaymentId,
+              shippingQuoteId: bound.quoteId,
+              shippingCarrierId: bound.carrierId,
+              verificationRequested: verification,
+            });
+          }
+          setPayStage('opening_payment');
+          const intent = await commerceService.createCommercePaymentIntent({
+            orderId: boundOrder.id,
+            idempotencyKey: useOneze
+              ? `oneze_payment_${boundOrder.id}`
+              : `web-pay-${boundOrder.id}-${idemRef.current}`,
+            gatewayId: useOneze ? 'oneze_internal' : undefined,
+          });
+          const immediate = intentSettlement(intent.status);
+          const outcome =
+            immediate === 'open' ? await waitForPaymentSettlement(intent.id) : immediate;
+          void qc.invalidateQueries({ queryKey: ['orders'] });
+          void qc.invalidateQueries({ queryKey: ['order', boundOrder.id] });
+          if (outcome === 'succeeded') {
+            setOrderId(boundOrder.id);
+            return;
+          }
+          if (outcome === 'pending') {
+            // The order exists unpaid — hand back to the order surface,
+            // which renders its true 'created'/pending state.
+            router.replace(`/orders/${boundOrder.id}`);
+            return;
+          }
+          setPayError(
+            'Payment could not be completed — try again, or finish it in the app.',
+          );
+          setPayStage(null);
+          return;
+        }
+
         const created: string[] = [];
         const settled: string[] = [];
         const pendingOrders: string[] = [];
@@ -572,8 +786,16 @@ function CheckoutInner() {
         }
         setPayStage(null);
         return;
-      } catch {
-        setPayError('Payment could not be completed — check your payment method and try again.');
+      } catch (error) {
+        // Surface the server's own refusal first — a re-bind 409
+        // (payment already in progress) or 410 (reservation expired) says
+        // something specific; only an unparseable error takes the generic.
+        setPayError(
+          parseApiError(
+            error,
+            'Payment could not be completed — check your payment method and try again.',
+          ).message,
+        );
         setPayStage(null);
         return;
       }
@@ -593,9 +815,9 @@ function CheckoutInner() {
       verificationRequested: verification,
     });
     if (useOneze) debitOnezePocket(onezeRequired);
-    qc.setQueryData<CommerceOrder[]>(['orders', 'commerce'], (old) =>
-      old ? [...old, ...orders] : old,
-    );
+    // The orders list is a paginated (InfiniteData) cache — recordOrder
+    // already wrote the fixture store, so invalidating refetches the
+    // composed page rather than hand-splicing an entry.
     void qc.invalidateQueries({ queryKey: ['orders'] });
     // The purchased listings are now sold — let PDP/feed surfaces re-read
     // before they could offer a stale Buy-now.
@@ -615,23 +837,64 @@ function CheckoutInner() {
     return <CheckoutSkeleton />;
   }
 
+  // Order-bound guards resolve before any listing-derived state — the
+  // order is the source of truth (native CheckoutScreen order guards).
+  if (resumeOrderId && orderLoadFailed) {
+    return (
+      <EmptyState
+        icon="alert"
+        title="Couldn't load this order"
+        subtitle="Check your connection and try again — the order is safe."
+        actionLabel="Try again"
+        onAction={() => void refetchBoundOrder()}
+      />
+    );
+  }
+  if (resumeOrderId && (!boundOrder || boundOrder.status !== 'created')) {
+    return (
+      <EmptyState
+        icon="receipt"
+        title="This order is no longer awaiting payment"
+        subtitle="It may already be paid, cancelled, or have a payment in progress."
+        actionLabel="View order"
+        onAction={() => router.replace(`/orders/${resumeOrderId}`)}
+      />
+    );
+  }
+
   if (items.length === 0) {
     return (
       <EmptyState
         icon="bag"
-        title={itemId ? 'This item is no longer available' : 'Nothing to check out'}
-        subtitle={itemId ? 'It may have sold while you were browsing.' : 'Add items to your bag first.'}
-        actionLabel="Browse items"
-        onAction={() => router.push('/explore')}
+        title={
+          resumeOrderId
+            ? "This order's item is no longer listed"
+            : itemId
+              ? 'This item is no longer available'
+              : 'Nothing to check out'
+        }
+        subtitle={
+          resumeOrderId
+            ? 'The order itself still exists — its page has the support path if you need it.'
+            : itemId
+              ? 'It may have sold while you were browsing.'
+              : 'Add items to your bag first.'
+        }
+        actionLabel={resumeOrderId ? 'Back to order' : 'Browse items'}
+        onAction={
+          resumeOrderId
+            ? () => router.replace(`/orders/${resumeOrderId}`)
+            : () => router.push('/explore')
+        }
       />
     );
   }
 
   return (
-    <div className="mx-auto max-w-[1000px] px-4 py-8 sm:px-6">
+    <div className="mx-auto max-w-[1000px] px-4 pb-24 pt-8 sm:px-6">
       <div className="flex items-center gap-2">
         <IconButton name="back" aria-label="Back" onClick={() => router.back()} className="-ml-2" />
-        <h1 className="text-screen-title font-bold text-text-primary">Checkout</h1>
+        <h1 className="text-screen-title text-text-primary">Checkout</h1>
       </div>
 
       <CheckoutProgressDots
@@ -713,6 +976,9 @@ function CheckoutInner() {
             }}
             onAdd={() => setAddCardOpen(true)}
             walletOption={walletOption}
+            cardTenderReason={
+              DATA_MODE === 'live' ? 'Card payments finish in the app for now' : undefined
+            }
           />
           {paymentMethodsError ? (
             <p className="-mt-4 flex items-center gap-1.5 text-caption text-warning-text">
@@ -743,6 +1009,7 @@ function CheckoutInner() {
             bundleDiscount={bundleDiscount}
             delivery={effectiveDelivery}
             verificationLabel={verification ? (autoVerified ? 'Included' : 'Free') : undefined}
+            bundleCharged={DATA_MODE !== 'live'}
           />
           {/* Itemised ledger — the same lines, reconciling to the total,
               one tap away (mobile: tapping the footer summary opens the
@@ -759,6 +1026,13 @@ function CheckoutInner() {
             </span>
             <Icon name="forward" size={14} className="text-text-muted" />
           </button>
+          <div className="mt-3.5 flex items-center gap-2 rounded-lg border border-border-subtle bg-surface-alt/50 px-3 py-2 text-caption">
+            <Icon name="shieldCheck" size={16} className="shrink-0 text-commerce-trust" />
+            <span className="text-meta text-text-secondary">
+              <strong className="font-semibold text-text-primary">ThryftVerse Escrow:</strong> Payment released to seller only after delivery is confirmed.
+            </span>
+          </div>
+
           <Button
             variant="primary"
             size="lg"
@@ -799,17 +1073,31 @@ function CheckoutInner() {
               not a banner (mirrors the mobile BuyerProtectionStrip moment). */}
           <p className="mt-4 flex items-start gap-1.5 text-caption text-text-secondary">
             <Icon name="shieldCheck" size={15} className="mt-px shrink-0 text-commerce-trust" />
-            Covered by Buyer Protection — your money is held until the item arrives as described,
-            then released to the seller. Full refund if it never arrives.
+            <span>
+              Covered by Buyer Protection — your money is held until the item arrives as described,
+              then released to the seller. Full refund if it never arrives.
+            </span>
+          </p>
+          {/* Returns window — the number is the backend contract
+              (RETURN_WINDOW_DAYS = 14 in routes/returns.ts; expired cases
+              are rejected RETURN_WINDOW_EXPIRED), not a marketing claim. */}
+          <p className="mt-2 flex items-start gap-1.5 text-caption text-text-secondary">
+            <Icon name="refresh" size={15} className="mt-px shrink-0 text-text-secondary" />
+            <span>
+              Buyer protection covers returns within{' '}
+              <span className="tnum font-semibold text-text-primary">14</span> days of delivery.
+            </span>
           </p>
           {/* Dispatch certainty — purchase-time ship window, contract-
               backed (listing SLA → platform default). Same claim the PDP
               delivery block makes. */}
           <p className="mt-2 flex items-start gap-1.5 text-caption text-text-secondary">
             <Icon name="clock" size={15} className="mt-px shrink-0 text-text-secondary" />
-            {items.length > 1 ? 'Sellers dispatch' : 'The seller dispatches'} within{' '}
-            <span className="tnum">{dispatchDays}</span>{' '}
-            {dispatchDays === 1 ? 'day' : 'days'} of payment — tracking lands on your order.
+            <span>
+              {items.length > 1 ? 'Sellers dispatch' : 'The seller dispatches'} within{' '}
+              <span className="tnum font-semibold text-text-primary">{dispatchDays}</span>{' '}
+              {dispatchDays === 1 ? 'day' : 'days'} of payment — tracking lands on your order.
+            </span>
           </p>
           <p className="mt-2 text-caption text-text-muted">
             By paying, you agree to our{' '}

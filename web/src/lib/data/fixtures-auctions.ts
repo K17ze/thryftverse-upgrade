@@ -114,9 +114,9 @@ export const AUCTIONS: AuctionMarketItem[] = [
     // the detail surface resolves to "Reserve not met · the seller may
     // accept your bid" rather than a win.
     id: 'a7',
-    listingId: 'l4',
+    listingId: 'l7',
     sellerId: 'u3',
-    title: 'Corduroy Trucker Jacket',
+    title: 'Leather Biker Jacket',
     image: 'https://images.unsplash.com/photo-1551028719-00167b16eac5?auto=format&fit=crop&w=900&q=80',
     startsAt: toIso(-12 * HOUR),
     endsAt: toIso(-12 * HOUR + AUCTION_WINDOW_MS),
@@ -129,9 +129,9 @@ export const AUCTIONS: AuctionMarketItem[] = [
     // Cancelled mid-window by the seller — terminalReason is authoritative
     // over the still-future endsAt.
     id: 'a8',
-    listingId: 'l7',
+    listingId: 'l6',
     sellerId: 'u2',
-    title: 'Silk Slip Midi Dress',
+    title: 'Silk Slip Dress',
     image: 'https://images.unsplash.com/photo-1595777457583-95e059d581b8?auto=format&fit=crop&w=900&q=80',
     startsAt: toIso(-2 * HOUR),
     endsAt: toIso(-2 * HOUR + AUCTION_WINDOW_MS),
@@ -148,31 +148,37 @@ export const AUCTIONS: AuctionMarketItem[] = [
     id: 'sa1',
     listingId: 'ml1',
     sellerId: 'me',
-    title: 'Oversized Denim Shirt',
+    title: 'Oversized Cotton Shirt',
     image: 'https://images.unsplash.com/photo-1596755094514-f87e34085b2c?auto=format&fit=crop&w=900&q=80',
     startsAt: toIso(-325 * MIN),
     endsAt: toIso(-325 * MIN + AUCTION_WINDOW_MS),
     startingBid: 18,
     currentBid: 42,
     bidCount: 7,
+    // Reserve set at £55 — the hammer (£42) hasn't reached it, so the
+    // seller row reads "Reserve not met" and the run closes unsold if
+    // nobody catches up before the window shuts.
+    reservePrice: 55,
   },
   {
     id: 'sa2',
     listingId: 'ml2',
     sellerId: 'me',
-    title: 'Pleated Trousers',
-    image: 'https://images.unsplash.com/photo-1594633312681-425c7b97ccd1?auto=format&fit=crop&w=900&q=80',
+    title: 'Straight Leg Jeans',
+    image: 'https://images.unsplash.com/photo-1542272604-787c3835535d?auto=format&fit=crop&w=900&q=80',
     startsAt: toIso(2.5 * HOUR),
     endsAt: toIso(2.5 * HOUR + AUCTION_WINDOW_MS),
     startingBid: 24,
     currentBid: 24,
     bidCount: 0,
+    // Reserve on the scheduled rerun — the seller row names the floor.
+    reservePrice: 32,
   },
   {
     id: 'sa3',
     listingId: 'ml3',
     sellerId: 'me',
-    title: 'Graphic Print Tee',
+    title: 'Organic Cotton Tee — White',
     image: 'https://images.unsplash.com/photo-1618354691373-d851c5c3a990?auto=format&fit=crop&w=900&q=80',
     startsAt: toIso(-30 * HOUR),
     endsAt: toIso(-30 * HOUR + AUCTION_WINDOW_MS),
@@ -185,8 +191,8 @@ export const AUCTIONS: AuctionMarketItem[] = [
     id: 'sa4',
     listingId: 'ml2',
     sellerId: 'me',
-    title: 'Pleated Trousers',
-    image: 'https://images.unsplash.com/photo-1594633312681-425c7b97ccd1?auto=format&fit=crop&w=900&q=80',
+    title: 'Straight Leg Jeans',
+    image: 'https://images.unsplash.com/photo-1542272604-787c3835535d?auto=format&fit=crop&w=900&q=80',
     startsAt: toIso(-4 * 24 * HOUR),
     endsAt: toIso(-4 * 24 * HOUR + AUCTION_WINDOW_MS),
     startingBid: 24,
@@ -426,6 +432,16 @@ export function countdownUrgency(vm: AuctionViewModel): CountdownUrgency {
   if (ms < 5 * MIN) return 'final';
   if (ms < HOUR) return 'soon';
   return 'normal';
+}
+
+/** Live competition threshold — five or more bids is a contested lot
+ *  (eBay's "N bids" prominence; the number is always shown, this only
+ *  upgrades its visual weight). Derived from the real bidCount, never
+ *  from a flag. */
+export const BID_WAR_MIN_BIDS = 5;
+
+export function isBidWar(auction: AuctionViewModel): boolean {
+  return auction.lifecycle === 'live' && auction.bidCount >= BID_WAR_MIN_BIDS;
 }
 
 /** Ticking clock for the detail surface — "2:14:09" / "44:09". */

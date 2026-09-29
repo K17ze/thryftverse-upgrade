@@ -16,6 +16,9 @@ import { AppImage } from '@/components/ui/AppImage';
 import { Button } from '@/components/ui/Button';
 import { EmptyState } from '@/components/ui/EmptyState';
 import { Icon } from '@/components/ui/Icon';
+import { DATA_MODE } from '@/lib/api/client';
+import * as liveService from '@/lib/api/services/live';
+import { parseApiError } from '@/lib/api/http';
 import { useMyListings } from '@/lib/hooks/queries';
 import { useSession } from '@/lib/session/SessionProvider';
 import { useHydrated } from '@/lib/store/useStore';
@@ -58,7 +61,7 @@ function formatConfirmed(iso: string): string {
   return `${day} at ${time}`;
 }
 
-const FIELD_LABEL = 'text-label font-semibold uppercase tracking-wide text-text-secondary';
+const FIELD_LABEL = 'text-label text-text-secondary';
 const INPUT =
   'h-12 w-full rounded-lg border border-border bg-input px-4 text-body text-input-text outline-none placeholder:text-text-muted focus:border-text-muted';
 
@@ -68,6 +71,12 @@ export function CreateStreamFlow() {
   const { isGuest } = useSession();
   const hydrated = useHydrated();
   const { data: listings, isLoading } = useMyListings();
+  /** Live mode schedules real backend sessions; broadcasting itself runs
+   *  from the host console at /live/host/[id] (this device or mobile).
+   *  The session contract always carries a scheduled start — there is no
+   *  create-and-go-live-now wire — so "now" stays fixture-only, as does
+   *  the cosmetic cover picker (no session field for it). */
+  const isLive = DATA_MODE === 'live';
 
   const available = (listings ?? []).filter((l) => !l.isSold && l.status !== 'sold');
 
@@ -80,6 +89,7 @@ export function CreateStreamFlow() {
   const [minStart, setMinStart] = useState('');
   const [errors, setErrors] = useState<FormErrors>({});
   const [pending, setPending] = useState(false);
+  const [submitError, setSubmitError] = useState<string | null>(null);
   const [confirmed, setConfirmed] = useState<{ iso: string; streamId: string } | null>(null);
 
   const fileRef = useRef<HTMLInputElement>(null);
@@ -143,29 +153,62 @@ export function CreateStreamFlow() {
     const e: FormErrors = {};
     if (title.trim().length < 3) e.title = 'Give your show a title (3+ characters)';
     if (pinIds.length === 0) e.pins = 'Pin at least one item to sell';
-    if (!cover) e.cover = 'Pick a cover for your show';
-    if (schedule === 'later') {
+    if (!isLive && !cover) e.cover = 'Pick a cover for your show';
+    if (schedule === 'later' || isLive) {
       if (!startAt) e.schedule = 'Pick a date and time';
       else if (Date.parse(startAt) <= Date.now()) e.schedule = 'Start time must be in the future';
     }
     return e;
   };
 
+  /** Live submit — the session row and one lot per pin are real backend
+   *  writes; the show lands under Coming up on web and mobile. */
+  const submitLive = async (scheduledIso: string) => {
+    const session = await liveService.createBroadcastSession({
+      title: title.trim(),
+      scheduledStartAt: scheduledIso,
+    });
+    // Pins become real scheduled lots — order is the running order.
+    for (const [i, listingId] of pinIds.entries()) {
+      const listing = available.find((l) => l.id === listingId);
+      await liveService.scheduleStreamLot(session.id, {
+        listingId,
+        lotNumber: i + 1,
+        position: i,
+        startPriceGbp: listing?.price ?? 0,
+      });
+    }
+    qc.invalidateQueries({ queryKey: ['live-sessions'] });
+    setConfirmed({ iso: scheduledIso, streamId: session.id });
+    window.scrollTo({ top: 0 });
+  };
+
   const submit = (event: React.FormEvent) => {
     event.preventDefault();
     const next = validate();
     setErrors(next);
-    if (Object.values(next).some(Boolean) || !cover) return;
+    setSubmitError(null);
+    if (Object.values(next).some(Boolean)) return;
+    if (!isLive && !cover) return;
     if (uploadedUri) committedRef.current.add(uploadedUri);
 
     setPending(true);
+    if (isLive) {
+      const scheduledIso = new Date(startAt).toISOString();
+      submitLive(scheduledIso)
+        .catch((error: unknown) => {
+          setSubmitError(parseApiError(error, 'The show could not be scheduled').message);
+        })
+        .finally(() => setPending(false));
+      return;
+    }
     window.setTimeout(() => {
       const scheduledIso =
         schedule === 'later' ? new Date(startAt).toISOString() : undefined;
       const stream = createHostStream({
         title: title.trim(),
-        coverUri: cover.uri,
-        coverAspectRatio: cover.aspectRatio,
+        coverUri: cover!.uri,
+        coverAspectRatio: cover!.aspectRatio,
         pinIds,
         scheduledAt: scheduledIso,
       });
@@ -210,9 +253,11 @@ export function CreateStreamFlow() {
         <span className="flex h-16 w-16 items-center justify-center rounded-full bg-surface-alt text-success-text">
           <Icon name="check" filled size={28} />
         </span>
-        <h1 className="mt-5 text-screen-title font-bold text-text-primary">Show scheduled</h1>
+        <h1 className="mt-5 text-screen-title text-text-primary">Show scheduled</h1>
         <p className="mt-2 text-body text-text-secondary">
-          {formatConfirmed(confirmed.iso)} — your show appears under Coming up.
+          {isLive
+            ? `${formatConfirmed(confirmed.iso)} — it’s in Coming up on web and mobile. The host console opens when it’s time.`
+            : `${formatConfirmed(confirmed.iso)} — your show appears under Coming up.`}
         </p>
         <div className="mt-7 flex w-full flex-col gap-2">
           <Button variant="primary" size="lg" fullWidth onClick={() => router.push('/live')}>
@@ -231,13 +276,13 @@ export function CreateStreamFlow() {
     );
   }
 
-  const scheduling = schedule === 'later';
+  const scheduling = isLive || schedule === 'later';
 
   return (
     <div className="mx-auto w-full max-w-[720px] px-4 pb-16 pt-6 sm:px-6">
       <header className="flex items-start justify-between gap-4">
         <div>
-          <h1 className="text-screen-title font-bold text-text-primary">Go live</h1>
+          <h1 className="text-screen-title text-text-primary">Go live</h1>
           <p className="mt-1 text-body text-text-secondary">
             Pick a cover, pin what you&apos;re selling, choose when.
           </p>
@@ -250,8 +295,14 @@ export function CreateStreamFlow() {
         </Link>
       </header>
 
+      {/* Single-column composer — one reading column, hairline-separated
+          sections, commit pinned as the last block. No restated summary:
+          the fields are the truth. */}
       <form onSubmit={submit} className="mt-6 flex flex-col gap-7" noValidate>
-        {/* Cover — the object buyers see on the live hub */}
+        {/* Cover — the object buyers see on the live hub. Fixture only:
+            the session API has no cover field, so in live mode the show
+            card renders from the pinned lots instead. */}
+        {!isLive ? (
         <fieldset>
           <legend className={FIELD_LABEL}>Cover</legend>
           <div className="relative mt-3 aspect-[16/10] w-full overflow-hidden rounded-lg bg-surface-alt">
@@ -315,6 +366,7 @@ export function CreateStreamFlow() {
             <p role="alert" className="mt-1.5 text-caption text-danger-text">{errors.cover}</p>
           ) : null}
         </fieldset>
+        ) : null}
 
         {/* Title */}
         <div className="flex flex-col gap-2">
@@ -401,6 +453,25 @@ export function CreateStreamFlow() {
         {/* Start time */}
         <fieldset className="border-t border-border-subtle pt-6">
           <legend className={FIELD_LABEL}>Start time</legend>
+          {isLive ? (
+            <div className="mt-3">
+              <input
+                type="datetime-local"
+                value={startAt}
+                min={minStart}
+                onChange={(e) => {
+                  setStartAt(e.target.value);
+                  setErrors((er) => (er.schedule ? { ...er, schedule: undefined } : er));
+                }}
+                aria-label="Scheduled start"
+                className={INPUT}
+              />
+              <p className="mt-1.5 text-meta text-text-muted">
+                Scheduled shows appear in Coming up — followers get notified when you go live.
+                Open the host console when it&apos;s time — web or mobile.
+              </p>
+            </div>
+          ) : (
           <div className="mt-3" role="radiogroup" aria-label="When to start">
             {(
               [
@@ -454,9 +525,14 @@ export function CreateStreamFlow() {
               <p role="alert" className="mt-1.5 text-caption text-danger-text">{errors.schedule}</p>
             ) : null}
           </div>
+          )}
+          {isLive && errors.schedule ? (
+            <p role="alert" className="mt-1.5 text-caption text-danger-text">{errors.schedule}</p>
+          ) : null}
         </fieldset>
 
-        {/* Action + honesty note */}
+        {/* Commit — the action and the honesty note, same hairline
+            section grammar as the fieldsets above. */}
         <div className="flex flex-col gap-2 border-t border-border-subtle pt-6">
           <Button
             type="submit"
@@ -467,9 +543,13 @@ export function CreateStreamFlow() {
           >
             {pending ? (scheduling ? 'Scheduling…' : 'Going live…') : scheduling ? 'Schedule show' : 'Go live'}
           </Button>
+          {submitError ? (
+            <p role="alert" className="text-caption text-danger-text">{submitError}</p>
+          ) : null}
           <p className="text-meta text-text-muted">
-            Demo mode — this stream is simulated: viewers, chat and orders are generated locally,
-            no video is broadcast, and the show clears on reload.
+            {isLive
+              ? 'Creates a real scheduled show — it appears under Coming up for your followers on web and mobile.'
+              : 'Demo mode — this stream is simulated: viewers, chat and orders are generated locally, no video is broadcast, and the show clears on reload.'}
           </p>
         </div>
       </form>

@@ -129,6 +129,9 @@ export const CO_OWN_ASSETS: CoOwnAsset[] = [
     askDepthUnits: 41,
     offeringStatus: 'offering',
     marketStatus: 'pre_market',
+    // Server capability matrix for pre_market — buys are the primary
+    // subscription; the secondary market (sell/buyout) hasn't opened.
+    capabilities: { buy: true, sell: false, cancel: true, buyoutAccept: false, vote: true },
     custodyNote: 'Climate-controlled archive, Spitalfields. Condition report refreshed quarterly.',
     createdAt: '2026-08-30T10:00:00Z',
   },
@@ -193,6 +196,9 @@ export const CO_OWN_ASSETS: CoOwnAsset[] = [
     askDepthUnits: 0,
     offeringStatus: 'closed',
     marketStatus: 'paused',
+    // Server capability matrix for paused — no order placement, cancels
+    // and votes still allowed.
+    capabilities: { buy: false, sell: false, cancel: true, buyoutAccept: false, vote: true },
     custodyNote: 'Vault custody, Manchester. Serviced 2026-04.',
     createdAt: '2026-02-11T10:00:00Z',
   },
@@ -257,6 +263,8 @@ export const CO_OWN_ASSETS: CoOwnAsset[] = [
     askDepthUnits: 0,
     offeringStatus: 'offering',
     marketStatus: 'pre_market',
+    // Same pre_market capability matrix — buys only.
+    capabilities: { buy: true, sell: false, cancel: true, buyoutAccept: false, vote: true },
     custodyNote: 'Authentication in progress — The RealReal partner lab.',
     createdAt: '2026-09-18T10:00:00Z',
   },
@@ -289,6 +297,7 @@ export const CO_OWN_ASSETS: CoOwnAsset[] = [
     askDepthUnits: 36,
     offeringStatus: 'closed',
     marketStatus: 'paused',
+    capabilities: { buy: false, sell: false, cancel: true, buyoutAccept: false, vote: true },
     custodyNote: 'Vault custody, Leeds. Insurance valuation renewed 2026-07.',
     createdAt: '2026-02-18T10:00:00Z',
   },
@@ -402,9 +411,9 @@ export const CO_OWN_ACTIVITY: ActivityEvent[] = [
 // ── Distributions & corporate actions ─────────────────────────────────
 
 export const DISTRIBUTIONS: Distribution[] = [
-  { id: 'd1', assetId: 'co5', kind: 'rental_income', amountPerUnitGbp: 1.85, totalPotGbp: 296, status: 'paid', paidAt: '2026-09-24T16:00:00Z', scheduledFor: '2026-09-24' },
-  { id: 'd2', assetId: 'co1', kind: 'resale_gain', amountPerUnitGbp: 0.9, totalPotGbp: 360, status: 'scheduled', paidAt: null, scheduledFor: '2026-10-01' },
-  { id: 'd3', assetId: 'co4', kind: 'licensing', amountPerUnitGbp: 0.45, totalPotGbp: 892.8, status: 'paid', paidAt: '2026-09-12T12:00:00Z', scheduledFor: '2026-09-12' },
+  { id: 'd1', assetId: 'co5', kind: 'rental_income', rawType: 'rental_income', amountPerUnitGbp: 1.85, totalPotGbp: 296, status: 'settled', paidAt: '2026-09-24T16:00:00Z', scheduledFor: '2026-09-24' },
+  { id: 'd2', assetId: 'co1', kind: 'resale_gain', rawType: 'resale_gain', amountPerUnitGbp: 0.9, totalPotGbp: 360, status: 'scheduled', paidAt: null, scheduledFor: '2026-10-01' },
+  { id: 'd3', assetId: 'co4', kind: 'licensing', rawType: 'licensing', amountPerUnitGbp: 0.45, totalPotGbp: 892.8, status: 'settled', paidAt: '2026-09-12T12:00:00Z', scheduledFor: '2026-09-12' },
 ];
 
 export const CORPORATE_ACTIONS: CorporateAction[] = [
@@ -414,6 +423,7 @@ export const CORPORATE_ACTIONS: CorporateAction[] = [
     id: 'ca-v1',
     assetId: 'co1',
     kind: 'sale_vote',
+    actionType: 'sale_vote',
     title: 'Private sale offer — £15,400',
     description:
       'A verified collector has offered £15,400 for the bag outright. If the vote passes, units redeem at £38.50 per unit plus accrued income.',
@@ -433,6 +443,7 @@ export const CORPORATE_ACTIONS: CorporateAction[] = [
     id: 'ca-v2',
     assetId: 'co4',
     kind: 'authentication',
+    actionType: 'authentication',
     title: 'Re-authentication with Nike TAG',
     description:
       'Proposal to spend £180 from the asset reserve on a fresh Nike TAG authentication ahead of a consignment offer.',
@@ -448,16 +459,18 @@ export const CORPORATE_ACTIONS: CorporateAction[] = [
     totalValueGbp: 180,
   },
   {
-    // Ballot closed, tally pending — est. figures stay in prose, not as
-    // contract values.
+    // Ballot past deadline, outcome unrecorded — the wire state stays
+    // 'open' until a result lands (the UI renders it "Voting closed");
+    // est. figures stay in prose, not as contract values.
     id: 'ca-v3',
     assetId: 'co6',
     kind: 'exit',
+    actionType: 'exit',
     title: 'Structured exit — auction consignment',
     description:
       'Exit via premium auction house (est. hammer £19,200). Fees 12%. Tally pending.',
     closesAt: '2026-09-20T18:00:00Z',
-    status: 'pending_tally',
+    status: 'open',
     yourVote: 'for',
     votesFor: 141,
     votesAgainst: 60,
@@ -473,6 +486,7 @@ export const CORPORATE_ACTIONS: CorporateAction[] = [
     id: 'ca-v4',
     assetId: 'co8',
     kind: 'insurance_renewal',
+    actionType: 'insurance_renewal',
     title: 'Insurance renewal — Heathrow Vault 2',
     description:
       'Renewal of the all-risk policy on the Kelly 25 ahead of the September policy lapse.',
@@ -819,6 +833,7 @@ function buildLedger(assetId: string, refPrice: number, seed: number, count: num
       units,
       unitPriceGbp: round2(price),
       executedAt: new Date(t).toISOString(),
+      settlementStatus: 'settled',
     });
     t -= Math.round(90_000 + rand() * 3_600_000); // 1.5–60 min between prints
   }
@@ -863,7 +878,7 @@ export const DISTRIBUTION_RECEIPTS: DistributionReceipt[] = [
     totalGbp: 3.6,
     exDate: '2026-09-10',
     paidAt: '2026-09-12T12:00:00Z',
-    status: 'paid',
+    status: 'settled',
   },
   {
     id: 'dr7',
@@ -874,7 +889,7 @@ export const DISTRIBUTION_RECEIPTS: DistributionReceipt[] = [
     totalGbp: 15.4,
     exDate: '2026-08-28',
     paidAt: '2026-09-01T10:00:00Z',
-    status: 'paid',
+    status: 'settled',
   },
   {
     id: 'dr6',
@@ -885,7 +900,7 @@ export const DISTRIBUTION_RECEIPTS: DistributionReceipt[] = [
     totalGbp: 7.44,
     exDate: '2026-07-30',
     paidAt: '2026-08-03T10:00:00Z',
-    status: 'paid',
+    status: 'settled',
   },
   {
     id: 'dr5',
@@ -896,7 +911,7 @@ export const DISTRIBUTION_RECEIPTS: DistributionReceipt[] = [
     totalGbp: 11.55,
     exDate: '2026-06-30',
     paidAt: '2026-07-03T10:00:00Z',
-    status: 'paid',
+    status: 'settled',
   },
   {
     id: 'dr4',
@@ -907,7 +922,7 @@ export const DISTRIBUTION_RECEIPTS: DistributionReceipt[] = [
     totalGbp: 3.2,
     exDate: '2026-05-15',
     paidAt: '2026-05-18T12:00:00Z',
-    status: 'paid',
+    status: 'settled',
   },
   {
     id: 'dr3',
@@ -918,7 +933,7 @@ export const DISTRIBUTION_RECEIPTS: DistributionReceipt[] = [
     totalGbp: 6.96,
     exDate: '2026-04-28',
     paidAt: '2026-05-02T10:00:00Z',
-    status: 'paid',
+    status: 'settled',
   },
   {
     id: 'dr2',
@@ -929,7 +944,7 @@ export const DISTRIBUTION_RECEIPTS: DistributionReceipt[] = [
     totalGbp: 11.0,
     exDate: '2026-03-31',
     paidAt: '2026-04-04T10:00:00Z',
-    status: 'paid',
+    status: 'settled',
   },
   {
     id: 'dr1',
@@ -940,7 +955,7 @@ export const DISTRIBUTION_RECEIPTS: DistributionReceipt[] = [
     totalGbp: 6.6,
     exDate: '2026-01-30',
     paidAt: '2026-02-03T10:00:00Z',
-    status: 'paid',
+    status: 'settled',
   },
 ];
 

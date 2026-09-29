@@ -6,13 +6,24 @@
  * the two in-chat marketplace cards, then the control rows for muted /
  * archived / requests / blocked / restricted.
  *
- * Persisted in `useChatPrefs` — there is no dedicated web chat-privacy
- * edge yet, so the scopes persist locally and the page says so rather
- * than implying a server sync that has not happened.
+ * Live mode syncs through GET/PATCH /users/me/chat-privacy — the same
+ * edge mobile's accountApi.updateChatPrivacy writes. `whoCanMessage`
+ * is the server-enforced DM gate (wire 'nobody' ↔ local 'none');
+ * `useChatPrefs` is the optimistic mirror and the fixture-mode truth,
+ * hydrated from server truth on mount and reverted on a failed write.
  */
 
-import { useMemo } from 'react';
+import { useEffect, useMemo } from 'react';
+import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { useConversations } from '@/lib/hooks/queries';
+import { DATA_MODE } from '@/lib/api/client';
+import { parseApiError } from '@/lib/api/http';
+import {
+  fetchChatPrivacy,
+  updateChatPrivacy,
+  type ChatPrivacySettings,
+} from '@/lib/api/services/users';
+import { useSession } from '@/lib/session/SessionProvider';
 import {
   useChatPrefs,
   useReadReceiptsEnabled,
@@ -27,6 +38,14 @@ import { SettingsRow } from '@/components/settings/SettingsRow';
 import { Switch } from '@/components/settings/Switch';
 import { Icon } from '@/components/ui/Icon';
 import { Skeleton } from '@/components/ui/Skeleton';
+import { useToast } from '@/components/ui/Toast';
+
+const isLive = DATA_MODE === 'live';
+
+/** Local scope vocabulary ↔ the wire's allowMessagesFrom enum. */
+function scopeToWire(value: WhoCanMessage): ChatPrivacySettings['allowMessagesFrom'] {
+  return value === 'none' ? 'nobody' : value;
+}
 
 const MESSAGE_SCOPES: Array<{
   value: WhoCanMessage;
@@ -48,6 +67,9 @@ const MESSAGE_SCOPES: Array<{
 
 export function MessagingSettingsView() {
   const hydrated = useHydrated();
+  const { show } = useToast();
+  const qc = useQueryClient();
+  const { isGuest, sessionLoading } = useSession();
   const { data, isLoading } = useConversations();
   const conversations = useMemo(() => data ?? [], [data]);
   const { isMuted, isArchived } = useConversationPrefs();
@@ -62,6 +84,74 @@ export function MessagingSettingsView() {
   const setOffersInChat = useChatPrefs((s) => s.setOffersInChat);
   const orderUpdatesInChat = useChatPrefs((s) => s.orderUpdatesInChat);
   const setOrderUpdatesInChat = useChatPrefs((s) => s.setOrderUpdatesInChat);
+  const syncChatPrivacy = useChatPrefs((s) => s.syncFromServer);
+
+  // The wire only exists for an authed live session — guests and fixture
+  // mode keep the device-local mirror.
+  const syncs = isLive && !isGuest;
+  const chatPrivacy = useQuery({
+    queryKey: ['chat-privacy'],
+    queryFn: ({ signal }) => fetchChatPrivacy(signal),
+    enabled: syncs,
+    staleTime: 30_000,
+  });
+
+  // Reconcile server truth into the mirror whenever the read lands.
+  useEffect(() => {
+    if (chatPrivacy.data) syncChatPrivacy(chatPrivacy.data);
+  }, [chatPrivacy.data, syncChatPrivacy]);
+
+  // Network/server failures carry no user-facing detail beyond "it didn't
+  // save" — the offline classifier is the only message worth surfacing.
+  const syncError = (error: unknown, fallback: string) => {
+    const parsed = parseApiError(error);
+    show(parsed.isNetworkError ? parsed.message : fallback, 'error');
+  };
+
+  /** Optimistic write — the mirror applies instantly, the live PATCH
+   *  carries just the touched field, and a failed write restores the
+   *  exact pre-write value. Fixture mode writes the store. */
+  const syncPref = (
+    apply: () => void,
+    revert: () => void,
+    patch: Partial<ChatPrivacySettings>,
+  ) => {
+    apply();
+    if (!syncs) return;
+    void updateChatPrivacy(patch)
+      .then(() => void qc.invalidateQueries({ queryKey: ['chat-privacy'] }))
+      .catch((error) => {
+        revert();
+        syncError(error, 'Couldn’t save — the preference was restored');
+      });
+  };
+
+  const selectScope = (value: WhoCanMessage) => {
+    const previous = whoCanMessage;
+    syncPref(
+      () => setWhoCanMessage(value),
+      () => setWhoCanMessage(previous),
+      { allowMessagesFrom: scopeToWire(value) },
+    );
+  };
+  const toggleReadReceipts = (v: boolean) =>
+    syncPref(
+      () => setReadReceipts(v),
+      () => setReadReceipts(!v),
+      { readReceiptsEnabled: v },
+    );
+  const toggleOffersInChat = (v: boolean) =>
+    syncPref(
+      () => setOffersInChat(v),
+      () => setOffersInChat(!v),
+      { offersInChatEnabled: v },
+    );
+  const toggleOrderUpdatesInChat = (v: boolean) =>
+    syncPref(
+      () => setOrderUpdatesInChat(v),
+      () => setOrderUpdatesInChat(!v),
+      { orderUpdatesInChatEnabled: v },
+    );
 
   const mutedCount = useMemo(
     () => conversations.filter((c) => isMuted(c) && !isArchived(c)).length,
@@ -79,7 +169,7 @@ export function MessagingSettingsView() {
     [conversations, requestResolutions],
   );
 
-  if (!hydrated || isLoading) {
+  if (!hydrated || isLoading || (isLive && sessionLoading) || (syncs && chatPrivacy.isLoading)) {
     return (
       <div className="space-y-8" aria-busy aria-label="Loading chat settings">
         {[0, 1, 2].map((section) => (
@@ -109,7 +199,7 @@ export function MessagingSettingsView() {
                 type="button"
                 role="radio"
                 aria-checked={checked}
-                onClick={() => setWhoCanMessage(scope.value)}
+                onClick={() => selectScope(scope.value)}
                 className="pressable flex min-h-[52px] w-full items-center gap-1 px-4 py-2 text-left sm:px-5"
               >
                 <span
@@ -162,7 +252,7 @@ export function MessagingSettingsView() {
           trailing={
             <Switch
               checked={readReceipts}
-              onChange={setReadReceipts}
+              onChange={toggleReadReceipts}
               aria-label="Read receipts"
             />
           }
@@ -174,7 +264,7 @@ export function MessagingSettingsView() {
           trailing={
             <Switch
               checked={offersInChat}
-              onChange={setOffersInChat}
+              onChange={toggleOffersInChat}
               aria-label="Offers in chat"
             />
           }
@@ -186,7 +276,7 @@ export function MessagingSettingsView() {
           trailing={
             <Switch
               checked={orderUpdatesInChat}
-              onChange={setOrderUpdatesInChat}
+              onChange={toggleOrderUpdatesInChat}
               aria-label="Order updates in chat"
             />
           }
@@ -234,9 +324,11 @@ export function MessagingSettingsView() {
       </SettingsSection>
 
       <p className="mt-6 px-4 text-caption text-text-muted sm:px-5">
-        Chat preferences are stored on this device. Read receipts apply to
-        your own messages straight away; the message scope is applied where
-        new conversations are started.
+        {syncs
+          ? 'These sync to your account — the platform gates new DMs on your message scope before a conversation is ever created.'
+          : isLive
+            ? 'Chat preferences are stored on this device — sign in to sync them to your account.'
+            : 'In this preview, chat preferences are stored on this device. On an account, the platform gates new DMs on your message scope.'}
       </p>
     </div>
   );

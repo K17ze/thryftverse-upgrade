@@ -10,12 +10,32 @@
 
 import { fetchJson } from '../http';
 
-/** Buyer-facing seller availability facts — the subset of the
- *  GET /sellers/:id seller object the purchase gate reads. */
+/** Buyer-facing seller facts — GET /sellers/:id's seller object. The
+ *  purchase gate reads availability; the PDP trust dossier reads the
+ *  response/dispatch/sales evidence the same payload already carries. */
 export interface SellerTrustSummary {
   id: string;
   username?: string | null;
+  displayName?: string | null;
   avatar?: string | null;
+  location?: string | null;
+  rating?: number | null;
+  reviewCount?: number | null;
+  /** Lifetime completed orders — native "N sold" proof point. */
+  completedSales?: number | null;
+  activeListingCount?: number | null;
+  /** Response-time evidence — "Usually responds in Xh". */
+  responseRate?: number | null;
+  responseTimeLabel?: string | null;
+  avgResponseHours?: number | null;
+  /** Seller-declared dispatch pace — "Dispatches same day"-style copy. */
+  dispatchTimeLabel?: string | null;
+  memberSince?: string | null;
+  /** Seller standards badges (topSeller/fastShipper/responsive/…). */
+  badges?: string[];
+  /** Tiered verification — richer than the boolean (native grammar). */
+  verificationTier?: string | null;
+  verified?: boolean;
   /** Effective away state — purchases and offers 409 SELLER_AWAY while
    *  true. Already resolved against holidayModeUntil server-side. */
   holidayMode: boolean;

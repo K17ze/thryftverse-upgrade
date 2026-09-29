@@ -44,8 +44,8 @@ import {
   useWithdrawListingOffer,
 } from '@/lib/hooks/pdp-queries';
 import { usePdpMarketEvidence } from '@/lib/hooks/pdp-market-queries';
-import { formatCount, formatPrice, timeAgo } from '@/lib/utils/format';
-import { OfferSheet } from './OfferSheet';
+import { formatCount, formatDate, formatPrice, timeAgo } from '@/lib/utils/format';
+import dynamic from 'next/dynamic';
 import { OfferToLikers } from './OfferToLikers';
 import { SizeGuideSheet, resolveSizeGuide } from './SizeGuideSheet';
 import { BundleUpsellRow } from '@/components/bundle/BundleUpsellRow';
@@ -53,15 +53,29 @@ import { ListingReportMenu } from './ListingReportMenu';
 import { SaveToBoardSheet } from '@/components/saved/SaveToBoardSheet';
 import { useIsBlockedUser } from '@/components/inbox/inboxSafety';
 
+// Offer composer — mounts only behind the "send offer" action, so its
+// chunk fetches on first open instead of riding every PDP.
+const OfferSheet = dynamic(
+  () => import('./OfferSheet').then((m) => m.OfferSheet),
+  { ssr: false },
+);
+
 interface BuyPanelProps {
   listing: Listing;
 }
 
-/** "5 Oct" — compact en-GB day/month for the ETA window. */
+/** "5 Oct" — compact en-GB day/month for the ETA window. UTC-pinned:
+ *  the ETA is a server-provided calendar date, and a local-TZ render
+ *  would print a different day near midnight (and drift across
+ *  hydration). Same contract as lib/utils/format. */
 function formatEtaDay(iso: string): string | null {
   const ms = Date.parse(iso);
   if (!Number.isFinite(ms)) return null;
-  return new Date(ms).toLocaleDateString('en-GB', { day: 'numeric', month: 'short' });
+  return new Date(ms).toLocaleDateString('en-GB', {
+    day: 'numeric',
+    month: 'short',
+    timeZone: 'UTC',
+  });
 }
 
 /** Delivery cost line — "Free postage" when the seller covers it, the real
@@ -235,8 +249,15 @@ export function BuyPanel({ listing }: BuyPanelProps) {
     if (soldComps && soldComps.count >= 2) {
       demand.push(`${soldComps.count} similar sold`);
     }
+    // Live demand — the engagement rollup's active offer count is the
+    // "N offers on the table" beat native prints. Only when real.
+    if (typeof listing.activeOfferCount === 'number' && listing.activeOfferCount > 0) {
+      demand.push(
+        `${listing.activeOfferCount} offer${listing.activeOfferCount === 1 ? '' : 's'} on the table`,
+      );
+    }
     return demand.length
-      ? `One only · ${demand.slice(0, 2).join(' · ')}`
+      ? `One only · ${demand.slice(0, 3).join(' · ')}`
       : 'One only — once it’s gone, it’s gone';
   })();
 
@@ -254,14 +275,29 @@ export function BuyPanel({ listing }: BuyPanelProps) {
 
   const handleHeart = () => {
     if (!requireAuth('save_item')) return;
-    toggleFav(listing.id);
-    if (!isFav) show('Added to wishlist', 'success');
+    const adding = !isFav;
+    void toggleFav(listing.id).then((ok) => {
+      if (ok) {
+        if (adding) show('Added to wishlist', 'success');
+      } else {
+        show('Couldn’t sync — your wishlist was restored', 'error');
+      }
+    });
   };
 
   const handleSave = () => {
     if (!requireAuth('save_item')) return;
-    toggleSaved(listing.id);
-    show(isSaved ? 'Removed from saved' : 'Added to saved', 'info');
+    const removing = isSaved;
+    void toggleSaved(listing.id).then((ok) => {
+      show(
+        ok
+          ? removing
+            ? 'Removed from saved'
+            : 'Added to saved'
+          : 'Couldn’t sync — saved items restored',
+        ok ? 'info' : 'error',
+      );
+    });
   };
 
   /**
@@ -272,7 +308,7 @@ export function BuyPanel({ listing }: BuyPanelProps) {
    */
   const handleSaveToBoard = () => {
     if (!requireAuth('save_item')) return;
-    if (!savedItem) toggleSaved(listing.id);
+    if (!savedItem) void toggleSaved(listing.id);
     setBoardOpen(true);
   };
 
@@ -294,7 +330,7 @@ export function BuyPanel({ listing }: BuyPanelProps) {
   const handleMessage = () => {
     if (!requireAuth('message_seller')) return;
     void createConversation
-      .mutateAsync({ memberIds: [listing.sellerId] })
+      .mutateAsync({ memberIds: [listing.sellerId], itemId: listing.id })
       .then((conversation) => router.push(`/inbox/${conversation.id}`))
       .catch(() => show('Could not open the conversation', 'error'));
   };
@@ -326,7 +362,7 @@ export function BuyPanel({ listing }: BuyPanelProps) {
         <span className="text-meta font-medium text-text-muted">{listing.disclosure ?? 'Sponsored'}</span>
       ) : null}
       {listing.brand ? (
-        <span className="text-label font-semibold uppercase tracking-wide text-text-secondary">
+        <span className="text-label text-text-secondary">
           {listing.brand}
         </span>
       ) : null}
@@ -394,7 +430,11 @@ export function BuyPanel({ listing }: BuyPanelProps) {
             aria-label={`Open @${sellerUsername}'s shop`}
             className="shrink-0 rounded-full"
           >
-            <Avatar src={seller?.avatar} name={sellerUsername} size={44} />
+            <Avatar
+              src={seller?.avatar ?? sellerTrust?.avatar}
+              name={sellerTrust?.displayName ?? sellerUsername}
+              size={44}
+            />
           </Link>
           <div className="min-w-0 flex-1">
             <p className="flex items-center gap-1 text-body-emphasis text-text-primary">
@@ -404,16 +444,47 @@ export function BuyPanel({ listing }: BuyPanelProps) {
               >
                 @{sellerUsername}
               </Link>
-              {seller?.verified ? (
-                <Icon name="verified" size={13} className="shrink-0 text-success-text" />
+              {seller?.verified === true || sellerTrust?.verified === true ? (
+                <Icon name="verified" size={13} className="shrink-0 text-commerce-trust" />
               ) : null}
             </p>
-            {typeof seller?.rating === 'number' ? (
+            {typeof seller?.rating === 'number' ||
+            typeof sellerTrust?.rating === 'number' ? (
               <p className="mt-0.5 flex items-center gap-1 text-meta text-text-secondary">
                 <Icon name="star" filled size={12} className="text-rating-star" />
-                <span className="tnum">{seller.rating.toFixed(1)}</span>
-                {seller.reviewCount ? (
-                  <span>· {formatCount(seller.reviewCount)} reviews</span>
+                <span className="tnum">
+                  {(seller?.rating ?? sellerTrust?.rating ?? 0).toFixed(1)}
+                </span>
+                {(seller?.reviewCount ?? sellerTrust?.reviewCount) ? (
+                  <span>
+                    · {formatCount(seller?.reviewCount ?? sellerTrust?.reviewCount ?? 0)}{' '}
+                    reviews
+                  </span>
+                ) : null}
+              </p>
+            ) : null}
+            {/* Trust dossier — the /sellers/:id evidence the detail payload
+                doesn't carry: response pace, completed sales, tenure.
+                Live-only facts; fixture mode leaves the rating line. */}
+            {sellerTrust &&
+            (sellerTrust.responseTimeLabel ||
+              sellerTrust.completedSales ||
+              sellerTrust.memberSince) ? (
+              <p className="mt-0.5 flex flex-wrap items-center gap-x-1.5 text-meta text-text-muted">
+                {sellerTrust.responseTimeLabel ? (
+                  <span>Usually responds in {sellerTrust.responseTimeLabel}</span>
+                ) : null}
+                {sellerTrust.completedSales ? (
+                  <span>
+                    {sellerTrust.responseTimeLabel ? '· ' : ''}
+                    <span className="tnum">{formatCount(sellerTrust.completedSales)}</span> sold
+                  </span>
+                ) : null}
+                {sellerTrust.memberSince ? (
+                  <span>
+                    {sellerTrust.responseTimeLabel || sellerTrust.completedSales ? '· ' : ''}
+                    Member since {formatDate(sellerTrust.memberSince)}
+                  </span>
                 ) : null}
               </p>
             ) : null}
@@ -700,11 +771,36 @@ export function BuyPanel({ listing }: BuyPanelProps) {
           </div>
         </div>
 
-        {/* Physical verification — the order contract carries
-            verificationRequested for orders at/above the authentication
-            threshold, so the claim is backed by the record the purchase
-            will produce, not by a badge on the listing. */}
-        {listing.price >= AUTHENTICATION_THRESHOLD_GBP ? (
+        {/* Authentication — real pipeline state from the commerce block
+            when the contract carries it ('verified' earns the badge label,
+            'in_progress' says the check is live). The price-threshold line
+            remains only as the order-level guarantee for items without a
+            listing-level claim — the same record checkout writes. */}
+        {listing.authenticity?.status === 'verified' ? (
+          <div className="mt-2.5 flex items-start gap-3">
+            <Icon name="verified" size={20} className="mt-0.5 shrink-0 text-commerce-trust" />
+            <div className="min-w-0">
+              <p className="text-body font-medium text-text-primary">
+                {listing.authenticity.label ?? 'Authenticated'}
+              </p>
+              <p className="mt-0.5 text-caption text-text-secondary">
+                This item has passed ThryftVerse authentication.
+              </p>
+            </div>
+          </div>
+        ) : listing.authenticity?.status === 'in_progress' ? (
+          <div className="mt-2.5 flex items-start gap-3">
+            <Icon name="clock" size={20} className="mt-0.5 shrink-0 text-text-secondary" />
+            <div className="min-w-0">
+              <p className="text-body font-medium text-text-primary">
+                Authentication in progress
+              </p>
+              <p className="mt-0.5 text-caption text-text-secondary">
+                Our verification team is checking this item.
+              </p>
+            </div>
+          </div>
+        ) : listing.price >= AUTHENTICATION_THRESHOLD_GBP ? (
           <div className="mt-2.5 flex items-start gap-3">
             <Icon name="verified" size={20} className="mt-0.5 shrink-0 text-commerce-trust" />
             <div className="min-w-0">
@@ -783,10 +879,15 @@ export function BuyPanel({ listing }: BuyPanelProps) {
                 originalPriceGbp: listing.price,
                 expiryHours,
               })
-              .then(() => {
+              .then((offer) => {
                 setOfferOpen(false);
                 void queryClient.invalidateQueries({ queryKey: ['listing-offer', listing.id] });
                 show(`Offer sent — ${formatPrice(amount)}`, 'success');
+                // Native grammar — a provisioned thread gets the buyer
+                // into the conversation the offer now lives in.
+                if (offer.conversationId) {
+                  router.push(`/inbox/${offer.conversationId}`);
+                }
               })
               .catch(() => show('Could not send the offer — try again.', 'error'));
             return;

@@ -8,7 +8,7 @@
  */
 
 import type { LiveSession } from '@/lib/data/fixtures-media';
-import { userById } from '@/lib/data/fixtures';
+import { liveSellerOf } from './useLiveSessions';
 import { AppImage } from '@/components/ui/AppImage';
 import { ReminderToggle } from './ReminderToggle';
 
@@ -32,7 +32,7 @@ export function UpcomingRail({ sessions }: UpcomingRailProps) {
   return (
     <div className="no-scrollbar -mx-4 flex gap-4 overflow-x-auto px-4 pb-1 sm:-mx-6 sm:px-6">
       {sessions.map((s) => {
-        const seller = userById(s.sellerId);
+        const seller = liveSellerOf(s);
         return (
           <article key={s.id} className="w-[200px] shrink-0 sm:w-[220px]">
             <div className="relative aspect-[4/5] w-full overflow-hidden rounded-lg bg-surface-alt">
@@ -51,7 +51,9 @@ export function UpcomingRail({ sessions }: UpcomingRailProps) {
             </div>
             <div className="px-0.5 pt-2.5">
               <h3 className="clamp-2 text-body font-medium text-text-primary">{s.title}</h3>
-              <p className="mt-1 text-meta text-text-muted">@{seller?.username ?? 'seller'}</p>
+              {seller?.username ? (
+                <p className="mt-1 text-meta text-text-muted">@{seller.username}</p>
+              ) : null}
               <div className="mt-2.5">
                 <ReminderToggle session={s} />
               </div>

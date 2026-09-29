@@ -10,9 +10,11 @@ import { useState } from 'react';
 import { Button } from '@/components/ui/Button';
 import { Icon } from '@/components/ui/Icon';
 import type { CoOwnAsset } from '@/lib/contracts/coown';
+import { coOwnMarkGbp } from '@/lib/contracts/coown';
 import { gbp } from './format';
-import { useCoOwnAlerts } from './alertStore';
+import { useCoOwnAlertsApi } from './alertStore';
 import { useToast } from '@/components/ui/Toast';
+import { useSignupWall } from '@/components/auth/SignupWall';
 
 export function CreateAlertSheet({
   asset,
@@ -22,9 +24,13 @@ export function CreateAlertSheet({
   onClose: () => void;
 }) {
   const [direction, setDirection] = useState<'above' | 'below'>('above');
-  const [targetText, setTargetText] = useState(asset.unitPriceGbp.toFixed(2));
-  const createAlert = useCoOwnAlerts((s) => s.createAlert);
+  // Alerts evaluate on the market mark (last trade) — prefill from it,
+  // not the issuance price.
+  const [targetText, setTargetText] = useState(coOwnMarkGbp(asset).toFixed(2));
+  const [submitting, setSubmitting] = useState(false);
+  const { source, requiresAuth, createAlert } = useCoOwnAlertsApi();
   const { show } = useToast();
+  const { requireAuth, wall } = useSignupWall();
 
   const target = Number(targetText);
   const valid = Number.isFinite(target) && target > 0;
@@ -32,24 +38,42 @@ export function CreateAlertSheet({
   const inTheMoney =
     valid &&
     (direction === 'above'
-      ? asset.unitPriceGbp >= target
-      : asset.unitPriceGbp <= target);
+      ? coOwnMarkGbp(asset) >= target
+      : coOwnMarkGbp(asset) <= target);
 
-  const submit = (e: React.FormEvent) => {
+  const submit = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!valid) return;
-    createAlert({ assetId: asset.id, direction, targetPriceGbp: target });
-    show(
-      `Alert saved — ${direction === 'above' ? 'above' : 'below'} ${gbp(target)} on ${asset.title}`,
-      'success',
-    );
-    onClose();
+    if (!valid || submitting) return;
+    // Server alerts need an account — route guests through the wall
+    // instead of posting a doomed request.
+    if (requiresAuth) {
+      requireAuth('purchase');
+      return;
+    }
+    setSubmitting(true);
+    const ok = await createAlert({
+      assetId: asset.id,
+      direction,
+      targetPriceGbp: target,
+    });
+    setSubmitting(false);
+    if (ok) {
+      show(
+        `Alert saved — ${direction === 'above' ? 'above' : 'below'} ${gbp(target)} on ${asset.title}`,
+        'success',
+      );
+      onClose();
+    } else {
+      show("Couldn't save the alert — check your connection and try again.", 'error');
+    }
   };
 
   return (
     <form onSubmit={submit} className="p-5" aria-label={`Price alert for ${asset.title}`}>
       <p className="text-body text-text-secondary">
-        Evaluates on this device — fires when the last-trade price{' '}
+        {source === 'server'
+          ? 'Evaluated server-side — notifies you when the last-trade price '
+          : 'Evaluates on this device — fires when the last-trade price '}
         {direction === 'above' ? 'rises above' : 'drops below'} your target.
       </p>
 
@@ -65,7 +89,7 @@ export function CreateAlertSheet({
         </div>
         <div className="flex items-baseline justify-between">
           <dt className="text-text-muted">Current price</dt>
-          <dd className="font-medium text-text-primary tnum">{gbp(asset.unitPriceGbp)}</dd>
+          <dd className="font-medium text-text-primary tnum">{gbp(coOwnMarkGbp(asset))}</dd>
         </div>
       </dl>
 
@@ -128,10 +152,11 @@ export function CreateAlertSheet({
         <Button type="button" variant="secondary" fullWidth onClick={onClose}>
           Cancel
         </Button>
-        <Button type="submit" fullWidth disabled={!valid}>
-          Create alert
+        <Button type="submit" fullWidth disabled={!valid || submitting}>
+          {submitting ? 'Saving…' : requiresAuth ? 'Sign in to set alert' : 'Create alert'}
         </Button>
       </div>
+      {wall}
     </form>
   );
 }

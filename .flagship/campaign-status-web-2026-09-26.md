@@ -204,3 +204,250 @@ Fresh-context convergence audit found 4 P1 fixture-in-live leaks; all repaired:
 
 Post-R6: tsc clean, eslint clean, build clean (~135 routes), smoke 37/37, journey 6/6 PASS.
 Accepted P2/P3 residuals + backend follow-ups recorded in gap-registry.
+
+## Phase 15 — Desktop rework wave (2026-09-28)
+
+User direction: webapp reads as a stretched mobile UI; engineer properly for desktop.
+Contract authored: .flagship/desktop-contract-2026-09-28.md (canvas 1440px,
+breakpoint contract, per-surface grammar, additive-only rule).
+8 disjoint workstreams dispatched: DX-A discovery/home, DX-B search, DX-C commerce,
+DX-D profile/social, DX-E messaging/notifications/support (inbox master-detail),
+DX-F wallet/co-own trading panes, DX-G seller/live/auctions ops, DX-H settings rail + misc.
+Shared (read-only for all): components/ui, components/layout, src/lib.
+
+## Phase 16 — Desktop rework landed + verified (2026-09-28)
+
+All 8 DX workstreams landed clean; contract honored (additive lg:/xl: only,
+zero mobile regressions, no fabricated content):
+- DX-A discovery: 1440 canvases, grids scale to xl:5/xl:6, explore→useMasonryColumns.
+- DX-B search: verified Vinted facet rail existed; member 2-col scan rows, landing xl:8.
+- DX-C commerce: orders/offers true table grammar at lg; order detail two-pane;
+  receipt document+rail; PDP canvas xl:1440 with corrected image sizes.
+- DX-D profile/social: IG-desktop hero (150px avatar, stats inline), highlight 87px,
+  look/outfit/poster two-panes, edit-profile live preview rail.
+- DX-E messaging: InboxSplitView master-detail (380px rail + chat), notifications
+  2-col groups, help/support/appeal two-pane + sticky rails.
+- DX-F wallet/co-own: balances+ledger two-pane, payouts destinations rail,
+  asset detail 1fr/400px trade rail, syndicate/market-tape true columns.
+- DX-G seller/live/auctions: ops tables with lg column headers, earnings two-pane,
+  sell form + sticky preview rail, auction create run-sheet rail, catalog-import step rail.
+- DX-H settings/agents: new settings/layout.tsx rail (248px sticky nav derived from
+  destinations) + 720px content; agents ops tables; invite two-col; onboarding card.
+Orchestrator fixes: InboxSplitView rail w-full→w-auto (empty-pane clipping bug found
+in rendered check); closet editable grid xl:5 + mosaic lg:h-64 (DX-D flags).
+VERIFY: tsc clean, eslint clean, build clean (135 routes), smoke 39/39,
+journey 6/6 PASS @1440px, desktop screenshots verified (inbox/orders/profile/
+wallet/settings/home/search/seller-hub/auctions) in .flagship/desktop-2026-09-28/shots/.
+
+## Phase 17 — DX-2 follow-up wave (2026-09-28)
+
+User-directed corrections after the DX desktop wave:
+
+- **DX2-A messaging/notifications depth**: ConversationList gained
+  Buying/Selling/Requests segment rail + secondary filter chips, roving
+  keyboard nav, Escape-clears-search; ConversationRowMenu is a real
+  pointer-anchored context menu (touch-visible kebab kept); ChatPanel got
+  Escape-to-deselect, group avatar recurrence, readable lg column;
+  Composer restores per-thread drafts (new useChatDrafts) + desktop
+  autofocus; MessageBubble linkifies URLs; notifications gained a
+  Needs-attention section, actionable rows (Follow back), dismiss overlay
+  in notificationCursor store, settings gear, two-column day groups.
+  Reports: dx2a-messaging-report.md.
+- **DX2-B co-own pools**: "syndicate" purged from all user-visible copy —
+  routes /co-own/syndicate/** → /co-own/pools/** (next.config 308s),
+  components/syndicate/ → components/pools/ (PoolHubView, PoolRow, etc.),
+  all 13 locale files regenerated from the sync script source. Concept
+  parity vs native verified: removed two fabricated lifecycle CTAs
+  (Settle pooled buy, Dissolve pool — no wire/native contract); withdraw
+  now open to any member. Contract/type names stay `syndicate` to match
+  the backend wire shape. Report: dx2b-pools-report.md.
+- **DX2-C forms**: edit-profile preview rail removed (re-authored as a
+  focused form: two-up field pairs, View-profile link, right-aligned
+  commit). Run-sheet restatement rails removed from /live/create and
+  /auctions/create. Functional rails kept (sell preview, checkout summary,
+  help, support). Report: dx2c-forms-report.md.
+
+VERIFY: tsc clean, eslint clean, build clean (pools routes generated,
+syndicate routes gone), smoke 17/17 + /co-own/syndicate 308→pools,
+journey 6/6 PASS @1440x900, rendered shots verified in
+shots-dx2/ (inbox, notifications, pools, profile-edit, live-create,
+auctions-create).
+
+## Phase 18 — DX-3 flagship polish wave (2026-09-28)
+
+- **DX3-A profile hero (P0 bug + redesign)**: identity row's -mt-16 dragged
+  the username/bio/stats ONTO the cover photo — invisible dark-on-image.
+  Re-authored: contained banner (lg:mx-6, h-56/xl-64, rounded, focal crop
+  lg:object-[50%_35%], honest sizes attr), avatar alone bridges the seam
+  (lg:-mt-[75px] = native AVATAR_SIZE/2 contract), all identity text on
+  canvas. h1 -> lg:text-hero. ClosetGrid lg:5/xl:6, ShopRail 168px cards,
+  ClosetListingsSection grid parity lg:5/xl:6 (orchestrator fix).
+- **DX3-B flagship tab system**: new components/ui/Tabs.tsx — text tabs
+  with 2px underline indicator on hairline baseline, WAI-APG roving
+  tabindex (arrows/Home/End), route-mode (Link/aria-current) + state-mode,
+  honest counts. Migrated 12 surfaces: notifications, inbox primary rail,
+  profile tabs, orders, seller section nav (8 pages), co-own hub + asset
+  detail, auctions + my-bids + fulfilment, offers. True filter chips kept
+  as chips; SegmentedControl retained for toolbar use. Orchestrator:
+  migrated home For You/Following to Tabs too.
+- **DX3-C residual sweep**: codebase ~95% covered by prior waves;
+  fixed /co-own/guide (was a phone column -> lg two-pane explainer +
+  3-cell nav).
+
+VERIFY: tsc clean, eslint clean, next build clean, journey 6/6 PASS
+@1440x900, rendered shots verified (profile, /u/dankdunksuk,
+notifications, inbox) in shots-dx2/.
+Reports: dx3a-profile-hero-report.md, dx3b (in agent transcript),
+dx3c (in agent transcript).
+
+## Phase 19 — DX-4 production-engineering audit dispatched (2026-09-28)
+
+Five parallel read-only auditors over the web codebase:
+state/data-integrity (persist hydration, query keys, fixture leakage,
+optimistic-write truthfulness, races) · React perf/render health
+(memoization, effects, hydration, code-split, virtualization, image
+budgets) · a11y+interaction (semantics, focus, keyboard, hover-parity,
+targets, SR truth, forms) · app-router correctness (error/loading/
+not-found boundaries, metadata, streaming, param handling) ·
+design-system coherence (primitive drift, token violations, AI-tells,
+typography, icons, density, state-surface drift).
+Reports: .flagship/review-r4/*.md -> repair fleet next.
+
+## Phase 19b — DX-4 audit results + repair fleet (2026-09-28)
+
+All five audit reports in `.flagship/review-r4/`:
+- approuter-audit: soft-404s on all public detail routes, zero
+  metadata/favicon/robots/sitemap, no loading/error boundaries,
+  onboarding deep-link hijack, /orders/[id] fetch-all-then-find.
+- a11y-interaction-audit: 9 mediums + lows — focus-restoration losses
+  (menu/dismiss/remove), fake tablists (SupportHub, PhotoEditSheet,
+  auctions/create radiogroup), no chat live-region, sub-44px targets.
+- perf-render-audit: Toast context inline-value fans out to ~122
+  consumers; 10-14 competing priority images; zero code-splitting;
+  unbounded lists; search cursor dropped (page-1 only); header badges
+  over-fetch; Composer render-phase rAF.
+- design-system-audit: dead border-hairline, white-on-brand invisible
+  check, shadow-lg drift, caps-label/verified-color/count-pill drift.
+- state-integrity-audit: 3 P0s — live /saved + profile favourites
+  resolve server ids through fixtures (empty grids, real counts); no
+  queryClient.clear() on account switch (account B inherits A's
+  orders/notifications); persisted slices survive logout. P1s: profile
+  edit never reaches server (PATCH /users/me unwired), look/poster/
+  outfits/orders fixture-resolution, saved-search alerts localStorage-
+  only despite real endpoints, optimistic writes w/o rollback.
+
+Repair fleet dispatched (disjoint ownership):
+- R4-A: app-router correctness (app/** + next.config + AppShell)
+- R4-B: perf/render (Toast, feeds, images, queries.ts, dynamic imports)
+- R4-C: a11y/interaction (inbox rows, notifications, Sheet, fake tablists)
+- R4-E: state core (stores, SessionProvider, listing-resolution helper)
+- R4-D design-token sweep sequenced LAST (codebase-wide, collides).
+- Orchestrator follow-ups queued: queries.ts key scoping (post-B),
+  app-page state wiring (post-A, E supplies hook APIs).
+
+## Phase 19c — DX-4 repair fleet complete (2026-09-28)
+
+Six repair workstreams landed (all restarted once after rate-limit kills;
+resume-aware prompts verified prior partial landings before continuing):
+
+- **R4-A app-router** (`r4a-approuter-fixes.md`): tri-state route
+  resolvers (lib/api/server.ts — resolved/missing/unresolvable, never a
+  fabricated gravestone); server shells + notFound() + generateMetadata
+  on item/u/auctions/collection/galleria x2/look/moodboard/poster/
+  category/explore/pools/co-own; robots.ts + sitemap.ts + icon +
+  apple-icon + manifest; metadataBase + OG defaults; onboarding
+  deep-link return (sessionStorage return-to); useOrder(orderId) hook
+  (GET /orders/:id) replacing fetch-all-then-find; orders ?tab=
+  deep-link; loading.tsx x3 + error.tsx x4; Suspense fallback skeletons;
+  outfits miss → notFound().
+- **R4-B perf** (`r4b-perf-fixes.md`): Toast context memoized + timer
+  hygiene + focus-pause; one prioritized image per grid (HomeFeed
+  prioritizeFirst); dynamic imports for CameraSheet/PhotoEditSheet/
+  PdpLightbox/OfferSheets/VisualSearch camera (capability gate moved to
+  lib/media/cameraSupport.ts so the split is real); SignupWall →
+  app-level provider (26 consumers, single sheet); ClientTime wrapper +
+  UTC-pinned timeAgo/formatDate (~38 sites); React.memo on ProductTile +
+  MessageBubble (ChatPanel restructured to stable message-keyed
+  callbacks); AuctionDeadlineChip gated; header count-only badges.
+- **R4-C a11y** (`r4c-a11y-fixes.md`): focus restoration on
+  menu-activation/dismiss/remove (focusAdjacentGroupControl); SupportHub
+  + PhotoEditSheet fake tablists fixed; auctions/create radiogroup
+  roving tabindex; 5 pad-out sites; Sheet aria-labelledby + type-guard;
+  ForwardSheet role=list; kebab viewport clamping; aria-expanded sweep.
+- **R4-E state core** (`r4e-state-fixes.md`): P0 session-identity reset
+  — adoptIdentity bumps epoch + queryClient.clear() +
+  resetAccountSlices() (24 persisted slices) on every identity change;
+  late-hydration veto; saved-list writes revert-on-fail +
+  savedSyncError/savedListsStale channels; look-save domain split
+  (savedLooks → /looks/:id/save); useListingIds/useSellerSummary
+  resolution helper; profile edit → PATCH /users/me (saveProfileLive);
+  saved searches → real /users/me/saved-searches CRUD; collections
+  no-swallow writes; moodboard membership endpoints + syncIssues;
+  agent mutation rollback; useOwnerBoards hydration gate.
+- **R4-F app wiring** (`r4f-app-wiring.md`): all 10 wiring items —
+  saved/profile grids via useListingIds (P0 #1), look creator/rail,
+  orders detail/receipt live resolution, collection delete/membership
+  try/catch + useBoardCoverThumbs, moodboard actions routed + overlay
+  fixture-scoped, profile edit live save, outfits live, poster
+  author-from-wire + live-hidden owner actions, sync-failure surfacing.
+- **R4-D design tokens** (`r4d-design-tokens.md`): dead text-title class
+  found + fixed; bg-brand text-white → text-text-inverse; 3 shadow-lg →
+  tokens; 98 screen-title sites weight-unified; 14 verified badges →
+  text-commerce-trust; 6 row hovers → bg-row; LiveBadge dedupe; z-10 →
+  z-elevated x14; scrim ink tokens; text-micro; caps-label grammar
+  unified (137 label + ~140 micro/meta sites).
+
+Orchestrator handoffs also landed: intent-topics/candles/governance-
+votes/auction queryFns thread AbortSignal; BuyPanel formatEtaDay
+UTC-pinned; ListingShareCard/OfferCard times via ClientTime; priority
+residue removed (ClosetGrid/LooksGrid/ClosetListingsSection); eslint
+warnings cleared.
+
+VERIFY (fresh runs): tsc clean · eslint clean (0 problems) · next build
+clean (102 routes) · smoke 39/39 → 200 with real fixture ids (404s on
+guessed ids were the new notFound() working) · journey 6/6 PASS ·
+rendered shots verified: PDP (delivery truth + unified badge), look
+(creator resolved + shoppable rail), saved (honest empty + text tabs),
+profile, notifications, orders — .flagship/desktop-2026-09-28/shots-dx2/.
+
+Accepted residuals: chat unread has no count endpoint (documented);
+count-pill has no shared primitive (drift documented); live white/10
+fills have no tokens; SocialButtons logo glyphs bypass registry (no
+logo glyphs exist); meta-caps unification tightened 21 tracking sites
+(visible-but-intended); ListingQA seller label stays success-text
+(answer attribution, distinct element).
+
+## Phase 19d — R4 convergence review + seam repairs (2026-09-28)
+
+Fresh adversarial reviewer on the six-wave cumulative diff found 9 seam
+defects (3 P1, 6 P2) — all fixed and re-verified:
+
+- **P1 offers counter dead in live**: counterListing resolved via
+  useListingIds (was ungated fixture lookup → Counter action no-op);
+  OfferSheet now dynamic-imported (last eager consumer).
+- **P1 AuctionRunwayCard fixture ghost**: wire-provided auction.seller
+  preferred; fixture catalogue fixture-gated (live-id collision would
+  attribute lots to the wrong member); verified badge renders only when
+  the identity carries the field (wire shape has none — never assumed).
+- **P1 resetAccountSlices gaps**: feedPrefs (hidden/downweights/ceilings
+  — pushed to /interactions live), algorithm tuning, auction watchlist,
+  live reminders, postage prefs, sell draft — all now cleared on
+  identity change via module reset helpers that clear the
+  useSyncExternalStore caches + notify mounted subscribers.
+- **P2s**: conversationRole fixture lookup gated (live seller threads no
+  longer mislabel buying when ownerId absent — native's same default);
+  SellerAuctionRow brand via useListingIds live; BidHistory enrichment
+  fixture-gated (wire bidderName is truth).
+
+Checked clean by the reviewer: session epoch veto (no permanent wedge),
+server-shell/client notFound() no double-fire, memo comparators complete,
+toast timer hygiene, dynamic-import gating, token-sweep hierarchy intact,
+pulseModel/MemberEditsRail/offerAcceptance fixture seams.
+
+Two findings rejected as intentional: groupAdmin "A member" copy
+(removeFixtureMember is fixture-gated by caller; live uses liveGroupApi),
+SignupWall once-per-action session memory (documented mobile-matching
+grammar with cooldown nudge re-entry affordance).
+
+VERIFY (fresh): tsc clean · eslint clean · build clean · smoke 40/40 ·
+journey 6/6 PASS.
