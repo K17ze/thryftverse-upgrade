@@ -412,3 +412,21 @@ working tree (separate workstream).
 ### Audit finding (root cause of user-reported breakage)
 - Dynamic routes shipped HTML referencing unhashed main-app.js → 404 → no hydration → all buttons dead on /item/[id], /co-own/[id], /auctions/[id]. Cause: .next corruption from concurrent builds. Fixed via clean wipe+build; verified offer sheet opens, bid/trade inputs hydrate.
 - AccountMenu added — avatar dropdown (Profile/Orders/Saved/Offers/Wallet/Seller hub/Support/Settings/Sign out). Sign in was unreachable because session defaults signed-in.
+
+## 2026 (session cca622cf) — Post-decomposition verification wave
+
+**Context:** After three decomposition commits (78aa734d, 70ffe5fe, 7b72a176) moved ~19k lines into ~190 domain modules, a full parity sweep + registry re-audit ran against the frozen tree (second agent stopped).
+
+**Method:** literal string-parity script (every quoted literal in each old monolith grepped against the new module set), identifier/service-call inventories, effect/DATA_MODE counting, plus targeted checks on all 22 open gap-registry findings.
+
+**Findings:**
+- All 19 decomposed surfaces: zero missing user-facing strings, service calls, or handlers. Every "MISSING" hit triaged to comments, template fragments, or code renames.
+- 3 real defects fixed (7b72a176): `DistributionReceiptRow` phantom import (TS2305), doubled border-t seam on auctions/create, missing `useMemo` import cleanup.
+- Registry: all 10 P0s verified fixed by earlier waves (markRead-on-open, livePins shared store, walletKeys factory, offerAcceptance order-creation, createTicket for reports, a11y prefs via pre-hydration script, useFollows on Following tab, guest identity + signup wall on bids, coown trade ledger writes).
+- Sampled P1 sub-items all verified: private-board wall, seller self-bid gate, PdpBuyDock, skip link, OrderTimeline honest date stamps, offer fee math on offer amount, missingPublishFields condition gate, visual-search error/retry status, Sheet drag-to-dismiss, onboarding blocked-permission flow, coown fill-estimate depth parity (avg fill/worst price/fee/total/GTC90).
+- Comment-parity: aggregate comment volume grew (inbox 831→1517 across modules); second-wave deltas were decorative `// ──` separators correctly replaced by module boundaries — contract/rationale comments confirmed present (passkey ceremony, revocation terminality, proxy-ceiling semantics).
+- ConvertView "(guaranteed minimum)"→"(net) + explicit feeBps" is a semantic upgrade, not a loss.
+
+**Gates:** tsc clean, next lint clean, next build green (110 routes), all 26 critical routes return 200 on the running dev server, 0 orphan modules.
+
+**Remaining frontier:** rendered-visual fidelity vs competitor captures (needs screenshot-driven iteration), plus ~50 unverified P1/P2-P3 sub-items in dept reports.
