@@ -12,6 +12,7 @@ import { Icon } from '@/components/ui/Icon';
 import { Skeleton } from '@/components/ui/Skeleton';
 import { useToast } from '@/components/ui/Toast';
 import { AnimatedCheck } from '@/components/ui/AnimatedCheck';
+import { EmptyState } from '@/components/ui/EmptyState';
 import { DISPATCH_SLA_DAYS } from '@/lib/commerce/dispatch';
 
 export function CheckoutSkeleton() {
@@ -139,3 +140,71 @@ export function CheckoutSuccess({ orderId }: { orderId: string }) {
     </div>
   );
 }
+
+export function CheckoutEmptyGate({
+  resumeOrderId,
+  itemId,
+  orderLoadFailed,
+  boundOrder,
+  itemsLength,
+  onRetryOrder,
+  onViewOrder,
+  onBrowseItems,
+}: {
+  resumeOrderId: string | null;
+  itemId: string | null;
+  orderLoadFailed: boolean;
+  boundOrder?: { status: string } | null;
+  itemsLength: number;
+  onRetryOrder: () => void;
+  onViewOrder: () => void;
+  onBrowseItems: () => void;
+}) {
+  if (resumeOrderId && orderLoadFailed) {
+    return (
+      <EmptyState
+        icon="alert"
+        title="Couldn't load this order"
+        subtitle="Check your connection and try again — the order is safe."
+        actionLabel="Try again"
+        onAction={onRetryOrder}
+      />
+    );
+  }
+  if (resumeOrderId && (!boundOrder || boundOrder.status !== 'created')) {
+    return (
+      <EmptyState
+        icon="receipt"
+        title="This order is no longer awaiting payment"
+        subtitle="It may already be paid, cancelled, or have a payment in progress."
+        actionLabel="View order"
+        onAction={onViewOrder}
+      />
+    );
+  }
+  if (itemsLength === 0) {
+    return (
+      <EmptyState
+        icon="bag"
+        title={
+          resumeOrderId
+            ? "This order's item is no longer listed"
+            : itemId
+              ? 'This item is no longer available'
+              : 'Nothing to check out'
+        }
+        subtitle={
+          resumeOrderId
+            ? 'The order itself still exists — its page has the support path if you need it.'
+            : itemId
+              ? 'It may have sold while you were browsing.'
+              : 'Add items to your bag first.'
+        }
+        actionLabel={resumeOrderId ? 'Back to order' : 'Browse items'}
+        onAction={resumeOrderId ? onViewOrder : onBrowseItems}
+      />
+    );
+  }
+  return null;
+}
+
