@@ -9,13 +9,26 @@ import { useSession } from '@/lib/session/SessionProvider';
 export default function FollowersPage() {
   const params = useParams();
   const username = String(params.username ?? '');
-  const { data, isLoading, isFetched } = useUserByUsername(username);
+  const { data, isLoading, isFetched, isError, refetch } = useUserByUsername(username);
   const { user: me } = useSession();
   // A renamed session username misses the fixture table — the session's
   // merged user is the truth there.
   const user = data ?? (me?.username === username ? me : undefined);
 
   if (isLoading) return <ConnectionsSkeleton />;
+  if (isError) {
+    return (
+      <div className="pt-16">
+        <EmptyState
+          icon="warning"
+          title="Couldn't load this profile"
+          subtitle="Check your connection and try again."
+          actionLabel="Retry"
+          onAction={() => refetch()}
+        />
+      </div>
+    );
+  }
   if (isFetched && !user) {
     return (
       <div className="pt-16">

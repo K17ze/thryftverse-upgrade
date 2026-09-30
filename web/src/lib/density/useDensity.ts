@@ -16,7 +16,7 @@
  *
  * CSS contract — surfaces read `var(--density-*)` (globals.css):
  *   --density-row-height  --density-row-py  --density-row-gap
- *   --density-gutter      --density-section-gap  --density-card-radius
+ *   --density-gutter      --density-section-gap
  */
 import { create } from 'zustand';
 import { persist, createJSONStorage } from 'zustand/middleware';

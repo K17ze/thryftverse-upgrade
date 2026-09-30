@@ -84,7 +84,7 @@ export function AccountMenu() {
         aria-haspopup="menu"
         aria-expanded={open}
         onClick={() => setOpen((v) => !v)}
-        className={`pressable rounded-full ${open ? 'ring-2 ring-text-primary ring-offset-2 ring-offset-header' : ''}`}
+        className={`pressable relative flex h-11 w-11 items-center justify-center rounded-full ${open ? 'ring-2 ring-text-primary ring-offset-2 ring-offset-header' : ''}`}
       >
         <Avatar src={user?.avatar} name={user?.username} size={34} />
       </button>

@@ -163,7 +163,7 @@ export function ShopRail({ ownerId, isOwner = false, listings = [] }: ShopRailPr
 function ShopRailCard({ item }: { item: ShopRailItem }) {
   return (
     <Link
-      href={`/listing/${item.id}`}
+      href={`/item/${item.id}`}
       className="pressable group block w-[132px] shrink-0 lg:w-[168px]"
       aria-label={`${item.title}, ${formatPrice(item.price)}${item.isSold ? ', sold' : ''}`}
     >
@@ -173,7 +173,7 @@ function ShopRailCard({ item }: { item: ShopRailItem }) {
           alt=""
           fill
           sizes="(max-width: 1024px) 132px, 168px"
-          className="h-full w-full transition-transform duration-300 group-hover:scale-[1.04]"
+          className="h-full w-full media-zoom"
           fallbackIcon="heart"
         />
         {item.isSold ? (

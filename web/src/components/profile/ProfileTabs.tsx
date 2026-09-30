@@ -25,7 +25,7 @@ export function ProfileTabs<T extends string>({
   ariaLabel = 'Sections',
 }: ProfileTabsProps<T>) {
   return (
-    <div className="sticky top-16 z-elevated bg-background/95 backdrop-blur-sm">
+    <div className="sticky top-14 z-elevated bg-background/95 backdrop-blur-sm md:top-16">
       <Tabs
         tabs={tabs}
         active={active}

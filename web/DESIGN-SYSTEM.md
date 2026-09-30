@@ -23,7 +23,7 @@ via `[data-theme="light"]` CSS vars — never hardcode hex colors.
   chip style, one button grammar, one press feedback (`.pressable` scale 0.975).
 - **No duplicate titles.** Screen header doesn't repeat the section title.
 - **Hit area ≠ visible shape.** 44px targets, 20–24px glyphs, no decorative
-  chrome circles around icons. On media: `drop-scrim`/`glyph-scrim` for
+  chrome circles around icons. On media: `drop-scrim` for
   legibility, no solid circles.
 - **Full states.** Loading (skeleton, not spinner), empty (EmptyState),
   error, populated — all designed.
@@ -69,13 +69,13 @@ headlines only, sparingly (mobile uses serif only for lot titles,
 Discover headers, seller names). `font-serif` remains for one-off sizes
 like the Galleria hero campaign statement.
 
-Shadows: `shadow-subtle` `shadow-card` `shadow-floating` `shadow-modal` —
+Shadows: `shadow-subtle` `shadow-floating` `shadow-modal` —
 deliberate only, never routine.
 
 Z-index: `z-elevated` `z-sticky` `z-dropdown` `z-modal` `z-toast` `z-overlay`.
 
 Utilities: `pressable` (press feedback), `tnum`, `skeleton`, `clamp-1`,
-`clamp-2`, `no-scrollbar`, `hairline`, `glyph-scrim`, `drop-scrim`, `img-fade`.
+`clamp-2`, `no-scrollbar`, `drop-scrim`, `img-fade`.
 
 ## Primitives (`@/components/ui/`)
 
@@ -200,7 +200,7 @@ query-owned list zone:
 `useDensity()` persists the preference; `PlatformRuntime` mirrors it to
 `<html data-density>`; `globals.css` holds the vars
 (`--density-row-height`, `--density-row-py`, `--density-row-gap`,
-`--density-gutter`, `--density-section-gap`, `--density-card-radius`).
+`--density-gutter`, `--density-section-gap`).
 
 - Prefer CSS var consumption (`py-[var(--density-row-py)]`) over the JS
   hook — geometry survives SSR/hydration.

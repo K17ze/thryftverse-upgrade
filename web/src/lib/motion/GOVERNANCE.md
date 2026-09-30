@@ -32,6 +32,6 @@ Port of the mobile motion contract (`frontend/src/theme/MOTION_GRAMMAR.md`,
 
 ## Existing utilities already in globals.css
 
-`pressable` (120ms), `fade-up`, `fade-in`, `sheet-enter`, `toast-enter`/
-`toast-exit`, `media-zoom`, `link-quiet`, `skeleton` shimmer. These are
+`pressable` (120ms), `fade-in`, `sheet-enter`, `toast-enter`/
+`toast-exit`, `media-zoom`, `skeleton` shimmer. These are
 the sanctioned vocabulary — reach for them before adding new keyframes.

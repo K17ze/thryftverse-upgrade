@@ -40,8 +40,6 @@
   --coown-down: #FF9B9B;
   --coown-up-subtle: rgba(142, 209, 167, 0.16);
   --coown-down-subtle: rgba(255, 155, 155, 0.16);
-  --social: #9A6B7A;
-  --discovery: #B85566;
   --commerce-trust: #4A7AC4;
   --commerce-trust-subtle: rgba(74, 122, 196, 0.10);
   --commerce-trust-border: rgba(74, 122, 196, 0.20);
@@ -57,10 +55,8 @@
   --row: #141414;
   --row-pressed: #1A1A1A;
   --header: #0A0A0A;
-  --shadow-color: #000000;
 
   --elev-subtle: 0 1px 6px rgba(0, 0, 0, 0.24);
-  --elev-card: 0 2px 10px rgba(0, 0, 0, 0.28);
   --elev-floating: 0 4px 14px rgba(0, 0, 0, 0.36);
   --elev-modal: 0 8px 22px rgba(0, 0, 0, 0.48);
 }
@@ -99,8 +95,6 @@
   --coown-down: #5F1616;
   --coown-up-subtle: rgba(28, 86, 49, 0.10);
   --coown-down-subtle: rgba(95, 22, 22, 0.10);
-  --social: #6B3245;
-  --discovery: #7B0E1E;
   --commerce-trust: #06489A;
   --commerce-trust-subtle: rgba(6, 72, 154, 0.08);
   --commerce-trust-border: rgba(6, 72, 154, 0.16);
@@ -116,10 +110,8 @@
   --row: #F5F5F5;
   --row-pressed: #EBEBEB;
   --header: #FFFFFF;
-  --shadow-color: #000000;
 
   --elev-subtle: 0 1px 6px rgba(0, 0, 0, 0.04);
-  --elev-card: 0 2px 10px rgba(0, 0, 0, 0.06);
   --elev-floating: 0 4px 14px rgba(0, 0, 0, 0.10);
   --elev-modal: 0 8px 22px rgba(0, 0, 0, 0.16);
 }
@@ -161,8 +153,6 @@
   --color-coown-down: var(--coown-down);
   --color-coown-up-subtle: var(--coown-up-subtle);
   --color-coown-down-subtle: var(--coown-down-subtle);
-  --color-social: var(--social);
-  --color-discovery: var(--discovery);
   --color-commerce-trust: var(--commerce-trust);
   --color-commerce-trust-subtle: var(--commerce-trust-subtle);
   --color-commerce-trust-border: var(--commerce-trust-border);
@@ -188,7 +178,6 @@
   --radius-lg: 12px;
   --radius-xl: 16px;
   --radius-chat: 20px;
-  --radius-xxl: 24px;
   --radius-sheet: 20px;
 
   /* Type scale — mirrors mobile TypographyV2: size / line-height / weight /
@@ -273,7 +262,6 @@
   --font-serif: var(--font-playfair), Georgia, serif;
 
   --shadow-subtle: var(--elev-subtle);
-  --shadow-card: var(--elev-card);
   --shadow-floating: var(--elev-floating);
   --shadow-modal: var(--elev-modal);
 
@@ -349,11 +337,12 @@ textarea:focus-visible {
 }
 
 
-/* Press feedback — charter range 0.97–0.985, transform only (no layout shift) */
+/* Press feedback — charter range 0.97–0.985, transform only (no layout shift).
+   `filter` is in the property list for hover dim/brighten on media. */
 .pressable {
   transition: transform 120ms var(--ease-standard), opacity 120ms var(--ease-standard),
     background-color 120ms var(--ease-standard), color 120ms var(--ease-standard),
-    border-color 120ms var(--ease-standard);
+    border-color 120ms var(--ease-standard), filter 120ms var(--ease-standard);
 }
 .pressable:active {
   transform: scale(0.975);
@@ -382,15 +371,7 @@ textarea:focus-visible {
   font-family: var(--font-playfair), Georgia, serif;
 }
 
-/* Hairline separator */
-.hairline {
-  border-color: var(--border-subtle);
-}
-
-/* Text-shadow scrim for glyphs over media (mirrors mobile actionGlyph) */
-.glyph-scrim {
-  text-shadow: 0 1px 4px var(--shadow-color);
-}
+/* Drop-shadow scrim for glyphs over media (mirrors mobile actionGlyph) */
 .drop-scrim {
   filter: drop-shadow(0 1px 4px rgba(0, 0, 0, 0.6));
 }
@@ -440,11 +421,7 @@ textarea:focus-visible {
 /* AnimatedCheck — success marker draw-in. Circle strokes in, tick follows,
    one quiet ring expands once. Collapses to instant under reduced motion
    via the global rule above. */
-@keyframes check-circle-draw {
-  from { stroke-dashoffset: 100; }
-  to { stroke-dashoffset: 0; }
-}
-@keyframes check-tick-draw {
+@keyframes check-draw {
   from { stroke-dashoffset: 100; }
   to { stroke-dashoffset: 0; }
 }
@@ -457,11 +434,11 @@ textarea:focus-visible {
 }
 .anim-check-circle {
   stroke: currentColor;
-  animation: check-circle-draw 420ms var(--ease-standard) 60ms both;
+  animation: check-draw 420ms var(--ease-standard) 60ms both;
 }
 .anim-check-tick {
   stroke: currentColor;
-  animation: check-tick-draw 260ms var(--ease-standard) 380ms both;
+  animation: check-draw 260ms var(--ease-standard) 380ms both;
 }
 .anim-check-ring {
   position: absolute;
@@ -539,38 +516,6 @@ h2 {
    Everything here collapses to instant under prefers-reduced-motion (block at
    the end of this file).
    ============================================================================ */
-
-/* Pressable — extend property coverage with `filter` (hover dim/brighten).
-   Declared separately so the base rule remains the source for timing/easing;
-   this only widens the transitioned property list. */
-.pressable {
-  transition-property: transform, opacity, background-color, color, border-color,
-    filter;
-}
-
-/* Quiet link — secondary text resolving to primary on hover, micro tier. */
-@utility link-quiet {
-  color: var(--text-secondary);
-  transition: color 120ms var(--ease-standard);
-}
-.link-quiet:hover {
-  color: var(--text-primary);
-}
-
-/* fade-up — reusable opt-in mount transition (opacity 0→1, 4px rise). */
-@keyframes fade-up {
-  from {
-    opacity: 0;
-    transform: translateY(4px);
-  }
-  to {
-    opacity: 1;
-    transform: translateY(0);
-  }
-}
-@utility fade-up {
-  animation: fade-up 200ms var(--ease-standard) both;
-}
 
 /* fade-in — opacity-only entrance for scrims/overlays. */
 @keyframes fade-in {
@@ -659,7 +604,6 @@ h2 {
 /* Reduced motion — new utilities collapse to instant, matching the global
    squash above. `animation: none` also skips the `both` fill entirely. */
 @media (prefers-reduced-motion: reduce) {
-  .fade-up,
   .fade-in,
   .sheet-enter,
   .toast-enter,
@@ -689,7 +633,6 @@ h2 {
   --density-row-gap: 8px;
   --density-gutter: 16px;
   --density-section-gap: 24px;
-  --density-card-radius: 12px;
 }
 :root[data-density="compact"] {
   --density-row-height: 56px;
@@ -697,7 +640,6 @@ h2 {
   --density-row-gap: 0px;
   --density-gutter: 16px;
   --density-section-gap: 16px;
-  --density-card-radius: 8px;
 }
 :root[data-density="editorial"] {
   --density-row-height: 80px;
@@ -705,7 +647,6 @@ h2 {
   --density-row-gap: 16px;
   --density-gutter: 20px;
   --density-section-gap: 32px;
-  --density-card-radius: 16px;
 }
 
 /* Accent presets — [data-accent] on <html> overrides the brand token quad
@@ -770,14 +711,4 @@ h2 {
 }
 html[data-offline] body {
   padding-top: var(--offline-strip-h);
-}
-
-/* Motion vars — CSS-facing halves of web/src/lib/motion (tiers + easing
-   direction rules). For transitions, not decoration. */
-:root {
-  --dur-micro: 120ms;
-  --dur-deliberate: 280ms;
-  --ease-entrance: cubic-bezier(0.215, 0.61, 0.355, 1);
-  --ease-exit: cubic-bezier(0.55, 0.055, 0.675, 0.19);
-  --ease-crisp: cubic-bezier(0.645, 0.045, 0.355, 1);
 }
