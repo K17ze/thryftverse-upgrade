@@ -21,6 +21,7 @@ import { Skeleton } from '@/components/ui/Skeleton';
 import { formatDate } from '@/lib/utils/format';
 import { RatingStars } from './RatingStars';
 import { ReviewReportSheet } from './ReviewReportSheet';
+import { ReviewResponseSheet } from './ReviewResponseSheet';
 import { reviewerHref } from './profileViewModel';
 
 /**
@@ -95,9 +96,11 @@ export function ReviewSummary({
 function ReviewRow({
   review,
   onReport,
+  onRespond,
 }: {
   review: Review;
   onReport?: () => void;
+  onRespond?: () => void;
 }) {
   const href = reviewerHref(review);
   const nameClass = 'clamp-1 text-body-emphasis font-semibold text-text-primary';
@@ -182,16 +185,30 @@ function ReviewRow({
             </p>
           </div>
         ) : null}
-        {onReport ? (
-          <button
-            type="button"
-            onClick={onReport}
-            className="pressable mt-2 inline-flex items-center gap-1 text-meta text-text-muted hover:text-text-secondary"
-          >
-            <Icon name="flag" size={12} aria-hidden />
-            Report
-          </button>
-        ) : null}
+        <div className="mt-2 flex items-center gap-4">
+          {/* Seller respond — native ProfileReviewRow: own profile only,
+              buyer-authored reviews with no response yet. */}
+          {onRespond ? (
+            <button
+              type="button"
+              onClick={onRespond}
+              className="pressable inline-flex items-center gap-1 text-meta font-medium text-brand hover:underline"
+            >
+              <Icon name="chat" size={12} aria-hidden />
+              Respond
+            </button>
+          ) : null}
+          {onReport ? (
+            <button
+              type="button"
+              onClick={onReport}
+              className="pressable inline-flex items-center gap-1 text-meta text-text-muted hover:text-text-secondary"
+            >
+              <Icon name="flag" size={12} aria-hidden />
+              Report
+            </button>
+          ) : null}
+        </div>
       </div>
     </article>
   );
@@ -217,11 +234,21 @@ export function ReviewListSkeleton({ count = 3 }: { count?: number }) {
 export function ReviewList({ reviews }: { reviews: Review[] }) {
   const { user } = useSession();
   const [reportingId, setReportingId] = useState<string | null>(null);
+  const [responding, setResponding] = useState<Review | null>(null);
   // Report affordance (native ProfileReviewRow): live-only — fixture mode
   // has no report endpoint — signed-in viewers, never on their own or
   // automatic rows.
   const canReport = (r: Review) =>
     DATA_MODE === 'live' && user != null && !r.isAutomatic && r.reviewerId !== user.id;
+  // Respond affordance (native ProfileReviewRow): the seller on their own
+  // profile, buyer-authored rows only, and only while no response exists —
+  // the server also enforces seller identity on the write.
+  const canRespond = (r: Review) =>
+    DATA_MODE === 'live' &&
+    user != null &&
+    r.userId === user.id &&
+    !r.isAutomatic &&
+    !r.sellerResponse;
 
   return (
     <div>
@@ -230,12 +257,19 @@ export function ReviewList({ reviews }: { reviews: Review[] }) {
           key={r.id}
           review={r}
           onReport={canReport(r) ? () => setReportingId(r.id) : undefined}
+          onRespond={canRespond(r) ? () => setResponding(r) : undefined}
         />
       ))}
       <ReviewReportSheet
         open={reportingId != null}
         onClose={() => setReportingId(null)}
         reviewId={reportingId}
+      />
+      <ReviewResponseSheet
+        open={responding != null}
+        onClose={() => setResponding(null)}
+        reviewId={responding?.id ?? null}
+        reviewerName={responding?.reviewerName}
       />
     </div>
   );

@@ -26,6 +26,10 @@ import {
 import { DATA_MODE } from '@/lib/api/client';
 import { fetchOrders } from '@/lib/api/services/commerce';
 import { ORDERS } from '@/lib/data/fixtures';
+import {
+  EvidencePhotoField,
+  type EvidencePhoto,
+} from '@/components/orders/EvidencePhotoField';
 import { useSupportActions } from './useSupportTickets';
 
 const FIELD_CLASS =
@@ -56,6 +60,7 @@ export function NewTicketForm({ onCreated, onCancel, initialTopic }: NewTicketFo
   const [topicId, setTopicId] = useState<SupportTopicId | ''>(initialTopic ?? '');
   const [orderId, setOrderId] = useState('');
   const [message, setMessage] = useState('');
+  const [evidence, setEvidence] = useState<EvidencePhoto[]>([]);
   const [touched, setTouched] = useState(false);
   const [submitting, setSubmitting] = useState(false);
 
@@ -78,10 +83,13 @@ export function NewTicketForm({ onCreated, onCancel, initialTopic }: NewTicketFo
   const ordersEmpty = isLive && ordersQuery.isSuccess && orderOptions.length === 0;
 
   const topic = topicId ? topicById(topicId) : undefined;
+  // Evidence mid-upload can't submit — a submitted ticket must carry the
+  // real uploaded URLs, not still-uploading blob previews.
+  const uploading = evidence.some((e) => e.state === 'uploading');
   // Live tickets are order-bound — the order is required, never faked.
   const orderOk = isLive ? orderId !== '' : true;
   const canSubmit =
-    topicId !== '' && orderOk && message.trim().length >= 10 && !submitting && !ordersLoading;
+    topicId !== '' && orderOk && message.trim().length >= 10 && !submitting && !ordersLoading && !uploading;
 
   const submit = async () => {
     setTouched(true);
@@ -92,6 +100,9 @@ export function NewTicketForm({ onCreated, onCancel, initialTopic }: NewTicketFo
         topicId,
         orderRef: orderId || null,
         message: message.trim(),
+        evidenceUris: evidence
+          .filter((e) => e.state === 'attached')
+          .map((e) => e.uri),
       });
       onCreated(ticket.id);
     } catch {
@@ -210,6 +221,18 @@ export function NewTicketForm({ onCreated, onCancel, initialTopic }: NewTicketFo
           </p>
         ) : null}
       </div>
+
+      {/* Evidence photos — optional, once a topic is chosen. Native
+          OrderSupportScreen parity: up to 3, uploaded on pick in live
+          mode so the ticket carries durable media URLs. */}
+      {topicId !== '' ? (
+        <EvidencePhotoField
+          label="Photos (optional)"
+          hint="Photos of the item, packaging or delivery help us resolve this faster."
+          items={evidence}
+          onChange={setEvidence}
+        />
+      ) : null}
 
       {topic ? (
         <p className="flex items-center gap-1.5 text-caption text-text-muted">
