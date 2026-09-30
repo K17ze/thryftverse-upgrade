@@ -10,7 +10,6 @@
 import { notFound } from 'next/navigation';
 import { MasonryGrid, useMasonryColumns } from '@/components/feed/MasonryGrid';
 import { EditableMoodboardGrid } from '@/components/moodboard/EditableMoodboardGrid';
-import { Button } from '@/components/ui/Button';
 import { EmptyState } from '@/components/ui/EmptyState';
 import { IconButton } from '@/components/ui/IconButton';
 import { BackBar } from '@/components/profile/BackBar';
@@ -83,7 +82,7 @@ export function CollectionClient() {
             ) : null}
             {w.resolved.editable ? (
               <IconButton
-                name="overflow"
+                name="more"
                 aria-label="Collection options"
                 onClick={() => w.setOptionsOpen(true)}
               />
@@ -93,115 +92,129 @@ export function CollectionClient() {
       />
 
       <CollectionHeader
+        showHero={w.showHero}
+        heroThumbs={w.heroThumbs}
         title={w.resolved.title}
-        owner={w.resolved.owner}
-        editable={w.resolved.editable}
-        meta={w.resolved.meta}
-        description={w.resolved.description}
         isPrivate={w.resolved.isPrivate}
         archived={w.archived}
-        editing={w.editing}
-        itemCount={w.itemIds.length}
-        heroThumbs={w.heroThumbs}
-        showHero={w.showHero}
-        onStartEditing={() => w.setEditing(true)}
-        onOpenImport={() => w.setImportOpen(true)}
+        owner={w.resolved.owner}
+        itemCount={w.items.length}
+        meta={w.resolved.meta}
+        description={w.resolved.description}
       />
 
-      {w.isEditing ? (
-        <CollectionEditToolbar
-          itemCount={w.itemIds.length}
-          selectMode={w.selectMode}
-          selectedCount={w.selectedIds.size}
-          onToggleSelectMode={() => {
-            w.setSelectMode((v) => !v);
-          }}
-          onOpenImport={() => w.setImportOpen(true)}
-          onRemoveSelected={w.removeSelected}
-          onDone={w.stopEditing}
-        />
-      ) : null}
+      <CollectionEditToolbar
+        isEditing={w.isEditing}
+        selectMode={w.selectMode}
+        selectedCount={w.selectedIds.size}
+        onOpenImport={() => w.setImportOpen(true)}
+        onToggleSelectMode={() => {
+          w.setSelectMode((v) => !v);
+          w.setSelectedIds(new Set());
+        }}
+        onRemoveSelected={w.removeSelected}
+        onCancelSelection={() => {
+          w.setSelectMode(false);
+          w.setSelectedIds(new Set());
+        }}
+      />
 
       <div className="mt-8 px-4 pb-16 sm:px-6">
         {w.isEditing ? (
-          <EditableMoodboardGrid
-            items={w.summaries}
-            editable
-            selectMode={w.selectMode}
-            selectedIds={w.selectedIds}
-            onToggleSelect={w.toggleSelect}
-            onRemoveItem={(item) => w.removeWithUndo([item.id])}
-            onMove={(draggedId, targetId) => {
-              const from = w.itemIds.indexOf(draggedId);
-              const to = w.itemIds.indexOf(targetId);
-              if (from < 0 || to < 0 || from === to) return;
-              void w.commitItems(movedItem(w.itemIds, from, to));
-            }}
-            onMoveBefore={(draggedId, targetId) => {
-              void w.commitItems(itemMovedBefore(w.itemIds, draggedId, targetId));
-            }}
-          />
-        ) : w.items.length === 0 ? (
-          <div className="py-12">
+          w.items.length === 0 ? (
             <EmptyState
               icon="bookmark"
               title="This collection is empty"
-              subtitle={
-                w.resolved.editable
-                  ? 'Add items you love from search, the feed, or product pages.'
-                  : 'The owner hasn’t added any items to this collection yet.'
-              }
-              actionLabel={w.resolved.editable ? 'Explore items' : undefined}
-              onAction={w.resolved.editable ? () => window.location.assign('/search') : undefined}
+              subtitle="Add saved items or favourites to start building it."
+              actionLabel="Add items"
+              onAction={() => w.setImportOpen(true)}
+              compact
             />
-            {w.resolved.editable && w.candidates.length > 0 ? (
-              <div className="mt-4 flex justify-center">
-                <Button
-                  variant="secondary"
-                  size="md"
-                  onClick={() => w.setImportOpen(true)}
-                >
-                  Import from saved
-                </Button>
-              </div>
-            ) : null}
-          </div>
+          ) : (
+            <EditableMoodboardGrid
+              items={w.summaries}
+              columns={columns}
+              selectMode={w.selectMode}
+              selectedIds={w.selectedIds}
+              onToggleSelect={w.toggleSelect}
+              onRemove={(itemId) => w.removeWithUndo([itemId])}
+              onMove={
+                LIVE
+                  ? undefined
+                  : (itemId, dir) => void w.commitItems(movedItem(w.itemIds, itemId, dir))
+              }
+              onReorder={
+                LIVE
+                  ? undefined
+                  : (draggedId, targetId) =>
+                      void w.commitItems(itemMovedBefore(w.itemIds, draggedId, targetId))
+              }
+            />
+          )
         ) : (
-          <MasonryGrid items={w.units} />
+          <MasonryGrid
+            units={w.units}
+            columns={columns}
+            emptyTitle="This collection is empty"
+            emptySubtitle="Saved items will appear here."
+          />
         )}
       </div>
 
       <CollectionSheetsGroup
         id={w.id}
         title={w.resolved.title}
-        description={w.resolved.description ?? ''}
-        isPrivate={Boolean(w.resolved.isPrivate)}
+        isPrivate={w.resolved.isPrivate}
         archived={w.archived}
-        items={w.summaries}
-        candidates={w.candidates}
-        candidatesLoading={w.candidatesLoading}
-        optionsOpen={w.optionsOpen}
-        detailsOpen={w.detailsOpen}
-        coverOpen={w.coverOpen}
+        isCloset={w.isCloset}
         importOpen={w.importOpen}
-        confirmDelete={w.confirmDelete}
-        onCloseOptions={() => w.setOptionsOpen(false)}
-        onCloseDetails={() => w.setDetailsOpen(false)}
-        onCloseCover={() => w.setCoverOpen(false)}
         onCloseImport={() => w.setImportOpen(false)}
-        onCloseConfirmDelete={() => w.setConfirmDelete(false)}
+        candidates={w.candidates}
+        onAddItems={w.addItems}
+        optionsOpen={w.optionsOpen}
+        onCloseOptions={() => w.setOptionsOpen(false)}
         onOpenDetails={() => w.setDetailsOpen(true)}
+        onStartEditing={() => w.setEditing(true)}
         onOpenCover={() => w.setCoverOpen(true)}
         onTogglePrivacy={w.togglePrivacy}
         onToggleArchive={() => {
-          w.setBoardArchived(w.id, !w.archived);
           w.setOptionsOpen(false);
+          w.setBoardArchived(w.id, !w.archived);
+          w.show(
+            w.archived
+              ? 'Board restored'
+              : 'Board archived — it stays reachable from this link',
+            'info',
+          );
         }}
-        onConfirmDeleteOpen={() => w.setConfirmDelete(true)}
+        onShare={() => {
+          w.setOptionsOpen(false);
+          void w.shareCollection();
+        }}
+        onOpenConfirmDelete={() => {
+          w.setOptionsOpen(false);
+          w.setConfirmDelete(true);
+        }}
+        coverOpen={w.coverOpen}
+        onCloseCover={() => w.setCoverOpen(false)}
+        items={w.summaries}
+        coverItemId={w.coverItemId ?? undefined}
+        onSelectCover={(cId) => {
+          w.setBoardCover(w.id, cId);
+          w.setCoverOpen(false);
+          w.show(cId ? 'Cover updated' : 'Cover reset to automatic', 'info');
+        }}
+        detailsOpen={w.detailsOpen}
+        onCloseDetails={() => w.setDetailsOpen(false)}
+        initialDetails={{
+          title: w.resolved.title,
+          description: w.resolved.description ?? null,
+          isPrivate: !!w.resolved.isPrivate,
+        }}
         onSaveDetails={w.saveDetails}
-        onSelectCover={(itemId) => w.setBoardCover(w.id, itemId)}
-        onAddItems={w.addItems}
-        onDeleteCollection={w.deleteCollection}
+        confirmDelete={w.confirmDelete}
+        onCloseConfirmDelete={() => w.setConfirmDelete(false)}
+        onDeleteCollection={() => void w.deleteCollection()}
       />
     </div>
   );

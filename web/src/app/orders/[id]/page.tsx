@@ -17,180 +17,72 @@
  *  - OrderBannersRail
  *  - OrderMiddleSections
  *  - OrderSheetsGroup
- *  - useOrderDetailActions
+ *  - useOrderDetailWorkflow
  */
 
-import { useParams, useRouter } from 'next/navigation';
-import { useQuery, useQueryClient } from '@tanstack/react-query';
+import { useParams } from 'next/navigation';
 import { Button } from '@/components/ui/Button';
 import { EmptyState } from '@/components/ui/EmptyState';
 import { Icon } from '@/components/ui/Icon';
 import { IconButton } from '@/components/ui/IconButton';
-import { useToast } from '@/components/ui/Toast';
 import { OrderStatusBadge } from '@/components/orders/OrderRow';
 import { OrderDetailSkeleton } from '@/components/orders/OrderDetailSkeleton';
 import { OrderSupportSection } from '@/components/orders/OrderSupportSection';
-import type { OrderActionItem } from '@/components/orders/OrderActionsSheet';
-import type { IssueCategory } from '@/components/orders/IssueReportSheet';
-import type { ProtectionCoverage } from '@/components/orders/BuyerProtectionSheet';
-import {
-  isCancelledStatus,
-  normaliseOrderStatus,
-  resolveOrderExperience,
-  type OrderAction,
-  type OrderRole,
-} from '@/components/orders/orderCapabilities';
-import {
-  useCreateConversation,
-  useOrderActions,
-  useOrderReturnCase,
-} from '@/lib/hooks/queries';
-import { useOrder, useOrderAuthentication } from '@/lib/hooks/order-queries';
+import { isCancelledStatus } from '@/components/orders/orderCapabilities';
 import { DATA_MODE } from '@/lib/api/client';
-import * as commerceService from '@/lib/api/services/commerce';
-import { useSession } from '@/lib/session/SessionProvider';
-import { useSavedAddresses, useSavedPaymentMethods } from '@/lib/store/userPaymentData';
-import { useOrderInstrumentFacts } from '@/lib/hooks/instrument-queries';
-import { useSupportActions, useSupportTickets } from '@/components/support/useSupportTickets';
-import { useListingIds, useSellerSummary } from '@/lib/hooks/listing-resolution';
-import { listingById, userById } from '@/lib/data/fixtures';
-import {
-  commerceOrderDetailFor,
-  orderEnrichmentFor,
-} from '@/lib/data/fixtures-commerce';
 import { formatDate } from '@/lib/utils/format';
 import { OrderPurchaseSummaryCard } from '@/components/orders/OrderPurchaseSummaryCard';
 import { OrderInstrumentFactsRail } from '@/components/orders/OrderInstrumentFactsRail';
-import { OrderCounterpartyCard, type CounterpartyView } from '@/components/orders/OrderCounterpartyCard';
+import { OrderCounterpartyCard } from '@/components/orders/OrderCounterpartyCard';
 import { OrderBannersRail } from '@/components/orders/OrderBannersRail';
 import { OrderMiddleSections } from '@/components/orders/OrderMiddleSections';
 import { OrderSheetsGroup } from '@/components/orders/OrderSheetsGroup';
-import { useOrderDetailActions } from '@/components/orders/useOrderDetailActions';
-import type { OrderReviewView } from '@/components/orders/OrderReviewCard';
-import type { AppIconName } from '@/components/ui/Icon';
-import type { User, Listing } from '@/lib/contracts/domain';
-import type { SellerSummary } from '@/lib/api/services/users';
-
-const EMPTY_IDS: string[] = [];
-
-const ACTION_LABEL: Record<OrderAction, string> = {
-  pay: 'Pay now',
-  dispatch: 'Mark as dispatched',
-  propose_extension: 'Propose dispatch extension',
-  respond_extension: 'Respond to extension',
-  confirm_delivery: 'Confirm receipt',
-  cancel: 'Cancel order',
-  report_issue: 'Report a problem',
-  view_resolution: 'View return request',
-  leave_review: 'Leave a review',
-  view_review: 'Reviewed — thanks',
-  view_receipt: 'View receipt',
-  track_order: 'Track parcel',
-  inspect: 'Check your item',
-  contact: 'Message',
-};
-
-const ACTION_ICON: Partial<Record<OrderAction, AppIconName>> = {
-  confirm_delivery: 'check',
-  cancel: 'closeCircle',
-  report_issue: 'flag',
-  view_resolution: 'shield',
-  leave_review: 'star',
-  view_review: 'star',
-  view_receipt: 'receipt',
-  track_order: 'box',
-  contact: 'chat',
-  pay: 'card',
-  dispatch: 'send',
-};
-
-function toCounterparty(
-  source: User | SellerSummary | null | undefined,
-): CounterpartyView | null {
-  if (!source) return null;
-  if ('isVerified' in source) {
-    return {
-      id: source.id,
-      username: source.username,
-      avatar: source.avatar,
-      isVerified: source.isVerified,
-      rating: source.rating,
-    };
-  }
-  return {
-    id: source.id,
-    username: source.username,
-    avatar: source.avatar,
-    isVerified: source.verified,
-    rating: source.rating,
-  };
-}
+import {
+  ACTION_LABEL,
+  useOrderDetailWorkflow,
+} from '@/components/orders/detail/useOrderDetailWorkflow';
 
 export default function OrderDetailPage() {
   const params = useParams<{ id: string }>();
-  const router = useRouter();
-  const { show } = useToast();
-  const { user, sessionLoading } = useSession();
   const orderId = params?.id ?? '';
-  const queryClient = useQueryClient();
+  const workflow = useOrderDetailWorkflow(orderId);
 
   const {
-    data: order,
+    router,
+    user,
+    sessionLoading,
     isLoading,
     isError,
     refetch,
-  } = useOrder(orderId);
-  const actions = useOrderActions(orderId);
-  const createConversation = useCreateConversation();
-  const { data: tickets } = useSupportTickets();
-  const { createTicket } = useSupportActions();
-  const { data: liveReturnCase } = useOrderReturnCase(orderId);
-  const authenticationQuery = useOrderAuthentication(orderId);
-  const authentication = authenticationQuery.data ?? null;
-
-  const liveListing = useListingIds(order ? [order.listingId] : EMPTY_IDS);
-  const liveSeller = useSellerSummary(
-    order && user ? (order.buyerId === user.id ? order.sellerId : order.buyerId) : null,
-  );
-
-  const { defaultAddress: fixtureDefaultAddress } = useSavedAddresses();
-  const { defaultMethod: fixtureDefaultMethod } = useSavedPaymentMethods();
-  const orderFacts = useOrderInstrumentFacts(
-    orderId,
-    !!user && !!order && order.buyerId === user.id,
-  );
-  const deliveryAddress =
-    DATA_MODE === 'live' ? orderFacts.deliveryAddress : fixtureDefaultAddress;
-  const paidWith =
-    DATA_MODE === 'live' ? orderFacts.paymentMethod : fixtureDefaultMethod;
-
-  const { data: parcelTrail } = useQuery({
-    queryKey: ['order', orderId, 'parcel-events'],
-    queryFn: ({ signal }) => commerceService.fetchParcelEvents(orderId, signal),
-    enabled: DATA_MODE === 'live' && !!orderId,
-  });
-
-  const { data: orderReview } = useQuery({
-    queryKey: ['order', orderId, 'review'],
-    queryFn: ({ signal }) => commerceService.fetchOrderReview(orderId, signal),
-    enabled: DATA_MODE === 'live' && !!orderId,
-    staleTime: 60_000,
-  });
-
-  const isBuyer = !!order && !!user && order.buyerId === user.id;
-  const role: OrderRole = isBuyer ? 'buyer' : 'seller';
-  const resolvedListing: Listing | null = order
-    ? DATA_MODE === 'live'
-      ? (liveListing.byId.get(order.listingId) ?? null)
-      : (listingById(order.listingId) ?? null)
-    : null;
-  const counterparty = toCounterparty(
-    DATA_MODE === 'live'
-      ? (liveSeller.data ?? null)
-      : (order ? userById(isBuyer ? order.sellerId : order.buyerId) : null),
-  );
-
-  const {
+    order,
+    isBuyer,
+    role,
+    resolvedListing,
+    counterparty,
+    liveSellerLoading,
+    deliveryAddress,
+    paidWith,
+    detail,
+    enrichment,
+    trackingEvents,
+    returnCase,
+    openTicket,
+    sellerReview,
+    orderReview,
+    authentication,
+    isAuthenticationError,
+    key,
+    isCompleted,
+    experience,
+    caps,
+    pendingExtension,
+    sheetActions,
+    contextualIssues,
+    protectionCoverage,
+    protectionLoading,
+    isProtectionError,
+    protectionOpen,
+    setProtectionOpen,
     actionsOpen,
     setActionsOpen,
     issueOpen,
@@ -199,12 +91,11 @@ export default function OrderDetailPage() {
     setReturnOpen,
     dispatchOpen,
     setDispatchOpen,
-    protectionOpen,
-    setProtectionOpen,
     confirmSheet,
     setConfirmSheet,
     busy,
     claimBusy,
+    actions,
     run,
     handleAction,
     handleIssueSelect,
@@ -212,22 +103,7 @@ export default function OrderDetailPage() {
     openCounterpartyThread,
     copyTracking,
     copyOrderNumber,
-  } = useOrderDetailActions({
-    order: order!,
-    counterparty,
-    actions,
-    createConversation,
-    createTicket,
-    show,
-    router,
-    queryClient,
-  });
-
-  const protectionQuery = useQuery({
-    queryKey: ['order', orderId, 'protection'],
-    queryFn: ({ signal }) => commerceService.fetchOrderProtection(orderId, signal),
-    enabled: DATA_MODE === 'live' && protectionOpen && !!order && isBuyer,
-  });
+  } = workflow;
 
   if (sessionLoading || isLoading) {
     return <OrderDetailSkeleton />;
@@ -269,178 +145,6 @@ export default function OrderDetailPage() {
     );
   }
 
-  const detail = commerceOrderDetailFor(order);
-  const enrichment = orderEnrichmentFor(order.id);
-  const trackingEvents =
-    DATA_MODE === 'live' ? (parcelTrail?.events ?? []) : (enrichment.trackingEvents ?? []);
-  const returnCase =
-    DATA_MODE === 'live' ? (liveReturnCase ?? null) : (enrichment.returnCase ?? null);
-  const openTicket = (tickets ?? []).find(
-    (t) => t.orderId === order.id && (t.status === 'open' || t.status === 'in_review'),
-  );
-
-  const key = normaliseOrderStatus(order.status);
-  const isCompleted = key === 'completed';
-  const caseOpen =
-    !!openTicket ||
-    (returnCase != null && returnCase.status !== 'closed' && returnCase.status !== 'refund_confirmed');
-  const hasOpenResolution =
-    DATA_MODE === 'live' ? order.hasOpenResolution === true || caseOpen : caseOpen;
-  const hasReview =
-    DATA_MODE === 'live'
-      ? (order.hasReview === true || (orderReview != null && orderReview.isAuto !== true))
-      : enrichment.hasReview === true;
-  const reviewIsAuto =
-    DATA_MODE === 'live' ? orderReview?.isAuto === true : enrichment.reviewIsAuto === true;
-
-  const sellerReview: OrderReviewView | null = !isBuyer
-    ? DATA_MODE === 'live'
-      ? orderReview
-        ? {
-            rating: orderReview.rating,
-            text: orderReview.comment,
-            isAuto: orderReview.isAuto,
-            createdAt: orderReview.createdAt,
-            sellerResponse: orderReview.sellerResponse ?? null,
-          }
-        : null
-      : enrichment.hasReview
-        ? {
-            rating: enrichment.reviewRating ?? 0,
-            text: enrichment.reviewText ?? null,
-            isAuto: enrichment.reviewIsAuto === true,
-            sellerResponse: enrichment.reviewResponse ?? null,
-          }
-        : null
-    : null;
-
-  const experience = resolveOrderExperience({
-    status: order.status,
-    role,
-    hasOpenResolution,
-    hasReview,
-    reviewIsAuto,
-    hasTracking: !!order.trackingNumber || trackingEvents.length > 0,
-    fulfilmentSnapshot: order.fulfilmentSnapshot ?? enrichment.fulfilmentSnapshot ?? null,
-    shipByDate: order.shipByDate ?? enrichment.shipByDate ?? null,
-    dispatchExtension:
-      enrichment.dispatchExtension !== undefined
-        ? enrichment.dispatchExtension
-        : (order.dispatchExtension ?? null),
-    inspectionDeadlineAt: order.inspectionDeadlineAt ?? enrichment.inspectionDeadlineAt ?? null,
-    estimatedDeliveryAt: order.estimatedDeliveryAt ?? enrichment.estimatedDeliveryAt ?? null,
-    estimatedReleaseAt: order.estimatedReleaseAt ?? enrichment.estimatedReleaseAt ?? null,
-  });
-  const caps = experience.capabilities;
-
-  const pendingExtension =
-    enrichment.dispatchExtension !== undefined
-      ? enrichment.dispatchExtension
-      : order.dispatchExtension;
-
-  const contextualIssues: IssueCategory[] =
-    key === 'delivery failed'
-      ? [{ id: 'delivery_failed', label: 'Delivery failed', description: 'The carrier could not deliver your parcel' }]
-      : key === 'returned'
-        ? [{ id: 'returned', label: 'Parcel returned', description: 'Your parcel was sent back to the seller' }]
-        : [];
-
-  const sheetActions: OrderActionItem[] = [
-    ...caps.secondaryActions.map((a) => ({
-      key: a,
-      label:
-        a === 'contact'
-          ? isBuyer
-            ? 'Message seller'
-            : 'Message buyer'
-          : ACTION_LABEL[a],
-      icon: ACTION_ICON[a] ?? 'forward',
-      variant: (a === 'cancel' ? 'destructive' : a === 'confirm_delivery' ? 'primary' : 'default') as
-        | 'default'
-        | 'primary'
-        | 'destructive',
-      onPress: () => handleAction(a),
-    })),
-    ...(isBuyer && (key === 'delivered' || key === 'completed') && !returnCase
-      ? [
-          {
-            key: 'request_return',
-            label: 'Request a return',
-            icon: 'repeat' as const,
-            variant: 'default' as const,
-            onPress: () => setReturnOpen(true),
-          },
-        ]
-      : []),
-    ...(isBuyer && key !== 'created' && !isCancelledStatus(order.status)
-      ? [
-          {
-            key: 'buyer_protection',
-            label: 'Buyer protection',
-            icon: 'shield' as const,
-            variant: 'default' as const,
-            onPress: () => setProtectionOpen(true),
-          },
-        ]
-      : []),
-    ...(!isBuyer && order.shippingLabelUrl
-      ? [
-          {
-            key: 'shipping_label',
-            label: 'Shipping label',
-            icon: 'document' as const,
-            variant: 'default' as const,
-            onPress: () =>
-              window.open(order.shippingLabelUrl!, '_blank', 'noopener,noreferrer'),
-          },
-        ]
-      : []),
-    {
-      key: 'view_listing',
-      label: 'View listing',
-      icon: 'tag',
-      variant: 'default',
-      onPress: () => router.push(`/item/${order.listingId}`),
-    },
-  ];
-
-  const protectionCoverage: ProtectionCoverage | null =
-    DATA_MODE === 'live'
-      ? protectionQuery.data
-        ? {
-            covered: protectionQuery.data.status === 'covered',
-            feeGbp: protectionQuery.data.feeGbpMinor / 100,
-            coverageCapGbp: protectionQuery.data.coverageAmountGbpMinor / 100,
-            eligibleUntil: protectionQuery.data.eligibleUntil,
-            claims: protectionQuery.data.claims.map((c) => ({
-              ticketId: c.ticketId,
-              label: c.topicLabel,
-              status: c.status,
-              createdAt: c.createdAt,
-            })),
-          }
-        : null
-      : {
-          covered: detail.protectionFee > 0,
-          feeGbp: detail.protectionFee,
-          coverageCapGbp: Math.min(order.totalPrice, 500),
-          eligibleUntil: order.deliveredAt
-            ? new Date(Date.parse(order.deliveredAt) + 30 * 86_400_000).toISOString()
-            : new Date(Date.parse(order.createdAt) + 60 * 86_400_000).toISOString(),
-          claims: (tickets ?? [])
-            .filter(
-              (t) =>
-                t.orderId === order.id &&
-                (t.topicId === 'order_issue' || t.topicId === 'refund'),
-            )
-            .map((t) => ({
-              ticketId: t.id,
-              label: t.topicLabel,
-              status: t.status,
-              createdAt: t.createdAt,
-            })),
-        };
-
   return (
     <div className="mx-auto max-w-[720px] px-4 py-8 sm:px-6 lg:max-w-[1100px]">
       <div className="flex items-center gap-2">
@@ -481,8 +185,8 @@ export default function OrderDetailPage() {
           <OrderPurchaseSummaryCard
             order={order}
             listing={resolvedListing}
-            detail={detail}
-            enrichment={enrichment}
+            detail={detail!}
+            enrichment={enrichment!}
             isBuyer={isBuyer}
             deliveryAddress={deliveryAddress}
             paidWith={paidWith}
@@ -491,14 +195,14 @@ export default function OrderDetailPage() {
 
           <OrderCounterpartyCard
             counterparty={counterparty}
-            isLoading={liveSeller.isLoading}
+            isLoading={liveSellerLoading}
             isBuyer={isBuyer}
             onMessage={openCounterpartyThread}
           />
 
           <OrderMiddleSections
             order={order}
-            detail={detail}
+            detail={detail!}
             isBuyer={isBuyer}
             statusKey={key}
             estimatedReleaseAt={experience.estimatedReleaseAt}
@@ -511,7 +215,7 @@ export default function OrderDetailPage() {
             canRespondExtension={caps.canRespondExtension}
             trackingEvents={trackingEvents}
             authentication={authentication}
-            isAuthenticationError={authenticationQuery.isError}
+            isAuthenticationError={isAuthenticationError}
             returnCase={returnCase}
             sellerReview={sellerReview}
             orderReviewId={orderReview?.id}
@@ -531,7 +235,7 @@ export default function OrderDetailPage() {
             isBuyer={isBuyer}
             paidWith={paidWith}
             deliveryAddress={deliveryAddress}
-            enrichment={enrichment}
+            enrichment={enrichment!}
             onCopyOrderNumber={copyOrderNumber}
           />
 
@@ -603,8 +307,8 @@ export default function OrderDetailPage() {
         protectionOpen={protectionOpen}
         setProtectionOpen={setProtectionOpen}
         protectionCoverage={protectionCoverage}
-        isProtectionLoading={DATA_MODE === 'live' && protectionQuery.isLoading}
-        isProtectionError={DATA_MODE === 'live' && protectionQuery.isError}
+        isProtectionLoading={protectionLoading}
+        isProtectionError={isProtectionError}
         isBuyer={isBuyer}
         claimBusy={claimBusy}
         onFileClaim={submitProtectionClaim}

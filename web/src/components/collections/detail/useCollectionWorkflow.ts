@@ -453,6 +453,9 @@ export function useCollectionWorkflow() {
     addItems,
     togglePrivacy,
     saveDetails,
+    show,
+    coverItemId,
+    setSelectedIds,
     setBoardCover,
     setBoardArchived,
   };
