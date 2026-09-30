@@ -19,6 +19,7 @@ import { DATA_MODE } from '@/lib/api/client';
 import * as commerceService from '@/lib/api/services/commerce';
 import * as listingsService from '@/lib/api/services/listings';
 import * as sellersService from '@/lib/api/services/sellers';
+export type { SellerTrustSummary } from '@/lib/api/services/sellers';
 import type { ListingQuestion } from '@/lib/contracts/domain';
 import { CURRENT_USER, LISTING_QA } from '@/lib/data/fixtures';
 import { OFFERS, cancelOffer, type CommerceOffer } from '@/lib/data/fixtures-commerce';

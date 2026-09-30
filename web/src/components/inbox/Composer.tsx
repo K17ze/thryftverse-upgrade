@@ -1,19 +1,14 @@
 'use client';
 
 /**
- * Composer — chat input bar. Auto-growing textarea inside a 20px pill,
- * photo attach that stages a local preview before sending (remove before
- * it goes out), quick-reply bolt picker, brand send button enabled with
- * text or a staged photo. A picked reply rides as a quoted bar above the
- * input (the mobile ReplyQuote grammar — brand edge, sender, one-line
- * preview) until × or Escape cancels it. Enter sends, Shift+Enter
- * newline; the send and attach controls disable while a send is in
- * flight — the optimistic bubble's clock receipt carries the honest
- * in-flight state.
+ * Composer — chat input bar orchestrator.
+ * Auto-growing textarea inside a 20px pill, photo / document attach,
+ * voice note recording with waveform preview, role-scoped quick-reply picker,
+ * quoted replies, and in-place message edit staging.
+ * Preserves optimistic send receipts, offline typing debounce, and safety scanners.
  */
 
 import { useCallback, useEffect, useRef, useState } from 'react';
-import Link from 'next/link';
 import type { SendChatMessageInput } from '@/lib/hooks/queries';
 import { DATA_MODE } from '@/lib/api/client';
 import { setTypingStatus } from '@/lib/api/services/chat';
@@ -22,111 +17,33 @@ import { IconButton } from '@/components/ui/IconButton';
 import { useToast } from '@/components/ui/Toast';
 import { useQuickRepliesData } from '@/lib/hooks/chat-queries';
 import { useHydrated } from '@/lib/store/useStore';
-import { ChatSafetyBanner } from './ChatSafetyBanner';
 import { detectComposerSafetyWarning, type ChatSafetyWarning } from './chatSafety';
 import { useChatDrafts } from './useChatDrafts';
+import { VoiceRecordingBar, waveformFor } from './composer/VoiceRecordingBar';
+import { StagedAttachmentPreview, type StagedAttachment } from './composer/StagedAttachmentPreview';
+import { QuickReplyMenu } from './composer/QuickReplyMenu';
+import { ComposerBanners, type ComposerReply } from './composer/ComposerBanners';
 
 const MAX_HEIGHT = 128;
 
-/** m:ss for the recording bar and the staged voice chip. */
-function formatElapsed(ms: number): string {
-  const total = Math.max(0, Math.round(ms / 1000));
-  return `${Math.floor(total / 60)}:${String(total % 60).padStart(2, '0')}`;
-}
-
-/**
- * Staged attachment — what the composer holds before send. The pick is a
- * local File + blob: preview; live mode uploads the File (presign → PUT →
- * finalize) and posts the canonical URI, fixture mode keeps the blob so
- * the thread renders the real bytes.
- */
-type StagedAttachment =
-  | { kind: 'image'; uri: string; file: File }
-  | { kind: 'document'; uri: string; file: File; name: string; mimeType: string }
-  | {
-      kind: 'voice';
-      uri: string;
-      file: File;
-      durationMs: number;
-      waveform?: number[];
-    };
-
-/**
- * Best-effort waveform — decodes the recorded blob and buckets ~36 peak
- * samples (the mobile voiceWaveform shape). Decode support varies by
- * browser/container, so failure honestly ships no waveform rather than a
- * fabricated one.
- */
-async function waveformFor(file: File): Promise<{ durationMs?: number; waveform?: number[] }> {
-  try {
-    const Ctx =
-      window.AudioContext ??
-      (window as { webkitAudioContext?: typeof AudioContext }).webkitAudioContext;
-    if (!Ctx) return {};
-    const ctx = new Ctx();
-    try {
-      const buf = await ctx.decodeAudioData(await file.arrayBuffer());
-      const data = buf.getChannelData(0);
-      const bars = 36;
-      const step = Math.max(1, Math.floor(data.length / bars));
-      const stride = Math.max(1, Math.floor(step / 48));
-      const peaks: number[] = [];
-      for (let i = 0; i < bars; i++) {
-        let peak = 0;
-        const from = i * step;
-        const to = Math.min(from + step, data.length);
-        for (let j = from; j < to; j += stride) {
-          peak = Math.max(peak, Math.abs(data[j]));
-        }
-        peaks.push(peak);
-      }
-      const max = Math.max(...peaks, 0.001);
-      return {
-        durationMs: Math.round(buf.duration * 1000),
-        waveform: peaks.map((v) => Math.round((v / max) * 100) / 100),
-      };
-    } finally {
-      void ctx.close();
-    }
-  } catch {
-    return {};
-  }
-}
-
-interface ComposerReply {
-  senderName: string;
-  text: string;
-}
-
-/**
- * Edit-stash entry — what the composer held when a new edit was staged.
- * A plain draft stores just its text; an in-progress edit stores the
- * message id, its original body (the edit bar's preview line) and the
- * in-progress replacement text, so leaving the newer edit resumes it.
- */
 type EditStashEntry =
   | { kind: 'draft'; text: string }
   | { kind: 'edit'; id: string; banner: string; text: string };
 
-interface ComposerProps {
+export interface ComposerProps {
   onSend: (input: SendChatMessageInput) => void;
   /** True while a send is in flight — controls disable, no double-send. */
   sending?: boolean;
   /** Staged reply target — renders the quoted compose bar until cleared. */
   replyTo?: ComposerReply | null;
   onCancelReply?: () => void;
-  /** Staged edit — the composer's edit mode (mobile composer edit
-   *  banner): prefills the textarea, shows an "Edit message" bar, and
-   *  routes submit to onEditSubmit until cancelled. */
+  /** Staged edit — the composer's edit mode: prefills the textarea and routes submit. */
   editTarget?: { id: string; text: string } | null;
   onEditSubmit?: (messageId: string, text: string) => void;
   onCancelEdit?: () => void;
-  /** Owning thread — the edit stash and any stash-resumed edit belong to
-   *  one conversation's messages, so they clear when the thread changes. */
+  /** Owning thread — clears stash on switch. */
   threadId?: string;
-  /** Marketplace seat of the viewer in this thread — picks the
-   *  role-scoped quick-reply list (native ChatComposer grammar). Null on
-   *  non-marketplace threads: no strip renders there. */
+  /** Marketplace seat of the viewer in this thread for role-scoped quick replies. */
   quickReplyRole?: 'buyer' | 'seller' | null;
 }
 
@@ -143,19 +60,12 @@ export function Composer({
 }: ComposerProps) {
   const toast = useToast();
   const [value, setValue] = useState('');
-  // Per-thread drafts — the mobile draftText grammar: text typed here is
-  // owned by this conversation; switching threads swaps the draft and
-  // the inbox row previews it as "Draft".
   const setDraft = useChatDrafts((s) => s.setDraft);
   const [staged, setStaged] = useState<StagedAttachment | null>(null);
-  const [repliesOpen, setRepliesOpen] = useState(false);
-  // The mobile useConversationSafety composer check — the draft scans on
-  // every change; dismissal sticks per draft but resets the moment the
-  // flagged text is gone so editing away and back re-warns.
   const [draftWarning, setDraftWarning] = useState<ChatSafetyWarning | null>(null);
   const [draftWarningDismissed, setDraftWarningDismissed] = useState(false);
-  // Voice capture — MediaRecorder + getUserMedia, feature-detected so the
-  // mic control honestly never renders where the browser can't record.
+
+  // Voice capture state & refs
   const [recording, setRecording] = useState(false);
   const [elapsedMs, setElapsedMs] = useState(0);
   const recorderRef = useRef<MediaRecorder | null>(null);
@@ -163,37 +73,27 @@ export function Composer({
   const recordChunksRef = useRef<Blob[]>([]);
   const recordStartRef = useRef(0);
   const recordCancelledRef = useRef(false);
+
+  const fileRef = useRef<HTMLInputElement>(null);
   const docFileRef = useRef<HTMLInputElement>(null);
-  // Declared before `canRecord` — the capability gate reads it.
+  const areaRef = useRef<HTMLTextAreaElement>(null);
+
   const hydrated = useHydrated();
   const canRecord =
     hydrated &&
     typeof MediaRecorder !== 'undefined' &&
     !!navigator.mediaDevices?.getUserMedia;
-  // An edit resumed from the stash — the parent's staging is already
-  // clear for it, so the composer tracks it locally. `text` here is the
-  // original body (the edit bar's preview), matching editTarget's shape.
+
   const [resumedEdit, setResumedEdit] = useState<{ id: string; text: string } | null>(null);
   const activeEdit = editTarget ?? resumedEdit;
-  const areaRef = useRef<HTMLTextAreaElement>(null);
-  const fileRef = useRef<HTMLInputElement>(null);
-  const repliesWrapRef = useRef<HTMLDivElement>(null);
-  const repliesBtnRef = useRef<HTMLButtonElement>(null);
-  // Quick replies come from the server when live (role-scoped, matching
-  // the manage page's writes); the persisted local store is the fixture/
-  // guest path only — never a fabricated synced list.
+
   const { replies } = useQuickRepliesData(quickReplyRole ?? undefined);
 
-  // ── Typing signal — the mobile useConversationComposer grammar. The
-  // edge is realtime-only (chat.typing.update fans out to the thread
-  // topic, nothing persists), so it fires purely on local transitions:
-  // start after a 1s debounce while the draft is non-empty, stop after
-  // 3s idle, on send, or when the draft clears. Live mode only — the
-  // fixture dataset has no endpoint. The endpoint is rate-limited
-  // (10/10s); one POST per transition stays far inside it.
+  // ── Typing status realtime broadcast ──────────────────────────────
   const typingOn = useRef(false);
   const typingStartTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
   const typingStopTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+
   const postTyping = useCallback(
     (on: boolean) => {
       if (!threadId || DATA_MODE !== 'live' || typingOn.current === on) return;
@@ -202,6 +102,7 @@ export function Composer({
     },
     [threadId],
   );
+
   const clearTypingTimers = useCallback(() => {
     if (typingStartTimer.current) {
       clearTimeout(typingStartTimer.current);
@@ -212,10 +113,12 @@ export function Composer({
       typingStopTimer.current = null;
     }
   }, []);
+
   const stopTypingNow = useCallback(() => {
     clearTypingTimers();
     postTyping(false);
   }, [clearTypingTimers, postTyping]);
+
   const noteKeystroke = useCallback(
     (next: string) => {
       if (!threadId || DATA_MODE !== 'live') return;
@@ -235,7 +138,6 @@ export function Composer({
           postTyping(false);
         }, 3000);
       } else {
-        // Draft cleared — no lingering "typing…" on the far side.
         if (typingStartTimer.current) {
           clearTimeout(typingStartTimer.current);
           typingStartTimer.current = null;
@@ -246,9 +148,6 @@ export function Composer({
     [threadId, postTyping],
   );
 
-  // Thread switch / unmount — a live "typing" must be stopped on the
-  // thread it belongs to before the composer moves on. The cleanup runs
-  // with the previous threadId, which is exactly the target of the stop.
   useEffect(() => {
     return () => {
       clearTypingTimers();
@@ -259,36 +158,7 @@ export function Composer({
     };
   }, [threadId, clearTypingTimers]);
 
-  useEffect(() => {
-    if (!repliesOpen) return;
-    const onDoc = (e: MouseEvent) => {
-      if (repliesWrapRef.current && !repliesWrapRef.current.contains(e.target as Node)) {
-        setRepliesOpen(false);
-      }
-    };
-    const onEsc = (e: KeyboardEvent) => {
-      if (e.key === 'Escape') {
-        // Focus goes back to the trigger — the menu Escape contract.
-        setRepliesOpen(false);
-        repliesBtnRef.current?.focus();
-      }
-    };
-    document.addEventListener('mousedown', onDoc);
-    document.addEventListener('keydown', onEsc);
-    // Menu grammar: focus moves into the menu on open (the FeedItemMenu
-    // pattern) so the keyboard sequence starts at the first reply.
-    repliesWrapRef.current
-      ?.querySelector<HTMLElement>('[role="menuitem"]')
-      ?.focus();
-    return () => {
-      document.removeEventListener('mousedown', onDoc);
-      document.removeEventListener('keydown', onEsc);
-    };
-  }, [repliesOpen]);
-
-  // Escape while recording cancels it — capture phase so it wins over
-  // the thread's Escape-to-deselect (an active recording is the
-  // innermost thing to unwind, same grammar as a staged reply).
+  // Voice recording Escape key listener
   useEffect(() => {
     if (!recording) return;
     const onKey = (e: KeyboardEvent) => {
@@ -302,8 +172,7 @@ export function Composer({
     return () => document.removeEventListener('keydown', onKey, true);
   }, [recording]);
 
-  // Recording elapsed clock — 4fps tick keeps the readout honest without
-  // re-rendering the composer per animation frame.
+  // Recording elapsed clock
   useEffect(() => {
     if (!recording) return;
     setElapsedMs(Date.now() - recordStartRef.current);
@@ -314,8 +183,7 @@ export function Composer({
     return () => clearInterval(id);
   }, [recording]);
 
-  // Unmount cleanup — a live recording must not outlive the composer
-  // (thread switch or navigation): stop the recorder, release the mic.
+  // Unmount voice cleanup
   useEffect(
     () => () => {
       recordCancelledRef.current = true;
@@ -329,16 +197,10 @@ export function Composer({
     [],
   );
 
-  // Picking a reply focuses the input — the quoted bar is the staging
-  // area; sending clears it via the parent.
   useEffect(() => {
     if (replyTo) areaRef.current?.focus();
   }, [replyTo]);
 
-  // Mount — restore this thread's stored draft (the thread-switch path
-  // above only runs on a prop change), then put the caret in the
-  // composer on desktop (Messenger web grammar; touch viewports skip it
-  // so no keyboard pops unprompted).
   const grow = useCallback(() => {
     const el = areaRef.current;
     if (!el) return;
@@ -346,25 +208,13 @@ export function Composer({
     el.style.height = `${Math.min(el.scrollHeight, MAX_HEIGHT)}px`;
   }, []);
 
-  // Entering edit mode prefills the textarea with the message body and
-  // focuses it; a staged photo is dropped (edits are text-only). The
-  // composer's prior contents are pushed onto a stash stack — a plain
-  // draft pushes { kind: 'draft' }, an in-progress edit pushes
-  // { kind: 'edit' } — so A → B → end resumes A's edit rather than
-  // silently replacing the stashed draft. The current draft is read
-  // through a ref so the effect deps stay honest.
+  // ── Edit staging & stack management ───────────────────────────────
   const editStash = useRef<EditStashEntry[]>([]);
   const stagedEditId = useRef<string | null>(null);
   const stagedEditBanner = useRef('');
   const valueRef = useRef(value);
   valueRef.current = value;
 
-  // Thread switch — the sanctioned derive-state-on-prop-change reset:
-  // stash entries and a resumed edit reference message ids from the
-  // conversation they came from; carrying them into a new thread would
-  // edit the wrong message, so the local edit state clears in render.
-  // The draft store read + grow/focus frames live in the effect below —
-  // a render can't own an external-store read or an uncancellable rAF.
   const stashThread = useRef(threadId);
   if (stashThread.current !== threadId) {
     stashThread.current = threadId;
@@ -374,11 +224,6 @@ export function Composer({
     if (resumedEdit) setResumedEdit(null);
   }
 
-  // Draft restore + thread switch — mount runs this once for the initial
-  // draft restore + desktop autofocus; a threadId change re-runs it with
-  // the new thread's stored draft ("draft stays with its conversation").
-  // Pending frame ids are tracked so a rapid switch or unmount cancels
-  // them instead of firing a stale frame into the next thread.
   const draftRafIds = useRef<number[]>([]);
   useEffect(() => {
     const raf = (fn: () => void) => {
@@ -395,9 +240,7 @@ export function Composer({
       setValue(nextDraft);
       raf(grow);
     }
-    // Desktop grammar — opening a thread puts the caret in the composer
-    // (Messenger web); touch viewports skip it so no keyboard pops.
-    if (window.matchMedia('(min-width: 768px)').matches) {
+    if (typeof window !== 'undefined' && window.matchMedia('(min-width: 768px)').matches) {
       raf(() => areaRef.current?.focus());
     }
     return () => {
@@ -419,8 +262,6 @@ export function Composer({
         }
       });
     if (activeEdit) {
-      // A fresh parent-staged edit (resumed edits short-circuit above —
-      // the pop already set stagedEditId to the resumed id).
       editStash.current.push(
         stagedEditId.current === null
           ? { kind: 'draft', text: valueRef.current }
@@ -438,9 +279,6 @@ export function Composer({
       focusComposer();
       return;
     }
-    // The active edit ended — pop the stash. An interrupted edit resumes
-    // composer-side (the parent's staging is already clear); a plain
-    // draft restores as text.
     stagedEditId.current = null;
     stagedEditBanner.current = '';
     const entry = editStash.current.pop();
@@ -453,30 +291,21 @@ export function Composer({
     } else {
       setResumedEdit(null);
       setValue(entry?.text ?? '');
-      // The restored draft re-asserts itself in the store — an edit
-      // staged over it never overwrote the draft slot.
       if (threadId) setDraft(threadId, entry?.text ?? '');
       requestAnimationFrame(grow);
     }
   }, [activeEdit, grow, threadId, setDraft]);
 
-  // × / Escape end the staged edit — a stash-resumed edit isn't in the
-  // parent's staging, so clearing it locally unwinds the stash the same
-  // way a parent-driven cancel does.
   const cancelEdit = () => {
     if (resumedEdit) setResumedEdit(null);
     onCancelEdit?.();
   };
 
+  // ── Submit message / edit ──────────────────────────────────────────
   const submit = () => {
     if (sending) return;
-    // The recipient's indicator clears the moment the message lands, not
-    // 3s later — stop the signal before the send path runs.
     stopTypingNow();
     const text = value.trim();
-    // Edit mode routes the submit to the edit write — an empty edit is a
-    // no-op (the server would reject it anyway). A resumed edit has no
-    // parent staging to clear, so it ends locally to pop the stash.
     if (activeEdit) {
       if (text) onEditSubmit?.(activeEdit.id, text);
       if (resumedEdit) setResumedEdit(null);
@@ -487,8 +316,6 @@ export function Composer({
       text: text || undefined,
       mediaUri: staged?.uri,
       mediaType: staged?.kind === 'image' ? 'image' : staged?.kind,
-      // The File rides along so live mode can upload the staged pick —
-      // a blob: URI alone means nothing to the server.
       file: staged?.file,
       documentName: staged?.kind === 'document' ? staged.name : undefined,
       documentMimeType:
@@ -500,7 +327,6 @@ export function Composer({
     setValue('');
     setStaged(null);
     if (threadId) setDraft(threadId, '');
-    // The draft is gone — the warning and its dismissal go with it.
     setDraftWarning(null);
     setDraftWarningDismissed(false);
     requestAnimationFrame(() => {
@@ -508,10 +334,7 @@ export function Composer({
     });
   };
 
-  const pickPhoto = () => {
-    fileRef.current?.click();
-  };
-
+  // ── Media pickers ──────────────────────────────────────────────────
   const onFile = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     e.target.value = '';
@@ -523,13 +346,6 @@ export function Composer({
     setStaged({ kind: 'image', uri: URL.createObjectURL(file), file });
   };
 
-  /**
-   * Document pick — the backend's 'document' message type carries
-   * documentName/documentMimeType in metadata alongside the uploaded
-   * mediaUri. No type allowlist beyond "not an image/video" — the staged
-   * chip shows exactly what will be sent (name + MIME), and the send
-   * fails honestly if the upload is rejected.
-   */
   const onDocFile = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     e.target.value = '';
@@ -546,10 +362,6 @@ export function Composer({
       mimeType: file.type || 'application/octet-stream',
     });
   };
-
-  // ── Voice capture — real MediaRecorder flow: record → stop stages a
-  // playable chip (the same preview-before-send grammar as a photo);
-  // cancel discards. ──────────────────────────────────────────────────
 
   const startRecording = async () => {
     if (recording || !canRecord) return;
@@ -596,7 +408,6 @@ export function Composer({
     if (cancelled || chunks.length === 0) return;
     const ext = mimeType.includes('mp4') ? 'm4a' : 'webm';
     const file = new File(chunks, `voice-note.${ext}`, { type: mimeType });
-    // Decoded duration is the accurate figure; the timer is the fallback.
     const decoded = await waveformFor(file);
     setStaged({
       kind: 'voice',
@@ -622,6 +433,17 @@ export function Composer({
     setStaged(null);
   };
 
+  const handleQuickReply = (msg: string) => {
+    setValue(msg);
+    setDraftWarning(detectComposerSafetyWarning(msg));
+    setDraftWarningDismissed(false);
+    noteKeystroke(msg);
+    requestAnimationFrame(() => {
+      grow();
+      areaRef.current?.focus();
+    });
+  };
+
   return (
     <form
       data-chat-composer
@@ -631,313 +453,133 @@ export function Composer({
       }}
       className="shrink-0 border-t border-border-subtle bg-background"
     >
-      {/* Readable column — the input tracks the message column on
-          desktop (ChatPanel's lg:max-w-3xl); the border stays full-width
-          pane chrome. */}
       <div className="mx-auto w-full lg:max-w-3xl">
-      {/* Edit staging — the mobile composer edit banner: same edge/sender/
-          preview grammar as the reply bar, Escape or × cancels. */}
-      {activeEdit ? (
-        <div className="flex items-stretch gap-2 px-3 pt-2.5 md:px-4">
-          <div className="flex min-w-0 flex-1 items-center overflow-hidden rounded-md border border-border bg-surface">
-            <span className="w-[3px] self-stretch rounded-sm bg-brand" aria-hidden />
-            <span className="min-w-0 flex-1 px-2.5 py-2">
-              <span className="block text-meta font-semibold text-brand">Edit message</span>
-              <span className="clamp-1 block text-caption text-text-secondary">
-                {activeEdit.text}
-              </span>
-            </span>
-          </div>
-          <IconButton
-            name="close"
-            size={16}
-            aria-label="Cancel edit"
-            onClick={cancelEdit}
-            disabled={sending}
-          />
-        </div>
-      ) : null}
-      {/* Quoted reply — the mobile ReplyQuote grammar: brand edge, sender
-          name, one-line preview, × dismisses (Escape does the same from
-          the input). */}
-      {!activeEdit && replyTo ? (
-        <div className="flex items-stretch gap-2 px-3 pt-2.5 md:px-4">
-          <div className="flex min-w-0 flex-1 items-center overflow-hidden rounded-md border border-border bg-surface">
-            <span className="w-[3px] self-stretch rounded-sm bg-brand" aria-hidden />
-            <span className="min-w-0 flex-1 px-2.5 py-2">
-              <span className="block text-meta font-semibold text-brand">
-                {replyTo.senderName}
-              </span>
-              <span className="clamp-1 block text-caption text-text-secondary">
-                {replyTo.text}
-              </span>
-            </span>
-          </div>
-          <IconButton
-            name="close"
-            size={16}
-            aria-label="Cancel reply"
-            onClick={() => onCancelReply?.()}
-            disabled={sending}
-          />
-        </div>
-      ) : null}
-      {/* Staged attachment — WhatsApp's preview-before-send. The pick is a
-          local blob URL: images render a thumb, documents a filename chip,
-          voice a playable clip — each honest about what will be sent. */}
-      {staged ? (
-        <div className="flex items-center gap-2 px-3 pt-2.5 md:px-4">
-          {staged.kind === 'image' ? (
-            <div className="relative h-14 w-14 shrink-0 overflow-hidden rounded-md">
-              {/* eslint-disable-next-line @next/next/no-img-element -- local pick, not optimizable */}
-              <img src={staged.uri} alt="Photo ready to send" className="h-full w-full object-cover" />
-            </div>
-          ) : staged.kind === 'document' ? (
-            <div className="flex min-w-0 items-center gap-2.5 rounded-md border border-border bg-surface px-2.5 py-2">
-              <Icon name="document" size={20} className="shrink-0 text-brand" />
-              <span className="min-w-0">
-                <span className="clamp-1 block max-w-[220px] text-body font-medium text-text-primary">
-                  {staged.name}
-                </span>
-                <span className="clamp-1 block text-meta text-text-muted">
-                  {staged.mimeType}
-                </span>
-              </span>
-            </div>
-          ) : (
-            <div className="flex min-w-0 items-center gap-2.5 rounded-md border border-border bg-surface px-2.5 py-2">
-              <Icon name="mic" size={18} className="shrink-0 text-brand" />
-              <span className="min-w-0">
-                <span className="block text-body font-medium text-text-primary">
-                  Voice note
-                </span>
-                <span className="tnum block text-meta text-text-muted">
-                  {formatElapsed(staged.durationMs)}
-                </span>
-              </span>
-              <audio
-                src={staged.uri}
-                controls
-                preload="metadata"
-                className="h-9 max-w-[200px]"
-              />
-            </div>
-          )}
-          <IconButton
-            name="close"
-            size={16}
-            aria-label={`Remove ${staged.kind}`}
-            className="-my-1 shrink-0"
-            onClick={clearStaged}
-          />
-        </div>
-      ) : null}
-      {/* Draft safety warning — the mobile inline composer strip: danger/
-          caution while the draft carries off-platform-payment or urgency
-          grammar. Dismissible, non-blocking — send always proceeds (the
-          mobile semantics: warn, never prevent). */}
-      {draftWarning && !draftWarningDismissed ? (
-        <div className="px-3 pt-2.5 md:px-4">
-          <ChatSafetyBanner
-            warning={draftWarning}
-            onDismiss={() => setDraftWarningDismissed(true)}
-          />
-        </div>
-      ) : null}
-      {recording ? (
-        /* Recording bar — swaps in for the input row while the mic is
-           live: pulsing dot, elapsed readout, cancel / stop-and-stage. */
-        <div className="flex items-center gap-1 px-2 py-2 md:px-3" role="status">
-          <IconButton
-            name="close"
-            aria-label="Discard voice recording"
-            onClick={cancelRecording}
-          />
-          <div className="flex min-w-0 flex-1 items-center gap-2.5 rounded-chat bg-surface-alt px-4 py-1.5">
-            <span
-              aria-hidden="true"
-              className="h-2.5 w-2.5 shrink-0 animate-pulse rounded-full bg-danger"
-            />
-            <span className="tnum text-body font-medium text-text-primary">
-              {formatElapsed(elapsedMs)}
-            </span>
-            <span className="clamp-1 text-meta text-text-muted">
-              Recording — stop to preview before sending
-            </span>
-          </div>
-          <button
-            type="button"
-            onClick={stopRecording}
-            aria-label="Stop recording"
-            className="pressable -my-0.5 flex h-11 w-11 shrink-0 items-center justify-center"
-          >
-            <span className="flex h-10 w-10 items-center justify-center rounded-full bg-brand text-text-inverse">
-              <Icon name="stop" size={18} />
-            </span>
-          </button>
-        </div>
-      ) : (
-      <div className="flex items-end gap-1 px-2 py-2 md:px-3">
-        <input
-          ref={fileRef}
-          type="file"
-          accept="image/*"
-          className="hidden"
-          aria-hidden
-          tabIndex={-1}
-          onChange={onFile}
+        <ComposerBanners
+          activeEdit={activeEdit}
+          onCancelEdit={cancelEdit}
+          replyTo={replyTo}
+          onCancelReply={onCancelReply}
+          warning={draftWarning}
+          warningDismissed={draftWarningDismissed}
+          onDismissWarning={() => setDraftWarningDismissed(true)}
+          disabled={sending}
         />
-        <input
-          ref={docFileRef}
-          type="file"
-          accept=".pdf,.doc,.docx,.txt,.csv,.xls,.xlsx,.ppt,.pptx,.md,.rtf,.zip,application/pdf,application/msword,application/vnd.openxmlformats-officedocument.wordprocessingml.document,text/plain,text/csv,application/zip"
-          className="hidden"
-          aria-hidden
-          tabIndex={-1}
-          onChange={onDocFile}
-        />
-        {/* Attachment + quick-reply controls are send-path — edits are
-            text-only so all of them hide while an edit is staged. The mic
-            renders only where MediaRecorder + getUserMedia actually exist. */}
-        {!activeEdit ? (
-          <>
-            <IconButton
-              name="image"
-              aria-label="Attach a photo"
-              onClick={pickPhoto}
-              disabled={sending}
+
+        <StagedAttachmentPreview staged={staged} onClear={clearStaged} />
+
+        {recording ? (
+          <VoiceRecordingBar
+            elapsedMs={elapsedMs}
+            onCancel={cancelRecording}
+            onStop={stopRecording}
+          />
+        ) : (
+          <div className="flex items-end gap-1 px-2 py-2 md:px-3">
+            <input
+              ref={fileRef}
+              type="file"
+              accept="image/*"
+              className="hidden"
+              aria-hidden
+              tabIndex={-1}
+              onChange={onFile}
             />
-            <IconButton
-              name="document"
-              aria-label="Attach a document"
-              onClick={() => docFileRef.current?.click()}
-              disabled={sending}
+            <input
+              ref={docFileRef}
+              type="file"
+              accept=".pdf,.doc,.docx,.txt,.csv,.xls,.xlsx,.ppt,.pptx,.md,.rtf,.zip,application/pdf,application/msword,application/vnd.openxmlformats-officedocument.wordprocessingml.document,text/plain,text/csv,application/zip"
+              className="hidden"
+              aria-hidden
+              tabIndex={-1}
+              onChange={onDocFile}
             />
-            {canRecord ? (
-              <IconButton
-                name="mic"
-                aria-label="Record a voice note"
-                onClick={() => void startRecording()}
-                disabled={sending}
-              />
+
+            {!activeEdit ? (
+              <>
+                <IconButton
+                  name="image"
+                  aria-label="Attach a photo"
+                  onClick={() => fileRef.current?.click()}
+                  disabled={sending}
+                />
+                <IconButton
+                  name="document"
+                  aria-label="Attach a document"
+                  onClick={() => docFileRef.current?.click()}
+                  disabled={sending}
+                />
+                {canRecord ? (
+                  <IconButton
+                    name="mic"
+                    aria-label="Record a voice note"
+                    onClick={() => void startRecording()}
+                    disabled={sending}
+                  />
+                ) : null}
+
+                {hydrated && quickReplyRole ? (
+                  <QuickReplyMenu
+                    replies={replies}
+                    disabled={sending}
+                    onSelect={handleQuickReply}
+                  />
+                ) : null}
+              </>
             ) : null}
-            {/* Native grammar: the strip only exists on marketplace
-                threads (a listing context resolves a buyer/seller seat).
-                The menu mounts even when the list is empty so the
-                "Manage quick replies" affordance stays reachable. */}
-            {hydrated && quickReplyRole ? (
-          <div ref={repliesWrapRef} className="relative shrink-0">
-            <IconButton
-              ref={repliesBtnRef}
-              name="zap"
-              aria-label="Quick replies"
-              aria-expanded={repliesOpen}
-              aria-haspopup="menu"
-              onClick={() => setRepliesOpen((o) => !o)}
-              disabled={sending}
-            />
-            {repliesOpen ? (
-              <div
-                role="menu"
-                onKeyDown={(e) => {
-                  if (e.key !== 'Tab') return;
-                  // Menu grammar (the FeedItemMenu fix): close, return
-                  // focus to the trigger, then let the browser's default
-                  // tab step continue from it — an open menu left past its
-                  // Tab position strands the tab order.
-                  setRepliesOpen(false);
-                  repliesBtnRef.current?.focus();
+
+            <div className="min-w-0 flex-1 rounded-chat border border-transparent bg-surface-alt px-4 py-1.5 transition-colors focus-within:border-border">
+              <textarea
+                ref={areaRef}
+                rows={1}
+                value={value}
+                onChange={(e) => {
+                  setValue(e.target.value);
+                  if (!activeEdit && threadId) setDraft(threadId, e.target.value);
+                  const w = detectComposerSafetyWarning(e.target.value);
+                  setDraftWarning(w);
+                  if (!w) setDraftWarningDismissed(false);
+                  noteKeystroke(e.target.value);
+                  grow();
                 }}
-                className="absolute bottom-full left-0 mb-2 w-72 overflow-hidden rounded-lg border border-border bg-surface py-1 shadow-floating"
-              >
-                <p className="px-3.5 pb-1 pt-2 text-micro font-semibold uppercase tracking-[0.08em] text-text-muted">
-                  Quick replies
-                </p>
-                {replies.map((r) => (
-                  <button
-                    key={r.id}
-                    type="button"
-                    role="menuitem"
-                    onClick={() => {
-                      setValue(r.message);
-                      // Programmatic drafts bypass onChange — re-scan so a
-                      // saved template carrying risky grammar still warns.
-                      setDraftWarning(detectComposerSafetyWarning(r.message));
-                      setDraftWarningDismissed(false);
-                      noteKeystroke(r.message);
-                      setRepliesOpen(false);
-                      requestAnimationFrame(() => {
-                        grow();
-                        areaRef.current?.focus();
-                      });
-                    }}
-                    className="pressable block w-full px-3.5 py-2.5 text-left hover:bg-row-pressed"
-                  >
-                    <span className="block text-body font-semibold text-text-primary">{r.title}</span>
-                    <span className="clamp-1 mt-0.5 block text-meta text-text-muted">{r.message}</span>
-                  </button>
-                ))}
-                <Link
-                  href="/seller-hub/quick-replies"
-                  className="block border-t border-border-subtle px-3.5 py-2.5 text-body font-semibold text-text-primary hover:bg-row-pressed"
-                >
-                  Manage quick replies
-                </Link>
-              </div>
-            ) : null}
-          </div>
-            ) : null}
-          </>
-        ) : null}
-        <div className="min-w-0 flex-1 rounded-chat border border-transparent bg-surface-alt px-4 py-1.5 transition-colors focus-within:border-border">
-          <textarea
-            ref={areaRef}
-            rows={1}
-            value={value}
-            onChange={(e) => {
-              setValue(e.target.value);
-              // Draft persistence — plain typing only; an in-progress
-              // edit's text is not the conversation's draft.
-              if (!activeEdit && threadId) setDraft(threadId, e.target.value);
-              // Mobile useConversationSafety: re-scan on every change; a
-              // draft that no longer matches clears the warning AND the
-              // dismissal, so re-typing risky text warns again.
-              const w = detectComposerSafetyWarning(e.target.value);
-              setDraftWarning(w);
-              if (!w) setDraftWarningDismissed(false);
-              noteKeystroke(e.target.value);
-              grow();
-            }}
-            onKeyDown={(e) => {
-              if (e.key === 'Enter' && !e.shiftKey) {
-                e.preventDefault();
-                submit();
-              } else if (e.key === 'Escape' && activeEdit) {
-                // Escape cancels the staged edit before the staged reply.
-                e.preventDefault();
-                cancelEdit();
-              } else if (e.key === 'Escape' && replyTo) {
-                e.preventDefault();
-                onCancelReply?.();
+                onKeyDown={(e) => {
+                  if (e.key === 'Enter' && !e.shiftKey) {
+                    e.preventDefault();
+                    submit();
+                  } else if (e.key === 'Escape' && activeEdit) {
+                    e.preventDefault();
+                    cancelEdit();
+                  } else if (e.key === 'Escape' && replyTo) {
+                    e.preventDefault();
+                    onCancelReply?.();
+                  }
+                }}
+                placeholder={activeEdit ? 'Edit message…' : 'Message…'}
+                aria-label={activeEdit ? 'Edit message' : 'Message'}
+                className="max-h-32 w-full resize-none bg-transparent py-1.5 text-body text-input-text placeholder:text-text-muted focus:outline-none"
+              />
+            </div>
+
+            <button
+              type="submit"
+              disabled={sending || (!value.trim() && !staged)}
+              aria-label={
+                sending
+                  ? 'Sending message'
+                  : activeEdit
+                    ? 'Save edit'
+                    : 'Send message'
               }
-            }}
-            placeholder={activeEdit ? 'Edit message…' : 'Message…'}
-            aria-label={activeEdit ? 'Edit message' : 'Message'}
-            className="max-h-32 w-full resize-none bg-transparent py-1.5 text-body text-input-text placeholder:text-text-muted focus:outline-none"
-          />
-        </div>
-        <button
-          type="submit"
-          disabled={sending || (!value.trim() && !staged)}
-          aria-label={sending ? 'Sending message' : activeEdit ? 'Save edit' : 'Send message'}
-          className="pressable -my-0.5 flex h-11 w-11 shrink-0 items-center justify-center disabled:pointer-events-none disabled:opacity-40"
-        >
-          <span className="flex h-10 w-10 items-center justify-center rounded-full bg-brand text-text-inverse">
-            <Icon name={sending ? 'clock' : activeEdit ? 'check' : 'send'} size={18} />
-          </span>
-        </button>
-      </div>
-      )}
+              className="pressable -my-0.5 flex h-11 w-11 shrink-0 items-center justify-center disabled:pointer-events-none disabled:opacity-40"
+            >
+              <span className="flex h-10 w-10 items-center justify-center rounded-full bg-brand text-text-inverse">
+                <Icon
+                  name={sending ? 'clock' : activeEdit ? 'check' : 'send'}
+                  size={18}
+                />
+              </span>
+            </button>
+          </div>
+        )}
       </div>
     </form>
   );

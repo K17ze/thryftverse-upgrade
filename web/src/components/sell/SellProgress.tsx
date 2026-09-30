@@ -6,11 +6,41 @@
  */
 
 import { Icon } from '@/components/ui/Icon';
+import {
+  DESCRIPTION_MIN,
+  isSizeRequiredCategory,
+  parsePriceInput,
+  type SellDraft,
+} from './constants';
 
 export interface SellStep {
   id: string;
   label: string;
   done: boolean;
+}
+
+export function computeSellSteps(draft: SellDraft): SellStep[] {
+  const price = parsePriceInput(draft.price);
+  return [
+    { id: 'sell-photos', label: 'Photos', done: draft.photos.length > 0 },
+    {
+      id: 'sell-details',
+      label: 'Details',
+      done:
+        draft.title.trim().length >= 3 &&
+        !!draft.category &&
+        !!draft.condition &&
+        !(isSizeRequiredCategory(draft.category, draft.subcategory) && !draft.size) &&
+        draft.description.trim().length >= DESCRIPTION_MIN,
+    },
+    { id: 'sell-price', label: 'Price', done: price != null },
+    {
+      id: 'sell-postage',
+      label: 'Postage',
+      done: !!draft.shippingMethod && !!draft.shippingPayer,
+    },
+    { id: 'sell-review', label: 'Review', done: false },
+  ];
 }
 
 interface SellProgressProps {

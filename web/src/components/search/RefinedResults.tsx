@@ -41,19 +41,12 @@ import { FilterSheet } from '@/components/filters/FilterSheet';
 import { useMediaQuery } from '@/components/filters/useMediaQuery';
 import { useResultColumns } from '@/components/filters/useResultColumns';
 import { useLoadMoreSentinel } from '@/lib/hooks/useLoadMoreSentinel';
-import { COLOR_VOCAB } from '@/components/visualsearch/visualSearchTypes';
 import { relatedSearches } from './searchMatch';
 import { RefinementRail } from './RefinementRail';
 import { SortDropdown } from './SortDropdown';
+import { ActiveFilterChips } from './ActiveFilterChips';
+import { useResultsChips } from './useResultsChips';
 import type { StateCopyDomain } from '@/lib/state-copy';
-
-interface ResultsChip {
-  key: string;
-  label: string;
-  /** Colour chips carry the vocabulary swatch. */
-  swatch?: string;
-  onRemove: () => void;
-}
 
 interface RefinedResultsProps {
   listings: Listing[];
@@ -102,11 +95,6 @@ interface RefinedResultsProps {
   emptyActionLabel?: string;
   onEmptyAction?: () => void;
 }
-
-/** Swatch lookup for colour chips — kept off the render path. */
-const COLOUR_SWATCHES = new Map(
-  COLOR_VOCAB.map((c) => [c.name, `rgb(${c.rgb[0]}, ${c.rgb[1]}, ${c.rgb[2]})`]),
-);
 
 export function RefinedResults({
   listings,
@@ -187,75 +175,7 @@ export function RefinedResults({
     [filtered, query],
   );
 
-  /**
-   * One removable chip per active facet value — every multi-select
-   * dimension fans out, price collapses to a single chip. Removing
-   * reflows the grid immediately, matching the sheet's live apply.
-   */
-  const chips = useMemo<ResultsChip[]>(() => {
-    const set = (next: Partial<ListingFilters>) =>
-      onFiltersChange({ ...filters, ...next });
-    const dropValue = (list: string[], v: string) =>
-      list.filter((x) => x.toLowerCase() !== v.toLowerCase());
-    const out: ResultsChip[] = filters.conditions.map((c) => ({
-      key: `condition:${c}`,
-      label: c,
-      onRemove: () =>
-        set({ conditions: filters.conditions.filter((x) => x !== c) }),
-    }));
-    if (filters.priceMin != null || filters.priceMax != null) {
-      const label =
-        filters.priceMin != null && filters.priceMax != null
-          ? `£${filters.priceMin}–£${filters.priceMax}`
-          : filters.priceMax != null
-            ? `Under £${filters.priceMax}`
-            : `£${filters.priceMin}+`;
-      out.push({
-        key: 'price',
-        label,
-        onRemove: () => set({ priceMin: null, priceMax: null }),
-      });
-    }
-    for (const slug of filters.categories) {
-      out.push({
-        key: `category:${slug}`,
-        label: categoryName(slug),
-        onRemove: () => set({ categories: dropValue(filters.categories, slug) }),
-      });
-    }
-    for (const s of filters.sizes) {
-      if (!s.trim()) continue;
-      out.push({
-        key: `size:${s.toLowerCase()}`,
-        label: `Size ${s.trim()}`,
-        onRemove: () => set({ sizes: dropValue(filters.sizes, s) }),
-      });
-    }
-    for (const b of filters.brands) {
-      if (!b.trim()) continue;
-      out.push({
-        key: `brand:${b.toLowerCase()}`,
-        label: b.trim(),
-        onRemove: () => set({ brands: dropValue(filters.brands, b) }),
-      });
-    }
-    for (const c of filters.colours) {
-      out.push({
-        key: `colour:${c.toLowerCase()}`,
-        label: c,
-        swatch: COLOUR_SWATCHES.get(c) ?? undefined,
-        onRemove: () => set({ colours: dropValue(filters.colours, c) }),
-      });
-    }
-    if (filters.includeSold) {
-      out.push({
-        key: 'sold',
-        label: 'Sold items',
-        onRemove: () => set({ includeSold: false }),
-      });
-    }
-    return out;
-  }, [filters, onFiltersChange, categoryName]);
+  const chips = useResultsChips({ filters, onFiltersChange, categoryName });
 
   const rail = (
     <RefinementRail
@@ -314,43 +234,10 @@ export function RefinedResults({
             </div>
           </div>
 
-          {chips.length > 0 ? (
-            <div
-              className="no-scrollbar -mt-0.5 flex items-center gap-1.5 overflow-x-auto px-4 pb-2.5 sm:px-6"
-              role="list"
-              aria-label="Active filters"
-            >
-              {chips.map((chip) => (
-                <div key={chip.key} role="listitem" className="shrink-0">
-                  <button
-                    type="button"
-                    onClick={chip.onRemove}
-                    aria-label={`Remove filter: ${chip.label}`}
-                    className="pressable inline-flex h-8 items-center gap-1 rounded-full bg-surface-alt pl-3 pr-2 text-caption font-semibold text-text-primary hover:bg-surface-raised"
-                  >
-                    {chip.swatch ? (
-                      <span
-                        aria-hidden
-                        className="h-3 w-3 shrink-0 rounded-full border border-border-subtle"
-                        style={{ backgroundColor: chip.swatch }}
-                      />
-                    ) : null}
-                    <span className="max-w-44 truncate">{chip.label}</span>
-                    <Icon name="close" size={13} className="shrink-0 text-text-muted" />
-                  </button>
-                </div>
-              ))}
-              <div role="listitem" className="shrink-0">
-                <button
-                  type="button"
-                  onClick={() => onFiltersChange(EMPTY_FILTERS)}
-                  className="pressable h-8 px-1 text-caption font-semibold text-text-secondary hover:text-text-primary"
-                >
-                  Clear all
-                </button>
-              </div>
-            </div>
-          ) : null}
+          <ActiveFilterChips
+            chips={chips}
+            onClearAll={() => onFiltersChange(EMPTY_FILTERS)}
+          />
         </div>
 
         <div className="pt-3">

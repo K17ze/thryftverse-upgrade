@@ -11,7 +11,7 @@
  * keeps the sheet/toolbar pattern.
  */
 
-import { useEffect, useMemo, useState } from 'react';
+import { useMemo, useState } from 'react';
 import { Icon } from '@/components/ui/Icon';
 import { useCategoryDirectory } from './useCategoryDirectory';
 import type { Listing, ListingCondition } from '@/lib/contracts/domain';
@@ -24,11 +24,10 @@ import {
   soldFacetCount,
   type FacetOption,
 } from './facetCounts';
+import { FacetOptionRow } from './FacetOptionRow';
+import { PriceFacetGroup } from './PriceFacetGroup';
 
 const MAX_VISIBLE = 6;
-
-const FIELD =
-  'h-10 w-full rounded-lg border border-border bg-input pl-7 pr-2.5 text-body text-input-text placeholder:text-text-muted focus:border-text-muted focus:outline-none';
 
 interface RefinementRailProps {
   /** The current result set — facet counts derive from this, unfiltered. */
@@ -59,124 +58,7 @@ function toggleValue(list: string[], value: string): string[] {
     : [...list, value];
 }
 
-function OptionRow({
-  option,
-  selected,
-  onToggle,
-}: {
-  option: FacetOption;
-  selected: boolean;
-  onToggle: () => void;
-}) {
-  return (
-    <li>
-      <button
-        type="button"
-        role="checkbox"
-        aria-checked={selected}
-        onClick={onToggle}
-        className="pressable flex h-11 w-full items-center gap-2.5 text-left"
-      >
-        <span
-          className={`flex h-[18px] w-[18px] shrink-0 items-center justify-center rounded-sm border ${
-            selected
-              ? 'border-brand bg-brand text-text-inverse'
-              : 'border-border bg-surface'
-          }`}
-        >
-          {selected ? <Icon name="check" size={12} /> : null}
-        </span>
-        {option.swatch ? (
-          <span
-            aria-hidden
-            className="h-3.5 w-3.5 shrink-0 rounded-full border border-border-subtle"
-            style={{ backgroundColor: option.swatch }}
-          />
-        ) : null}
-        <span
-          className={`min-w-0 flex-1 truncate text-body ${
-            selected ? 'font-medium text-text-primary' : 'text-text-secondary'
-          }`}
-        >
-          {option.label}
-        </span>
-        <span className="tnum shrink-0 text-caption text-text-muted">
-          {option.count}
-        </span>
-      </button>
-    </li>
-  );
-}
 
-/** Price bounds — draft inputs commit on Enter/blur, sheet-parity live feel. */
-function PriceGroup({
-  filters,
-  onChange,
-}: Pick<RefinementRailProps, 'filters' | 'onChange'>) {
-  const [min, setMin] = useState(filters.priceMin?.toString() ?? '');
-  const [max, setMax] = useState(filters.priceMax?.toString() ?? '');
-
-  useEffect(() => {
-    setMin(filters.priceMin?.toString() ?? '');
-    setMax(filters.priceMax?.toString() ?? '');
-  }, [filters.priceMin, filters.priceMax]);
-
-  const commit = () => {
-    const parse = (raw: string): number | null => {
-      if (raw.trim() === '') return null;
-      const n = Number(raw);
-      return Number.isNaN(n) || n < 0 ? null : n;
-    };
-    const nextMin = parse(min);
-    const nextMax = parse(max);
-    if (nextMin === filters.priceMin && nextMax === filters.priceMax) return;
-    onChange({ ...filters, priceMin: nextMin, priceMax: nextMax });
-  };
-
-  return (
-    <div className="flex items-center gap-2 pb-4 pt-1.5">
-      <div className="relative flex-1">
-        <span
-          className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-body text-text-muted"
-          aria-hidden
-        >
-          £
-        </span>
-        <input
-          inputMode="decimal"
-          value={min}
-          onChange={(e) => setMin(e.target.value)}
-          onBlur={commit}
-          onKeyDown={(e) => e.key === 'Enter' && commit()}
-          placeholder="Min"
-          aria-label="Minimum price"
-          className={FIELD}
-        />
-      </div>
-      <span className="text-text-muted" aria-hidden>
-        –
-      </span>
-      <div className="relative flex-1">
-        <span
-          className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-body text-text-muted"
-          aria-hidden
-        >
-          £
-        </span>
-        <input
-          inputMode="decimal"
-          value={max}
-          onChange={(e) => setMax(e.target.value)}
-          onBlur={commit}
-          onKeyDown={(e) => e.key === 'Enter' && commit()}
-          placeholder="Max"
-          aria-label="Maximum price"
-          className={FIELD}
-        />
-      </div>
-    </div>
-  );
-}
 
 export function RefinementRail({
   listings,
@@ -377,7 +259,7 @@ export function RefinementRail({
                 <>
                   <ul className="mt-0.5">
                     {visible.map((o) => (
-                      <OptionRow
+                      <FacetOptionRow
                         key={o.value}
                         option={o}
                         selected={group.isSelected(o)}
@@ -412,7 +294,7 @@ export function RefinementRail({
         <h3 className="text-label text-text-muted">
           Price
         </h3>
-        <PriceGroup filters={filters} onChange={onChange} />
+        <PriceFacetGroup filters={filters} onChange={onChange} />
       </div>
     </div>
   );
