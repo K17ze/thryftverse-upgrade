@@ -55,6 +55,8 @@ export function groupByDay(messages: Message[]): MessageGroup[] {
   return groups;
 }
 
+// Live offers render as cards; an 'offer_declined' record is commerce prose
+// and falls through to the text bubble, same as the row preview.
 export function isOffer(m: Message): boolean {
   return (
     m.type === 'offer' ||

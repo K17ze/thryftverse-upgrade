@@ -107,6 +107,8 @@ export function ChatMessageList({
           ) : null}
           {g.messages.map((m, i) => {
             const mine = isMine(m);
+            // Same-sender run — system rows and tombstones break the
+            // cluster; the divider sits above the anchored message.
             const prev = g.messages[i - 1];
             const next = g.messages[i + 1];
             const hasPrev = !!prev && sameRun(prev, m);
@@ -121,11 +123,18 @@ export function ChatMessageList({
                     : 'middle';
             const tight = cluster === 'middle' || cluster === 'last';
 
+            // Cluster-first incoming group message gets a sender label —
+            // the same name resolution the mobile GroupChatScreen uses.
             const senderLabel =
               isGroup && !mine && !isSystem(m) && !hasPrev
                 ? senderLabelFor(conversation, m.senderId)
                 : undefined;
 
+            // Incoming group messages carry the sender's avatar on the
+            // run's LAST bubble (single or last), with an indent
+            // spacer on the earlier ones — the mobile ChatMessageItem
+            // avatar-recurrence rule, so consecutive senders are
+            // scannable without a label on every row.
             const groupIncoming =
               isGroup && !mine && !isSystem(m) && !m.isDeleted;
             const senderAvatar =
@@ -134,12 +143,21 @@ export function ChatMessageList({
                 : undefined;
 
             const canReply = replyable(m);
+            // The actions menu opens on any persisted message, plus
+            // the two non-persisted edge cases the mobile grammar
+            // covers: a failed pending send (Retry / Discard — the
+            // only actions a message that never landed can offer) and
+            // a saved tombstone (Unsave — the backend still permits
+            // retracting a save on a deleted-for-everyone row).
             const failed = failedIds.has(m.id);
             const menuable =
               actionable(m) || failed || (m.isDeleted === true && isSaved(m));
 
             const handleContextMenu = (e: React.MouseEvent) => {
               if (!menuable) return;
+              // Touch long-press / right-click opens the
+              // actions menu — the web analogue of the mobile
+              // long-press sheet.
               e.preventDefault();
               onOpenMenu(e.clientX, e.clientY, m);
             };
@@ -180,6 +198,12 @@ export function ChatMessageList({
                       />
                     ) : isOffer(m) ? (
                       (() => {
+                        // The standing record drives the card — effective
+                        // status, amount and the legal action set all come
+                        // from it; an unresolvable message renders read-only.
+                        // `via` keeps the provenance: a listing-fallback
+                        // card is labelled the standing offer, not the
+                        // offer this message described.
                         const resolution = offerResolutionForMessage(
                           m,
                           conversation,
@@ -225,6 +249,11 @@ export function ChatMessageList({
                         );
                       })()
                     ) : m.type === 'listing_share' && m.listing ? (
+                      // Buyer-seat offer CTA (the native share card's
+                      // action dock): only when the viewer isn't the
+                      // listing's seller and the item isn't sold. An
+                      // unproven sellerId still shows it — the create
+                      // edge rejects own-listing offers honestly.
                       <ListingShareCard
                         message={m}
                         mine={mine}

@@ -33,6 +33,10 @@ export function PausedNotice({ exitUnderway }: { exitUnderway: boolean }) {
   );
 }
 
+/** Delisted tier — removed from the public market. Positions and
+ *  resting claims still exist and the recourse obligation stands; the
+ *  composer must not offer a book the server will reject. Distinct from
+ *  PausedNotice: paused can resume, delisted is terminal. */
 export function DelistedPanel() {
   return (
     <div
@@ -51,6 +55,11 @@ export function DelistedPanel() {
   );
 }
 
+/** Preview tier — the market exists but the issuer hasn't signed the
+ *  recourse agreement yet, so the book is sealed. The issuer gets the
+ *  signature rail here (the same terms the wizard showed); everyone else
+ *  gets the honest not-live read. A successful signature refetches the
+ *  asset at 'listed' and this panel swaps to the live composer. */
 export function PreviewPanel({
   asset,
   isIssuer,

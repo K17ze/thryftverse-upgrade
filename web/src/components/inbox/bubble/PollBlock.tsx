@@ -17,6 +17,14 @@ interface PollBlockProps {
   onToggle: (optionIndex: number) => void;
 }
 
+/**
+ * PollBlock — the web's PollMessageBubble. The fill bar IS the data viz:
+ * share of total votes, brand ink for the viewer's own picks. Options
+ * are real toggle buttons while the poll is open — a closed poll (or a
+ * read-only render path) degrades to inert rows, matching the server's
+ * own 400 gate. Anonymous polls say so instead of pretending identity
+ * would ever be shown.
+ */
 export function PollBlock({
   poll,
   mine,
@@ -32,6 +40,8 @@ export function PollBlock({
   const toggle = (idx: number) => {
     if (inert || pendingIdx !== null) return;
     setPendingIdx(idx);
+    // The caller's optimistic write converges the poll — a short timer
+    // clears the local in-flight marker (no async handle to await).
     onToggle(idx);
     setTimeout(() => setPendingIdx(null), 400);
   };

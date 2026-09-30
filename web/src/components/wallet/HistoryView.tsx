@@ -15,9 +15,7 @@
 import { useMemo, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { Button } from '@/components/ui/Button';
-import { Chip } from '@/components/ui/Chip';
 import { EmptyState } from '@/components/ui/EmptyState';
-import { Icon } from '@/components/ui/Icon';
 import { IconButton } from '@/components/ui/IconButton';
 import { Skeleton } from '@/components/ui/Skeleton';
 import { useToast } from '@/components/ui/Toast';
@@ -31,25 +29,14 @@ import {
   buildLedger,
   filterLedger,
   formatMonthLabel,
-  formatLedgerMoney,
-  signedLedgerMoney,
-  LEDGER_FILTERS,
   LEDGER_PAGE_SIZE,
   netsByCurrency,
   ledgerToCsv,
   type LedgerFilter,
   type WalletLedgerEntry,
 } from './ledgerViewModel';
-
-type DateRangeFilter = 'all' | 'this_month' | 'last_30' | 'last_90';
-
-/** Asset rail — native WalletHistoryScreen's exact grammar
- *  (ALL / 1ZE / FIAT), driving the server-side ledger filter. */
-const ASSET_FILTERS: { value: WalletLedgerAssetFilter; label: string }[] = [
-  { value: 'ALL', label: 'All' },
-  { value: '1ZE', label: '1ZE' },
-  { value: 'FIAT', label: 'Fiat' },
-];
+import { HistoryMetricsStrip } from './history/HistoryMetricsStrip';
+import { HistoryControls, type DateRangeFilter } from './history/HistoryControls';
 
 /**
  * The current UTC month key ('2026-09') — ledger dates are ISO strings and
@@ -120,7 +107,7 @@ export function HistoryView() {
         { value: 'last_30' as const, label: 'Last 30 days' },
         { value: 'last_90' as const, label: 'Last 90 days' },
       ],
-    [monthKey],
+      [monthKey],
   );
 
   // Live rows come from the wallet_ledger feed; fixture rows ship inside
@@ -186,10 +173,7 @@ export function HistoryView() {
 
   const visible = filtered.slice(0, visibleCount);
 
-  // Financial volume metrics — grouped per currency. The canonical ledger
-  // is multi-currency: summing GBP sales + EUR FX legs + 1ZE transfers
-  // under one label would fabricate a figure no account holds. Each
-  // currency present renders its own line.
+  // Financial volume metrics — grouped per currency.
   const moneyInByCurrency = useMemo(() => {
     const buckets = new Map<string, { currency: string; asset?: '1ZE' | 'FIAT'; total: number }>();
     for (const e of filtered) {
@@ -301,142 +285,33 @@ export function HistoryView() {
       </div>
 
       {/* Metrics Summary Strip (Polymarket / eBay financial standard) */}
-      <div className="mt-6 grid grid-cols-1 gap-3 px-4 sm:grid-cols-3 sm:px-6">
-        <div className="rounded-md border border-border-subtle bg-surface-alt/40 p-3.5">
-          <p className="text-micro font-semibold uppercase tracking-[0.08em] text-text-muted">
-            Money in (Credits)
-          </p>
-          {moneyInByCurrency.length > 0 ? (
-            moneyInByCurrency.map((b) => (
-              <p key={b.currency} className="tnum mt-1 text-section-title font-bold text-coown-up">
-                +{formatLedgerMoney(b.total, b.currency, b.asset)}
-              </p>
-            ))
-          ) : (
-            <p className="mt-1 text-section-title font-bold text-text-muted">—</p>
-          )}
-        </div>
-        <div className="rounded-md border border-border-subtle bg-surface-alt/40 p-3.5">
-          <p className="text-micro font-semibold uppercase tracking-[0.08em] text-text-muted">
-            Money out (Debits)
-          </p>
-          {moneyOutByCurrency.length > 0 ? (
-            moneyOutByCurrency.map((b) => (
-              <p key={b.currency} className="tnum mt-1 text-section-title font-bold text-text-primary">
-                −{formatLedgerMoney(b.total, b.currency, b.asset)}
-              </p>
-            ))
-          ) : (
-            <p className="mt-1 text-section-title font-bold text-text-muted">—</p>
-          )}
-        </div>
-        <div className="rounded-md border border-border-subtle bg-surface-alt/40 p-3.5">
-          <p className="text-micro font-semibold uppercase tracking-[0.08em] text-text-muted">
-            Net movement
-          </p>
-          {nets.length > 0 ? (
-            nets.map((b) => (
-              <p
-                key={b.currency}
-                className={`tnum mt-1 text-section-title font-bold ${
-                  b.net >= 0 ? 'text-coown-up' : 'text-text-primary'
-                }`}
-              >
-                {signedLedgerMoney(b.net, b.currency, b.asset)}
-              </p>
-            ))
-          ) : (
-            <p className="mt-1 text-section-title font-bold text-text-muted">—</p>
-          )}
-        </div>
-      </div>
+      <HistoryMetricsStrip
+        moneyInByCurrency={moneyInByCurrency}
+        moneyOutByCurrency={moneyOutByCurrency}
+        nets={nets}
+      />
 
-      {/* Controls: Search, Date Range, Export */}
-      <div className="mt-6 flex flex-col gap-3 px-4 sm:flex-row sm:items-center sm:justify-between sm:px-6">
-        <div className="relative flex-1">
-          <Icon
-            name="search"
-            size={16}
-            className="pointer-events-none absolute left-3 top-3 text-text-muted"
-          />
-          <input
-            type="text"
-            value={searchQuery}
-            onChange={(e) => setSearchQuery(e.target.value)}
-            placeholder="Search by description, item, or ID…"
-            className="h-10 w-full rounded-md border border-border bg-input pl-9 pr-3 text-caption text-text-primary placeholder:text-text-muted focus:border-brand focus:outline-none"
-          />
-        </div>
-
-        <div className="flex items-center gap-2">
-          {/* Date range dropdown */}
-          <select
-            value={dateRange}
-            onChange={(e) => setDateRange(e.target.value as DateRangeFilter)}
-            className="h-10 rounded-md border border-border bg-surface-alt px-3 text-caption font-medium text-text-primary focus:border-brand focus:outline-none"
-            aria-label="Filter by date range"
-          >
-            {dateRangeOptions.map((d) => (
-              <option key={d.value} value={d.value}>
-                {d.label}
-              </option>
-            ))}
-          </select>
-
-          <Button variant="secondary" size="md" icon="download" onClick={exportCsv}>
-            Export CSV
-          </Button>
-        </div>
-      </div>
-
-      {/* Asset rail — native WalletHistoryScreen grammar (All / 1ZE /
-          Fiat); drives the server-side ledger filter in live mode. */}
-      <div
-        role="group"
-        aria-label="Filter by asset"
-        className="no-scrollbar mt-4 flex gap-2 overflow-x-auto px-4 pb-1 sm:px-6"
-      >
-        {ASSET_FILTERS.map((f) => (
-          <Chip
-            key={f.value}
-            selected={assetFilter === f.value}
-            onClick={() => {
-              setAssetFilter(f.value);
-              setVisibleCount(LEDGER_PAGE_SIZE);
-            }}
-            aria-label={`Show ${f.label === 'All' ? 'all activity' : `${f.label} activity`}`}
-          >
-            {f.label}
-          </Chip>
-        ))}
-      </div>
-
-      {/* Category chips rail */}
-      <div
-        role="group"
-        aria-label="Filter transactions"
-        className="no-scrollbar mt-2 flex gap-2 overflow-x-auto px-4 pb-1 sm:px-6"
-      >
-        {LEDGER_FILTERS.map((f) => (
-          <Chip
-            key={f.value}
-            selected={filter === f.value}
-            onClick={() => {
-              setFilter(f.value);
-              setVisibleCount(LEDGER_PAGE_SIZE);
-            }}
-            aria-label={`Show ${f.label.toLowerCase()}`}
-          >
-            {f.label}
-          </Chip>
-        ))}
-      </div>
-
-      {/* Transaction Count Indicator */}
-      <div className="mt-4 px-4 text-caption text-text-muted sm:px-6">
-        Showing <span className="tnum font-medium text-text-primary">{visible.length}</span> of{' '}
-        <span className="tnum font-medium text-text-primary">{filtered.length}</span> transaction{filtered.length === 1 ? '' : 's'}
-      </div>
+      {/* Controls: Search, Date Range, Asset & Category filters */}
+      <HistoryControls
+        searchQuery={searchQuery}
+        onSearchChange={setSearchQuery}
+        dateRange={dateRange}
+        onDateRangeChange={setDateRange}
+        dateRangeOptions={dateRangeOptions}
+        onExportCsv={exportCsv}
+        assetFilter={assetFilter}
+        onAssetFilterChange={(val) => {
+          setAssetFilter(val);
+          setVisibleCount(LEDGER_PAGE_SIZE);
+        }}
+        categoryFilter={filter}
+        onCategoryFilterChange={(val) => {
+          setFilter(val);
+          setVisibleCount(LEDGER_PAGE_SIZE);
+        }}
+        visibleCount={visible.length}
+        totalCount={filtered.length}
+      />
 
       {/* Grouped Month Ledger with Click-to-Inspect */}
       <div className="mt-3">

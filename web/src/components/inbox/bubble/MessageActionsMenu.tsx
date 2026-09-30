@@ -10,6 +10,7 @@
 import { useEffect, useRef, useState } from 'react';
 import { EXTENDED_REACTIONS } from '@/lib/hooks/chat-queries';
 
+/** A reactable emoji + the viewer's current state on it. */
 export interface MenuReaction {
   emoji: string;
   reactedByMe: boolean;
@@ -17,25 +18,49 @@ export interface MenuReaction {
 
 export interface MessageActionsMenuProps {
   anchor: { x: number; y: number };
+  /** Quick-react row — reflects reactedByMe so a second tap removes. */
   reactions?: MenuReaction[];
   onReact?: (emoji: string) => void;
+  /** reactedByMe lookup for the expanded emoji grid (the quick row's own
+   *  `reactions` prop only covers the default six). */
   hasReacted?: (emoji: string) => boolean;
+  /** Failed outgoing send — the mobile Retry row. */
   onRetry?: () => void;
   onReply?: () => void;
   onForward?: () => void;
+  /** Group-admin pin toggle — the label flips on `pinned`; absent for
+   *  DMs and non-admins (the backend only permits admin/owner writes). */
   onPin?: () => void;
   pinned?: boolean;
+  /** Shared saved state — the label flips to "Unsave" when the viewer
+   *  has it saved (mobile's isSaved label grammar). */
   saved?: boolean;
   onSave?: () => void;
   onCopy?: () => void;
   onEdit?: () => void;
   onReport?: () => void;
+  /** Discard a failed pending send — local only, no server edge. */
   onRemove?: () => void;
   onDeleteForMe?: () => void;
   onDeleteForEveryone?: () => void;
   onClose: () => void;
 }
 
+/**
+ * Press-and-hold / right-click action menu — the touch + desktop
+ * equivalent of the mobile long-press sheet. Renders at the press point,
+ * clamped inside the viewport; outside-press and Escape dismiss. A
+ * quick-react row heads the menu when the caller supplies it (the mobile
+ * MessageContextMenu emoji row — "+" expands to the extended 18-emoji
+ * set), then the action grammar in the mobile order: Retry (failed
+ * sends), Reply, Forward, Save in chat, Edit, Copy, Report (incoming),
+ * Delete for me / Delete for everyone — actions only render for the
+ * props the caller wired, so a message kind that can't forward never
+ * shows a dead control. Keyboard-operable: focus lands on the first
+ * item, arrows rove, Escape or an item pick closes and returns focus to
+ * whatever opened the menu — scroll, outside-press and Tab dismissals
+ * don't refocus, so closing can't drag the stream back to the trigger.
+ */
 export function MessageActionsMenu({
   anchor,
   reactions,
@@ -57,7 +82,13 @@ export function MessageActionsMenu({
   onClose,
 }: MessageActionsMenuProps) {
   const ref = useRef<HTMLDivElement>(null);
+  // "+" expander — the mobile EmojiReactionsBar extended set toggle.
   const [moreOpen, setMoreOpen] = useState(false);
+  // Focus restore — the element that held focus before the menu opened
+  // gets it back on unmount, but only for Escape / item picks. Scroll
+  // and outside-press dismissals leave focus alone: focusing the opener
+  // while the user scrolls would drag the stream back to the trigger
+  // (the same dismiss-vs-interrupt split the overlay menus use).
   const restoreFocus = useRef<Element | null>(null);
   const restoreOnClose = useRef(false);
 
@@ -88,6 +119,8 @@ export function MessageActionsMenu({
     };
   }, [onClose]);
 
+  // Focus the first item on open; on unmount, restore the opener's focus
+  // only when the dismissal asked for it (Escape / item pick).
   useEffect(() => {
     const el = ref.current;
     const first = el?.querySelector<HTMLElement>(
@@ -109,6 +142,11 @@ export function MessageActionsMenu({
 
   const onKeyDown = (e: React.KeyboardEvent) => {
     if (e.key === 'Tab') {
+      // Menu grammar: Tab exits the menu and continues the page sequence —
+      // it must not leave an open menu behind (the FeedItemMenu fix).
+      // Focus is moved back to the element that opened the menu first so
+      // the browser's default tab step (kept — no preventDefault) proceeds
+      // from it rather than from a detached menu item.
       const prev = restoreFocus.current;
       onClose();
       if (prev instanceof HTMLElement) prev.focus();
@@ -140,6 +178,8 @@ export function MessageActionsMenu({
   const item =
     'pressable flex w-full items-center gap-2.5 px-3.5 py-2.5 text-left text-body text-text-primary hover:bg-row-pressed focus-visible:bg-row-pressed focus-visible:outline-none';
   const pick = (fn?: () => void) => () => {
+    // An item pick is a deliberate dismissal — focus returns to the
+    // opener, same as Escape.
     restoreOnClose.current = true;
     fn?.();
     onClose();
@@ -160,6 +200,8 @@ export function MessageActionsMenu({
   ].filter(Boolean).length;
   const reactable = Boolean(reactions?.length && onReact);
   const width = reactable ? 232 : 176;
+  // Rough height estimate for viewport clamping — reaction row, the
+  // expanded emoji grid when open, then items.
   const estHeight =
     8 + (reactable ? 52 : 0) + (reactable && moreOpen ? 124 : 0) + rows * 44;
   const left = Math.max(8, Math.min(anchor.x, window.innerWidth - width - 8));
@@ -201,6 +243,8 @@ export function MessageActionsMenu({
             className="flex items-center justify-between"
           >
             {reactions?.map((r) => reactChip(r.emoji, r.reactedByMe))}
+            {/* "+" expander — the mobile EmojiReactionsBar affordance:
+                toggles the extended emoji grid without closing the menu. */}
             <button
               type="button"
               role="menuitem"

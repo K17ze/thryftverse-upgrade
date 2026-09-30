@@ -31,6 +31,12 @@ interface VoiceAttachmentProps {
   conversationId?: string;
 }
 
+/**
+ * Voice message — play/pause toggle driving a hidden audio element, the
+ * server waveform rendered as bars when present, duration when known.
+ * A voice row with no URI and no duration falls back to the plain label
+ * rather than a dead control.
+ */
 export function VoiceAttachment({
   m,
   mine,
@@ -46,6 +52,10 @@ export function VoiceAttachment({
   const bars = (m.voiceWaveform ?? []).slice(0, 36);
   const metaTone = mine ? 'text-text-inverse/80' : 'text-text-muted';
 
+  // Live voice media sits in a private bucket — the wire's mediaUri is
+  // an identifier, not a playable URL. Playback resolves through the
+  // membership-bound signed grant (revocable, TTL'd; mobile
+  // useVoicePlayer parity). Fixture-mode voiceUri is already playable.
   const needsGrant = DATA_MODE === 'live' && Boolean(conversationId);
   const playable = needsGrant ? true : Boolean(m.voiceUri);
 
@@ -58,6 +68,8 @@ export function VoiceAttachment({
     }
     if (needsGrant) {
       const grant = grantRef.current;
+      // Refetch inside a 4s pre-expiry window — a grant that dies
+      // mid-play leaves a silent element.
       if (!grant || grant.expiresAt <= Date.now() + 4000) {
         setResolving(true);
         try {
@@ -169,6 +181,15 @@ export function VoiceAttachment({
   );
 }
 
+/**
+ * VoiceTranscriptRow — the opt-in transcript surface (mobile
+ * VoiceTranscriptionPanel parity). Never auto-fetched: the user taps
+ * "Show transcript", the backend either replays the existing row or
+ * queues a job (idempotent). Processing polls until the worker lands;
+ * the text always carries the "Automatically transcribed" provenance
+ * label and a binary quality rating — never presented as the sender's
+ * exact words.
+ */
 function VoiceTranscriptRow({
   conversationId,
   messageId,
@@ -207,6 +228,7 @@ function VoiceTranscriptRow({
     );
   };
 
+  // The worker lands async — poll while the job is queued/processing.
   useEffect(() => {
     if (state !== 'processing') return;
     let dead = false;
@@ -255,6 +277,7 @@ function VoiceTranscriptRow({
     setRating(value);
     rateVoiceTranscription(conversationId, messageId, value).catch(() => {
       setRating(null);
+      /* silent — a rating miss isn't worth a toast mid-thread */
     });
   };
 

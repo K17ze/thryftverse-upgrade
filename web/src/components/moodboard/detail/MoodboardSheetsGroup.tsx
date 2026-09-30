@@ -87,6 +87,8 @@ export function MoodboardSheetsGroup({
         onAdd={onAddItems}
       />
 
+      {/* Board comments — anchored to a canvas item when opened from a
+          selection, otherwise the board-level thread. */}
       <MoodboardCommentsSheet
         boardId={boardId}
         open={commentsOpen}

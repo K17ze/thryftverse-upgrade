@@ -99,7 +99,9 @@ export function TradeReceiptView({ result, onDone }: TradeReceiptViewProps) {
           <dd className="text-meta text-text-muted tnum">{order.id.toUpperCase().slice(0, 18)}</dd>
         </div>
       </dl>
-      {/* Post-trade AML monitor flag */}
+      {/* Post-trade AML monitor flag — the trade executed and the server
+          logged a review alert against it. Persistent on the receipt,
+          not a disappearing toast; the alert id is the support ref. */}
       {aml ? (
         <p
           role="status"

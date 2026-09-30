@@ -34,6 +34,7 @@ export function CollectionEditToolbar({
 
   return (
     <>
+      {/* Edit toolbar — quiet actions; batch chrome lives in the select pill */}
       <div className="mb-4 flex items-center justify-between gap-2 px-4 sm:px-6">
         <div className="flex items-center gap-2">
           <Button

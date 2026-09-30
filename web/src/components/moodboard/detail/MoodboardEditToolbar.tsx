@@ -44,6 +44,7 @@ export function MoodboardEditToolbar({
 
   return (
     <>
+      {/* Edit toolbar — quiet actions; batch chrome lives in the select pill */}
       {view === 'items' ? (
         <div className="mt-4 flex items-center justify-between gap-2 px-4 sm:px-6">
           <div className="flex items-center gap-2">
@@ -71,6 +72,8 @@ export function MoodboardEditToolbar({
           </span>
         </div>
       ) : (
+        /* Canvas edit chrome — add items + theme swatches, mirroring the
+           mobile editor's bottom panel. */
         <div className="mt-3 flex flex-wrap items-center gap-2 px-4 sm:px-6">
           <Button
             variant="secondary"
@@ -81,6 +84,8 @@ export function MoodboardEditToolbar({
             Add items
           </Button>
 
+          {/* Theme writes PATCH board meta — an owner-only capability
+              server-side, so editors don't get the dead affordance. */}
           {isOwner ? (
             <div
               role="radiogroup"

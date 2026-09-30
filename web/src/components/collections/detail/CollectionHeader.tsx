@@ -40,6 +40,8 @@ export function CollectionHeader({
 }: CollectionHeaderProps) {
   if (showHero) {
     return (
+      /* Cover hero — item-cover mosaic strip with the title/meta over a
+         legibility scrim. Media is the colour; no separate header below. */
       <div className="relative mx-4 mt-1 overflow-hidden rounded-xl sm:mx-6">
         <div className="grid h-44 grid-cols-4 gap-0.5 sm:h-56 lg:h-64">
           {Array.from({ length: 4 }).map((_, i) => (

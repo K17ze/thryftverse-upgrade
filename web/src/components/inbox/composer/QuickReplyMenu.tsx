@@ -10,7 +10,7 @@ import { useEffect, useRef, useState } from 'react';
 import Link from 'next/link';
 import { IconButton } from '@/components/ui/IconButton';
 
-interface QuickReplyItem {
+export interface QuickReplyItem {
   id: string;
   title: string;
   message: string;
@@ -40,12 +40,15 @@ export function QuickReplyMenu({
     };
     const onEsc = (e: KeyboardEvent) => {
       if (e.key === 'Escape') {
+        // Focus goes back to the trigger — the menu Escape contract.
         setOpen(false);
         btnRef.current?.focus();
       }
     };
     document.addEventListener('mousedown', onDoc);
     document.addEventListener('keydown', onEsc);
+    // Menu grammar: focus moves into the menu on open (the FeedItemMenu
+    // pattern) so the keyboard sequence starts at the first reply.
     wrapRef.current
       ?.querySelector<HTMLElement>('[role="menuitem"]')
       ?.focus();
@@ -71,6 +74,10 @@ export function QuickReplyMenu({
           role="menu"
           onKeyDown={(e) => {
             if (e.key !== 'Tab') return;
+            // Menu grammar (the FeedItemMenu fix): close, return
+            // focus to the trigger, then let the browser's default
+            // tab step continue from it — an open menu left past its
+            // Tab position strands the tab order.
             setOpen(false);
             btnRef.current?.focus();
           }}

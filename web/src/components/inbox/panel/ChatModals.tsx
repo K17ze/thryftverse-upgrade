@@ -11,6 +11,8 @@ import type { SharedMediaItem } from '../SharedMediaGrid';
 import type { OfferWithOrder } from '@/lib/commerce/offerAcceptance';
 import type { Conversation, Listing } from '@/lib/contracts/domain';
 
+// Action-gated surfaces — split out of the thread's initial bundle. Each
+// only renders behind its open flag, so the chunk fetches on first use.
 const ConfirmSheet = dynamic(
   () => import('../ConfirmSheet').then((m) => m.ConfirmSheet),
   { ssr: false },
@@ -91,6 +93,8 @@ export function ChatModals({
         />
       ) : null}
 
+      {/* Counter sheet — reuses the PDP / /offers offer grammar against
+          the standing record; the send goes through the same respond path. */}
       {counterTarget && counterListing ? (
         <OfferSheet
           open
@@ -105,6 +109,9 @@ export function ChatModals({
         />
       ) : null}
 
+      {/* Make-offer on a shared listing — the same sheet, no counter
+          context; the write threads conversationId so the offer lands in
+          this thread (native sendListingShare → offer flow). */}
       {shareOfferListing ? (
         <OfferSheet
           open

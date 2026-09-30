@@ -7,52 +7,15 @@
  * drag / move reordering, multi-select batch remove, and cover selection.
  */
 
-import { useMemo, useState } from 'react';
-import { notFound, useParams, useRouter } from 'next/navigation';
-import { useQuery, useQueryClient } from '@tanstack/react-query';
+import { notFound } from 'next/navigation';
 import { MasonryGrid, useMasonryColumns } from '@/components/feed/MasonryGrid';
 import { EditableMoodboardGrid } from '@/components/moodboard/EditableMoodboardGrid';
 import { Button } from '@/components/ui/Button';
 import { EmptyState } from '@/components/ui/EmptyState';
 import { IconButton } from '@/components/ui/IconButton';
-import { useToast } from '@/components/ui/Toast';
 import { BackBar } from '@/components/profile/BackBar';
-import { useShare } from '@/components/profile/useShare';
-import {
-  COLLECTIONS,
-  PROFILE_COLLECTIONS,
-  collectionById,
-  listingsForIds,
-} from '@/components/profile/fixtures';
-import { useBoardCoverThumbs } from '@/components/profile/boardMedia';
-import { useBoardPrefs } from '@/components/profile/boardPrefs';
-import { useCollectionActions } from '@/lib/hooks/collections-queries';
-import { useSellerListings, useUser } from '@/lib/hooks/queries';
-import { useSession } from '@/lib/session/SessionProvider';
-import { useHydrated, useStore } from '@/lib/store/useStore';
-import {
-  itemMovedBefore,
-  movedItem,
-  useCollectionEdits,
-  useCollectionOverlay,
-  withItemsAdded,
-  withoutItemIds,
-} from '@/lib/store/collectionEdits';
-import {
-  USER_COLLECTION_SEED,
-  type UserCollection,
-} from '@/lib/data/fixtures-collections';
-import { userById } from '@/lib/data/fixtures';
 import { DATA_MODE } from '@/lib/api/client';
-import * as collectionsService from '@/lib/api/services/collections';
-import { fetchListingById } from '@/lib/api/services/listings';
-import {
-  mapListingToDiscoverySummary,
-  type DiscoveryFeedUnit,
-  type DiscoveryListingSummary,
-  type User,
-} from '@/lib/contracts/domain';
-import { timeAgo } from '@/lib/utils/format';
+import { itemMovedBefore, movedItem } from '@/lib/store/collectionEdits';
 
 // Domain-isolated sub-components (<400 LOC modularity standard)
 import {
@@ -64,568 +27,181 @@ import {
 import { CollectionHeader } from '@/components/collections/detail/CollectionHeader';
 import { CollectionEditToolbar } from '@/components/collections/detail/CollectionEditToolbar';
 import { CollectionSheetsGroup } from '@/components/collections/detail/CollectionSheetsGroup';
+import { useCollectionWorkflow } from '@/components/collections/detail/useCollectionWorkflow';
 
-const USER_COLLECTIONS_KEY = ['user-collections'] as const;
 const LIVE = DATA_MODE === 'live';
-const EMPTY_IDS: string[] = [];
-
-interface ResolvedCollection {
-  id: string;
-  title: string;
-  itemIds: string[];
-  owner?: User | null;
-  ownerId?: string;
-  isPrivate?: boolean;
-  description?: string | null;
-  meta?: string;
-  editable: boolean;
-}
 
 export function CollectionClient() {
-  const params = useParams();
-  const router = useRouter();
-  const { show } = useToast();
-  const share = useShare();
-  const { user: me, sessionLoading } = useSession();
   const columns = useMasonryColumns();
-  const hydrated = useHydrated();
-  const queryClient = useQueryClient();
+  const w = useCollectionWorkflow();
 
-  const id = String(params.id ?? '');
-  const isCloset = id.startsWith('closet-');
-  const closetId = isCloset ? id.slice('closet-'.length) : '';
-
-  const boardPref = useBoardPrefs((s) => s.boards[id]);
-  const setBoardCover = useBoardPrefs((s) => s.setCover);
-  const setBoardArchived = useBoardPrefs((s) => s.setArchived);
-  const setBoardPrivate = useBoardPrefs((s) => s.setPrivate);
-
-  const {
-    updateCollection,
-    addItems: addItemsToCollection,
-    removeItems: removeItemsFromCollection,
-    deleteCollection: deleteCollectionAction,
-  } = useCollectionActions();
-
-  const {
-    data: closetOwner,
-    isLoading: ownerLoading,
-    isError: ownerError,
-    refetch: refetchOwner,
-  } = useUser(closetId);
-  const {
-    data: closetItems,
-    isLoading: closetItemsLoading,
-    isError: itemsError,
-    refetch: refetchItems,
-  } = useSellerListings(closetId);
-
-  const boardQuery = useQuery({
-    queryKey: ['collection', id],
-    queryFn: ({ signal }) => collectionsService.getCollection(id, signal),
-    enabled: LIVE && !isCloset && Boolean(me),
-    retry: false,
-  });
-
-  const loading =
-    (isCloset && (ownerLoading || closetItemsLoading)) ||
-    (LIVE && !isCloset && (sessionLoading || (Boolean(me) && boardQuery.isLoading)));
-
-  const overlay = useCollectionOverlay(id);
-  const setCollectionItems = useCollectionEdits((s) => s.setCollectionItems);
-  const setCollectionMeta = useCollectionEdits((s) => s.setCollectionMeta);
-  const edits = hydrated ? overlay : undefined;
-
-  const resolved = useMemo<ResolvedCollection | null>(() => {
-    if (isCloset) {
-      if (loading || !closetOwner) return null;
-      return {
-        id,
-        title: `${closetOwner.username}'s closet`,
-        itemIds: (closetItems ?? []).map((l) => l.id),
-        owner: closetOwner,
-        editable: false,
-      };
-    }
-    if (LIVE) {
-      const board = boardQuery.data;
-      if (!board || !me) return null;
-      return {
-        id,
-        title: edits?.title ?? board.name,
-        description:
-          edits && 'description' in edits ? edits.description : board.description,
-        itemIds: [...board.itemIds],
-        owner: me,
-        ownerId: me.id,
-        isPrivate:
-          (hydrated ? boardPref?.isPrivate : undefined) ?? board.isPrivate,
-        meta: board.updatedAt ? `Updated ${timeAgo(board.updatedAt)}` : undefined,
-        editable: true,
-      };
-    }
-    const c = collectionById(id);
-    if (!c) return null;
-    const ownerId = 'ownerId' in c ? c.ownerId : 'me';
-    const uc = (
-      queryClient.getQueryData<UserCollection[]>(USER_COLLECTIONS_KEY) ??
-      USER_COLLECTION_SEED
-    ).find((x) => x.id === c.id);
-    const isPrivate =
-      (hydrated ? boardPref?.isPrivate : undefined) ??
-      ('isPrivate' in c ? c.isPrivate : undefined) ??
-      uc?.isPrivate ??
-      false;
-    return {
-      id,
-      title: edits?.title ?? c.title,
-      description:
-        edits && 'description' in edits ? edits.description : uc?.description ?? null,
-      itemIds: [...c.itemIds],
-      owner: ownerId && ownerId !== 'me' ? userById(ownerId) : undefined,
-      ownerId,
-      isPrivate,
-      meta: c.createdAt ? `Updated ${timeAgo(c.createdAt)}` : undefined,
-      editable: !!me && ownerId === me.id,
-    };
-  }, [
-    id,
-    isCloset,
-    loading,
-    closetOwner,
-    closetItems,
-    me,
-    queryClient,
-    hydrated,
-    boardPref?.isPrivate,
-    edits,
-    boardQuery.data,
-  ]);
-
-  const itemIds = useMemo(
-    () => edits?.itemIds ?? resolved?.itemIds ?? [],
-    [edits?.itemIds, resolved],
-  );
-
-  const coverItemId = hydrated ? boardPref?.coverItemId : undefined;
-  const heroThumbs = useBoardCoverThumbs(
-    isCloset ? EMPTY_IDS : itemIds,
-    4,
-    undefined,
-    coverItemId,
-  );
-
-  const boardItemsQuery = useQuery({
-    queryKey: ['collection-items', id, itemIds.join(',')],
-    queryFn: async ({ signal }) => {
-      const resolvedListings = await Promise.all(
-        itemIds.map((lid) => fetchListingById(lid, signal).catch(() => null)),
-      );
-      return resolvedListings.filter((l): l is NonNullable<typeof l> => l !== null);
-    },
-    enabled: LIVE && !isCloset && itemIds.length > 0,
-    staleTime: 60_000,
-  });
-
-  const items = useMemo(() => {
-    if (isCloset) return closetItems ?? [];
-    if (LIVE) return boardItemsQuery.data ?? [];
-    return listingsForIds(itemIds);
-  }, [isCloset, closetItems, itemIds, boardItemsQuery.data]);
-
-  const summaries = useMemo<DiscoveryListingSummary[]>(
-    () => items.map(mapListingToDiscoverySummary),
-    [items],
-  );
-
-  const units = useMemo<DiscoveryFeedUnit[]>(
-    () =>
-      summaries.map((l) => ({
-        type: 'listing',
-        id: `col-${id}-${l.id}`,
-        listing: l,
-      })),
-    [summaries, id],
-  );
-
-  const [editing, setEditing] = useState(false);
-  const [selectMode, setSelectMode] = useState(false);
-  const [selectedIds, setSelectedIds] = useState<ReadonlySet<string>>(new Set());
-  const [importOpen, setImportOpen] = useState(false);
-  const [optionsOpen, setOptionsOpen] = useState(false);
-  const [coverOpen, setCoverOpen] = useState(false);
-  const [detailsOpen, setDetailsOpen] = useState(false);
-  const [confirmDelete, setConfirmDelete] = useState(false);
-
-  const wishlist = useStore((s) => s.wishlist);
-  const saved = useStore((s) => s.saved);
-  const pool = useMemo(() => {
-    const onBoard = new Set(itemIds);
-    return [...new Set([...saved, ...wishlist])].filter((x) => !onBoard.has(x));
-  }, [saved, wishlist, itemIds]);
-
-  const candidatesQuery = useQuery({
-    queryKey: ['collection-candidates', id, pool.join(',')],
-    queryFn: async ({ signal }) => {
-      const rows = await Promise.all(
-        pool.map((lid) => fetchListingById(lid, signal).catch(() => null)),
-      );
-      return rows
-        .filter((l): l is NonNullable<typeof l> => l !== null)
-        .map(mapListingToDiscoverySummary);
-    },
-    enabled: LIVE && importOpen && pool.length > 0,
-    staleTime: 60_000,
-  });
-  const candidates = useMemo<DiscoveryListingSummary[]>(() => {
-    if (LIVE) return candidatesQuery.data ?? [];
-    return listingsForIds(pool).map(mapListingToDiscoverySummary);
-  }, [pool, candidatesQuery.data]);
-
-  if (loading) {
+  if (w.loading) {
     return <CollectionSkeleton columns={columns} />;
   }
 
-  if (isCloset && (ownerError || itemsError)) {
+  // Error is not absence — a failed fetch gets a retry, not a gravestone.
+  if (w.isCloset && (w.ownerError || w.itemsError)) {
     return (
       <CollectionClosetErrorState
         onRetry={() => {
-          void refetchOwner();
-          void refetchItems();
+          void w.refetchOwner();
+          void w.refetchItems();
         }}
       />
     );
   }
 
-  if (LIVE && !isCloset && boardQuery.isError) {
+  if (LIVE && !w.isCloset && w.boardQuery.isError) {
     return (
       <CollectionLiveErrorState
-        onRetry={() => void boardQuery.refetch()}
+        onRetry={() => void w.boardQuery.refetch()}
       />
     );
   }
 
-  if (!resolved) {
+  // Resolved-empty is a definitive miss — the not-found boundary owns it.
+  if (!w.resolved) {
     notFound();
   }
 
-  const viewerOwns = !!me && resolved.ownerId === me.id;
-  if (!viewerOwns && (resolved.isPrivate || resolved.ownerId === 'me')) {
+  // Private boards are owner-only — anyone else gets the honest wall.
+  if (!w.viewerOwns && (w.resolved.isPrivate || w.resolved.ownerId === 'me')) {
     return <CollectionPrivateWallState />;
   }
-
-  const isEditing = resolved.editable && editing;
-
-  const shareCollection = () =>
-    share({
-      url: `${window.location.origin}/collection/${id}`,
-      title: resolved.title,
-      copiedLabel: 'Collection link copied',
-    });
-
-  const deleteCollection = async () => {
-    try {
-      await deleteCollectionAction(id);
-    } catch {
-      show("Couldn't delete the collection — try again", 'error');
-      return;
-    }
-    if (!LIVE) {
-      for (const arr of [COLLECTIONS, PROFILE_COLLECTIONS]) {
-        const i = arr.findIndex((c) => c.id === id);
-        if (i >= 0) arr.splice(i, 1);
-      }
-    }
-    show('Collection deleted', 'info');
-    router.push('/collections');
-  };
-
-  const commitItems = async (next: string[]): Promise<boolean> => {
-    const before = new Set(itemIds);
-    const after = new Set(next);
-    const added = next.filter((x) => !before.has(x));
-    const removed = itemIds.filter((x) => !after.has(x));
-    try {
-      if (added.length > 0) await addItemsToCollection(id, added);
-      if (removed.length > 0) await removeItemsFromCollection(id, removed);
-      if (added.length === 0 && removed.length === 0) {
-        if (!LIVE) {
-          setCollectionItems(id, next);
-          queryClient.setQueryData<UserCollection[]>(USER_COLLECTIONS_KEY, (old) =>
-            old?.map((c) => (c.id === id ? { ...c, itemIds: [...next] } : c)),
-          );
-        }
-      } else if (!LIVE) {
-        setCollectionItems(id, next);
-        queryClient.setQueryData<UserCollection[]>(USER_COLLECTIONS_KEY, (old) =>
-          old?.map((c) => (c.id === id ? { ...c, itemIds: [...next] } : c)),
-        );
-      } else {
-        void queryClient.invalidateQueries({ queryKey: ['collection', id] });
-      }
-      return true;
-    } catch {
-      show("Couldn't update this collection — try again", 'error');
-      return false;
-    }
-  };
-
-  const stopEditing = () => {
-    setEditing(false);
-    setSelectMode(false);
-    setSelectedIds(new Set());
-  };
-
-  const toggleSelect = (itemId: string) => {
-    setSelectedIds((prev) => {
-      const next = new Set(prev);
-      if (next.has(itemId)) next.delete(itemId);
-      else next.add(itemId);
-      return next;
-    });
-  };
-
-  const removeWithUndo = (ids: string[]) => {
-    if (ids.length === 0) return;
-    const orderBefore = itemIds;
-    const next = withoutItemIds(itemIds, new Set(ids));
-    setSelectedIds((prev) => {
-      const cleared = new Set(prev);
-      for (const x of ids) cleared.delete(x);
-      return cleared;
-    });
-    void (async () => {
-      const ok = await commitItems(next);
-      if (!ok) return;
-      show(
-        ids.length === 1 ? 'Removed 1 item' : `Removed ${ids.length} items`,
-        'info',
-        { label: 'Undo', onPress: () => void commitItems(orderBefore) },
-      );
-    })();
-  };
-
-  const removeSelected = () => {
-    removeWithUndo([...selectedIds]);
-    setSelectMode(false);
-  };
-
-  const addItems = (ids: string[]) => {
-    setImportOpen(false);
-    const fresh = ids.filter((x) => !itemIds.includes(x));
-    if (fresh.length === 0) {
-      show('Already in this collection', 'info');
-      return;
-    }
-    void (async () => {
-      const ok = await commitItems(withItemsAdded(itemIds, fresh));
-      if (ok) {
-        show(
-          fresh.length === 1 ? 'Added 1 item' : `Added ${fresh.length} items`,
-          'success',
-        );
-      }
-    })();
-  };
-
-  const archived = hydrated && boardPref?.archived === true;
-  const showHero = !isCloset && heroThumbs.length > 0;
-
-  const togglePrivacy = () => {
-    const next = !resolved.isPrivate;
-    setOptionsOpen(false);
-    void (async () => {
-      try {
-        await updateCollection(id, { isPrivate: next });
-      } catch {
-        show("Couldn't update privacy — try again", 'error');
-        return;
-      }
-      setBoardPrivate(id, next);
-      show(next ? 'Board is now private' : 'Board is now public', 'info');
-    })();
-  };
-
-  const saveDetails = async (next: {
-    title: string;
-    description: string | null;
-    isPrivate: boolean;
-  }) => {
-    await updateCollection(id, {
-      name: next.title,
-      description: next.description,
-      isPrivate: next.isPrivate,
-    });
-    setCollectionMeta(id, { title: next.title, description: next.description });
-    setBoardPrivate(id, next.isPrivate);
-    void queryClient.invalidateQueries({ queryKey: ['collection', id] });
-  };
 
   return (
     <div className="mx-auto max-w-[1440px]">
       <BackBar
         actions={
           <>
-            {!resolved.isPrivate ? (
+            {!w.resolved.isPrivate ? (
               <IconButton
                 name="share"
                 aria-label="Share collection"
-                onClick={shareCollection}
+                onClick={w.shareCollection}
               />
             ) : null}
-            {resolved.editable ? (
-              isEditing ? (
-                <Button
-                  variant="secondary"
-                  size="sm"
-                  onClick={stopEditing}
-                  className="ml-1"
-                >
-                  Done
-                </Button>
-              ) : (
-                <>
-                  <IconButton
-                    name="edit"
-                    aria-label="Manage items"
-                    onClick={() => setEditing(true)}
-                  />
-                  <IconButton
-                    name="more"
-                    aria-label="Collection options"
-                    onClick={() => setOptionsOpen(true)}
-                  />
-                </>
-              )
+            {w.resolved.editable ? (
+              <IconButton
+                name="overflow"
+                aria-label="Collection options"
+                onClick={() => w.setOptionsOpen(true)}
+              />
             ) : null}
           </>
         }
       />
 
       <CollectionHeader
-        showHero={showHero}
-        heroThumbs={heroThumbs}
-        title={resolved.title}
-        isPrivate={resolved.isPrivate}
-        archived={archived}
-        owner={resolved.owner}
-        itemCount={items.length}
-        meta={resolved.meta}
-        description={resolved.description}
+        title={w.resolved.title}
+        owner={w.resolved.owner}
+        editable={w.resolved.editable}
+        meta={w.resolved.meta}
+        description={w.resolved.description}
+        isPrivate={w.resolved.isPrivate}
+        archived={w.archived}
+        editing={w.editing}
+        itemCount={w.itemIds.length}
+        heroThumbs={w.heroThumbs}
+        showHero={w.showHero}
+        onStartEditing={() => w.setEditing(true)}
+        onOpenImport={() => w.setImportOpen(true)}
       />
 
-      <CollectionEditToolbar
-        isEditing={isEditing}
-        selectMode={selectMode}
-        selectedCount={selectedIds.size}
-        onOpenImport={() => setImportOpen(true)}
-        onToggleSelectMode={() => {
-          setSelectMode((v) => !v);
-          setSelectedIds(new Set());
-        }}
-        onRemoveSelected={removeSelected}
-        onCancelSelection={() => {
-          setSelectMode(false);
-          setSelectedIds(new Set());
-        }}
-      />
+      {w.isEditing ? (
+        <CollectionEditToolbar
+          itemCount={w.itemIds.length}
+          selectMode={w.selectMode}
+          selectedCount={w.selectedIds.size}
+          onToggleSelectMode={() => {
+            w.setSelectMode((v) => !v);
+          }}
+          onOpenImport={() => w.setImportOpen(true)}
+          onRemoveSelected={w.removeSelected}
+          onDone={w.stopEditing}
+        />
+      ) : null}
 
-      <div>
-        {isEditing ? (
-          items.length === 0 ? (
-            <EmptyState
-              icon="folder"
-              title="This collection is empty"
-              subtitle="Add saved items or favourites to start building it."
-              actionLabel="Add items"
-              onAction={() => setImportOpen(true)}
-              compact
-            />
-          ) : (
-            <EditableMoodboardGrid
-              items={summaries}
-              columns={columns}
-              selectMode={selectMode}
-              selectedIds={selectedIds}
-              onToggleSelect={toggleSelect}
-              onRemove={(itemId) => removeWithUndo([itemId])}
-              onMove={
-                LIVE
-                  ? undefined
-                  : (itemId, dir) => void commitItems(movedItem(itemIds, itemId, dir))
-              }
-              onReorder={
-                LIVE
-                  ? undefined
-                  : (draggedId, targetId) =>
-                      void commitItems(itemMovedBefore(itemIds, draggedId, targetId))
-              }
-            />
-          )
-        ) : (
-          <MasonryGrid
-            units={units}
-            columns={columns}
-            emptyTitle="This collection is empty"
-            emptySubtitle="Saved items will appear here."
+      <div className="mt-8 px-4 pb-16 sm:px-6">
+        {w.isEditing ? (
+          <EditableMoodboardGrid
+            items={w.summaries}
+            editable
+            selectMode={w.selectMode}
+            selectedIds={w.selectedIds}
+            onToggleSelect={w.toggleSelect}
+            onRemoveItem={(item) => w.removeWithUndo([item.id])}
+            onMove={(draggedId, targetId) => {
+              const from = w.itemIds.indexOf(draggedId);
+              const to = w.itemIds.indexOf(targetId);
+              if (from < 0 || to < 0 || from === to) return;
+              void w.commitItems(movedItem(w.itemIds, from, to));
+            }}
+            onMoveBefore={(draggedId, targetId) => {
+              void w.commitItems(itemMovedBefore(w.itemIds, draggedId, targetId));
+            }}
           />
+        ) : w.items.length === 0 ? (
+          <div className="py-12">
+            <EmptyState
+              icon="bookmark"
+              title="This collection is empty"
+              subtitle={
+                w.resolved.editable
+                  ? 'Add items you love from search, the feed, or product pages.'
+                  : 'The owner hasn’t added any items to this collection yet.'
+              }
+              actionLabel={w.resolved.editable ? 'Explore items' : undefined}
+              onAction={w.resolved.editable ? () => window.location.assign('/search') : undefined}
+            />
+            {w.resolved.editable && w.candidates.length > 0 ? (
+              <div className="mt-4 flex justify-center">
+                <Button
+                  variant="secondary"
+                  size="md"
+                  onClick={() => w.setImportOpen(true)}
+                >
+                  Import from saved
+                </Button>
+              </div>
+            ) : null}
+          </div>
+        ) : (
+          <MasonryGrid items={w.units} />
         )}
       </div>
 
       <CollectionSheetsGroup
-        id={id}
-        title={resolved.title}
-        isPrivate={resolved.isPrivate}
-        archived={archived}
-        isCloset={isCloset}
-        importOpen={importOpen}
-        onCloseImport={() => setImportOpen(false)}
-        candidates={candidates}
-        onAddItems={addItems}
-        optionsOpen={optionsOpen}
-        onCloseOptions={() => setOptionsOpen(false)}
-        onOpenDetails={() => setDetailsOpen(true)}
-        onStartEditing={() => setEditing(true)}
-        onOpenCover={() => setCoverOpen(true)}
-        onTogglePrivacy={togglePrivacy}
+        id={w.id}
+        title={w.resolved.title}
+        description={w.resolved.description ?? ''}
+        isPrivate={Boolean(w.resolved.isPrivate)}
+        archived={w.archived}
+        items={w.summaries}
+        candidates={w.candidates}
+        candidatesLoading={w.candidatesLoading}
+        optionsOpen={w.optionsOpen}
+        detailsOpen={w.detailsOpen}
+        coverOpen={w.coverOpen}
+        importOpen={w.importOpen}
+        confirmDelete={w.confirmDelete}
+        onCloseOptions={() => w.setOptionsOpen(false)}
+        onCloseDetails={() => w.setDetailsOpen(false)}
+        onCloseCover={() => w.setCoverOpen(false)}
+        onCloseImport={() => w.setImportOpen(false)}
+        onCloseConfirmDelete={() => w.setConfirmDelete(false)}
+        onOpenDetails={() => w.setDetailsOpen(true)}
+        onOpenCover={() => w.setCoverOpen(true)}
+        onTogglePrivacy={w.togglePrivacy}
         onToggleArchive={() => {
-          setOptionsOpen(false);
-          setBoardArchived(id, !archived);
-          show(
-            archived
-              ? 'Board restored'
-              : 'Board archived — it stays reachable from this link',
-            'info',
-          );
+          w.setBoardArchived(w.id, !w.archived);
+          w.setOptionsOpen(false);
         }}
-        onShare={() => {
-          setOptionsOpen(false);
-          void shareCollection();
-        }}
-        onOpenConfirmDelete={() => {
-          setOptionsOpen(false);
-          setConfirmDelete(true);
-        }}
-        coverOpen={coverOpen}
-        onCloseCover={() => setCoverOpen(false)}
-        items={items}
-        coverItemId={coverItemId ?? undefined}
-        onSelectCover={(cId) => {
-          setBoardCover(id, cId);
-          setCoverOpen(false);
-          show(cId ? 'Cover updated' : 'Cover reset to automatic', 'info');
-        }}
-        detailsOpen={detailsOpen}
-        onCloseDetails={() => setDetailsOpen(false)}
-        initialDetails={{
-          title: resolved.title,
-          description: resolved.description ?? null,
-          isPrivate: !!resolved.isPrivate,
-        }}
-        onSaveDetails={saveDetails}
-        confirmDelete={confirmDelete}
-        onCloseConfirmDelete={() => setConfirmDelete(false)}
-        onDeleteCollection={() => void deleteCollection()}
+        onConfirmDeleteOpen={() => w.setConfirmDelete(true)}
+        onSaveDetails={w.saveDetails}
+        onSelectCover={(itemId) => w.setBoardCover(w.id, itemId)}
+        onAddItems={w.addItems}
+        onDeleteCollection={w.deleteCollection}
       />
     </div>
   );

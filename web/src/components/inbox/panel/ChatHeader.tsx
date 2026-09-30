@@ -50,6 +50,8 @@ export function ChatHeader({
         onClick={onBack}
       />
 
+      {/* Header identity — tapping opens the info surface, matching the
+          mobile header → conversation-info navigation. */}
       <Link
         href={`/inbox/${conversationId}/info`}
         aria-label={`${isGroup ? 'Group' : 'Chat'} details — ${title}`}

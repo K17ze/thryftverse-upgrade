@@ -17,6 +17,8 @@ import { gbp } from '../../format';
 
 const SIDE_LABEL: Record<TradeSide, string> = { buy: 'Buy', sell: 'Sell' };
 const TYPE_LABEL: Record<OrderType, string> = { market: 'Market', limit: 'Limit', protected_market: 'Protected' };
+/** Time-in-force — 'day' rests until end of day (GFD on the wire),
+ *  'gtc' rests until cancelled or 90 days (GTC90). */
 const DURATION_LABEL: Record<OrderDuration, string> = {
   day: 'Day order',
   gtc: 'GTC · 90 days',
@@ -87,6 +89,8 @@ function HoldToConfirmButton({
       onPointerUp={cancel}
       onPointerLeave={cancel}
       onPointerCancel={cancel}
+      // Keyboard-only submit — pointer clicks already resolved via the
+      // hold path; detail === 0 means a keyboard (or AT) activation.
       onClick={(e) => {
         if (e.detail === 0) onSubmit();
       }}
@@ -102,6 +106,8 @@ function HoldToConfirmButton({
   );
 }
 
+/** Wall-clock ticker for the reservation countdown — 1s resolution is
+ *  enough for a ~60s hold. */
 function useNow(active: boolean): number {
   const [now, setNow] = useState(() => Date.now());
   useEffect(() => {
@@ -120,14 +126,22 @@ export interface TradeReviewCardProps {
   limitPriceGbp: number | null;
   duration: OrderDuration;
   quote: QuoteDisplay;
+  /** Live mode: the server preview + reservation this review is bound
+   *  to. Null in fixture mode, where the local quote is the display. */
   prepared: PreparedLiveOrder | null;
+  /** Live book moved >2% in the user's favour since the quote locked —
+   *  the review surfaces it so commit is an informed choice. */
   marketMoved: boolean;
   liveBestPriceGbp: number | null;
+  /** Fired once when the reservation's commit deadline passes. */
   onExpire: () => void;
+  /** Full obligation — 1ZE locked for buys, units committed for sells. */
   maxReservedLabel: string;
   requireHold: boolean;
   holdReason: string;
   submitting: boolean;
+  /** Non-null when the live risk disclosure hasn't been accepted yet —
+   *  the confirm stays disabled until the checkbox is ticked. */
   riskDocument: { id: string; version: string; title: string; contentUrl: string | null } | null;
   riskAccepted: boolean;
   onRiskAcceptedChange: (accepted: boolean) => void;
@@ -157,6 +171,8 @@ export function TradeReviewCard({
   onBack,
   onConfirm,
 }: TradeReviewCardProps) {
+  // Countdown to the real commit deadline — the earlier of the preview's
+  // validity and the reservation expiry.
   const now = useNow(prepared != null);
   const secondsLeft =
     prepared != null ? Math.max(0, Math.ceil((prepared.validUntilMs - now) / 1000)) : null;
@@ -206,6 +222,8 @@ export function TradeReviewCard({
         ) : null}
       </dl>
       {prepared ? (
+        // Server quote — the preview's own fill walk, fee and total.
+        // Nothing here is computed locally.
         <dl className="mt-5 space-y-2 border-t border-border-subtle pt-4 text-body">
           {prepared.preview.estimatedFill.filledUnits > 0 ? (
             <>
@@ -277,6 +295,9 @@ export function TradeReviewCard({
           </div>
         ) : null}
       </dl>
+      {/* Native's "quote changed" notice, adapted to the reservation
+          model: the locked price can't hurt the user, but the live book
+          may now be better — Back re-quotes, confirm settles locked. */}
       {marketMoved && liveBestPriceGbp != null ? (
         <p
           role="status"

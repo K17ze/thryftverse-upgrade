@@ -9,38 +9,22 @@
  *  - ConvertFormSection
  *  - ConvertReviewSheet
  *  - ConvertReceipt
+ *  - useConvertWorkflow
  */
 
-import { useMemo, useState, useEffect, useRef, useCallback } from 'react';
 import { useRouter } from 'next/navigation';
-import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { EmptyState } from '@/components/ui/EmptyState';
 import { Icon } from '@/components/ui/Icon';
 import { IconButton } from '@/components/ui/IconButton';
 import { Skeleton } from '@/components/ui/Skeleton';
-import { useToast } from '@/components/ui/Toast';
 import { DATA_MODE } from '@/lib/api/client';
-import { parseApiError } from '@/lib/api/http';
-import * as payoutsService from '@/lib/api/services/payouts';
-import * as fxService from '@/lib/api/services/fx';
 import { useSession } from '@/lib/session/SessionProvider';
-import { formatPrice } from '@/lib/utils/format';
-import type { WalletLedgerEntry } from './ledgerViewModel';
-import { useWalletData, type WalletData } from './useWalletData';
-import { walletKeys } from './walletKeys';
+import { useWalletData } from './useWalletData';
 import { ConvertReceipt } from './ConvertReceipt';
 import { ConvertReviewSheet } from './ConvertReviewSheet';
 import { ConvertBalanceSection } from './ConvertBalanceSection';
 import { ConvertFormSection } from './ConvertFormSection';
-import {
-  buildQuote,
-  executeQuote,
-  formatIze,
-  rateLabel,
-  round2,
-  type ConversionResult,
-  type ConvertQuote,
-} from './convertViewModel';
+import { useConvertWorkflow } from './useConvertWorkflow';
 
 function ConvertSkeleton() {
   return (
@@ -69,304 +53,11 @@ function ConvertSkeleton() {
 
 export function ConvertView() {
   const router = useRouter();
-  const queryClient = useQueryClient();
-  const { show } = useToast();
   const { data, isLoading, isError, refetch } = useWalletData();
   const { user, isGuest, sessionLoading } = useSession();
   const isLive = DATA_MODE === 'live';
 
-  const [direction, setDirection] = useState<'ize_to_gbp' | 'gbp_to_ize'>('ize_to_gbp');
-  const [amount, setAmount] = useState('');
-  const [reviewing, setReviewing] = useState(false);
-  const [step, setStep] = useState<'amount' | 'executing' | 'receipt' | 'error'>('amount');
-  const [result, setResult] = useState<ConversionResult | null>(null);
-  const [errorMessage, setErrorMessage] = useState('');
-
-  const [liveQuote, setLiveQuote] = useState<payoutsService.ConvertQuotePayload | null>(null);
-  const [quoteLoading, setQuoteLoading] = useState(false);
-  const [quoteError, setQuoteError] = useState(false);
-  const [quoteNonce, setQuoteNonce] = useState(0);
-  const [newIzeBalance, setNewIzeBalance] = useState<number | null>(null);
-
-  const idempotencyKeyRef = useRef<string | null>(null);
-
-  const [secondsRemaining, setSecondsRemaining] = useState(15);
-  useEffect(() => {
-    if (isLive) return;
-    const timer = setInterval(() => {
-      setSecondsRemaining((s) => (s <= 1 ? 15 : s - 1));
-    }, 1000);
-    return () => clearInterval(timer);
-  }, [isLive]);
-
-  const pocketsQuery = useQuery({
-    queryKey: [...walletKeys.root, 'pockets', user?.id],
-    enabled: isLive && !!user?.id,
-    staleTime: 30_000,
-    queryFn: ({ signal }) => fxService.getCurrencyBalances(user!.id, signal),
-  });
-  const fiatPocket = pocketsQuery.data;
-  const pocketCurrency = fiatPocket?.fiatCurrency ?? 'GBP';
-  const pocketMajor = fiatPocket
-    ? fxService.minorUnitsToMajor(fiatPocket.fiatBalanceMinor, fiatPocket.fiatCurrency)
-    : 0;
-
-  const buyPairQuery = useQuery({
-    queryKey: [...walletKeys.root, 'buy-pair', pocketCurrency],
-    enabled: isLive && !!fiatPocket && direction === 'gbp_to_ize',
-    staleTime: 60_000,
-    queryFn: ({ signal }) => fxService.getFxPairRate('USD', pocketCurrency, signal),
-  });
-  const buyRate = buyPairQuery.data ? Number(buyPairQuery.data.rate) : NaN;
-
-  const numericAmount = Number(amount) || 0;
-  const pocketExp = fxService.currencyMinorExponent(pocketCurrency);
-  const roundToPocket = useCallback(
-    (v: number) => {
-      const f = Math.pow(10, pocketExp);
-      return Math.round(v * f) / f;
-    },
-    [pocketExp],
-  );
-  const pocketCap = Math.floor(pocketMajor * Math.pow(10, pocketExp)) / Math.pow(10, pocketExp);
-  const maxAmount = data
-    ? direction === 'ize_to_gbp'
-      ? data.ize
-        ? data.ize.available
-        : 0
-      : isLive
-        ? pocketCap
-        : round2(data.available)
-    : 0;
-  const exceeds = numericAmount > maxAmount + 1e-9;
-
-  const directionSupported =
-    !isLive ||
-    direction === 'ize_to_gbp' ||
-    (fiatPocket != null && !pocketsQuery.isError);
-
-  useEffect(() => {
-    idempotencyKeyRef.current = null;
-  }, [direction, numericAmount]);
-
-  useEffect(() => {
-    if (
-      !isLive ||
-      direction !== 'ize_to_gbp' ||
-      numericAmount <= 0 ||
-      exceeds ||
-      !user?.id
-    ) {
-      setLiveQuote(null);
-      setQuoteError(false);
-      setQuoteLoading(false);
-      return;
-    }
-    let cancelled = false;
-    const controller = new AbortController();
-    const timer = window.setTimeout(() => {
-      setQuoteLoading(true);
-      setQuoteError(false);
-      payoutsService
-        .getConvertQuote(
-          { userId: user.id, izeAmount: numericAmount, fiatCurrency: pocketCurrency },
-          controller.signal,
-        )
-        .then((res) => {
-          if (!cancelled) setLiveQuote(res.conversion ?? null);
-        })
-        .catch(() => {
-          if (!cancelled) {
-            setLiveQuote(null);
-            setQuoteError(true);
-          }
-        })
-        .finally(() => {
-          if (!cancelled) setQuoteLoading(false);
-        });
-    }, 400);
-    return () => {
-      cancelled = true;
-      controller.abort();
-      window.clearTimeout(timer);
-    };
-  }, [isLive, direction, numericAmount, exceeds, user?.id, quoteNonce, pocketCurrency]);
-
-  const BUY_IZE_FEE_BPS_ESTIMATE = 200;
-
-  const quote: ConvertQuote | null = useMemo(() => {
-    if (exceeds || numericAmount <= 0 || !directionSupported) return null;
-    if (!isLive) return buildQuote(direction, numericAmount);
-    if (direction === 'gbp_to_ize') {
-      if (!Number.isFinite(buyRate) || buyRate <= 0) return null;
-      const principal = roundToPocket(numericAmount / (1 + BUY_IZE_FEE_BPS_ESTIMATE / 10_000));
-      return {
-        direction,
-        sourceAmount: roundToPocket(numericAmount),
-        principal,
-        fee: roundToPocket(numericAmount - principal),
-        feeBps: BUY_IZE_FEE_BPS_ESTIMATE,
-        net: round2(principal / buyRate),
-      };
-    }
-    if (!liveQuote || Math.abs(liveQuote.izeAmount - numericAmount) > 1e-6) {
-      return null;
-    }
-    return {
-      direction,
-      sourceAmount: liveQuote.izeAmount,
-      principal: liveQuote.principalAmount,
-      fee: liveQuote.feeAmount,
-      feeBps: liveQuote.feeBps,
-      net: liveQuote.netFiatAmount,
-    };
-  }, [exceeds, numericAmount, directionSupported, isLive, direction, liveQuote, buyRate, roundToPocket]);
-
-  const liveRatePerIze = liveQuote?.rateUsed ?? liveQuote?.fxRate ?? null;
-  const quoteRateLabel =
-    isLive && direction === 'gbp_to_ize'
-      ? Number.isFinite(buyRate)
-        ? `≈ 1 1ZE = ${formatPrice(buyRate, pocketCurrency)} (estimate)`
-        : 'Fetching estimate…'
-      : isLive && liveRatePerIze != null
-        ? `1 1ZE = ${formatPrice(liveRatePerIze, pocketCurrency)}`
-        : rateLabel(direction);
-
-  const setPercentage = (pct: number) => {
-    if (maxAmount <= 0) return;
-    const computed =
-      direction === 'gbp_to_ize' && isLive
-        ? roundToPocket(maxAmount * pct)
-        : round2(maxAmount * pct);
-    setAmount(computed.toFixed(direction === 'gbp_to_ize' && isLive ? pocketExp : 2));
-  };
-
-  const applyConversion = (r: ConversionResult) => {
-    queryClient.setQueryData<WalletData>(walletKeys.all(user?.id), (old) => {
-      if (!old?.ize) return old;
-      const entry: WalletLedgerEntry = {
-        id: r.id,
-        kind: 'conversion',
-        amount: r.gbpDelta,
-        status: 'completed',
-        date: r.timestamp,
-        description:
-          r.direction === 'ize_to_gbp'
-            ? `Conversion — ${formatIze(r.sourceAmount)} 1ZE to GBP`
-            : `Conversion — ${formatPrice(r.sourceAmount, 'GBP')} to 1ZE`,
-        balance: null,
-      };
-      return {
-        ...old,
-        available: round2(old.available + r.gbpDelta),
-        ize: { ...old.ize, settled: round2(old.ize.settled + r.izeDelta) },
-        session: [entry, ...old.session],
-      };
-    });
-  };
-
-  const executeLive = async () => {
-    if (!user?.id || numericAmount <= 0) return;
-    if (direction === 'gbp_to_ize' && !fiatPocket) return;
-    setReviewing(false);
-    setErrorMessage('');
-    setStep('executing');
-    if (!idempotencyKeyRef.current) {
-      idempotencyKeyRef.current = payoutsService.newConvertAttemptKey();
-    }
-    try {
-      if (direction === 'gbp_to_ize') {
-        const res = await payoutsService.buyIze({
-          userId: user.id,
-          fiatAmount: numericAmount,
-          fiatCurrency: pocketCurrency,
-          idempotencyKey: idempotencyKeyRef.current,
-        });
-        const p = res.purchase;
-        const executed: ConversionResult = {
-          direction: 'gbp_to_ize',
-          sourceAmount: p.fiatAmount,
-          principal: p.principalFiat,
-          fee: p.feeFiat,
-          feeBps: p.feeBps,
-          net: p.izeAmount,
-          id: '',
-          gbpDelta: -p.fiatAmount,
-          izeDelta: p.izeAmount,
-          rate: p.rateUsed,
-          timestamp: new Date().toISOString(),
-        };
-        setResult(executed);
-        setNewIzeBalance(
-          typeof res.wallet?.onezeBalance === 'number' ? res.wallet.onezeBalance : null,
-        );
-        idempotencyKeyRef.current = null;
-        setStep('receipt');
-        void queryClient.invalidateQueries({ queryKey: walletKeys.root });
-        show(
-          `Bought ${formatIze(executed.net)} 1ZE for ${formatPrice(executed.sourceAmount, pocketCurrency)}`,
-          'success',
-        );
-        return;
-      }
-      const res = await payoutsService.convertIzeToFiat({
-        userId: user.id,
-        izeAmount: numericAmount,
-        fiatCurrency: pocketCurrency,
-        idempotencyKey: idempotencyKeyRef.current,
-      });
-      const c = res.conversion;
-      const executed: ConversionResult = {
-        direction: 'ize_to_gbp',
-        sourceAmount: c.izeAmount,
-        principal: c.principalAmount,
-        fee: c.feeAmount,
-        feeBps: c.feeBps,
-        net: c.netFiatAmount,
-        id: '',
-        gbpDelta: c.netFiatAmount,
-        izeDelta: -c.izeAmount,
-        rate: c.rateUsed ?? c.fxRate ?? 0,
-        timestamp: new Date().toISOString(),
-      };
-      setResult(executed);
-      setNewIzeBalance(
-        typeof res.wallet?.onezeBalance === 'number' ? res.wallet.onezeBalance : null,
-      );
-      idempotencyKeyRef.current = null;
-      setStep('receipt');
-      void queryClient.invalidateQueries({ queryKey: walletKeys.root });
-      show(
-        `Converted ${formatIze(executed.sourceAmount)} 1ZE to ${formatPrice(executed.net, pocketCurrency)}`,
-        'success',
-      );
-    } catch (e) {
-      setErrorMessage(parseApiError(e, 'Unable to convert right now.').message);
-      setStep('error');
-    }
-  };
-
-  const execute = () => {
-    if (!quote) return;
-    if (isLive) {
-      void executeLive();
-      return;
-    }
-    setReviewing(false);
-    setStep('executing');
-    window.setTimeout(() => {
-      const executed = executeQuote(quote);
-      applyConversion(executed);
-      setResult(executed);
-      setStep('receipt');
-      show(
-        executed.direction === 'ize_to_gbp'
-          ? `Converted ${formatIze(executed.sourceAmount)} 1ZE to ${formatPrice(executed.net, 'GBP')}`
-          : `Converted ${formatPrice(executed.sourceAmount, 'GBP')} to ${formatIze(executed.net)} 1ZE`,
-        'success',
-      );
-    }, 900);
-  };
+  const workflow = useConvertWorkflow({ data, user, isLive });
 
   if (sessionLoading || isLoading) return <ConvertSkeleton />;
 
@@ -406,35 +97,20 @@ export function ConvertView() {
     );
   }
 
-  const ize = data.ize ?? { settled: 0, pending: 0, reserved: 0, available: 0 };
-
-  if (step === 'receipt' && result) {
+  if (workflow.step === 'receipt' && workflow.result) {
     return (
       <ConvertReceipt
-        result={result}
-        pocketCurrency={pocketCurrency}
+        result={workflow.result}
+        pocketCurrency={workflow.pocketCurrency}
         isLive={isLive}
-        newIzeBalance={newIzeBalance}
+        newIzeBalance={workflow.newIzeBalance}
         available={data.available}
-        settledIze={ize.settled}
+        settledIze={workflow.ize.settled}
         onDone={() => router.push('/wallet')}
-        onConvertAgain={() => {
-          setResult(null);
-          setAmount('');
-          setStep('amount');
-        }}
+        onConvertAgain={workflow.resetFlow}
       />
     );
   }
-
-  const settledLabel =
-    direction === 'ize_to_gbp'
-      ? `${formatIze(ize.available)} 1ZE`
-      : isLive
-        ? fiatPocket
-          ? fxService.formatMinorAmount(fiatPocket.fiatBalanceMinor, pocketCurrency)
-          : '—'
-        : formatPrice(data.available, data.currency);
 
   return (
     <div className="mx-auto w-full max-w-xl pb-16 lg:max-w-2xl">
@@ -444,60 +120,60 @@ export function ConvertView() {
           <h1 className="text-screen-title text-text-primary">Instant Convert</h1>
           <p className="text-caption text-text-secondary">
             {isLive
-              ? `Between your ${pocketCurrency} balance and 1ZE`
+              ? `Between your ${workflow.pocketCurrency} balance and 1ZE`
               : 'Real-time zero-slippage liquidity exchange'}
           </p>
         </div>
       </div>
 
       <ConvertBalanceSection
-        settledLabel={settledLabel}
-        direction={direction}
-        ize={ize}
+        settledLabel={workflow.settledLabel}
+        direction={workflow.direction}
+        ize={workflow.ize}
         data={data}
         isLive={isLive}
-        fiatPocket={fiatPocket}
-        pocketCurrency={pocketCurrency}
+        fiatPocket={workflow.fiatPocket}
+        pocketCurrency={workflow.pocketCurrency}
       />
 
       <ConvertFormSection
-        direction={direction}
-        setDirection={setDirection}
-        amount={amount}
-        setAmount={setAmount}
-        maxAmount={maxAmount}
-        pocketExp={pocketExp}
+        direction={workflow.direction}
+        setDirection={workflow.setDirection}
+        amount={workflow.amount}
+        setAmount={workflow.setAmount}
+        maxAmount={workflow.maxAmount}
+        pocketExp={workflow.pocketExp}
         isLive={isLive}
-        pocketCurrency={pocketCurrency}
-        exceeds={exceeds}
-        numericAmount={numericAmount}
-        directionSupported={directionSupported}
-        pocketsQueryError={pocketsQuery.isError}
-        onRetryPockets={() => void pocketsQuery.refetch()}
-        quote={quote}
-        quoteLoading={quoteLoading}
-        quoteError={quoteError}
-        onRetryQuote={() => setQuoteNonce((n) => n + 1)}
-        quoteRateLabel={quoteRateLabel}
-        secondsRemaining={secondsRemaining}
-        step={step}
-        setStep={setStep}
-        errorMessage={errorMessage}
-        onReview={() => setReviewing(true)}
-        onSetPercentage={setPercentage}
+        pocketCurrency={workflow.pocketCurrency}
+        exceeds={workflow.exceeds}
+        numericAmount={workflow.numericAmount}
+        directionSupported={workflow.directionSupported}
+        pocketsQueryError={workflow.pocketsQuery.isError}
+        onRetryPockets={() => void workflow.pocketsQuery.refetch()}
+        quote={workflow.quote}
+        quoteLoading={workflow.quoteLoading}
+        quoteError={workflow.quoteError}
+        onRetryQuote={() => workflow.setQuoteNonce((n) => n + 1)}
+        quoteRateLabel={workflow.quoteRateLabel}
+        secondsRemaining={workflow.secondsRemaining}
+        step={workflow.step}
+        setStep={workflow.setStep}
+        errorMessage={workflow.errorMessage}
+        onReview={() => workflow.setReviewing(true)}
+        onSetPercentage={workflow.setPercentage}
       />
 
       <ConvertReviewSheet
-        open={reviewing && quote != null}
-        onClose={() => setReviewing(false)}
-        quote={quote}
-        direction={direction}
-        numericAmount={numericAmount}
-        pocketCurrency={pocketCurrency}
-        quoteRateLabel={quoteRateLabel}
+        open={workflow.reviewing && workflow.quote != null}
+        onClose={() => workflow.setReviewing(false)}
+        quote={workflow.quote}
+        direction={workflow.direction}
+        numericAmount={workflow.numericAmount}
+        pocketCurrency={workflow.pocketCurrency}
+        quoteRateLabel={workflow.quoteRateLabel}
         isLive={isLive}
-        step={step}
-        onExecute={execute}
+        step={workflow.step}
+        onExecute={workflow.execute}
       />
 
       {isLive ? null : (

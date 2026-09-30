@@ -102,6 +102,8 @@ export function CollectionSheetsGroup({
         onAdd={onAddItems}
       />
 
+      {/* Owner options — every row runs a real action; destructive delete
+          gets its own confirm sheet (mobile ConfirmationSheet grammar). */}
       <Sheet
         open={optionsOpen}
         onClose={onCloseOptions}
@@ -221,6 +223,9 @@ export function CollectionSheetsGroup({
         </div>
       </Sheet>
 
+      {/* Cover picker — only real item images front the board; "Automatic"
+          restores the derived collage. No cover contract exists on the
+          collections API, so the pick persists in boardPrefs. */}
       <Sheet
         open={coverOpen}
         onClose={onCloseCover}
@@ -280,6 +285,7 @@ export function CollectionSheetsGroup({
         </div>
       </Sheet>
 
+      {/* EditCollectionScreen parity — name, description, privacy. */}
       <EditCollectionSheet
         collectionId={id}
         open={detailsOpen}

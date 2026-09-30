@@ -23,6 +23,13 @@ interface TranslationRowProps {
   message: Message;
 }
 
+/**
+ * TranslationRow — the in-bubble translate affordance, port of the
+ * mobile translationRow block: idle "Translate" link → spinner →
+ * translated body with source-language label + "Show original", or the
+ * honest failed state with retry. Script detection decides whether the
+ * row shows at all; results cache per message+locale for the session.
+ */
 export function TranslationRow({ message }: TranslationRowProps) {
   const { locale } = useLocale();
   const [result, setResult] = useState<TranslationResult | undefined>(() =>
@@ -32,6 +39,8 @@ export function TranslationRow({ message }: TranslationRowProps) {
     getCachedTranslation(message.id, locale) ? 'done' : 'idle',
   );
 
+  // Fixture mode has no translate backend — an affordance that can only
+  // ever fail is worse than none.
   const foreign =
     DATA_MODE === 'live' && isForeignLanguageMessage(message.text ?? '', locale);
   if (!foreign) return null;

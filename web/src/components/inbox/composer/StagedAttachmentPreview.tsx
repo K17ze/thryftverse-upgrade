@@ -10,6 +10,12 @@ import { Icon } from '@/components/ui/Icon';
 import { IconButton } from '@/components/ui/IconButton';
 import { formatElapsed } from './VoiceRecordingBar';
 
+/**
+ * Staged attachment — what the composer holds before send. The pick is a
+ * local File + blob: preview; live mode uploads the File (presign → PUT →
+ * finalize) and posts the canonical URI, fixture mode keeps the blob so
+ * the thread renders the real bytes.
+ */
 export type StagedAttachment =
   | { kind: 'image'; uri: string; file: File }
   | { kind: 'document'; uri: string; file: File; name: string; mimeType: string }

@@ -51,6 +51,7 @@ export const MoodboardCoverHeader = forwardRef<
   ref,
 ) {
   return (
+    /* Cover header — media carries the surface; scrim only for legibility */
     <div className="relative mx-4 mt-1 overflow-hidden rounded-xl sm:mx-6">
       <div className="relative h-60 sm:h-80">
         <AppImage

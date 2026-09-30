@@ -33,6 +33,9 @@ export function MessageReceipt({
   /** Read-tick tint — full inverse on the brand bubble, brand on a card. */
   readClassName?: string;
 }) {
+  // Read receipts off → the viewer's own ticks stop at "delivered". The
+  // cap lives here (the single point every surface shares — bubbles,
+  // offer cards, listing shares) so no renderer can overclaim a read.
   const receiptsEnabled = useReadReceiptsEnabled();
   const effective = capReceiptForPrivacy(status, receiptsEnabled);
   if (!effective) return null;
@@ -179,12 +182,18 @@ export function MessageText({
 }
 
 /**
- * Quiet hover/focus gutter actions beside the bubble.
+ * Quiet hover/focus gutter actions — the desktop answer to the mobile
+ * swipe-to-reply + long-press menu. Rendered beside the bubble, never
+ * inside it, so text layout never shifts; hover and keyboard focus reveal
+ * them the same way. `mine` flips the gutter to the leading side with the
+ * primary action hugging the bubble edge.
  */
 export function MessageActions({
   mine,
   onReply,
   onCopy,
+  /** Opens the react/actions menu anchored at the button — the gutter
+   *  entry point to the same menu long-press opens. */
   onReact,
 }: {
   mine: boolean;
@@ -194,6 +203,9 @@ export function MessageActions({
 }) {
   if (!onReply && !onCopy && !onReact) return null;
 
+  // Each button manages its own reveal — a group-hover or its own
+  // focus-visible flips pointer events + opacity (a shared container
+  // opacity would swallow the focus state).
   const btn =
     'pointer-events-none flex h-11 items-center rounded-md px-2 text-micro font-semibold uppercase tracking-[0.08em] text-text-muted opacity-0 transition-opacity duration-150 hover:text-text-primary focus-visible:pointer-events-auto focus-visible:opacity-100 group-hover/msg:pointer-events-auto group-hover/msg:opacity-100';
 

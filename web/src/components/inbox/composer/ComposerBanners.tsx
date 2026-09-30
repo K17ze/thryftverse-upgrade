@@ -39,7 +39,8 @@ export function ComposerBanners({
 }: ComposerBannersProps) {
   return (
     <>
-      {/* Edit staging banner */}
+      {/* Edit staging — the mobile composer edit banner: same edge/sender/
+          preview grammar as the reply bar, Escape or × cancels. */}
       {activeEdit ? (
         <div className="flex items-stretch gap-2 px-3 pt-2.5 md:px-4">
           <div className="flex min-w-0 flex-1 items-center overflow-hidden rounded-md border border-border-subtle bg-surface">
@@ -63,7 +64,9 @@ export function ComposerBanners({
         </div>
       ) : null}
 
-      {/* Quoted reply banner */}
+      {/* Quoted reply — the mobile ReplyQuote grammar: brand edge, sender
+          name, one-line preview, × dismisses (Escape does the same from
+          the input). */}
       {!activeEdit && replyTo ? (
         <div className="flex items-stretch gap-2 px-3 pt-2.5 md:px-4">
           <div className="flex min-w-0 flex-1 items-center overflow-hidden rounded-md border border-border-subtle bg-surface">
@@ -87,7 +90,10 @@ export function ComposerBanners({
         </div>
       ) : null}
 
-      {/* Draft safety warning banner */}
+      {/* Draft safety warning — the mobile inline composer strip: danger/
+          caution while the draft carries off-platform-payment or urgency
+          grammar. Dismissible, non-blocking — send always proceeds (the
+          mobile semantics: warn, never prevent). */}
       {warning && !warningDismissed && onDismissWarning ? (
         <div className="px-3 pt-2.5 md:px-4">
           <ChatSafetyBanner

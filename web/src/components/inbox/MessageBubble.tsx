@@ -82,6 +82,11 @@ export interface MessageBubbleProps {
   cluster?: MessageCluster;
 }
 
+/**
+ * The bubble takes message-keyed callbacks (the caller passes one stable
+ * handler, the bubble supplies its own message) so the memo below can
+ * hold across a thread re-render — per-row closures would defeat it.
+ */
 function MessageBubbleImpl({
   message: m,
   mine,
@@ -120,6 +125,8 @@ function MessageBubbleImpl({
   const mediaOnly = Boolean(m.mediaUri) && !m.text;
   const reactions = m.reactions ?? [];
   const metaTone = mine ? 'text-text-inverse/60' : 'text-text-muted';
+  // Cluster grammar — same-sender runs tighten to a 2px gap; the tail
+  // corner belongs to the run's final bubble only.
   const tight = cluster === 'middle' || cluster === 'last';
   const tail = cluster === 'single' || cluster === 'last';
 
@@ -200,6 +207,9 @@ function MessageBubbleImpl({
 
           {m.mediaUri ? (
             onMediaPress ? (
+              // Tap → fullscreen lightbox (mobile ChatMediaPreviewScreen).
+              // The video renders inert inside the press target — playback
+              // lives in the lightbox's real controls player.
               <button
                 type="button"
                 onClick={() => onMediaPress(m)}
@@ -241,6 +251,8 @@ function MessageBubbleImpl({
                 )}
               </button>
             ) : isVideo ? (
+              // Video rides a native player — poster still when the server
+              // supplies one (the mediaUri may be an HLS playlist).
               <video
                 src={m.mediaUri}
                 poster={m.posterUri}
@@ -298,6 +310,12 @@ function MessageBubbleImpl({
             </p>
           ) : null}
 
+          {/* Inline translate — mobile parity (WhatsApp/Instagram
+              pattern): foreign-language incoming text offers a quiet
+              Translate link that expands to the translated body plus
+              "Translated from X · Show original". Live-only — the
+              fixture backend has no translator, so the affordance
+              would render a guaranteed error. */}
           {!mine && m.text && DATA_MODE === 'live' ? (
             <TranslationRow message={m} />
           ) : null}
@@ -308,11 +326,17 @@ function MessageBubbleImpl({
             } ${metaTone}`}
           >
             {m.isEdited ? <span className="text-micro">Edited</span> : null}
+            {/* Local clock time — client-computed (ClientTime): a server
+                render can't know the viewer's timezone, so the label is
+                empty in SSR HTML and fills on mount. */}
             <ClientTime
               iso={m.timestamp}
               format={formatMessageTime}
               className="text-micro"
             />
+            {/* A failed send keeps its 'sending' readStatus — the clock
+                would claim in-flight on a write that already failed; the
+                "Not delivered" affordance below the bubble carries it. */}
             {mine && !failed ? <MessageReceipt status={m.readStatus} /> : null}
           </div>
         </div>
@@ -321,6 +345,11 @@ function MessageBubbleImpl({
           <p className="mt-0.5 text-right text-meta text-text-muted">Seen</p>
         ) : null}
 
+        {/* Reaction chips — the message's emoji content, overlapped on the
+            bubble's bottom edge like the mobile reaction badge. Max three
+            shown; the row reserves space so the next message isn't covered.
+            When the caller wires the reaction edge the chips are real
+            toggle buttons — tap adds/removes the viewer's own reaction. */}
         {reactions.length > 0 ? (
           <div
             className={`absolute -bottom-2.5 z-[1] flex gap-1 ${
@@ -371,6 +400,10 @@ function MessageBubbleImpl({
           </div>
         ) : null}
 
+        {/* Quiet gutter actions — react, reply (swipe-reply's desktop
+            analogue) and copy. Anchored beside the bubble stack so text
+            layout never shifts; hover and keyboard focus reveal them the
+            same way. */}
         <MessageActions
           mine={mine}
           onReply={replyable && onReply ? () => onReply(m) : undefined}
@@ -384,6 +417,15 @@ function MessageBubbleImpl({
   );
 }
 
+/**
+ * Memoized — a thread with full history re-renders on every poll tick,
+ * send, receipt and search keystroke; unchanged bubbles skip their
+ * render. The comparator tracks every meaningful prop: message payload
+ * (by reference — React Query keeps row identity), the derived booleans,
+ * and the reply preview by field (the caller resolves it fresh each
+ * render). Callbacks are message-keyed and stable upstream, so identity
+ * equality is meaningful — a changed identity re-renders honestly.
+ */
 export const MessageBubble = memo(
   MessageBubbleImpl,
   (a, b) =>
