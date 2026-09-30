@@ -105,7 +105,7 @@ export function BulkDraftSheet({ open, draft, onSave, onClose }: BulkDraftSheetP
             e.target.value = '';
           }}
         />
-        <ul className="flex gap-2 overflow-x-auto pb-1" aria-label="Item photos">
+        <ul className="no-scrollbar flex gap-2 overflow-x-auto pb-1" aria-label="Item photos">
           {form.images.map((uri, i) => (
             <li key={uri} className="relative h-20 w-20 shrink-0">
               <AppImage src={uri} alt={`Photo ${i + 1}`} fill sizes="80px" className="rounded-md" />

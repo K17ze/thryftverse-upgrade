@@ -35,7 +35,7 @@ export function CategoryTile({
     <Link
       href={`/category/${slug}`}
       role="listitem"
-      className={`group relative block shrink-0 overflow-hidden rounded-lg ${className}`}
+      className={`group relative block shrink-0 overflow-hidden rounded-lg pressable ${className}`}
       aria-label={
         count
           ? `${name} — ${count} item${count === 1 ? '' : 's'}`
@@ -49,7 +49,7 @@ export function CategoryTile({
         sizes={sizes}
         priority={priority}
         className="h-full w-full"
-        imgClassName="transition-transform duration-300 group-hover:scale-105"
+        imgClassName="media-zoom"
       />
       <div className="absolute inset-0 bg-gradient-to-t from-media-overlay-scrim via-transparent to-transparent" />
       <span className="absolute bottom-2 left-2.5 right-2.5">

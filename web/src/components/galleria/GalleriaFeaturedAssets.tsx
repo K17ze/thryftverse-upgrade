@@ -8,6 +8,7 @@
 
 import Link from 'next/link';
 import { AppImage } from '@/components/ui/AppImage';
+import { SoldOverlay } from '@/components/ui/SoldOverlay';
 import { formatPrice } from '@/lib/utils/format';
 import { getListingCoverUri, getPrimaryMedia } from '@/lib/utils/media';
 import type { Listing } from '@/lib/contracts/domain';
@@ -37,14 +38,7 @@ function AssetCard({ asset }: { asset: ResolvedGalleriaAsset }) {
           className="h-full w-full"
           sizes="(max-width: 768px) 50vw, (max-width: 1024px) 33vw, (max-width: 1280px) 25vw, 224px"
         />
-        {listing.isSold ? (
-          <>
-            <div className="absolute inset-0 bg-overlay" />
-            <span className="absolute inset-0 flex items-center justify-center text-body font-medium uppercase tracking-[1.2px] text-scrim-text-primary">
-              Sold
-            </span>
-          </>
-        ) : null}
+        {listing.isSold ? <SoldOverlay /> : null}
       </div>
 
       <div className="mt-3 flex flex-col gap-1 px-0.5">

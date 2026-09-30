@@ -15,6 +15,7 @@ import type { DiscoveryListingSummary } from '@/lib/contracts/domain';
 import { AppImage } from '@/components/ui/AppImage';
 import { Avatar } from '@/components/ui/Avatar';
 import { Icon } from '@/components/ui/Icon';
+import { SoldOverlay } from '@/components/ui/SoldOverlay';
 import { SustainabilityChip } from '@/components/ui/Badge';
 import { useStore, useHydrated } from '@/lib/store/useStore';
 import { useToast } from '@/components/ui/Toast';
@@ -151,7 +152,7 @@ function ProductTileImpl({ item, aspectRatio, visualOnly, priority }: ProductTil
   };
 
   return (
-    <article className={`group relative ${item.isSold ? 'opacity-70' : ''}`}>
+    <article className={`group relative pressable ${item.isSold ? 'opacity-70' : ''}`}>
       <div className="relative overflow-hidden rounded-lg bg-surface-alt">
         {coverIsVideo ? (
           <TileVideo src={cover} label={item.title} aspectRatio={ratio} />
@@ -172,12 +173,7 @@ function ProductTileImpl({ item, aspectRatio, visualOnly, priority }: ProductTil
             grammar at badge weight: a small on-media chip, no scrim, so
             the tile stays browsable without reading as purchasable. */}
         {item.isSold ? (
-          <>
-            <div className="absolute inset-0 bg-overlay" />
-            <span className="absolute inset-0 flex items-center justify-center text-body font-medium uppercase tracking-[1.2px] text-scrim-text-primary">
-              Sold
-            </span>
-          </>
+          <SoldOverlay />
         ) : isPaused ? (
           <span className="absolute left-2 top-2 rounded-md bg-overlay px-2 py-1 text-meta font-semibold uppercase tracking-wide text-scrim-text-primary">
             Paused

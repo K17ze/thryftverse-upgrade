@@ -19,6 +19,7 @@ import { ProductTile } from '@/components/cards/ProductTile';
 import { Avatar } from '@/components/ui/Avatar';
 import { Icon } from '@/components/ui/Icon';
 import { Skeleton } from '@/components/ui/Skeleton';
+import { PdpSectionTitle } from './PdpSectionTitle';
 import { formatCount } from '@/lib/utils/format';
 
 interface PdpRailsProps {
@@ -142,12 +143,12 @@ export function PdpRails({
               </Link>
             </div>
           ) : (
-            <h2
+            <PdpSectionTitle
               id="pdp-seller-rail"
-              className="mb-4 px-4 text-section-title font-semibold text-text-primary sm:px-6"
+              className="mb-4 px-4 sm:px-6"
             >
               More from this seller
-            </h2>
+            </PdpSectionTitle>
           )}
           <div className="no-scrollbar flex gap-2 overflow-x-auto px-4 sm:px-6" role="list">
             {sellerItems.map((item) => (
@@ -162,9 +163,7 @@ export function PdpRails({
       {similarItems.length > 0 ? (
         <section className="border-t border-border-subtle py-6" aria-labelledby="pdp-similar-rail">
           <div className="mb-4 flex items-baseline justify-between gap-3 px-4 sm:px-6">
-            <h2 id="pdp-similar-rail" className="text-section-title font-semibold text-text-primary">
-              {similarTitle}
-            </h2>
+            <PdpSectionTitle id="pdp-similar-rail">{similarTitle}</PdpSectionTitle>
             <span className="tnum shrink-0 text-meta text-text-muted">
               {similarItems.length} {similarItems.length === 1 ? 'item' : 'items'}
             </span>

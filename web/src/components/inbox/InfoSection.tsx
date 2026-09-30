@@ -10,6 +10,7 @@
 import React from 'react';
 import Link from 'next/link';
 import { Icon, type AppIconName } from '@/components/ui/Icon';
+import { Spinner } from '@/components/ui/Spinner';
 
 export function InfoSection({
   title,
@@ -99,10 +100,7 @@ export function InfoRow({
         ) : null}
       </span>
       {busy ? (
-        <span
-          className="h-4 w-4 shrink-0 animate-spin rounded-full border-2 border-border border-t-text-primary"
-          aria-label="Working"
-        />
+        <Spinner size={16} tone="neutral" label="Working" />
       ) : null}
       {detail ? (
         <span className="clamp-1 max-w-[38%] shrink-0 text-right text-meta text-text-muted">

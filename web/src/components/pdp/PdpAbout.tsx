@@ -20,6 +20,7 @@ import { Icon } from '@/components/ui/Icon';
 import { categoryLabel } from '@/components/search/categoryDirectoryStore';
 import { formatDate } from '@/lib/utils/format';
 import { SizeGuideSheet, resolveSizeGuide } from './SizeGuideSheet';
+import { PdpSectionTitle } from './PdpSectionTitle';
 
 interface PdpAboutProps {
   listing: Listing;
@@ -105,9 +106,7 @@ export function PdpAbout({ listing }: PdpAboutProps) {
 
   return (
     <section className="border-t border-border-subtle py-6" aria-labelledby="pdp-about">
-      <h2 id="pdp-about" className="text-section-title font-semibold text-text-primary">
-        About this item
-      </h2>
+      <PdpSectionTitle id="pdp-about">About this item</PdpSectionTitle>
 
       {/* Condition evidence — grade + what the grade means inline; the
           buyer shouldn't have to open a sheet to learn what "Good"

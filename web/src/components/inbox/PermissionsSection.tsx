@@ -9,6 +9,7 @@
 
 import { useState } from 'react';
 import { Icon } from '@/components/ui/Icon';
+import { Spinner } from '@/components/ui/Spinner';
 import type {
   EditablePermission,
   GroupCapabilities,
@@ -82,10 +83,7 @@ export function PermissionsSection({
                   </span>
                 </span>
                 {pendingKey === permission.key ? (
-                  <span
-                    className="h-4 w-4 shrink-0 animate-spin rounded-full border-2 border-border border-t-text-primary"
-                    aria-label="Saving"
-                  />
+                  <Spinner size={16} tone="neutral" label="Saving" />
                 ) : (
                   <Icon
                     name={expanded ? 'chevronUp' : 'chevronDown'}

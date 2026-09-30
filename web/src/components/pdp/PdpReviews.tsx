@@ -18,6 +18,7 @@ import { DATA_MODE } from '@/lib/api/client';
 import { useSession } from '@/lib/session/SessionProvider';
 import { Avatar } from '@/components/ui/Avatar';
 import { Chip } from '@/components/ui/Chip';
+import { PdpSectionTitle } from './PdpSectionTitle';
 import { Icon } from '@/components/ui/Icon';
 import { Skeleton } from '@/components/ui/Skeleton';
 import { RatingStars } from '@/components/profile/RatingStars';
@@ -146,9 +147,7 @@ export function PdpReviews({ listing }: PdpReviewsProps) {
   if (isError) {
     return (
       <section className="border-t border-border-subtle py-6" aria-labelledby="pdp-reviews">
-        <h2 id="pdp-reviews" className="text-section-title font-semibold text-text-primary">
-          Seller reviews
-        </h2>
+        <PdpSectionTitle id="pdp-reviews">Seller reviews</PdpSectionTitle>
         <div className="mt-3 flex items-center gap-2" role="alert">
           <Icon name="alert" size={14} className="shrink-0 text-warning-text" />
           <span className="min-w-0 flex-1 text-body text-text-secondary">
@@ -174,9 +173,7 @@ export function PdpReviews({ listing }: PdpReviewsProps) {
 
   return (
     <section className="border-t border-border-subtle py-6" aria-labelledby="pdp-reviews">
-      <h2 id="pdp-reviews" className="text-section-title font-semibold text-text-primary">
-        Seller reviews
-      </h2>
+      <PdpSectionTitle id="pdp-reviews">Seller reviews</PdpSectionTitle>
 
       {average != null ? (
         <p className="mt-2 flex items-center gap-1.5 text-body text-text-primary">

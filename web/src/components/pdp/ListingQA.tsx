@@ -23,6 +23,7 @@ import { Avatar } from '@/components/ui/Avatar';
 import { Icon } from '@/components/ui/Icon';
 import { Skeleton } from '@/components/ui/Skeleton';
 import { useToast } from '@/components/ui/Toast';
+import { PdpSectionTitle } from './PdpSectionTitle';
 import { useSession } from '@/lib/session/SessionProvider';
 import { parseApiError } from '@/lib/api/http';
 import { DATA_MODE } from '@/lib/api/client';
@@ -164,12 +165,9 @@ export function ListingQA({ listing, isSellerBlocked = false }: ListingQAProps) 
     >
       {/* Section header — title + quiet count */}
       <div className="mb-4 flex items-center gap-2">
-        <h2
-          id="pdp-questions"
-          className="flex-1 text-section-title font-semibold text-text-primary"
-        >
+        <PdpSectionTitle id="pdp-questions" className="flex-1">
           Questions &amp; answers
-        </h2>
+        </PdpSectionTitle>
         {questionTotal > 0 ? (
           <span className="tnum rounded-full bg-surface-alt px-2 py-0.5 text-meta text-text-muted">
             {questionTotal}

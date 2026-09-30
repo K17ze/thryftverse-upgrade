@@ -16,6 +16,7 @@ import { useCoOwnAssetForListing } from '@/lib/hooks/coown-queries';
 import { AppImage } from '@/components/ui/AppImage';
 import { Icon } from '@/components/ui/Icon';
 import { formatPrice } from '@/lib/utils/format';
+import { PdpSectionTitle } from './PdpSectionTitle';
 
 interface PdpCoOwnProps {
   listingId: string;
@@ -32,9 +33,9 @@ export function PdpCoOwn({ listingId }: PdpCoOwnProps) {
 
   return (
     <section className="border-t border-border-subtle py-6" aria-labelledby="pdp-coown">
-      <h2 id="pdp-coown" className="mb-3 text-section-title font-semibold text-text-primary">
+      <PdpSectionTitle id="pdp-coown" className="mb-3">
         Fractional ownership
-      </h2>
+      </PdpSectionTitle>
 
       <Link
         href={`/co-own/${encodeURIComponent(data.id)}`}

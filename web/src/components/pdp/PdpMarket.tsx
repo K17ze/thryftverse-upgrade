@@ -20,6 +20,7 @@ import { usePdpMarketEvidence } from '@/lib/hooks/pdp-market-queries';
 import { AppImage } from '@/components/ui/AppImage';
 import { Skeleton } from '@/components/ui/Skeleton';
 import { formatPrice } from '@/lib/utils/format';
+import { PdpSectionTitle } from './PdpSectionTitle';
 
 interface PdpMarketProps {
   listing: Listing;
@@ -138,9 +139,9 @@ export function PdpMarket({ listing }: PdpMarketProps) {
 
   return (
     <section className="border-t border-border-subtle py-6" aria-labelledby="pdp-market">
-      <h2 id="pdp-market" className="mb-3 text-section-title font-semibold text-text-primary">
+      <PdpSectionTitle id="pdp-market" className="mb-3">
         Price history &amp; market
-      </h2>
+      </PdpSectionTitle>
 
       <dl>
         {rows.map((row) => (

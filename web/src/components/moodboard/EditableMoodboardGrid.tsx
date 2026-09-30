@@ -15,6 +15,7 @@ import { useMemo, useState, type DragEvent } from 'react';
 import type { DiscoveryListingSummary } from '@/lib/contracts/domain';
 import { AppImage } from '@/components/ui/AppImage';
 import { Icon } from '@/components/ui/Icon';
+import { SoldOverlay } from '@/components/ui/SoldOverlay';
 import { formatPrice } from '@/lib/utils/format';
 import {
   getCategoryFocalPoint,
@@ -108,14 +109,7 @@ function EditableTile({
           sizes="(max-width: 640px) 50vw, (max-width: 1024px) 33vw, 20vw"
         />
 
-        {item.isSold ? (
-          <>
-            <div className="absolute inset-0 bg-overlay" />
-            <span className="absolute inset-0 flex items-center justify-center text-body font-medium uppercase tracking-[1.2px] text-scrim-text-primary">
-              Sold
-            </span>
-          </>
-        ) : null}
+        {item.isSold ? <SoldOverlay /> : null}
 
         {selectMode ? (
           <>

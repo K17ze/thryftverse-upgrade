@@ -9,6 +9,7 @@
  */
 
 import { Icon, type AppIconName } from '@/components/ui/Icon';
+import { Spinner } from '@/components/ui/Spinner';
 
 export interface QuickAction {
   key: string;
@@ -41,7 +42,7 @@ export function QuickActions({ actions }: { actions: QuickAction[] }) {
           >
             <span className="flex h-7 w-7 items-center justify-center" aria-hidden>
               {action.busy ? (
-                <span className="h-4 w-4 animate-spin rounded-full border-2 border-border border-t-brand" />
+                <Spinner size={16} />
               ) : (
                 <Icon name={action.icon} size={22} filled={action.active} />
               )}

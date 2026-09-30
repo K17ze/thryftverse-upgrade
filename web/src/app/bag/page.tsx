@@ -273,7 +273,7 @@ export default function BagPage() {
                         aspectRatio={0.8}
                         focalPoint={getCategoryFocalPoint(s.category)}
                         sizes="140px"
-                        className="w-full transition-transform duration-200 group-hover:scale-105"
+                        className="w-full media-zoom"
                       />
                     </Link>
                     <div className="mt-2 min-w-0">

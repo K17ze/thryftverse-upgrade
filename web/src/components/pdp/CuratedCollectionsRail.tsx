@@ -16,6 +16,7 @@ import { COLLECTIONS } from '@/components/profile/fixtures';
 import { DATA_MODE } from '@/lib/api/client';
 import { fetchGalleriaCollection, fetchGalleriaCollections } from '@/lib/api/services/galleria';
 import { useSession } from '@/lib/session/SessionProvider';
+import { PdpSectionTitle } from './PdpSectionTitle';
 import { AppImage } from '@/components/ui/AppImage';
 import { Icon } from '@/components/ui/Icon';
 
@@ -83,12 +84,9 @@ export function CuratedCollectionsRail({ listing }: CuratedCollectionsRailProps)
         <p className="text-meta uppercase tracking-wide text-text-muted">
           Curated by ThryftVerse
         </p>
-        <h2
-          id="pdp-collections"
-          className="mt-1 text-section-title font-semibold text-text-primary"
-        >
+        <PdpSectionTitle id="pdp-collections" className="mt-1">
           Featured in collections
-        </h2>
+        </PdpSectionTitle>
       </div>
       <div
         className="no-scrollbar mt-4 flex snap-x snap-mandatory gap-3 overflow-x-auto px-4 sm:px-6"

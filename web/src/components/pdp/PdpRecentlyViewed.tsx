@@ -15,6 +15,7 @@ import { mapListingToDiscoverySummary } from '@/lib/contracts/domain';
 import { ProductTile } from '@/components/cards/ProductTile';
 import { useRecentlyViewedListings } from '@/lib/hooks/home-modules';
 import { useSession } from '@/lib/session/SessionProvider';
+import { PdpSectionTitle } from './PdpSectionTitle';
 
 const RAIL_CAP = 10;
 
@@ -33,12 +34,9 @@ export function PdpRecentlyViewed({ listing }: { listing: Listing }) {
       className="border-t border-border-subtle py-6"
       aria-labelledby="pdp-recently-viewed"
     >
-      <h2
-        id="pdp-recently-viewed"
-        className="mb-4 px-4 text-section-title font-semibold text-text-primary sm:px-6"
-      >
+      <PdpSectionTitle id="pdp-recently-viewed" className="mb-4 px-4 sm:px-6">
         Recently viewed
-      </h2>
+      </PdpSectionTitle>
       <div className="no-scrollbar flex gap-2 overflow-x-auto px-4 sm:px-6" role="list">
         {items.slice(0, RAIL_CAP).map((item) => (
           <div key={item.id} role="listitem" className="w-[150px] shrink-0 sm:w-[180px]">

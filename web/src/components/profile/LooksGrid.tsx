@@ -15,7 +15,7 @@ import { formatCount } from '@/lib/utils/format';
 
 export function LookTile({ look, priority }: { look: Look; priority?: boolean }) {
   return (
-    <Link href={`/look/${look.id}`} className="group block" aria-label={look.title ?? 'Look'}>
+    <Link href={`/look/${look.id}`} className="group block pressable" aria-label={look.title ?? 'Look'}>
       <div className="relative overflow-hidden rounded-lg bg-surface-alt">
         <AppImage
           src={look.coverImageUri}

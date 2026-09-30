@@ -258,7 +258,7 @@ export default function MoodboardsPage() {
             New board
           </button>
         </div>
-        <div className="mt-3 flex gap-3 overflow-x-auto px-4 pb-1 sm:px-6">
+        <div className="no-scrollbar mt-3 flex gap-3 overflow-x-auto px-4 pb-1 sm:px-6">
           {/* Create tile — dashed frame, first in the rail */}
           <button
             type="button"

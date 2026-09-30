@@ -68,7 +68,7 @@ function BagLineItem({
     <li className="flex items-start gap-3.5 py-3.5">
       <Link
         href={`/item/${listing.id}`}
-        className="pressable relative w-20 shrink-0 overflow-hidden rounded-md bg-surface-alt"
+        className="group pressable relative w-20 shrink-0 overflow-hidden rounded-md bg-surface-alt"
         aria-label={listing.title}
       >
         <AppImage
@@ -77,7 +77,7 @@ function BagLineItem({
           aspectRatio={0.8}
           focalPoint={getCategoryFocalPoint(listing.category)}
           sizes="80px"
-          className="w-full transition-transform duration-200 hover:scale-105"
+          className="w-full media-zoom"
         />
       </Link>
       <div className="min-w-0 flex-1">

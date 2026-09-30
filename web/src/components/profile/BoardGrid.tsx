@@ -27,7 +27,7 @@ export function BoardCard({ href, title, thumbs, count, ownerName, isPrivate }: 
   return (
     <Link
       href={href}
-      className="group block"
+      className="group block pressable"
       aria-label={`${title}, ${count} items`}
     >
       <div className="relative overflow-hidden rounded-xl bg-surface-alt" style={{ aspectRatio: '0.85' }}>
@@ -41,7 +41,7 @@ export function BoardCard({ href, title, thumbs, count, ownerName, isPrivate }: 
                     alt=""
                     fill
                     sizes="(max-width: 640px) 25vw, (max-width: 1280px) 15vw, 118px"
-                    className="h-full w-full transition-transform duration-300 group-hover:scale-105"
+                    className="h-full w-full media-zoom"
                   />
                 ) : (
                   <div className="h-full w-full bg-surface-raised" />
@@ -55,7 +55,7 @@ export function BoardCard({ href, title, thumbs, count, ownerName, isPrivate }: 
             alt={title}
             fill
             sizes="(max-width: 640px) 50vw, (max-width: 1280px) 25vw, 236px"
-            className="h-full w-full transition-transform duration-300 group-hover:scale-105"
+            className="h-full w-full media-zoom"
             fallbackIcon="layers"
           />
         )}

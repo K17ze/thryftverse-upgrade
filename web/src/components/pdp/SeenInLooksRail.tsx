@@ -15,6 +15,7 @@ import { DATA_MODE } from '@/lib/api/client';
 import { fetchLooks, type LookWithCounts } from '@/lib/api/services/social';
 import { AppImage } from '@/components/ui/AppImage';
 import { Icon } from '@/components/ui/Icon';
+import { PdpSectionTitle } from './PdpSectionTitle';
 
 const LIVE = DATA_MODE === 'live';
 
@@ -78,12 +79,7 @@ export function SeenInLooksRail({ listing }: SeenInLooksRailProps) {
     <section className="border-t border-border-subtle py-6" aria-labelledby="pdp-seen-in-looks">
       <div className="flex items-center gap-1.5 px-4 sm:px-6">
         <Icon name="eye" size={16} className="text-text-muted" />
-        <h2
-          id="pdp-seen-in-looks"
-          className="text-section-title font-semibold text-text-primary"
-        >
-          Seen in Looks
-        </h2>
+        <PdpSectionTitle id="pdp-seen-in-looks">Seen in Looks</PdpSectionTitle>
       </div>
       <p className="mb-3 mt-0.5 px-4 text-meta text-text-muted sm:px-6">
         Styled by the community

@@ -22,6 +22,7 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { Button } from '@/components/ui/Button';
 import { Sheet } from '@/components/ui/Sheet';
+import { Spinner } from '@/components/ui/Spinner';
 import { DATA_MODE } from '@/lib/api/client';
 import {
   applyEnhancement,
@@ -341,10 +342,7 @@ export function PhotoEditSheet({
           />
           {!img && !loadFailed ? (
             <div className="absolute inset-0 flex items-center justify-center rounded-md bg-surface-alt">
-              <span
-                className="h-6 w-6 animate-spin rounded-full border-2 border-border border-t-text-primary"
-                aria-hidden
-              />
+              <Spinner size={24} tone="neutral" />
             </div>
           ) : null}
           {loadFailed ? (
@@ -595,10 +593,7 @@ export function PhotoEditSheet({
 
             {aiPhase === 'submitting' ? (
               <div className="flex items-center gap-2">
-                <span
-                  className="h-4 w-4 animate-spin rounded-full border-2 border-border border-t-text-primary"
-                  aria-hidden
-                />
+                <Spinner size={16} tone="neutral" />
                 <p className="text-caption text-text-secondary">Enhancing…</p>
               </div>
             ) : null}

@@ -70,7 +70,7 @@ export function HighlightsRail({ ownerId, isOwner = false }: HighlightsRailProps
                 alt=""
                 fill
                 sizes="68px"
-                className="h-full w-full transition-transform duration-300 group-hover:scale-[1.05]"
+                className="h-full w-full media-zoom"
                 fallbackIcon="bookmark"
               />
             </span>

@@ -15,6 +15,7 @@ import { useCallback, useEffect, useRef, useState } from 'react';
 import { AppImage } from '@/components/ui/AppImage';
 import { Button } from '@/components/ui/Button';
 import { Icon } from '@/components/ui/Icon';
+import { Spinner } from '@/components/ui/Spinner';
 import { IconButton } from '@/components/ui/IconButton';
 import { Sheet } from '@/components/ui/Sheet';
 import { captureVideoFrame } from '@/lib/media/imageEdit';
@@ -181,10 +182,7 @@ export function CameraSheet({ open, onClose, onCapture, remainingSlots }: Camera
             <div className="flex aspect-[4/5] w-full flex-col items-center justify-center gap-3 px-6 text-center sm:aspect-[4/3]">
               {phase === 'starting' ? (
                 <>
-                  <span
-                    className="h-6 w-6 animate-spin rounded-full border-2 border-border border-t-text-primary"
-                    aria-hidden
-                  />
+                  <Spinner size={24} tone="neutral" />
                   <p className="text-caption text-text-muted">Starting the camera…</p>
                 </>
               ) : phase === 'denied' ? (

@@ -14,6 +14,7 @@ import type { Listing } from '@/lib/contracts/domain';
 import { AppImage } from '@/components/ui/AppImage';
 import { EmptyState } from '@/components/ui/EmptyState';
 import { Icon, type AppIconName } from '@/components/ui/Icon';
+import { SoldOverlay } from '@/components/ui/SoldOverlay';
 import { Skeleton } from '@/components/ui/Skeleton';
 import { useToast } from '@/components/ui/Toast';
 import { focusAdjacentGroupControl } from '@/lib/a11y/focus';
@@ -50,12 +51,7 @@ export function ClosetTile({ item, priority }: { item: Listing; priority?: boole
           </span>
         ) : null}
         {item.isSold ? (
-          <>
-            <div className="absolute inset-0 bg-overlay" />
-            <span className="absolute inset-0 flex items-center justify-center text-meta font-bold uppercase tracking-[1.2px] text-scrim-text-primary">
-              Sold
-            </span>
-          </>
+          <SoldOverlay size="sm" />
         ) : (
           /* Inspect overlay — hover/focus only, hover-capable devices. */
           <div

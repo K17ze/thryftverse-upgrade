@@ -17,6 +17,7 @@ import { useQueryClient } from '@tanstack/react-query';
 import { Sheet } from '@/components/ui/Sheet';
 import { Button } from '@/components/ui/Button';
 import { Badge } from '@/components/ui/Badge';
+import { Spinner } from '@/components/ui/Spinner';
 import { Icon, type AppIconName } from '@/components/ui/Icon';
 import { useToast } from '@/components/ui/Toast';
 import { DATA_MODE } from '@/lib/api/client';
@@ -289,7 +290,7 @@ export function AddMoneySheet({ open, onClose, currency }: AddMoneySheetProps) {
 
         {step === 'processing' && (
           <div className="py-12 text-center">
-            <div className="mx-auto flex h-14 w-14 animate-spin items-center justify-center rounded-full border-2 border-brand border-t-transparent" />
+            <Spinner size={56} className="mx-auto block" />
             <h3 className="mt-6 text-section-title font-semibold text-text-primary">
               Simulating {selectedMethod.name}…
             </h3>

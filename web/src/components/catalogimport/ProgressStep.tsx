@@ -9,6 +9,7 @@
 
 import { useEffect, useRef, useState } from 'react';
 import { Icon } from '@/components/ui/Icon';
+import { Spinner } from '@/components/ui/Spinner';
 import type { ImportSource } from './core';
 
 interface ProgressStepProps {
@@ -72,10 +73,7 @@ export function ProgressStep({ source, onDone }: ProgressStepProps) {
                 {state === 'done' ? (
                   <Icon name="check" size={16} className="text-success-text" />
                 ) : state === 'active' ? (
-                  <span
-                    aria-hidden
-                    className="h-4 w-4 animate-spin rounded-full border-2 border-border-subtle border-t-brand"
-                  />
+                  <Spinner size={16} />
                 ) : (
                   <span aria-hidden className="h-1.5 w-1.5 rounded-full bg-border" />
                 )}

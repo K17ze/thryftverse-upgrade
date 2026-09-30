@@ -19,6 +19,7 @@ import { useQueryClient } from '@tanstack/react-query';
 import { Badge } from '@/components/ui/Badge';
 import { Button } from '@/components/ui/Button';
 import { Chip } from '@/components/ui/Chip';
+import { Spinner } from '@/components/ui/Spinner';
 import { EmptyState } from '@/components/ui/EmptyState';
 import { Icon } from '@/components/ui/Icon';
 import { IconButton } from '@/components/ui/IconButton';
@@ -457,10 +458,7 @@ export function WithdrawView() {
                 {i < stage ? (
                   <Icon name="check" filled size={20} className="text-success-text" />
                 ) : i === stage ? (
-                  <span
-                    className="h-5 w-5 animate-spin rounded-full border-2 border-border border-t-text-primary"
-                    aria-hidden
-                  />
+                  <Spinner size={20} tone="neutral" />
                 ) : (
                   <span className="h-5 w-5 rounded-full border border-border" aria-hidden />
                 )}

@@ -34,6 +34,7 @@ import { useQueryClient } from '@tanstack/react-query';
 import { Button } from '@/components/ui/Button';
 import { EmptyState } from '@/components/ui/EmptyState';
 import { Icon } from '@/components/ui/Icon';
+import { Spinner } from '@/components/ui/Spinner';
 import { IconButton } from '@/components/ui/IconButton';
 import { Sheet } from '@/components/ui/Sheet';
 import { Skeleton } from '@/components/ui/Skeleton';
@@ -853,7 +854,7 @@ export function ExchangeView() {
           <p className="mt-1.5 text-body text-text-secondary">
             Debiting {sourceCurrency} and crediting {targetCurrency} at the quoted rate.
           </p>
-          <span className="mt-6 h-8 w-8 animate-spin rounded-full border-2 border-border border-t-brand" />
+          <Spinner size={32} className="mt-6" />
         </div>
       </div>
     );
@@ -954,7 +955,7 @@ export function ExchangeView() {
             <div className="rounded-lg border border-border-subtle bg-surface-alt p-4">
               {isFetchingQuote ? (
                 <div className="flex items-center gap-2 py-1.5">
-                  <span className="h-4 w-4 animate-spin rounded-full border-2 border-border border-t-text-primary" />
+                  <Spinner size={16} tone="neutral" />
                   <span className="text-body text-text-muted">
                     {isLive ? 'Fetching live quote…' : 'Fetching demo quote…'}
                   </span>

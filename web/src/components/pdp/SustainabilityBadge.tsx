@@ -11,6 +11,7 @@
 import Link from 'next/link';
 import type { Listing } from '@/lib/contracts/domain';
 import { Icon } from '@/components/ui/Icon';
+import { PdpSectionTitle } from './PdpSectionTitle';
 
 type Grade = NonNullable<Listing['sustainabilityGrade']>;
 
@@ -38,12 +39,9 @@ export function SustainabilityBadge({ grade }: SustainabilityBadgeProps) {
 
   return (
     <section className="border-t border-border-subtle py-6" aria-labelledby="pdp-impact">
-      <h2
-        id="pdp-impact"
-        className="mb-3 text-section-title font-semibold text-text-primary"
-      >
+      <PdpSectionTitle id="pdp-impact" className="mb-3">
         Environmental impact
-      </h2>
+      </PdpSectionTitle>
       <div className="flex items-center gap-3">
         <span
           className={`inline-flex h-9 w-9 shrink-0 items-center justify-center rounded-full text-body-emphasis font-bold ${meta.chipClass}`}

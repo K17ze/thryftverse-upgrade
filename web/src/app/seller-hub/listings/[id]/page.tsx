@@ -301,7 +301,7 @@ export default function ManageListingPage({
         <div>
           {/* Media rail — real thumbs, first is the cover. */}
           {listing.images.length ? (
-            <ul className="mt-6 flex gap-2 overflow-x-auto pb-1 lg:mt-0" aria-label="Listing photos">
+            <ul className="no-scrollbar mt-6 flex gap-2 overflow-x-auto pb-1 lg:mt-0" aria-label="Listing photos">
               {listing.images.map((uri, i) => (
                 <li key={uri} className="relative h-36 w-28 shrink-0">
                   <AppImage

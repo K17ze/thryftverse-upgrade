@@ -22,6 +22,7 @@ import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import { Button } from '@/components/ui/Button';
 import { Icon } from '@/components/ui/Icon';
+import { Spinner } from '@/components/ui/Spinner';
 import { LiveBadge } from '@/components/live/LiveBadge';
 import { formatScheduled } from '@/components/live/UpcomingRail';
 import { formatCount, formatPrice } from '@/lib/utils/format';
@@ -342,7 +343,7 @@ export function HostBroadcastRoom({ session, hostToken }: HostBroadcastRoomProps
               <div className="absolute inset-0 flex flex-col items-center justify-center gap-3 bg-surface-alt/95 px-6 text-center">
                 {media === 'connecting' ? (
                   <>
-                    <span className="h-6 w-6 animate-spin rounded-full border-2 border-border border-t-text-primary" />
+                    <Spinner size={24} tone="neutral" />
                     <p className="text-caption text-text-secondary">
                       Connecting to the broadcast room…
                     </p>

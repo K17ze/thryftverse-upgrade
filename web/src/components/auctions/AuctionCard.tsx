@@ -88,7 +88,7 @@ export function AuctionCard({ auction, priority }: AuctionCardProps) {
   const urgency = auctionChipUrgency(auction);
 
   return (
-    <article className="group relative">
+    <article className="group relative pressable">
       <div className="relative overflow-hidden rounded-lg bg-surface-alt">
         <AppImage
           src={auction.image}

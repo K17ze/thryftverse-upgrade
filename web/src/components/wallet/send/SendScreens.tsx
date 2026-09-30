@@ -13,6 +13,7 @@
 import { Icon } from '@/components/ui/Icon';
 import { IconButton } from '@/components/ui/IconButton';
 import { Button } from '@/components/ui/Button';
+import { Spinner } from '@/components/ui/Spinner';
 import { Skeleton } from '@/components/ui/Skeleton';
 import { formatMinorAmount, type TransferPayload } from '@/lib/api/services/fx';
 import { ConvertSummaryRow } from '../ConvertSummaryRow';
@@ -61,7 +62,7 @@ export function SendingScreen({
           Debiting your {sourceCurrency} pocket
           {sameCurrency ? '' : ` and converting to ${targetCurrency}`}.
         </p>
-        <span className="mt-6 h-8 w-8 animate-spin rounded-full border-2 border-border border-t-brand" />
+        <Spinner size={32} className="mt-6" />
       </div>
     </div>
   );

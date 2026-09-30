@@ -93,7 +93,7 @@ function GalleriaBanner() {
           focalPoint={focalPoint}
           sizes="(max-width: 640px) 112px, 176px"
           className="h-full w-full"
-          imgClassName="transition-transform duration-300 group-hover:scale-105"
+          imgClassName="media-zoom"
         />
       </div>
       <div className="flex min-w-0 flex-1 items-center gap-3 py-4 pl-4 pr-2 sm:pl-5">
@@ -142,7 +142,7 @@ function CategoryCard({
           fill
           sizes="(max-width: 640px) 50vw, (max-width: 1280px) 25vw, 12.5vw"
           className="h-full w-full"
-          imgClassName="transition-transform duration-300 group-hover:scale-105"
+          imgClassName="media-zoom"
         />
       </div>
       <div className="px-0.5 pt-2">

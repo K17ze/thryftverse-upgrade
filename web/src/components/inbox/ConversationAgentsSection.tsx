@@ -17,6 +17,7 @@ import type { ConversationAgentCategory } from '@/lib/contracts/conversationAgen
 import { Icon, type AppIconName } from '@/components/ui/Icon';
 import { IconButton } from '@/components/ui/IconButton';
 import { Skeleton } from '@/components/ui/Skeleton';
+import { Spinner } from '@/components/ui/Spinner';
 import { useToast } from '@/components/ui/Toast';
 import { CLOSED_CONFIRM, ConfirmSheet, type ConfirmSheetState } from './ConfirmSheet';
 import { useConversationAgents } from './useConversationAgents';
@@ -169,10 +170,7 @@ export function ConversationAgentsSection({
             </span>
           </span>
           {pending ? (
-            <span
-              className="h-4 w-4 shrink-0 animate-spin rounded-full border-2 border-border border-t-text-primary"
-              aria-label="Working"
-            />
+            <Spinner size={16} tone="neutral" label="Working" />
           ) : (
             <IconButton
               name={deployed ? 'remove' : 'plus'}

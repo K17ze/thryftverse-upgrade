@@ -82,7 +82,7 @@ function CuratedCard({
           alt={collection.title}
           fill
           sizes="(max-width: 640px) 220px, (max-width: 1024px) 260px, 300px"
-          className="h-full w-full transition-transform duration-300 group-hover:scale-105"
+          className="h-full w-full media-zoom"
           fallbackIcon="layers"
         />
         {/* Media scrim — legibility only */}
@@ -236,7 +236,7 @@ export function CuratedRail() {
         <span className="text-meta text-text-muted">Picked by members</span>
       </div>
 
-      <div className="mt-5 flex snap-x snap-mandatory gap-3 overflow-x-auto px-4 pb-2 sm:px-6">
+      <div className="no-scrollbar mt-5 flex snap-x snap-mandatory gap-3 overflow-x-auto px-4 pb-2 sm:px-6">
         {LIVE && liveQuery.isLoading
           ? [0, 1, 2, 3].map((i) => (
               <div

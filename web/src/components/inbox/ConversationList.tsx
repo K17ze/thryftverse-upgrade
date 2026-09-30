@@ -444,7 +444,7 @@ export function ConversationListPane({
         </div>
         {secondaryOpen || SECONDARY_TABS.includes(tab) ? (
           <div
-            className="mt-2 flex gap-1.5 overflow-x-auto pb-0.5"
+            className="no-scrollbar mt-2 flex gap-1.5 overflow-x-auto pb-0.5"
             role="group"
             aria-label="More inbox filters"
           >

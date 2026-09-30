@@ -47,6 +47,7 @@ import {
 import { AppImage } from '@/components/ui/AppImage';
 import { ClientTime } from '@/components/ui/ClientTime';
 import { Icon } from '@/components/ui/Icon';
+import { Spinner } from '@/components/ui/Spinner';
 import { useToast } from '@/components/ui/Toast';
 
 /** Bubble meta time — shared with OfferCard so every message kind stamps
@@ -315,10 +316,7 @@ function VoiceAttachment({
                 }`}
               >
                 {resolving ? (
-                  <span
-                    className="inline-block h-3.5 w-3.5 animate-spin rounded-full border-2 border-current border-t-transparent"
-                    aria-hidden
-                  />
+                  <Spinner size={14} tone="inherit" />
                 ) : (
                   <Icon name={playing ? 'pause' : 'play'} size={14} filled />
                 )}
@@ -476,10 +474,7 @@ function VoiceTranscriptRow({
       {state === 'loading' || state === 'processing' ? (
         <span className="flex items-center justify-between gap-3">
           <span className={`flex items-center gap-1.5 text-meta ${tone}`}>
-            <span
-              className="inline-block h-3 w-3 animate-spin rounded-full border border-current border-t-transparent"
-              aria-hidden
-            />
+            <Spinner size={12} tone="inherit" />
             {state === 'loading' ? 'Requesting transcript…' : 'Transcribing audio…'}
           </span>
           <button
@@ -1417,7 +1412,7 @@ function TranslationRow({ message }: { message: Message }) {
         </>
       ) : state === 'loading' ? (
         <p className="flex items-center gap-1.5 text-meta text-text-muted">
-          <span className="inline-block h-3 w-3 animate-spin rounded-full border border-current border-t-transparent" aria-hidden />
+          <Spinner size={12} tone="inherit" />
           Translating…
         </p>
       ) : state === 'error' ? (

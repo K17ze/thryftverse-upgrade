@@ -19,6 +19,7 @@ import { useRouter } from 'next/navigation';
 import { AppImage } from '@/components/ui/AppImage';
 import { Button } from '@/components/ui/Button';
 import { EmptyState } from '@/components/ui/EmptyState';
+import { Spinner } from '@/components/ui/Spinner';
 import { Icon } from '@/components/ui/Icon';
 import { IconButton } from '@/components/ui/IconButton';
 import { Skeleton } from '@/components/ui/Skeleton';
@@ -118,7 +119,7 @@ function EvidenceGrid({
           />
           {item.uploading ? (
             <span className="absolute inset-0 flex items-center justify-center" aria-hidden>
-              <span className="h-5 w-5 animate-spin rounded-full border-2 border-scrim-text-primary border-t-transparent" />
+              <Spinner size={20} tone="scrim" />
             </span>
           ) : null}
           <button

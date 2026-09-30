@@ -25,7 +25,7 @@ export function OutfitCard({ outfit, onDelete }: OutfitCardProps) {
   const cells = outfitThumbs(items, 4);
 
   return (
-    <div className="group relative">
+    <div className="group relative pressable">
       <Link
         href={`/outfits/${outfit.id}`}
         className="block"
@@ -45,7 +45,7 @@ export function OutfitCard({ outfit, onDelete }: OutfitCardProps) {
                       alt=""
                       fill
                       sizes="(max-width: 640px) 25vw, (max-width: 1280px) 15vw, 118px"
-                      className="h-full w-full transition-transform duration-300 group-hover:scale-105"
+                      className="h-full w-full media-zoom"
                     />
                   ) : (
                     <div className="h-full w-full bg-surface-raised" />
@@ -59,7 +59,7 @@ export function OutfitCard({ outfit, onDelete }: OutfitCardProps) {
               alt={outfit.name}
               fill
               sizes="(max-width: 640px) 50vw, (max-width: 1280px) 25vw, 236px"
-              className="h-full w-full transition-transform duration-300 group-hover:scale-105"
+              className="h-full w-full media-zoom"
               fallbackIcon="layers"
             />
           )}

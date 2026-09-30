@@ -14,6 +14,7 @@ import { useEffect, useState } from 'react';
 import { Sheet } from '@/components/ui/Sheet';
 import { Button } from '@/components/ui/Button';
 import { Icon } from '@/components/ui/Icon';
+import { Spinner } from '@/components/ui/Spinner';
 import { parseApiError } from '@/lib/api/http';
 import type { PayoutSetupOutcome } from '@/lib/api/services/payouts';
 import { useConnectStripePayout } from '@/lib/hooks/payout-queries';
@@ -69,10 +70,7 @@ export function PayoutSetupSheet({ open, onClose, onReady }: PayoutSetupSheetPro
       <div className="px-5 py-5">
         {state.phase === 'working' ? (
           <div className="flex flex-col items-center py-8 text-center" aria-busy>
-            <span
-              className="h-6 w-6 animate-spin rounded-full border-2 border-border border-t-text-primary"
-              aria-hidden
-            />
+            <Spinner size={24} tone="neutral" />
             <p className="mt-4 text-body text-text-secondary">
               Checking your payout setup…
             </p>

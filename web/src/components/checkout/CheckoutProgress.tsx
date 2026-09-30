@@ -1,5 +1,7 @@
 'use client';
 
+import { Spinner } from '@/components/ui/Spinner';
+
 /**
  * Checkout progress — ports of the mobile pair:
  *
@@ -34,10 +36,7 @@ export function CheckoutProgressOverlay({ label }: { label: string }) {
         }
       `}</style>
       <div className="flex items-center gap-2">
-        <span
-          aria-hidden
-          className="h-4 w-4 shrink-0 animate-spin rounded-full border-2 border-border border-t-brand"
-        />
+        <Spinner size={16} />
         <p className="clamp-1 flex-1 text-body font-medium text-text-primary">{label}</p>
       </div>
       <div className="mt-2 h-1 overflow-hidden rounded-full bg-border" aria-hidden>

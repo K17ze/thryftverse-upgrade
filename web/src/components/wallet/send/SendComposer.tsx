@@ -14,6 +14,7 @@
 import { Button } from '@/components/ui/Button';
 import { Icon } from '@/components/ui/Icon';
 import { Sheet } from '@/components/ui/Sheet';
+import { Spinner } from '@/components/ui/Spinner';
 import {
   formatMinorAmount,
   formatRateValue,
@@ -204,7 +205,7 @@ export function SendComposer(props: SendComposerProps) {
             <div className="rounded-lg border border-border-subtle bg-surface-alt p-4">
               {isFetchingQuote ? (
                 <div className="flex items-center gap-2 py-1.5">
-                  <span className="h-4 w-4 animate-spin rounded-full border-2 border-border border-t-text-primary" />
+                  <Spinner size={16} tone="neutral" />
                   <span className="text-body text-text-muted">Fetching live quote…</span>
                 </div>
               ) : quoteError ? (

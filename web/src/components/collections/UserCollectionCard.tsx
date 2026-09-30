@@ -48,7 +48,7 @@ export function UserCollectionCard({
                     alt=""
                     fill
                     sizes="(max-width: 640px) 25vw, (max-width: 1024px) 17vw, (max-width: 1280px) 13vw, 10vw"
-                    className="h-full w-full transition-transform duration-300 group-hover:scale-105"
+                    className="h-full w-full media-zoom"
                   />
                 ) : (
                   <div className="h-full w-full bg-surface-raised" />
@@ -62,7 +62,7 @@ export function UserCollectionCard({
             alt={name}
             fill
             sizes="(max-width: 640px) 50vw, (max-width: 1024px) 33vw, (max-width: 1280px) 25vw, 20vw"
-            className="h-full w-full transition-transform duration-300 group-hover:scale-105"
+            className="h-full w-full media-zoom"
             fallbackIcon="layers"
           />
         ) : (
