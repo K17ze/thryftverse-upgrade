@@ -17,6 +17,7 @@ import { AppImage } from '@/components/ui/AppImage';
 import { Badge } from '@/components/ui/Badge';
 import { Button } from '@/components/ui/Button';
 import { Icon, type AppIconName } from '@/components/ui/Icon';
+import { AnimatedCheck } from '@/components/ui/AnimatedCheck';
 import { useToast } from '@/components/ui/Toast';
 import { formatPrice } from '@/lib/utils/format';
 import { getListingCoverUri } from '@/lib/utils/media';
@@ -63,9 +64,7 @@ export function SellSuccess({ listing, edited, onListAnother }: SellSuccessProps
 
   return (
     <div className="mx-auto flex w-full max-w-[720px] flex-col items-center px-4 py-16 text-center sm:px-6 sm:py-20">
-      <span className="flex h-16 w-16 items-center justify-center rounded-full bg-success-subtle text-success-text">
-        <Icon name="check" filled size={30} />
-      </span>
+      <AnimatedCheck size={64} className="rounded-full bg-success-subtle text-success-text" />
       <h1 className="mt-6 text-screen-title text-text-primary">
         {edited ? 'Your changes are live' : 'Listed'}
       </h1>

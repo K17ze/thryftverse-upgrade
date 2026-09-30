@@ -80,7 +80,9 @@ export function AppImage({
             decoding="async"
             onLoad={() => setLoaded(true)}
             onError={() => setFailed(true)}
-            className={`img-fade h-full w-full object-cover transition-opacity duration-200 ${imgClassName}`}
+            className={`img-fade h-full w-full object-cover ${
+              loaded ? 'opacity-100' : 'opacity-0'
+            } ${imgClassName}`}
             style={{
               objectPosition,
             }}
@@ -99,7 +101,9 @@ export function AppImage({
             blurDataURL={blurDataURL ?? undefined}
             onLoad={() => setLoaded(true)}
             onError={() => setFailed(true)}
-            className={`img-fade object-cover transition-opacity duration-200 ${imgClassName}`}
+            className={`img-fade object-cover ${
+              loaded ? 'opacity-100' : 'opacity-0'
+            } ${imgClassName}`}
             style={{
               objectPosition,
             }}

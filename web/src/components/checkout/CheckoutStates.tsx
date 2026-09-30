@@ -11,6 +11,7 @@ import { Button } from '@/components/ui/Button';
 import { Icon } from '@/components/ui/Icon';
 import { Skeleton } from '@/components/ui/Skeleton';
 import { useToast } from '@/components/ui/Toast';
+import { AnimatedCheck } from '@/components/ui/AnimatedCheck';
 import { DISPATCH_SLA_DAYS } from '@/lib/commerce/dispatch';
 
 export function CheckoutSkeleton() {
@@ -89,9 +90,7 @@ export function CheckoutSuccess({ orderId }: { orderId: string }) {
 
   return (
     <div className="mx-auto flex max-w-md flex-col items-center px-6 py-24 text-center" role="status">
-      <span className="flex h-16 w-16 items-center justify-center rounded-full bg-success-subtle text-success-text">
-        <Icon name="check" size={30} filled />
-      </span>
+      <AnimatedCheck size={64} className="rounded-full bg-success-subtle text-success-text" />
       <h1 className="mt-5 text-screen-title text-text-primary">Order placed</h1>
       <p className="mt-2 text-body text-text-secondary">
         Your payment was successful. The seller has been asked to dispatch within{' '}

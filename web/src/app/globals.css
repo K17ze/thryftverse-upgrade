@@ -437,6 +437,41 @@ textarea:focus-visible {
   transition: opacity 300ms var(--ease-standard);
 }
 
+/* AnimatedCheck — success marker draw-in. Circle strokes in, tick follows,
+   one quiet ring expands once. Collapses to instant under reduced motion
+   via the global rule above. */
+@keyframes check-circle-draw {
+  from { stroke-dashoffset: 100; }
+  to { stroke-dashoffset: 0; }
+}
+@keyframes check-tick-draw {
+  from { stroke-dashoffset: 100; }
+  to { stroke-dashoffset: 0; }
+}
+@keyframes check-ring-burst {
+  from { transform: scale(0.6); opacity: 0.55; }
+  to { transform: scale(1.9); opacity: 0; }
+}
+.anim-check-svg {
+  color: var(--success-text, currentColor);
+}
+.anim-check-circle {
+  stroke: currentColor;
+  animation: check-circle-draw 420ms var(--ease-standard) 60ms both;
+}
+.anim-check-tick {
+  stroke: currentColor;
+  animation: check-tick-draw 260ms var(--ease-standard) 380ms both;
+}
+.anim-check-ring {
+  position: absolute;
+  inset: 0;
+  border-radius: 9999px;
+  border: 1.5px solid var(--success-text, currentColor);
+  animation: check-ring-burst 700ms var(--ease-standard) 340ms both;
+  pointer-events: none;
+}
+
 /* Media hairline — keeps image edges crisp against surfaces in both themes */
 .appimg::after {
   content: "";
