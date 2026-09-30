@@ -186,6 +186,9 @@ interface ConversationContextShape {
     imageUrl?: string;
     status: ConversationContextListingStatus;
     condition?: string;
+    /** Listing owner — lets clients pick the right quick-reply role and
+     *  gate seller affordances without a second fetch. */
+    sellerId?: string;
   };
   offer?: {
     id: string;
@@ -250,12 +253,13 @@ async function resolveConversationsContextBatch(
           image_url: string | null;
           status: string;
           condition: string | null;
+          seller_id: string | null;
         }>(
-          `SELECT id, title, price_gbp::text, image_url, status, condition
+          `SELECT id, title, price_gbp::text, image_url, status, condition, seller_id
            FROM listings WHERE id = ANY($1::text[])`,
           [itemIds]
         )
-      : Promise.resolve({ rows: [] as Array<{ id: string; title: string; price_gbp: string; image_url: string | null; status: string; condition: string | null }> }),
+      : Promise.resolve({ rows: [] as Array<{ id: string; title: string; price_gbp: string; image_url: string | null; status: string; condition: string | null; seller_id: string | null }> }),
     queryable.query<{
       id: string;
       conversation_id: string | null;
@@ -291,7 +295,7 @@ async function resolveConversationsContextBatch(
       : Promise.resolve({ rows: [] as Array<{ id: string; listing_id: string; total_gbp: string; status: string; created_at: string; escrow_release_scheduled_at: string | null; escrow_released_at: string | null }> }),
   ]);
 
-  const listingById = new Map<string, { title: string; price: number; image_url: string | null; status: string; condition: string | null }>();
+  const listingById = new Map<string, { title: string; price: number; image_url: string | null; status: string; condition: string | null; seller_id: string | null }>();
   for (const row of listingRows.rows) {
     listingById.set(row.id, {
       title: row.title,
@@ -299,6 +303,7 @@ async function resolveConversationsContextBatch(
       image_url: row.image_url,
       status: row.status,
       condition: row.condition,
+      seller_id: row.seller_id,
     });
   }
 
@@ -338,6 +343,7 @@ async function resolveConversationsContextBatch(
         imageUrl: listingData.image_url ?? undefined,
         status: mapListingStatus(listingData.status),
         condition: listingData.condition ?? undefined,
+        sellerId: listingData.seller_id ?? undefined,
       },
     };
 

@@ -12,7 +12,7 @@ import { useEffect, useMemo, useRef, useState } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import { useRouter } from 'next/navigation';
 import { useSession } from '@/lib/session/SessionProvider';
-import { useMyListings, useReviews } from '@/lib/hooks/queries';
+import { useMyListings, useReviews, useReviewSummary } from '@/lib/hooks/queries';
 import { useStore } from '@/lib/store/useStore';
 import { LOOKS } from '@/lib/data/fixtures';
 import { DATA_MODE } from '@/lib/api/client';
@@ -79,6 +79,7 @@ export default function ProfilePage() {
   const savedListsStale = useStore((s) => s.savedListsStale);
   const { data: myListings, isLoading: listingsLoading } = useMyListings();
   const { data: reviews, isLoading: reviewsLoading } = useReviews(user?.id ?? '');
+  const { data: reviewSummary } = useReviewSummary(user?.id ?? '');
 
   const listings = myListings ?? [];
   // Live mode reads the server's creator-scoped look list; fixture mode
@@ -267,7 +268,7 @@ export default function ProfilePage() {
                 <>
                   {/* Same aggregate block as the public profile — one
                       reviews grammar across both surfaces. */}
-                  <ReviewSummary reviews={reviews ?? []} />
+                  <ReviewSummary reviews={reviews ?? []} summary={reviewSummary} />
                   <ReviewList reviews={reviews ?? []} />
                 </>
               ) : (

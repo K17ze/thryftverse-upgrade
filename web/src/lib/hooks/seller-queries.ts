@@ -872,7 +872,9 @@ const TODO_ROUTE_TO_WEB: Record<string, string> = {
   InventoryManagement: '/seller-hub/listings',
   Wallet: '/wallet',
   CatalogImportProgress: '/seller-hub/import',
-  SellerVerification: '/seller-hub/verification',
+  // Web's verification surface is /verification (demands live under it) —
+  // there is no /seller-hub/verification route.
+  SellerVerification: '/verification',
 };
 
 export function useSellerTodos() {

@@ -112,6 +112,21 @@ export function useReviews(userId: string) {
   return useQuery({
     queryKey: ['reviews', userId],
     queryFn: ({ signal }) => data.reviews(userId, signal),
+    select: (d) => d.reviews,
+  });
+}
+
+/**
+ * The server-computed seller aggregate — same query/cache entry as
+ * useReviews (one fetch), selected down to the summary block. Null in
+ * fixture mode and whenever the wire omits it — consumers render the
+ * row-derived fallback only then.
+ */
+export function useReviewSummary(userId: string) {
+  return useQuery({
+    queryKey: ['reviews', userId],
+    queryFn: ({ signal }) => data.reviews(userId, signal),
+    select: (d) => d.summary,
   });
 }
 

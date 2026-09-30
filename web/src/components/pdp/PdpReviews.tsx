@@ -14,11 +14,14 @@ import { useMemo, useState } from 'react';
 import Link from 'next/link';
 import type { Listing, Review } from '@/lib/contracts/domain';
 import { useReviews } from '@/lib/hooks/queries';
+import { DATA_MODE } from '@/lib/api/client';
+import { useSession } from '@/lib/session/SessionProvider';
 import { Avatar } from '@/components/ui/Avatar';
 import { Chip } from '@/components/ui/Chip';
 import { Icon } from '@/components/ui/Icon';
 import { Skeleton } from '@/components/ui/Skeleton';
 import { RatingStars } from '@/components/profile/RatingStars';
+import { ReviewReportSheet } from '@/components/profile/ReviewReportSheet';
 import { reviewerHref as reviewerProfileHref } from '@/components/profile/profileViewModel';
 import { formatCount, formatDate } from '@/lib/utils/format';
 
@@ -29,7 +32,13 @@ interface PdpReviewsProps {
 /** Newest reviews shown when the set is too shallow to filter. */
 const RECENT_COUNT = 3;
 
-function ReviewRow({ review }: { review: Review }) {
+function ReviewRow({
+  review,
+  onReport,
+}: {
+  review: Review;
+  onReport?: () => void;
+}) {
   const href = reviewerProfileHref(review);
   const avatar = (
     <Avatar src={review.reviewerAvatar} name={review.reviewerName} size={32} />
@@ -62,6 +71,16 @@ function ReviewRow({ review }: { review: Review }) {
       <p className="mt-2 text-body leading-relaxed text-text-secondary">
         {review.text}
       </p>
+      {onReport ? (
+        <button
+          type="button"
+          onClick={onReport}
+          className="pressable mt-2 inline-flex items-center gap-1 text-meta text-text-muted hover:text-text-secondary"
+        >
+          <Icon name="flag" size={12} aria-hidden />
+          Report
+        </button>
+      ) : null}
     </article>
   );
 }
@@ -69,6 +88,8 @@ function ReviewRow({ review }: { review: Review }) {
 export function PdpReviews({ listing }: PdpReviewsProps) {
   const { data: reviews, isLoading, isError, refetch } = useReviews(listing.sellerId);
   const [ratingFilter, setRatingFilter] = useState<number | null>(null);
+  const { user } = useSession();
+  const [reportingId, setReportingId] = useState<string | null>(null);
 
   const seller = listing.seller;
   const sellerUsername = seller?.username ?? null;
@@ -194,9 +215,22 @@ export function PdpReviews({ listing }: PdpReviewsProps) {
 
       <div className="mt-2">
         {visible.map((r) => (
-          <ReviewRow key={r.id} review={r} />
+          <ReviewRow
+            key={r.id}
+            review={r}
+            onReport={
+              DATA_MODE === 'live' && user != null && r.reviewerId !== user.id
+                ? () => setReportingId(r.id)
+                : undefined
+            }
+          />
         ))}
       </div>
+      <ReviewReportSheet
+        open={reportingId != null}
+        onClose={() => setReportingId(null)}
+        reviewId={reportingId}
+      />
 
       {showAllLink ? (
         <Link

@@ -788,7 +788,7 @@ export async function reportChatMessage(
  * is still resolving, the hook reports loading rather than flashing the
  * local store ahead of the account's own replies.
  */
-export function useQuickRepliesData(): {
+export function useQuickRepliesData(role?: 'buyer' | 'seller'): {
   replies: QuickReply[];
   isLoading: boolean;
   isError: boolean;
@@ -802,9 +802,11 @@ export function useQuickRepliesData(): {
   const serverBacked = DATA_MODE === 'live' && Boolean(user?.id);
 
   const query = useQuery({
-    queryKey: ['quick-replies', DATA_MODE, user?.id],
+    // Role is part of the key — the composer (role-scoped) and the
+    // manage page (unscoped) hold separate caches.
+    queryKey: ['quick-replies', DATA_MODE, user?.id, role ?? 'all'],
     queryFn: async (): Promise<QuickReply[]> => {
-      const items = await chatService.fetchQuickReplies();
+      const items = await chatService.fetchQuickReplies(role);
       return items.map((r) => ({ id: r.id, title: r.title, message: r.body }));
     },
     enabled: serverBacked,

@@ -869,6 +869,7 @@ export const CONVERSATIONS: Conversation[] = [
       title: 'Nike Air Jordan 1 Retro High OG',
       price: 145,
       image: img('photo-1595341888016-a392ef81b7de', 200),
+      sellerId: 'u3',
     },
     messages: [
       { id: 'm1', senderId: 'me', text: 'Hi — is the box included?', timestamp: '2026-09-25T09:12:00Z', sender: 'me', readStatus: 'read' },
@@ -891,6 +892,7 @@ export const CONVERSATIONS: Conversation[] = [
       title: 'Silk Slip Dress',
       price: 95,
       image: img('photo-1595777457583-95e059d581b8', 200),
+      sellerId: 'u6',
     },
     messages: [
       { id: 'm5', senderId: 'u6', text: 'Thanks for your order!', timestamp: '2026-09-24T18:00:00Z', sender: 'other' },
@@ -925,6 +927,7 @@ export const CONVERSATIONS: Conversation[] = [
       title: 'Polo Ralph Lauren Harrington Jacket',
       price: 85,
       image: img('photo-1591047139829-d91aecb6caea', 200),
+      sellerId: 'u2',
     },
     messages: [
       { id: 'm9', senderId: 'u2', text: 'Is the Harrington still available?', timestamp: '2026-09-24T11:00:00Z', sender: 'other' },

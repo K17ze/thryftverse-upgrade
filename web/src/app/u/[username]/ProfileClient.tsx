@@ -17,7 +17,7 @@ import { useQuery, useQueryClient } from '@tanstack/react-query';
 import Link from 'next/link';
 import { notFound, useParams, useRouter } from 'next/navigation';
 import { useSession } from '@/lib/session/SessionProvider';
-import { useReviews } from '@/lib/hooks/queries';
+import { useReviews, useReviewSummary } from '@/lib/hooks/queries';
 import {
   PROFILE_AGGREGATE_ROOT,
   usePublicProfileByUsername,
@@ -107,6 +107,7 @@ export function ProfileClient() {
     fetchNextPage,
   } = useSellerListingsPaged(user?.id ?? '');
   const { data: reviews, isLoading: reviewsLoading } = useReviews(user?.id ?? '');
+  const { data: reviewSummary } = useReviewSummary(user?.id ?? '');
   const tabContentRef = useRef<HTMLDivElement>(null);
   const qc = useQueryClient();
   const { show } = useToast();
@@ -495,7 +496,7 @@ export function ProfileClient() {
             <div className="px-4 sm:px-6 lg:max-w-3xl">
               {reviewRows.length > 0 ? (
                 <>
-                  <ReviewSummary reviews={reviewRows} />
+                  <ReviewSummary reviews={reviewRows} summary={reviewSummary} />
                   <ReviewList reviews={reviewRows} />
                 </>
               ) : (

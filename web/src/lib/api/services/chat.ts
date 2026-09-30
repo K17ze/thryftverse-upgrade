@@ -28,6 +28,9 @@ export interface ConversationMarketplaceMeta {
   ownerId?: string;
   /** Server-projected context listing id, when the payload carries one. */
   listingId?: string;
+  /** The context listing's owner — resolves the seller seat without a
+   *  second listing fetch (quick-reply role, trust affordances). */
+  listingSellerId?: string;
 }
 
 export type ConversationWithMarketplace = Conversation & {
@@ -44,7 +47,7 @@ export function marketplaceMeta(
 /** The conversation payload fields beyond the declared contract — read
  *  defensively, absent payloads stay absent. */
 type ApiConversationPayloadFull = ApiConversationPayload & {
-  context?: { listing?: { id?: string } | null } | null;
+  context?: { listing?: { id?: string; sellerId?: string } | null } | null;
 };
 
 function attachMarketplaceMeta(
@@ -54,13 +57,16 @@ function attachMarketplaceMeta(
   if (!raw) return conversation;
   const full = raw as ApiConversationPayloadFull;
   const listingId = full.context?.listing?.id;
+  const listingSellerId = full.context?.listing?.sellerId;
   const itemId = raw.itemId ?? (typeof listingId === 'string' ? listingId : undefined);
   const ownerId = raw.ownerId ?? undefined;
-  if (!itemId && !ownerId) return conversation;
+  if (!itemId && !ownerId && !listingSellerId) return conversation;
   (conversation as ConversationWithMarketplace).marketplace = {
     itemId,
     ownerId,
     listingId: typeof listingId === 'string' ? listingId : undefined,
+    listingSellerId:
+      typeof listingSellerId === 'string' ? listingSellerId : undefined,
   };
   return conversation;
 }

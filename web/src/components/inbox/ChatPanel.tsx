@@ -659,9 +659,23 @@ export function ChatPanel({ conversationId }: { conversationId: string }) {
     [chatOffers, safetyListingId],
   );
   const metaOwnerId = meta.ownerId;
+  // The seller seat — the wire's context.listing.sellerId resolves it
+  // without the listing fetch; the resolver chain is the fallback.
+  const threadSellerId =
+    threadListing?.sellerId ?? threadOffer?.sellerId ?? meta.listingSellerId ?? metaOwnerId;
+  // Quick-reply role — native ChatComposer grammar: a marketplace thread
+  // seats the viewer as buyer or seller; non-marketplace threads show no
+  // strip at all. An unresolved seller defaults to buyer rather than
+  // offering seller templates to a possible buyer seat.
+  const quickReplyRole: 'buyer' | 'seller' | null =
+    !isGroup && safetyListingId
+      ? threadSellerId && threadSellerId === viewerId
+        ? 'seller'
+        : 'buyer'
+      : null;
   const safetyWarning = useMemo(() => {
     if (!conversation || isGroup || !safetyListingId) return null;
-    const sellerId = threadListing?.sellerId ?? threadOffer?.sellerId ?? metaOwnerId;
+    const sellerId = threadSellerId;
     const isSelling = sellerId
       ? sellerId === viewerId
       : !messages.some(
@@ -678,9 +692,7 @@ export function ChatPanel({ conversationId }: { conversationId: string }) {
     conversation,
     isGroup,
     safetyListingId,
-    threadListing,
-    threadOffer,
-    metaOwnerId,
+    threadSellerId,
     messages,
     viewerId,
   ]);
@@ -1892,6 +1904,7 @@ export function ChatPanel({ conversationId }: { conversationId: string }) {
       ) : (
         <Composer
           threadId={conversationId}
+          quickReplyRole={quickReplyRole}
           sending={sendMessage.isPending}
           onSend={send}
           replyTo={

@@ -361,12 +361,15 @@ export const data = {
     return USERS.find((u) => u.username === username) ?? null;
   },
 
-  async reviews(userId: string, signal?: AbortSignal): Promise<Review[]> {
+  async reviews(
+    userId: string,
+    signal?: AbortSignal,
+  ): Promise<usersService.UserReviewsResult> {
     if (DATA_MODE === 'live') {
       return usersService.fetchUserReviews(userId, signal);
     }
     await tick();
-    return REVIEWS.filter((r) => r.userId === userId);
+    return { reviews: REVIEWS.filter((r) => r.userId === userId), summary: null };
   },
 
   async conversations(currentUserId?: string, signal?: AbortSignal): Promise<Conversation[]> {

@@ -1,3 +1,5 @@
+'use client';
+
 /**
  * ReviewList — the member's review ledger: an aggregate summary block
  * (average + 5→1 distribution of the loaded reviews, mirrors mobile's
@@ -6,27 +8,59 @@
  * quiet — no reviewer identity, muted text, no verified marker.
  */
 
+import { useState } from 'react';
 import Link from 'next/link';
 import type { Review } from '@/lib/contracts/domain';
+import type { SellerReviewSummary } from '@/lib/api/services/users';
+import { DATA_MODE } from '@/lib/api/client';
+import { useSession } from '@/lib/session/SessionProvider';
 import { Avatar } from '@/components/ui/Avatar';
 import { AppImage } from '@/components/ui/AppImage';
 import { Icon } from '@/components/ui/Icon';
 import { Skeleton } from '@/components/ui/Skeleton';
 import { formatDate } from '@/lib/utils/format';
 import { RatingStars } from './RatingStars';
+import { ReviewReportSheet } from './ReviewReportSheet';
 import { reviewerHref } from './profileViewModel';
 
 /**
  * Aggregate header for the ledger — dominant average, stars, count, and
  * per-star bars proportional to the loaded reviews (count / total).
  */
-export function ReviewSummary({ reviews }: { reviews: Review[] }) {
-  const total = reviews.length;
-  const avg = total > 0 ? reviews.reduce((s, r) => s + r.rating, 0) / total : 0;
-  const buckets = [5, 4, 3, 2, 1].map((star) => ({
+export function ReviewSummary({
+  reviews,
+  summary,
+}: {
+  reviews: Review[];
+  /** Server aggregate (GET /sellers/:id/reviews summary) — authoritative
+   *  over ALL eligible reviews: auto rows are excluded from the average
+   *  and the distribution spans the full history, not the loaded page.
+   *  Absent (fixture/legacy payload) → row-derived fallback. */
+  summary?: SellerReviewSummary | null;
+}) {
+  const derivedTotal = reviews.length;
+  const derivedAvg =
+    derivedTotal > 0
+      ? reviews.reduce((s, r) => s + r.rating, 0) / derivedTotal
+      : 0;
+  const derivedBuckets = [5, 4, 3, 2, 1].map((star) => ({
     star,
     count: reviews.filter((r) => Math.round(r.rating) === star).length,
   }));
+
+  const total = summary ? summary.reviewCount : derivedTotal;
+  const avg = summary?.ratingAverage ?? derivedAvg;
+  // The server distribution's own sum is the bar denominator — it spans
+  // every eligible row, unlike `total` which also counts auto reviews.
+  const distTotal = summary
+    ? summary.distribution.reduce((s, d) => s + d.count, 0)
+    : derivedTotal;
+  const buckets = summary
+    ? [5, 4, 3, 2, 1].map((star) => ({
+        star,
+        count: summary.distribution.find((d) => d.rating === star)?.count ?? 0,
+      }))
+    : derivedBuckets;
 
   return (
     <div className="flex items-center gap-6 border-b border-border-subtle pb-5 sm:gap-10">
@@ -47,7 +81,7 @@ export function ReviewSummary({ reviews }: { reviews: Review[] }) {
             <span className="h-[3px] flex-1 overflow-hidden rounded-full bg-surface-alt">
               <span
                 className="block h-full rounded-full bg-brand"
-                style={{ width: `${total > 0 ? Math.round((count / total) * 100) : 0}%` }}
+                style={{ width: `${distTotal > 0 ? Math.round((count / distTotal) * 100) : 0}%` }}
               />
             </span>
             <span className="tnum w-6 text-right text-meta text-text-muted">{count}</span>
@@ -58,7 +92,13 @@ export function ReviewSummary({ reviews }: { reviews: Review[] }) {
   );
 }
 
-function ReviewRow({ review }: { review: Review }) {
+function ReviewRow({
+  review,
+  onReport,
+}: {
+  review: Review;
+  onReport?: () => void;
+}) {
   const href = reviewerHref(review);
   const nameClass = 'clamp-1 text-body-emphasis font-semibold text-text-primary';
 
@@ -142,6 +182,16 @@ function ReviewRow({ review }: { review: Review }) {
             </p>
           </div>
         ) : null}
+        {onReport ? (
+          <button
+            type="button"
+            onClick={onReport}
+            className="pressable mt-2 inline-flex items-center gap-1 text-meta text-text-muted hover:text-text-secondary"
+          >
+            <Icon name="flag" size={12} aria-hidden />
+            Report
+          </button>
+        ) : null}
       </div>
     </article>
   );
@@ -165,11 +215,28 @@ export function ReviewListSkeleton({ count = 3 }: { count?: number }) {
 }
 
 export function ReviewList({ reviews }: { reviews: Review[] }) {
+  const { user } = useSession();
+  const [reportingId, setReportingId] = useState<string | null>(null);
+  // Report affordance (native ProfileReviewRow): live-only — fixture mode
+  // has no report endpoint — signed-in viewers, never on their own or
+  // automatic rows.
+  const canReport = (r: Review) =>
+    DATA_MODE === 'live' && user != null && !r.isAutomatic && r.reviewerId !== user.id;
+
   return (
     <div>
       {reviews.map((r) => (
-        <ReviewRow key={r.id} review={r} />
+        <ReviewRow
+          key={r.id}
+          review={r}
+          onReport={canReport(r) ? () => setReportingId(r.id) : undefined}
+        />
       ))}
+      <ReviewReportSheet
+        open={reportingId != null}
+        onClose={() => setReportingId(null)}
+        reviewId={reportingId}
+      />
     </div>
   );
 }

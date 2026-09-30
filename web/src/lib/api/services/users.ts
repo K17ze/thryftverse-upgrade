@@ -158,16 +158,55 @@ export async function searchUsers(
   return (payload.items ?? []).map(mapUserSearchRowToUser);
 }
 
+/** Server-computed review aggregate — the authoritative score over ALL
+ *  eligible reviews (auto rows excluded from the average, included in
+ *  the count). Never recompute this client-side over a loaded page. */
+export interface SellerReviewSummary {
+  ratingAverage: number | null;
+  reviewCount: number;
+  eligibleCount: number;
+  distribution: { rating: number; count: number }[];
+  asOf: string | null;
+}
+
+export interface UserReviewsResult {
+  reviews: Review[];
+  summary: SellerReviewSummary | null;
+}
+
 export async function fetchUserReviews(
   userId: string,
   signal?: AbortSignal,
-): Promise<Review[]> {
-  const payload = await fetchJson<{ ok?: boolean; items?: Parameters<typeof mapReviewRow>[0][]; reviews?: Parameters<typeof mapReviewRow>[0][] }>(
+): Promise<UserReviewsResult> {
+  const payload = await fetchJson<{
+    ok?: boolean;
+    items?: Parameters<typeof mapReviewRow>[0][];
+    reviews?: Parameters<typeof mapReviewRow>[0][];
+    summary?: {
+      ratingAverage?: number | null;
+      reviewCount?: number;
+      eligibleCount?: number;
+      distribution?: { rating: number; count: number }[];
+      asOf?: string | null;
+    } | null;
+  }>(
     `/sellers/${encodeURIComponent(userId)}/reviews`,
     undefined,
     { signal },
   );
-  return (payload.items ?? payload.reviews ?? []).map(mapReviewRow);
+  const s = payload.summary;
+  return {
+    reviews: (payload.items ?? payload.reviews ?? []).map(mapReviewRow),
+    summary: s
+      ? {
+          ratingAverage: typeof s.ratingAverage === 'number' ? s.ratingAverage : null,
+          reviewCount: s.reviewCount ?? 0,
+          eligibleCount: s.eligibleCount ?? 0,
+          distribution: s.distribution ?? [],
+          asOf: s.asOf ?? null,
+        }
+      : null,
+  };
 }
 
 // ── Self profile mutations (profileApi.ts updateUserProfile) ────────────────

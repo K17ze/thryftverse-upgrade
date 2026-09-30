@@ -20,7 +20,7 @@ import { setTypingStatus } from '@/lib/api/services/chat';
 import { Icon } from '@/components/ui/Icon';
 import { IconButton } from '@/components/ui/IconButton';
 import { useToast } from '@/components/ui/Toast';
-import { useQuickReplies } from '@/lib/store/quickReplies';
+import { useQuickRepliesData } from '@/lib/hooks/chat-queries';
 import { useHydrated } from '@/lib/store/useStore';
 import { ChatSafetyBanner } from './ChatSafetyBanner';
 import { detectComposerSafetyWarning, type ChatSafetyWarning } from './chatSafety';
@@ -124,6 +124,10 @@ interface ComposerProps {
   /** Owning thread — the edit stash and any stash-resumed edit belong to
    *  one conversation's messages, so they clear when the thread changes. */
   threadId?: string;
+  /** Marketplace seat of the viewer in this thread — picks the
+   *  role-scoped quick-reply list (native ChatComposer grammar). Null on
+   *  non-marketplace threads: no strip renders there. */
+  quickReplyRole?: 'buyer' | 'seller' | null;
 }
 
 export function Composer({
@@ -135,6 +139,7 @@ export function Composer({
   onEditSubmit,
   onCancelEdit,
   threadId,
+  quickReplyRole = null,
 }: ComposerProps) {
   const toast = useToast();
   const [value, setValue] = useState('');
@@ -174,7 +179,10 @@ export function Composer({
   const fileRef = useRef<HTMLInputElement>(null);
   const repliesWrapRef = useRef<HTMLDivElement>(null);
   const repliesBtnRef = useRef<HTMLButtonElement>(null);
-  const replies = useQuickReplies((s) => s.replies);
+  // Quick replies come from the server when live (role-scoped, matching
+  // the manage page's writes); the persisted local store is the fixture/
+  // guest path only — never a fabricated synced list.
+  const { replies } = useQuickRepliesData(quickReplyRole ?? undefined);
 
   // ── Typing signal — the mobile useConversationComposer grammar. The
   // edge is realtime-only (chat.typing.update fans out to the thread
@@ -813,7 +821,11 @@ export function Composer({
                 disabled={sending}
               />
             ) : null}
-            {hydrated && replies.length > 0 ? (
+            {/* Native grammar: the strip only exists on marketplace
+                threads (a listing context resolves a buyer/seller seat).
+                The menu mounts even when the list is empty so the
+                "Manage quick replies" affordance stays reachable. */}
+            {hydrated && quickReplyRole ? (
           <div ref={repliesWrapRef} className="relative shrink-0">
             <IconButton
               ref={repliesBtnRef}

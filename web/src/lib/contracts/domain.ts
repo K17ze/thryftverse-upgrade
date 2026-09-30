@@ -427,6 +427,8 @@ export interface Conversation {
     price: number;
     image?: string;
     isSold?: boolean;
+    /** Listing owner — resolves the quick-reply role seat. */
+    sellerId?: string;
   };
   messages: Message[];
   isRequest?: boolean;
