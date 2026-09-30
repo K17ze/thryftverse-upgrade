@@ -16,7 +16,7 @@ import { Sheet } from '@/components/ui/Sheet';
 import { Button } from '@/components/ui/Button';
 import { Chip } from '@/components/ui/Chip';
 import { Icon } from '@/components/ui/Icon';
-import { CATEGORIES } from '@/lib/data/fixtures';
+import { useCategoryDirectory } from '@/components/search/useCategoryDirectory';
 import type { Listing, ListingCondition } from '@/lib/contracts/domain';
 import {
   categoryFacets,
@@ -172,9 +172,29 @@ export function FilterSheet({
   hideCategory,
   onSaveSearch,
 }: FilterSheetProps) {
+  const { categories: directoryCategories } = useCategoryDirectory();
+  // spelling → label, and spelling → canonical value. l.category stores
+  // either the node id or the display name; both keys map to the slug so
+  // mixed-vocab rows merge into one option that emits the canonical id.
   const categoryNames = useMemo(
-    () => new Map(CATEGORIES.map((c) => [c.slug, c.name])),
-    [],
+    () =>
+      new Map(
+        directoryCategories.flatMap((c) => [
+          [c.slug, c.name] as const,
+          [c.name.toLowerCase(), c.name] as const,
+        ]),
+      ),
+    [directoryCategories],
+  );
+  const categoryCanonical = useMemo(
+    () =>
+      new Map(
+        directoryCategories.flatMap((c) => [
+          [c.slug, c.slug] as const,
+          [c.name.toLowerCase(), c.slug] as const,
+        ]),
+      ),
+    [directoryCategories],
   );
 
   // Condition counts — all five options stay listed (they're OR'd, so a
@@ -192,18 +212,34 @@ export function FilterSheet({
   // except selected ones: they stay visible (honest 0) so they can be
   // unchecked here.
   const categoryOptions = useMemo<FacetOption[]>(() => {
-    const options = categoryFacets(listings, filters, categoryNames);
+    const options = categoryFacets(listings, filters, categoryNames, categoryCanonical);
     for (const slug of filters.categories) {
-      if (!options.some((o) => o.value === slug.toLowerCase())) {
+      const canonical = categoryCanonical.get(slug.toLowerCase()) ?? slug.toLowerCase();
+      if (!options.some((o) => o.value === canonical)) {
         options.push({
-          value: slug.toLowerCase(),
-          label: categoryNames.get(slug.toLowerCase()) ?? slug,
+          value: canonical,
+          label: categoryNames.get(canonical) ?? categoryNames.get(slug.toLowerCase()) ?? slug,
           count: 0,
         });
       }
     }
     return options;
-  }, [listings, filters, categoryNames]);
+  }, [listings, filters, categoryNames, categoryCanonical]);
+
+  // Category toggle — canonical-aware: a stored display-name spelling
+  // counts as the same option, so unchecking removes every alias of the
+  // value instead of leaving a stuck-selected ghost.
+  const canonicalCategory = (c: string) =>
+    categoryCanonical.get(c.toLowerCase()) ?? c.toLowerCase();
+  const toggleCategory = (value: string) => {
+    const selected = filters.categories.some((c) => canonicalCategory(c) === value);
+    onChange({
+      ...filters,
+      categories: selected
+        ? filters.categories.filter((c) => canonicalCategory(c) !== value)
+        : [...filters.categories, value],
+    });
+  };
 
   // Brand/size/colour lists — the same counted options the desktop rail
   // renders (facetCounts), with active URL-seeded values appended when
@@ -276,14 +312,9 @@ export function FilterSheet({
                   <Chip
                     key={o.value}
                     selected={filters.categories.some(
-                      (c) => c.toLowerCase() === o.value,
+                      (c) => canonicalCategory(c) === o.value,
                     )}
-                    onClick={() =>
-                      onChange({
-                        ...filters,
-                        categories: toggleValue(filters.categories, o.value),
-                      })
-                    }
+                    onClick={() => toggleCategory(o.value)}
                   >
                     {o.label}
                     <span className="tnum opacity-60">{o.count}</span>

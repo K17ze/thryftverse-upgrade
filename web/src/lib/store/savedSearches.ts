@@ -49,6 +49,9 @@ export interface SavedSearch {
   queryId?: string;
   /** Result count at save time — honest context, not a live count. */
   resultCount?: number;
+  /** Server-stamped last-match timestamp (live rows only) — rendered as
+   *  "Last match …"; never fabricated for fixture/local entries. */
+  lastNotifiedAt?: string | null;
 }
 
 export interface SaveSearchOptions {
@@ -181,6 +184,7 @@ function mapRemoteSearch(row: savedService.SavedSearch): SavedSearch {
     alertsOn: row.alertsEnabled ?? true,
     createdAt: row.createdAt ?? new Date().toISOString(),
     kind: 'text',
+    lastNotifiedAt: row.lastNotifiedAt ?? null,
   };
 }
 

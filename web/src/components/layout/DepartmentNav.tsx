@@ -14,9 +14,9 @@
 
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
-import { useRef, useState } from 'react';
-import { CATEGORIES } from '@/lib/data/fixtures';
+import { useMemo, useRef, useState } from 'react';
 import { useLocale } from '@/lib/i18n';
+import { useCategoryDirectory } from '@/components/search/useCategoryDirectory';
 
 /** chrome.nav.* keys — resolved via useLocale().t at render. */
 export type NavKey =
@@ -65,14 +65,6 @@ interface FlyoutSection {
  */
 const FLYOUTS: Record<string, FlyoutSection[]> = {
   '/explore': [
-    {
-      labelKey: 'categories',
-      wide: true,
-      links: CATEGORIES.map((c) => ({
-        href: `/category/${c.slug}`,
-        label: c.name,
-      })),
-    },
     {
       labelKey: 'discover',
       links: [
@@ -199,7 +191,28 @@ function FlyoutPanel({
 export function DepartmentNav() {
   const pathname = usePathname();
   const { t } = useLocale();
+  const { categories } = useCategoryDirectory();
   const [openHref, setOpenHref] = useState<string | null>(null);
+
+  // The categories flyout reads the live-aware directory — fixture seed on
+  // first paint, GET /taxonomy/category-directory once it resolves.
+  const flyouts = useMemo<Record<string, FlyoutSection[]>>(
+    () => ({
+      ...FLYOUTS,
+      '/explore': [
+        {
+          labelKey: 'categories',
+          wide: true,
+          links: categories.map((c) => ({
+            href: `/category/${c.slug}`,
+            label: c.name,
+          })),
+        },
+        ...FLYOUTS['/explore'],
+      ],
+    }),
+    [categories],
+  );
   // Escape restores focus to the trigger — that focus event must not
   // re-open the panel it just closed, so the next focus-open per item
   // is swallowed once.
@@ -216,7 +229,7 @@ export function DepartmentNav() {
           item.href === '/'
             ? pathname === '/'
             : pathname.startsWith(item.href);
-        const flyout = FLYOUTS[item.href];
+        const flyout = flyouts[item.href];
         const panelId = `dept-flyout-${item.href.replace(/\//g, '') || 'home'}`;
         const open = flyout != null && openHref === item.href;
         return (

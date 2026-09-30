@@ -25,7 +25,8 @@ export type SortKey =
   | 'newest'
   | 'most-liked'
   | 'price-asc'
-  | 'price-desc';
+  | 'price-desc'
+  | 'ending-soon';
 
 // Labels use native casing (frontend filterTypes.ts: 'Newest',
 // 'Price: Low to High', 'Most liked'). The rendered label lives in
@@ -38,6 +39,40 @@ export const SORT_OPTIONS: { value: SortKey; label: string }[] = [
   { value: 'most-liked', label: 'Most liked' },
   { value: 'price-asc', label: 'Price: Low to High' },
   { value: 'price-desc', label: 'Price: High to Low' },
+];
+
+/** "Ending soon" only applies to auction listings — meaningless for
+ *  fixed-price browse/search, so it is excluded unless the context is
+ *  auction-scoped (mirrors native filterTypes.getContextualSortOptions). */
+export const AUCTION_SORT_OPTION: { value: SortKey; label: string } = {
+  value: 'ending-soon',
+  label: 'Ending soon',
+};
+
+export function isAuctionSortContext(
+  categoryId: string,
+  searchQuery?: string,
+): boolean {
+  return (
+    categoryId.toLowerCase().includes('auction') ||
+    (searchQuery?.toLowerCase().includes('auction') ?? false)
+  );
+}
+
+export function getContextualSortOptions(
+  categoryId: string,
+  searchQuery?: string,
+): { value: SortKey; label: string }[] {
+  return isAuctionSortContext(categoryId, searchQuery)
+    ? [...SORT_OPTIONS, AUCTION_SORT_OPTION]
+    : SORT_OPTIONS;
+}
+
+/** Every parseable `?sort=` value — includes the contextual auction key so
+ *  a shared/bookmarked auction sort survives reload (useSortParam). */
+export const ALL_SORT_VALUES: readonly string[] = [
+  ...SORT_OPTIONS.map((o) => o.value),
+  AUCTION_SORT_OPTION.value,
 ];
 
 export const CONDITION_OPTIONS: ListingCondition[] = [

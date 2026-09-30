@@ -1,8 +1,8 @@
 /**
- * /category/[slug] — server shell. The taxonomy is a static catalogue in
- * both data modes, so a slug miss is always definitive — not-found.tsx
- * at 404 instead of the client view's soft empty state. generateMetadata
- * reads the same resolver.
+ * /category/[slug] — server shell. The valid slug set is fixture
+ * departments ∪ top-level taxonomy nodes — live-only departments resolve
+ * here and hydrate their real directory client-side; a miss on both is a
+ * definitive 404. generateMetadata reads the same resolver.
  */
 
 import { Suspense } from 'react';

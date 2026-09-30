@@ -40,6 +40,8 @@ import {
   listingById,
   userById,
 } from '@/lib/data/fixtures';
+import { TAXONOMY_SEED } from '@/lib/contracts/taxonomy';
+import type { Category } from '@/lib/contracts/domain';
 import { AUCTIONS } from '@/lib/data/fixtures-auctions';
 import { lookById, publicMoodboardById } from '@/lib/data/fixtures-content';
 import {
@@ -197,8 +199,15 @@ export const resolveCoOwnAssetForRoute = cache(async (id: string) => {
 });
 
 export function resolveCategoryForRoute(slug: string) {
-  // The taxonomy is a static catalogue in both modes — a slug miss is
-  // always definitive.
+  // The valid slug set is fixture departments ∪ taxonomy top-level nodes —
+  // live-only departments (kids, home, electronics…) must resolve so the
+  // client can render them; a miss on both is a genuine 404.
   const category = CATEGORIES.find((c) => c.slug === slug);
-  return category ? resolved(category) : missing();
+  if (category) return resolved(category);
+  const node = TAXONOMY_SEED.categories.find(
+    (n) => n.parentId === null && (n.id === slug || n.displayKey === slug),
+  );
+  return node
+    ? resolved<Category>({ slug: node.id, name: node.name })
+    : missing();
 }

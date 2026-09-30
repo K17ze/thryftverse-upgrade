@@ -12,20 +12,47 @@
 
 import Link from 'next/link';
 import type { Listing } from '@/lib/contracts/domain';
-import { CATEGORIES } from '@/lib/data/fixtures';
 import { Icon } from '@/components/ui/Icon';
-import { subcategoriesFor } from '@/components/search/taxonomy';
+import { useCategoryDirectory } from '@/components/search/useCategoryDirectory';
 
 interface PdpBreadcrumbProps {
   listing: Listing;
 }
 
 export function PdpBreadcrumb({ listing }: PdpBreadcrumbProps) {
-  const category = CATEGORIES.find((c) => c.slug === listing.category);
+  const { categories } = useCategoryDirectory();
+  // Live rows store the node id OR the display name — either spelling
+  // resolves. Older writes may carry a LEAF node id (the subcategory was
+  // stored as the category), so fall back to a parent-chain lookup:
+  // find the department whose children contain the value.
+  const direct =
+    categories.find(
+      (c) =>
+        c.slug === listing.category ||
+        c.name.toLowerCase() === listing.category.toLowerCase(),
+    ) ?? null;
+  const leafMatch = direct
+    ? null
+    : categories
+        .flatMap((c) => c.subcategories.map((s) => ({ parent: c, sub: s })))
+        .find(
+          (m) =>
+            m.sub.id.toLowerCase() === listing.category.toLowerCase() ||
+            m.sub.name.toLowerCase() === listing.category.toLowerCase(),
+        ) ?? null;
+  const category = direct ?? leafMatch?.parent;
   if (!category) return null;
 
-  const sub = listing.subcategory ?? null;
-  const subLinked = !!sub && subcategoriesFor(category.slug).includes(sub);
+  // A leaf-stored category already names the sub level — render its
+  // matched child as the sub crumb even when subcategory is empty.
+  const sub = listing.subcategory ?? leafMatch?.sub.id ?? null;
+  const subNode = sub
+    ? category.subcategories.find(
+        (s) =>
+          s.id.toLowerCase() === sub.toLowerCase() ||
+          s.name.toLowerCase() === sub.toLowerCase(),
+      )
+    : undefined;
 
   return (
     <nav
@@ -58,12 +85,12 @@ export function PdpBreadcrumb({ listing }: PdpBreadcrumbProps) {
               <Icon name="forward" size={11} className="text-border" />
             </li>
             <li>
-              {subLinked ? (
+              {subNode ? (
                 <Link
-                  href={`/category/${category.slug}?sub=${encodeURIComponent(sub)}`}
+                  href={`/category/${category.slug}?sub=${encodeURIComponent(subNode.id)}`}
                   className="pressable rounded-sm hover:text-text-primary"
                 >
-                  {sub}
+                  {subNode.name}
                 </Link>
               ) : (
                 <span>{sub}</span>

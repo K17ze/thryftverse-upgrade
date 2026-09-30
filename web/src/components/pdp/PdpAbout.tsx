@@ -16,8 +16,8 @@
 
 import { useEffect, useRef, useState } from 'react';
 import type { Listing, ListingCondition } from '@/lib/contracts/domain';
-import { CATEGORIES } from '@/lib/data/fixtures';
 import { Icon } from '@/components/ui/Icon';
+import { categoryLabel } from '@/components/search/categoryDirectoryStore';
 import { formatDate } from '@/lib/utils/format';
 import { SizeGuideSheet, resolveSizeGuide } from './SizeGuideSheet';
 
@@ -63,8 +63,7 @@ export function PdpAbout({ listing }: PdpAboutProps) {
     return typeof value === 'string' && value.trim() ? value.trim() : null;
   };
 
-  const categoryName =
-    CATEGORIES.find((c) => c.slug === listing.category)?.name ?? listing.category;
+  const categoryName = categoryLabel(listing.category);
 
   const conditionMeta = CONDITION_META[listing.condition];
   const sizeGuide = resolveSizeGuide(listing);

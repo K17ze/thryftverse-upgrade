@@ -11,7 +11,7 @@ import { AppImage } from '@/components/ui/AppImage';
 import { Button } from '@/components/ui/Button';
 import { Icon } from '@/components/ui/Icon';
 import { Sheet } from '@/components/ui/Sheet';
-import { CATEGORIES } from '@/lib/data/fixtures';
+import { useCategoryDirectory } from '@/components/search/useCategoryDirectory';
 import type { ListingCondition } from '@/lib/contracts/domain';
 import {
   BULK_PRICE_MAX,
@@ -46,6 +46,7 @@ export function BulkDraftSheet({ open, draft, onSave, onClose }: BulkDraftSheetP
   const fileRef = useRef<HTMLInputElement>(null);
   const [form, setForm] = useState<BulkDraftItem | null>(null);
   const [priceText, setPriceText] = useState('');
+  const { categories } = useCategoryDirectory();
 
   useEffect(() => {
     if (open) {
@@ -174,7 +175,7 @@ export function BulkDraftSheet({ open, draft, onSave, onClose }: BulkDraftSheetP
               className={`${inputCls} appearance-none`}
             >
               <option value="">Select…</option>
-              {CATEGORIES.map((c) => (
+              {categories.map((c) => (
                 <option key={c.slug} value={c.slug}>
                   {c.name}
                 </option>

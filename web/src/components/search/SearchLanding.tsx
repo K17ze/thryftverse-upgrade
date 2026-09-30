@@ -18,15 +18,15 @@ import {
   type DiscoveryListingSummary,
 } from '@/lib/contracts/domain';
 import { DATA_MODE } from '@/lib/api/client';
-import { CATEGORIES, LISTINGS } from '@/lib/data/fixtures';
+import { LISTINGS } from '@/lib/data/fixtures';
 import { GALLERIA_HERO } from '@/lib/data/fixtures-media';
 import { useGalleriaCover } from '@/lib/hooks/galleria-queries';
 import {
-  coversByCategory,
   rankBrands,
   useTrendingListings,
   useTrendingSearches,
 } from '@/lib/hooks/search-queries';
+import { useCategoryDirectory } from './useCategoryDirectory';
 import {
   CATEGORY_DIRECTORY,
   POPULAR_BRANDS,
@@ -177,20 +177,15 @@ export function SearchLanding({
     () => (LIVE ? rankBrands(trending.listings) : POPULAR_BRANDS),
     [trending.listings],
   );
+  const { categories: directoryCategories } = useCategoryDirectory();
   const directory: CategoryDirectoryEntry[] = useMemo(() => {
     if (!LIVE) return CATEGORY_DIRECTORY;
-    const covers = coversByCategory(trending.listings);
-    // Live: departments without real inventory-carrying listings get no
-    // cover art and are hidden rather than shown as grey placeholders.
-    return CATEGORIES.filter((c) => covers.has(c.slug.toLowerCase())).map(
-      (c) => ({
-        slug: c.slug,
-        name: c.name,
-        image: covers.get(c.slug.toLowerCase()) ?? '',
-        count: 0,
-      }),
-    );
-  }, [trending.listings]);
+    // Live: departments without inventory get no tile — a department with
+    // no active listings is a dead end, not a discovery surface.
+    return directoryCategories
+      .filter((c) => c.count > 0 || c.image)
+      .map((c) => ({ slug: c.slug, name: c.name, image: c.image, count: c.count }));
+  }, [directoryCategories]);
 
   return (
     <div className="px-4 pb-10 sm:px-6">

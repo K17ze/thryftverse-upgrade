@@ -11,10 +11,8 @@
 import Link from 'next/link';
 import { Chip } from '@/components/ui/Chip';
 import { CategoryTile } from './CategoryTile';
-import {
-  CATEGORY_DIRECTORY_BY_COUNT,
-  POPULAR_SEARCHES,
-} from './taxonomy';
+import { POPULAR_SEARCHES } from './taxonomy';
+import { useCategoryDirectory } from './useCategoryDirectory';
 
 interface SearchRecoveryProps {
   query: string;
@@ -31,8 +29,12 @@ export function SearchRecovery({
   hasActiveFilters,
   onSelect,
 }: SearchRecoveryProps) {
+  const { categories } = useCategoryDirectory();
   // Busiest departments with stock — every tile resolves to real items.
-  const suggestions = CATEGORY_DIRECTORY_BY_COUNT.filter((c) => c.count > 0).slice(0, 3);
+  const suggestions = [...categories]
+    .sort((a, b) => b.count - a.count)
+    .filter((c) => c.count > 0)
+    .slice(0, 3);
 
   return (
     <div className="px-4 pb-20 pt-14 sm:px-6 lg:pt-20">

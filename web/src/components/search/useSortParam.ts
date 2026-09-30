@@ -9,9 +9,9 @@
 
 import { useCallback } from 'react';
 import { usePathname, useRouter, useSearchParams } from 'next/navigation';
-import { SORT_OPTIONS, type SortKey } from '@/components/filters/filterTypes';
+import { ALL_SORT_VALUES, type SortKey } from '@/components/filters/filterTypes';
 
-const SORT_VALUES = new Set<string>(SORT_OPTIONS.map((o) => o.value));
+const SORT_VALUES = new Set<string>(ALL_SORT_VALUES);
 
 export function useSortParam(): [SortKey, (next: SortKey) => void] {
   const router = useRouter();

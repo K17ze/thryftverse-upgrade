@@ -17,6 +17,7 @@ import {
   type ListingMediaItem,
 } from '../lib/media/listingMediaProjection.js';
 import { reachExcludedSql, reachRankMultiplierExpr } from '../lib/sellerReach.js';
+import { categoryAliasTerms, categoryAliasTermsMany } from '../lib/taxonomyValidation.js';
 import {
   blendPromotedIntoResults,
   fetchPromotedListingsForQuery,
@@ -99,14 +100,16 @@ async function computeSearchResults(
   let filterIdx = 2; // $1 is the query text
 
   if (categories && categories.length > 0) {
-    // The filter sheet's multi-select — case-insensitive so URL slugs
-    // ('women') and stored values ('Women') agree.
+    // The filter sheet's multi-select — expanded through the taxonomy
+    // alias map so node ids, display keys and stored display names all
+    // resolve (l.category is mixed-vocabulary across clients).
     filterConditions.push(`LOWER(l.category) = ANY($${filterIdx++})`);
-    filterArgs.push(categories.map((c) => c.toLowerCase()));
+    filterArgs.push(await categoryAliasTermsMany(dbPool, categories));
   } else if (category) {
-    // Slug-tolerant single match — same LOWER() grammar as /listings.
-    filterConditions.push(`LOWER(l.category) = LOWER($${filterIdx++})`);
-    filterArgs.push(category);
+    // Single-select — same alias resolution so a route slug ('hobbies')
+    // matches rows stored under the display name ('Hobbies & collectables').
+    filterConditions.push(`LOWER(l.category) = ANY($${filterIdx++})`);
+    filterArgs.push(await categoryAliasTerms(dbPool, category));
   }
   if (conditions && conditions.length > 0) {
     filterConditions.push(`l.condition = ANY($${filterIdx++})`);

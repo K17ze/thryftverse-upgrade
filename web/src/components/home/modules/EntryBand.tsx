@@ -84,14 +84,18 @@ const ENTRY_SPECS: EntrySpec[] = [
   {
     key: 'sneakers',
     label: 'Sneakers',
-    href: '/category/sneakers',
-    match: (l) => l.category === 'sneakers',
+    // Search destinations, not fixture-only /category slugs — 'sneakers'
+    // and 'bags' are not live departments, so those routes would resolve
+    // to empty sets in live mode. The query hits title/category tokens
+    // either way.
+    href: '/search?q=sneakers',
+    match: (l) => /\bsneakers?\b/i.test(identity(l)),
   },
   {
     key: 'bags',
     label: 'Bags',
-    href: '/category/bags',
-    match: (l) => l.category === 'bags',
+    href: '/search?q=bags',
+    match: (l) => /\bbags?\b/i.test(identity(l)),
   },
   {
     key: 'the-row',

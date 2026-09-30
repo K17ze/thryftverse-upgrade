@@ -16,14 +16,14 @@
  * coverage: skeleton, filtered-empty, empty, populated.
  */
 
-import { useMemo, useState } from 'react';
+import { useCallback, useMemo, useState } from 'react';
 import Link from 'next/link';
 import { StateGate } from '@/components/flagship/StateGate';
 import { MasonryGrid } from '@/components/feed/MasonryGrid';
 import { Button } from '@/components/ui/Button';
 import { EmptyState } from '@/components/ui/EmptyState';
 import { Icon } from '@/components/ui/Icon';
-import { CATEGORIES } from '@/lib/data/fixtures';
+import { categoryLabel } from '@/components/search/categoryDirectoryStore';
 import {
   mapListingToDiscoverySummary,
   type DiscoveryFeedUnit,
@@ -174,8 +174,10 @@ export function RefinedResults({
     [filtered],
   );
 
-  const categoryName = useMemo(
-    () => new Map(CATEGORIES.map((c) => [c.slug, c.name])),
+  // Directory-aware label — the shared store resolves live taxonomy ids
+  // and display names alike (l.category is mixed-vocabulary).
+  const categoryName = useCallback(
+    (slug: string) => categoryLabel(slug),
     [],
   );
 
@@ -217,7 +219,7 @@ export function RefinedResults({
     for (const slug of filters.categories) {
       out.push({
         key: `category:${slug}`,
-        label: categoryName.get(slug.toLowerCase()) ?? slug,
+        label: categoryName(slug),
         onRemove: () => set({ categories: dropValue(filters.categories, slug) }),
       });
     }

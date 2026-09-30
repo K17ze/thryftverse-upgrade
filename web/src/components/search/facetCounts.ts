@@ -101,19 +101,36 @@ function tally(listings: Listing[], key: (l: Listing) => string): Map<string, nu
 /**
  * Category options — one entry per category present in the result set,
  * ordered by the caller's taxonomy map (department order), zero-count
- * categories omitted.
+ * categories omitted. `names` maps every storable spelling (node id,
+ * display name — l.category is mixed-vocabulary) to its label; counts are
+ * merged per canonical slug so an id-stored row and a name-stored row
+ * land on one option that emits the canonical value.
  */
 export function categoryFacets(
   listings: Listing[],
   filters: ListingFilters,
   names: Map<string, string>,
+  canonical?: Map<string, string>,
 ): FacetOption[] {
   const base = baseExcept(listings, filters, 'category');
   const counts = tally(base, (l) => l.category.toLowerCase());
+  // Merge every alias's tally into its canonical slug first — id-stored
+  // and name-stored rows both count toward the one option.
+  const merged = new Map<string, number>();
+  for (const [key, count] of counts) {
+    const slug = canonical?.get(key) ?? key;
+    merged.set(slug, (merged.get(slug) ?? 0) + count);
+  }
   const options: FacetOption[] = [];
-  for (const [slug, label] of names) {
-    const count = counts.get(slug);
-    if (count) options.push({ value: slug, label, count });
+  const emitted = new Set<string>();
+  for (const [key, label] of names) {
+    const slug = canonical?.get(key) ?? key;
+    if (emitted.has(slug)) continue;
+    const count = merged.get(slug);
+    if (count) {
+      options.push({ value: slug, label, count });
+      emitted.add(slug);
+    }
   }
   return options;
 }

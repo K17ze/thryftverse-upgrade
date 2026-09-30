@@ -6,25 +6,23 @@
  * don't navigate). One Chip grammar, aria-pressed on the active
  * department, Rail edge fades while the row clips.
  *
- * Counts are fixture-truth and only render in fixture mode — the live
- * catalogue doesn't expose per-department totals at this scope, so a
- * live pill shows the name alone rather than a borrowed number.
+ * Counts come from useCategoryDirectory — fixture truth in fixture mode,
+ * real server counts in live mode. A department with zero active
+ * listings shows the name alone rather than a fabricated number.
  */
 
 import { Chip } from '@/components/ui/Chip';
 import { Rail } from '@/components/home/modules/Rail';
-import { CATEGORY_DIRECTORY } from '@/components/search/taxonomy';
-import { DATA_MODE } from '@/lib/api/client';
-
-const LIVE = DATA_MODE === 'live';
+import { useCategoryDirectory } from '@/components/search/useCategoryDirectory';
 
 interface FeedCategoryPillsProps {
-  /** 'all' or a department slug from CATEGORY_DIRECTORY. */
+  /** 'all' or a department slug from the directory. */
   active: string;
   onChange: (slug: string) => void;
 }
 
 export function FeedCategoryPills({ active, onChange }: FeedCategoryPillsProps) {
+  const { categories } = useCategoryDirectory();
   return (
     <Rail label="Filter by department" className="pb-1">
       <Chip
@@ -34,9 +32,9 @@ export function FeedCategoryPills({ active, onChange }: FeedCategoryPillsProps) 
       >
         All
       </Chip>
-      {CATEGORY_DIRECTORY.map((cat) => {
+      {categories.map((cat) => {
         const selected = active === cat.slug;
-        const count = !LIVE && cat.count > 0 ? cat.count : null;
+        const count = cat.count > 0 ? cat.count : null;
         return (
           <Chip
             key={cat.slug}

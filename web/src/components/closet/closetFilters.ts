@@ -7,7 +7,7 @@
  */
 
 import type { Listing, ListingCondition } from '@/lib/contracts/domain';
-import { CATEGORIES } from '@/lib/data/fixtures';
+
 import { CONDITION_OPTIONS } from '@/components/filters/filterTypes';
 
 export type ClosetSortKey = 'newest' | 'price-asc' | 'price-desc' | 'most-liked';
@@ -78,11 +78,15 @@ export interface ClosetFacets {
   categories: ClosetFacet[];
 }
 
-const CATEGORY_NAMES = new Map(CATEGORIES.map((c) => [c.slug, c.name]));
+import {
+  categoryCanonicalKey,
+  categoryLabel,
+  categoryMatches,
+} from '@/components/search/categoryDirectoryStore';
 
-export function categoryLabel(slug: string): string {
-  return CATEGORY_NAMES.get(slug) ?? slug.charAt(0).toUpperCase() + slug.slice(1);
-}
+// Directory-aware label — resolves node ids AND display names (live rows
+// are mixed-vocabulary) and sees the live taxonomy once it resolves.
+export { categoryLabel };
 
 function tally(
   items: Listing[],
@@ -113,7 +117,10 @@ export function extractClosetFacets(items: Listing[]): ClosetFacets {
     (c) => ({ value: c, label: c, count: conditionCounts.get(c) ?? 0 }),
   );
 
-  const categories = [...tally(items, (l) => l.category).entries()]
+  // Mixed-vocabulary merge — id-stored and name-stored rows count toward
+  // one canonical facet value (the directory slug).
+  const categoryCounts = tally(items, (l) => categoryCanonicalKey(l.category));
+  const categories = [...categoryCounts.entries()]
     .map(([value, count]) => ({ value, label: categoryLabel(value), count }))
     .sort((a, b) => a.label.localeCompare(b.label));
 
@@ -140,7 +147,7 @@ export function applyClosetFilters(items: Listing[], f: ClosetFilters): Listing[
       return false;
     }
     if (f.conditions.length > 0 && !f.conditions.includes(l.condition)) return false;
-    if (f.category && l.category !== f.category) return false;
+    if (f.category && !categoryMatches(l.category, f.category)) return false;
     if (f.priceDropsOnly && !listingHasPriceDrop(l)) return false;
     return true;
   });

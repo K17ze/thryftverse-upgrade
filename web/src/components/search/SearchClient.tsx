@@ -31,7 +31,7 @@ import { MemberResults } from './MemberResults';
 import { SearchField } from './SearchField';
 import { SearchLanding } from './SearchLanding';
 import { SearchRecovery } from './SearchRecovery';
-import { CATEGORY_DIRECTORY } from './taxonomy';
+import { categoryLabel } from './categoryDirectoryStore';
 import {
   matchListings,
   normalizeTerm,
@@ -186,9 +186,7 @@ export function SearchClient() {
   const activeCategory = filters.categories[0] ?? null;
   const activeCategoryScope = useMemo(() => {
     if (!activeCategory) return undefined;
-    const name =
-      CATEGORY_DIRECTORY.find((c) => c.slug === activeCategory)?.name ??
-      activeCategory;
+    const name = categoryLabel(activeCategory);
     return { slug: activeCategory, name };
   }, [activeCategory]);
   const isLanding = !q && !hasFacets;

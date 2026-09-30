@@ -12,7 +12,10 @@
 import { useEffect, useRef, useState } from 'react';
 import { usePathname, useSearchParams } from 'next/navigation';
 import { Icon } from '@/components/ui/Icon';
-import { SORT_OPTIONS, type SortKey } from '@/components/filters/filterTypes';
+import {
+  getContextualSortOptions,
+  type SortKey,
+} from '@/components/filters/filterTypes';
 
 interface SortDropdownProps {
   value: SortKey;
@@ -26,6 +29,7 @@ const SORT_LABELS: Record<SortKey, string> = {
   'most-liked': 'Most liked',
   'price-asc': 'Price: Low to High',
   'price-desc': 'Price: High to Low',
+  'ending-soon': 'Ending soon',
 };
 
 export function SortDropdown({ value, onChange }: SortDropdownProps) {
@@ -45,7 +49,21 @@ export function SortDropdown({ value, onChange }: SortDropdownProps) {
   const params = useSearchParams();
   const hasQuery = pathname === '/search' && (params.get('q') ?? '').trim() !== '';
 
-  const options = SORT_OPTIONS.filter((o) => hasQuery || o.value !== 'most-liked').map(
+  // Auction sort context (native isAuctionSortContext): the /category/<slug>
+  // segment, the ?category/?sub params, or the query itself may carry an
+  // auction scope. Only then does "Ending soon" join the option list.
+  const slugSegment = pathname.startsWith('/category/')
+    ? pathname.slice('/category/'.length).split('/')[0]
+    : '';
+  const categoryContext = [slugSegment, params.get('category') ?? '', params.get('sub') ?? '']
+    .filter(Boolean)
+    .join(' ');
+  const sortOptions = getContextualSortOptions(
+    categoryContext,
+    params.get('q') ?? undefined,
+  );
+
+  const options = sortOptions.filter((o) => hasQuery || o.value !== 'most-liked').map(
     (o) => ({
       ...o,
       label:

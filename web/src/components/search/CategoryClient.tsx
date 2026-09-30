@@ -14,22 +14,29 @@ import { EmptyState } from '@/components/ui/EmptyState';
 import { RefinedResults } from './RefinedResults';
 import { useFacetParams } from './useFacetParams';
 import { useSortParam } from './useSortParam';
-import { CATEGORIES } from '@/lib/data/fixtures';
 import { DATA_MODE } from '@/lib/api/client';
 import { useListings } from '@/lib/hooks/queries';
-import { subcategoriesFor } from './taxonomy';
+import { useCategoryDirectory } from './useCategoryDirectory';
 
 export function CategoryClient({ slug }: { slug: string }) {
   const router = useRouter();
   const params = useSearchParams();
   const [sort, setSort] = useSortParam();
   const [filters, setFilters] = useFacetParams();
-  const category = CATEGORIES.find((c) => c.slug === slug);
-  const subs = subcategoriesFor(slug);
+  const { bySlug } = useCategoryDirectory();
+  const category = bySlug(slug);
+  const subs = category?.subcategories ?? [];
 
+  // ?sub= carries the sub id (fixture: the sub name — fixture ids ARE
+  // display names; live: the taxonomy node id). Match either spelling so
+  // hand-shared URLs keep working.
   const subParam = params.get('sub');
   const activeSub =
-    subs.find((s) => s.toLowerCase() === subParam?.toLowerCase()) ?? null;
+    subs.find(
+      (s) =>
+        s.id.toLowerCase() === subParam?.toLowerCase() ||
+        s.name.toLowerCase() === subParam?.toLowerCase(),
+    ) ?? null;
 
   // The page IS the category scope — a stray ?category= facet param would
   // only intersect to empty, so it's stripped before the request (and
@@ -58,7 +65,10 @@ export function CategoryClient({ slug }: { slug: string }) {
     {
       filters: effectiveFilters,
       sort,
-      subcategory: activeSub ?? undefined,
+      // A sub param that isn't a direct child (a grandchild node id like
+      // 'women-knitwear', or a display name from an old link) still goes
+      // to the server — the backend alias map resolves every spelling.
+      subcategory: activeSub?.id ?? subParam ?? undefined,
     },
   );
   const loadMore = useCallback(() => void fetchNextPage(), [fetchNextPage]);
@@ -66,17 +76,19 @@ export function CategoryClient({ slug }: { slug: string }) {
   const listings = useMemo(() => {
     const all = data?.items ?? [];
     // Idempotent — live mode already scoped server-side; kept so fixture
-    // and any partial rows still land on the right sub.
+    // and any partial rows still land on the right sub. Mixed storage
+    // means a row can carry the id or the name — match either.
     if (!activeSub) return all;
+    const want = [activeSub.id.toLowerCase(), activeSub.name.toLowerCase()];
     return all.filter(
-      (l) => l.subcategory?.toLowerCase() === activeSub.toLowerCase(),
+      (l) => l.subcategory != null && want.includes(l.subcategory.toLowerCase()),
     );
   }, [data, activeSub]);
 
-  const selectSub = (name: string | null) => {
+  const selectSub = (id: string | null) => {
     // Preserve the persisted sort across sub navigation.
     const sp = new URLSearchParams(params.toString());
-    if (name) sp.set('sub', name);
+    if (id) sp.set('sub', id);
     else sp.delete('sub');
     const qs = sp.toString();
     router.replace(`/category/${slug}${qs ? `?${qs}` : ''}`, { scroll: false });
@@ -114,11 +126,11 @@ export function CategoryClient({ slug }: { slug: string }) {
           </Chip>
           {subs.map((s) => (
             <Chip
-              key={s}
-              selected={activeSub === s}
-              onClick={() => selectSub(s)}
+              key={s.id}
+              selected={activeSub?.id === s.id}
+              onClick={() => selectSub(s.id)}
             >
-              {s}
+              {s.name}
             </Chip>
           ))}
         </nav>
@@ -149,13 +161,13 @@ export function CategoryClient({ slug }: { slug: string }) {
             <p className="text-item-title font-semibold text-text-primary">
               <span className="tnum">{n.toLocaleString('en-GB')}</span>{' '}
               item{n === 1 ? '' : 's'}
-              {activeSub ? ` in ${activeSub}` : ''}
+              {activeSub ? ` in ${activeSub.name}` : ''}
             </p>
           )
         }
         emptyTitle={
           activeSub
-            ? `No ${activeSub.toLowerCase()} yet`
+            ? `No ${activeSub.name.toLowerCase()} yet`
             : `Nothing in ${category.name} yet`
         }
         emptySubtitle="Check back soon — new items arrive daily."

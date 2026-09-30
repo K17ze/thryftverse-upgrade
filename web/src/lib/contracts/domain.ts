@@ -532,6 +532,9 @@ export interface NotificationEntry {
   aggregatedUnreadIds?: string[];
   /** Group size behind an aggregated card — drives the "+N" badge. */
   aggregatedCount?: number;
+  /** saved_search_match events carry the subscription they matched —
+   *  saved-search surfaces count unread matches per search from it. */
+  savedSearchId?: string;
 }
 
 // ============================================================================

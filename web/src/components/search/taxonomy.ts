@@ -1,8 +1,13 @@
 /**
  * Browse taxonomy — subcategory composition per top-level category.
- * Fixture-mode taxonomy: top categories come from CATEGORIES, children
- * mirror the subcategory values that actually exist on fixture listings
- * (mirrors CategoryTreeScreen's parent→children grouping).
+ * Fixture mode: top categories come from CATEGORIES, children mirror the
+ * subcategory values that actually exist on fixture listings (mirrors
+ * CategoryTreeScreen's parent→children grouping).
+ * Live mode: `useCategoryDirectory` swaps the fixture tables for
+ * GET /taxonomy/category-directory — server-computed counts, covers, and
+ * the real child nodes — so live browsing can never drift onto
+ * fixture-only departments (sneakers/vintage/streetwear) or hide live
+ * ones (kids, home, electronics…).
  */
 
 import { CATEGORIES, LISTINGS } from '@/lib/data/fixtures';

@@ -25,7 +25,9 @@
 
 import type { Listing } from '@/lib/contracts/domain';
 import { CATEGORIES, LISTINGS } from '@/lib/data/fixtures';
+import { TAXONOMY_SEED } from '@/lib/contracts/taxonomy';
 import { parseIntent } from '@/components/convsearch/convSearchEngine';
+import { categoryLabel, categoryMatches } from './categoryDirectoryStore';
 import type { AppIconName } from '@/components/ui/Icon';
 import {
   CATEGORY_TREE,
@@ -93,7 +95,11 @@ function diceCoefficient(a: string, b: string): number {
   return (2 * shared) / (a.length - 1 + (b.length - 1));
 }
 
-const CATEGORY_NAMES = new Map(CATEGORIES.map((c) => [c.slug, c.name]));
+// Category display names resolve through the shared directory store —
+// l.category is mixed-vocabulary (fixture slug, live node id, or display
+// name), and only the directory knows all three spellings.
+const categoryName = (value: string | undefined) =>
+  value ? categoryLabel(value) : undefined;
 
 /**
  * Search vocabulary — normalized token → canonical display token.
@@ -122,6 +128,13 @@ const VOCAB = (() => {
   for (const c of CATEGORIES) {
     add(c.name);
     add(c.slug);
+  }
+  // Canonical taxonomy — ids, display names and synonyms cover the live
+  // vocabulary (kids, hobbies…) even where the fixture set doesn't.
+  for (const node of TAXONOMY_SEED.categories) {
+    add(node.id);
+    add(node.name);
+    for (const syn of node.synonyms ?? []) add(syn);
   }
   for (const subs of Object.values(CATEGORY_TREE)) for (const s of subs) add(s);
   for (const l of LISTINGS) {
@@ -196,7 +209,7 @@ function listingFields(l: Listing): ListingTokenFields {
     brand: new Set(tokenize(l.brand ?? '')),
     detail: new Set(
       tokenize(
-        `${l.subcategory ?? ''} ${l.category} ${CATEGORY_NAMES.get(l.category) ?? ''}`,
+        `${l.subcategory ?? ''} ${l.category} ${categoryName(l.category) ?? ''}`,
       ),
     ),
   };
@@ -421,7 +434,7 @@ export function relatedSearches(
   for (const l of results) {
     add(l.brand);
     add(l.subcategory);
-    add(CATEGORY_NAMES.get(l.category));
+    add(categoryName(l.category));
   }
   return [...counts.values()]
     .sort((a, b) => b.count - a.count || a.label.localeCompare(b.label))
@@ -451,8 +464,8 @@ export interface QuerySuggestion {
 function matchesCategory(term: string, categorySlug: string): boolean {
   const tokens = tokenize(term);
   if (tokens.length === 0) return false;
-  const scoped = LISTINGS.filter(
-    (l) => l.category.toLowerCase() === categorySlug.toLowerCase(),
+  const scoped = LISTINGS.filter((l) =>
+    categoryMatches(l.category, categorySlug),
   );
   return matchCore(scoped, tokens).matched.length > 0;
 }
@@ -509,7 +522,7 @@ export function suggestQueries(
   // same terms, verified to have hits inside that department (no scoped
   // row is emitted for a term the category can't satisfy).
   if (categorySlug) {
-    const name = CATEGORY_NAMES.get(categorySlug) ?? categorySlug;
+    const name = categoryLabel(categorySlug);
     const scope = { slug: categorySlug, name };
     const scoped: QuerySuggestion[] = [];
     for (const s of out) {

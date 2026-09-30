@@ -1264,6 +1264,10 @@ export function mapNotificationEventToEntry(event: NotificationEventApi): Notifi
     actorUsername: event.actorUsername ?? undefined,
     actorUserId: event.actorUserId ?? undefined,
     createdAt: event.createdAt,
+    savedSearchId:
+      typeof event.payload?.savedSearchId === 'string'
+        ? event.payload.savedSearchId
+        : undefined,
   };
 }
 

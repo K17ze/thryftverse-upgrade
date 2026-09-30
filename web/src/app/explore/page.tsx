@@ -24,7 +24,8 @@ import { LooksMoodboards } from '@/components/explore/LooksMoodboards';
 import { ClosetsToFollow } from '@/components/explore/ClosetsToFollow';
 import { CuratedEditsRail } from '@/components/discovery/CuratedEditsRail';
 import { SearchField } from '@/components/search/SearchField';
-import { CATEGORY_DIRECTORY } from '@/components/search/taxonomy';
+import { useCategoryDirectory } from '@/components/search/useCategoryDirectory';
+import { categoryMatches } from '@/components/search/categoryDirectoryStore';
 import { FeedControlsProvider } from '@/components/feed/FeedControls';
 import { rankFeedUnits } from '@/components/home/rankFeed';
 import { useExploreFeed } from '@/lib/hooks/feed-queries';
@@ -89,21 +90,27 @@ export default function ExplorePage() {
     });
   }, [data, hydrated, hiddenIds, downKeys, downSizes, ceilings]);
 
-  const activeDepartment = CATEGORY_DIRECTORY.find(
-    (c) => c.slug === activeCategory,
-  );
+  const { bySlug } = useCategoryDirectory();
+  const activeDepartment = bySlug(activeCategory);
 
   // A department filter narrows the feed to its real listings — authored
   // units (looks, posters, editorial) carry no department and stay out
   // rather than leaking into a filtered view they don't belong to.
+  // l.category is mixed-vocabulary (node id or display name) — match both.
   const feedUnits = useMemo<DiscoveryFeedUnit[]>(() => {
     if (activeCategory === 'all') return units;
+    const want = new Set(
+      [activeCategory, activeDepartment?.name ?? '']
+        .filter(Boolean)
+        .map((v) => v.toLowerCase()),
+    );
     return units.filter(
       (u) =>
         u.type === 'listing' &&
-        u.listing.category.toLowerCase() === activeCategory,
+        (want.has(u.listing.category.toLowerCase()) ||
+          categoryMatches(u.listing.category, activeCategory)),
     );
-  }, [units, activeCategory]);
+  }, [units, activeCategory, activeDepartment]);
 
   // Tail pagination — the sentinel pulls the next page while the serve
   // has a nextCursor; an exhausted feed reports hasNextPage === false.

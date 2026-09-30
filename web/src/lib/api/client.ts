@@ -14,7 +14,6 @@ import type {
   Listing,
   Order,
   User,
-  Review,
 } from '@/lib/contracts/domain';
 import { mapListingToDiscoverySummary } from '@/lib/contracts/domain';
 import {
@@ -72,6 +71,7 @@ const SEARCH_SORT_WIRE: Record<SortKey, string> = {
   'most-liked': 'most_liked',
   'price-asc': 'price_asc',
   'price-desc': 'price_desc',
+  'ending-soon': 'ending_soon',
 };
 
 const BROWSE_SORT_WIRE: Record<SortKey, string> = {
@@ -80,6 +80,7 @@ const BROWSE_SORT_WIRE: Record<SortKey, string> = {
   'most-liked': 'most_liked',
   'price-asc': 'price_asc',
   'price-desc': 'price_desc',
+  'ending-soon': 'ending_soon',
 };
 
 async function fetchFeedFixture(_cursor?: string): Promise<FeedPage> {

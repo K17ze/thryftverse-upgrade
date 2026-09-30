@@ -54,6 +54,33 @@ function groupNodesByType(nodes: TaxonomyNode[]): TaxonomyCollection {
   return collection;
 }
 
+/** Live browse directory — GET /taxonomy/category-directory. Counts and
+ *  covers are computed server-side over active listings (mixed-vocabulary
+ *  columns resolved through the alias map). */
+export interface CategoryDirectoryApiEntry {
+  id: string;
+  name: string;
+  displayKey: string;
+  sortOrder: number;
+  count: number;
+  cover: string | null;
+  children: { id: string; name: string; displayKey: string; count: number }[];
+}
+
+export async function fetchCategoryDirectory(
+  signal?: AbortSignal,
+): Promise<CategoryDirectoryApiEntry[]> {
+  const payload = await fetchJson<{ ok?: boolean; directory?: CategoryDirectoryApiEntry[] }>(
+    '/taxonomy/category-directory',
+    undefined,
+    { signal },
+  );
+  if (!payload || !Array.isArray(payload.directory)) {
+    throw new Error('Category directory unavailable');
+  }
+  return payload.directory;
+}
+
 export async function fetchTaxonomy(signal?: AbortSignal): Promise<TaxonomyCollection> {
   try {
     const payload = await fetchJson<TaxonomyApiResponse>('/taxonomy', undefined, {

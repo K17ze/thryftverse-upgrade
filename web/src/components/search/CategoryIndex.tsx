@@ -10,20 +10,17 @@
 import { useState } from 'react';
 import Link from 'next/link';
 import { Icon } from '@/components/ui/Icon';
-import { CATEGORIES } from '@/lib/data/fixtures';
-import { CATEGORY_DIRECTORY, subcategoriesFor, subcategoryCount } from './taxonomy';
-
-/** Live counts — the same fixture truth the directory tiles publish. */
-const ITEM_COUNTS = new Map(CATEGORY_DIRECTORY.map((c) => [c.slug, c.count]));
+import { useCategoryDirectory } from './useCategoryDirectory';
 
 export function CategoryIndex() {
   const [openSlug, setOpenSlug] = useState<string | null>(null);
+  const { categories } = useCategoryDirectory();
 
   return (
     <ul className="divide-y divide-border-subtle border-y border-border-subtle">
-      {CATEGORIES.map((cat) => {
-        const subs = subcategoriesFor(cat.slug);
-        const count = ITEM_COUNTS.get(cat.slug) ?? 0;
+      {categories.map((cat) => {
+        const subs = cat.subcategories;
+        const count = cat.count;
         const open = openSlug === cat.slug;
 
         if (subs.length === 0) {
@@ -87,14 +84,14 @@ export function CategoryIndex() {
                   </Link>
                 </li>
                 {subs.map((s) => {
-                  const subCount = subcategoryCount(cat.slug, s);
+                  const subCount = s.count;
                   return (
-                    <li key={s}>
+                    <li key={s.id}>
                       <Link
-                        href={`/category/${cat.slug}?sub=${encodeURIComponent(s)}`}
+                        href={`/category/${cat.slug}?sub=${encodeURIComponent(s.id)}`}
                         className="pressable flex h-11 items-center justify-between px-1 pl-4 text-body text-text-secondary hover:bg-row-pressed hover:text-text-primary"
                       >
-                        {s}
+                        {s.name}
                         <span className="flex items-center gap-2 text-text-muted">
                           {subCount > 0 ? (
                             <span className="tnum text-caption">

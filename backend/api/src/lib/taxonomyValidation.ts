@@ -82,3 +82,88 @@ export function normaliseTaxonomyValue(
   if (!value) return value;
   return map.get(value.toLowerCase()) ?? value;
 }
+
+// ── Browse/read-path category aliasing ────────────────────────────────────
+//
+// l.category / l.subcategory are mixed-vocabulary columns: native writes the
+// canonical display name ('Hobbies & collectables'), the web composer writes
+// the node id ('hobbies'), and legacy rows predate both. A browse filter that
+// compares a route slug against only one form silently misses rows stored in
+// the other.
+//
+// categoryAliasTerms resolves any inbound form (node id, display_key, name,
+// or synonym — case-insensitive) to the full set of storable spellings for
+// that node, so `LOWER(l.category) = ANY(terms)` matches every row regardless
+// of which client wrote it. Unresolvable params pass through verbatim so
+// legacy free-text categories keep working.
+
+interface CategoryNodeAlias {
+  /** Every lowercase spelling a stored column may carry for this node. */
+  storables: string[];
+}
+
+let aliasCache: { map: Map<string, CategoryNodeAlias>; expiresAt: number } | null = null;
+
+async function loadCategoryAliases(db: Pool): Promise<Map<string, CategoryNodeAlias>> {
+  const result = await db.query<{
+    id: string;
+    display_key: string;
+    name: string;
+    synonyms: string[];
+  }>(
+    `SELECT id, display_key, name, synonyms
+     FROM taxonomy_nodes
+     WHERE is_active = true AND type = 'category'`,
+  );
+
+  const map = new Map<string, CategoryNodeAlias>();
+  for (const row of result.rows) {
+    const storables = [
+      ...new Set(
+        [row.id, row.display_key, row.name]
+          .map((v) => v.toLowerCase())
+          .filter(Boolean),
+      ),
+    ];
+    const alias: CategoryNodeAlias = { storables };
+    // Every inbound spelling resolves to the same storable set.
+    for (const key of [row.id, row.display_key, row.name, ...row.synonyms]) {
+      const k = key.toLowerCase();
+      if (k && !map.has(k)) map.set(k, alias);
+    }
+  }
+  return map;
+}
+
+async function getCategoryAliases(db: Pool): Promise<Map<string, CategoryNodeAlias>> {
+  if (aliasCache && Date.now() < aliasCache.expiresAt) {
+    return aliasCache.map;
+  }
+  try {
+    const map = await loadCategoryAliases(db);
+    aliasCache = { map, expiresAt: Date.now() + CACHE_TTL_MS };
+    return map;
+  } catch {
+    return new Map();
+  }
+}
+
+/**
+ * Resolve one inbound category filter term to every lowercase spelling the
+ * stored column may carry. Unknown terms return [term.toLowerCase()].
+ */
+export async function categoryAliasTerms(db: Pool, term: string): Promise<string[]> {
+  const alias = (await getCategoryAliases(db)).get(term.toLowerCase());
+  return alias?.storables ?? [term.toLowerCase()];
+}
+
+/**
+ * Resolve a list of inbound terms — union of each term's storable set.
+ */
+export async function categoryAliasTermsMany(db: Pool, terms: string[]): Promise<string[]> {
+  const out = new Set<string>();
+  for (const t of terms) {
+    for (const s of await categoryAliasTerms(db, t)) out.add(s);
+  }
+  return [...out];
+}

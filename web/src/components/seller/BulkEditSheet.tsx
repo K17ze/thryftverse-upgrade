@@ -11,7 +11,7 @@
 import { useEffect, useMemo, useState } from 'react';
 import { Button } from '@/components/ui/Button';
 import { Sheet } from '@/components/ui/Sheet';
-import { CATEGORIES } from '@/lib/data/fixtures';
+import { useCategoryDirectory } from '@/components/search/useCategoryDirectory';
 import type { SellerHubListingEditPatch } from '@/lib/api/services/sellerHub';
 import type { BulkActionResult } from '@/lib/hooks/seller-queries';
 import { formatPrice } from '@/lib/utils/format';
@@ -67,6 +67,8 @@ export function BulkEditSheet({
   const [priceMode, setPriceMode] = useState<PriceMode>('keep');
   const [priceValue, setPriceValue] = useState('');
   const [category, setCategory] = useState('');
+  // Live-aware vocabulary — same taxonomy ids the sell composer emits.
+  const { categories } = useCategoryDirectory();
   const [condition, setCondition] = useState('');
   const [error, setError] = useState<string | null>(null);
 
@@ -289,7 +291,7 @@ export function BulkEditSheet({
                   className={`${inputCls} appearance-none`}
                 >
                   <option value="">Keep current</option>
-                  {CATEGORIES.map((c) => (
+                  {categories.map((c) => (
                     <option key={c.slug} value={c.slug}>
                       {c.name}
                     </option>

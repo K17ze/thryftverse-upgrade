@@ -9,10 +9,11 @@
 
 import { CategoryIndex } from '@/components/search/CategoryIndex';
 import { CategoryTile } from '@/components/search/CategoryTile';
-import { CATEGORY_DIRECTORY } from '@/components/search/taxonomy';
+import { useCategoryDirectory } from '@/components/search/useCategoryDirectory';
 
 export default function CategoriesPage() {
-  const liveItems = CATEGORY_DIRECTORY.reduce((n, c) => n + c.count, 0);
+  const { categories } = useCategoryDirectory();
+  const liveItems = categories.reduce((n, c) => n + c.count, 0);
 
   return (
     <div className="mx-auto max-w-[1440px] px-4 pb-10 pt-6 sm:px-6">
@@ -22,7 +23,7 @@ export default function CategoriesPage() {
       <p className="mt-1 text-caption text-text-muted">
         <span className="tnum">{liveItems.toLocaleString('en-GB')}</span> live
         {' '}item{liveItems === 1 ? '' : 's'} across{' '}
-        {CATEGORY_DIRECTORY.length} departments
+        {categories.length} departments
       </p>
 
       {/* Department tiles — media is the colour, counts are fixture-truth */}
@@ -31,7 +32,7 @@ export default function CategoriesPage() {
         role="list"
         aria-label="Departments"
       >
-        {CATEGORY_DIRECTORY.map((cat, i) => (
+        {categories.map((cat, i) => (
           <CategoryTile
             key={cat.slug}
             slug={cat.slug}

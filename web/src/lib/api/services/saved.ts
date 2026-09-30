@@ -54,6 +54,10 @@ export interface SavedSearch {
   /** Server flag that gates match notifications — absent on older rows. */
   alertsEnabled?: boolean;
   createdAt?: string;
+  /** Server-stamped when the matcher last queued a match notification —
+   *  the durable "last match" signal (web counterpart of native
+   *  lastCheckedAt/lastMatchCount). */
+  lastNotifiedAt?: string | null;
 }
 
 export async function fetchSavedSearches(signal?: AbortSignal): Promise<SavedSearch[]> {

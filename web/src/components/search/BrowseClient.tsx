@@ -12,7 +12,7 @@ import { Chip } from '@/components/ui/Chip';
 import { RefinedResults } from './RefinedResults';
 import { useFacetParams } from './useFacetParams';
 import { useSortParam } from './useSortParam';
-import { CATEGORIES } from '@/lib/data/fixtures';
+import { useCategoryDirectory } from './useCategoryDirectory';
 import { DATA_MODE } from '@/lib/api/client';
 import { useListings } from '@/lib/hooks/queries';
 
@@ -20,6 +20,7 @@ export function BrowseClient() {
   const [category, setCategory] = useState<string | null>(null);
   const [sort, setSort] = useSortParam();
   const [filters, setFilters] = useFacetParams();
+  const { categories, bySlug } = useCategoryDirectory();
 
   // When the chip rail scopes the set, a category facet stacked on top
   // would only ever produce empty intersections — strip it (the group is
@@ -65,7 +66,7 @@ export function BrowseClient() {
         <Chip selected={category === null} onClick={() => setCategory(null)}>
           All
         </Chip>
-        {CATEGORIES.map((cat) => (
+        {categories.map((cat) => (
           <Chip
             key={cat.slug}
             selected={category === cat.slug}
@@ -102,10 +103,7 @@ export function BrowseClient() {
               <span className="tnum">{n.toLocaleString('en-GB')}</span>{' '}
               item{n === 1 ? '' : 's'}
               {category
-                ? ` in ${
-                    CATEGORIES.find((c) => c.slug === category)?.name ??
-                    category
-                  }`
+                ? ` in ${bySlug(category)?.name ?? category}`
                 : ''}
             </p>
           )

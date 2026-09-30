@@ -13,7 +13,7 @@
 
 import { useEffect, useMemo, useState } from 'react';
 import { Icon } from '@/components/ui/Icon';
-import { CATEGORIES } from '@/lib/data/fixtures';
+import { useCategoryDirectory } from './useCategoryDirectory';
 import type { Listing, ListingCondition } from '@/lib/contracts/domain';
 import type { ListingFilters } from '@/components/filters/filterTypes';
 import {
@@ -189,9 +189,28 @@ export function RefinementRail({
   const [collapsed, setCollapsed] = useState<Record<string, boolean>>({});
   const [expandedOptions, setExpandedOptions] = useState<Record<string, boolean>>({});
 
+  const { categories: directoryCategories } = useCategoryDirectory();
   const categoryNames = useMemo(
-    () => new Map(CATEGORIES.map((c) => [c.slug, c.name])),
-    [],
+    () =>
+      new Map(
+        directoryCategories.flatMap((c) => [
+          [c.slug, c.name] as const,
+          [c.name.toLowerCase(), c.name] as const,
+        ]),
+      ),
+    [directoryCategories],
+  );
+  // spelling → canonical value — id-stored and name-stored rows merge
+  // into one option (see FilterSheet).
+  const categoryCanonical = useMemo(
+    () =>
+      new Map(
+        directoryCategories.flatMap((c) => [
+          [c.slug, c.slug] as const,
+          [c.name.toLowerCase(), c.slug] as const,
+        ]),
+      ),
+    [directoryCategories],
   );
 
   const groups = useMemo<FacetGroup[]>(() => {
@@ -200,12 +219,13 @@ export function RefinementRail({
     if (!hideCategory) {
       // Selected slugs that aren't present in the result set stay visible
       // (honest 0) so they can be unchecked here.
-      const catOptions = categoryFacets(listings, filters, categoryNames);
+      const catOptions = categoryFacets(listings, filters, categoryNames, categoryCanonical);
       for (const slug of filters.categories) {
-        if (!catOptions.some((o) => o.value === slug.toLowerCase())) {
+        const canonical = categoryCanonical.get(slug.toLowerCase()) ?? slug.toLowerCase();
+        if (!catOptions.some((o) => o.value === canonical)) {
           catOptions.push({
-            value: slug.toLowerCase(),
-            label: categoryNames.get(slug.toLowerCase()) ?? slug,
+            value: canonical,
+            label: categoryNames.get(canonical) ?? categoryNames.get(slug.toLowerCase()) ?? slug,
             count: 0,
           });
         }
@@ -215,12 +235,23 @@ export function RefinementRail({
         title: 'Category',
         options: catOptions,
         isSelected: (o) =>
-          filters.categories.some((c) => c.toLowerCase() === o.value),
-        toggle: (o) =>
+          filters.categories.some(
+            (c) => (categoryCanonical.get(c.toLowerCase()) ?? c.toLowerCase()) === o.value,
+          ),
+        // Canonical-aware toggle — a stored display-name spelling counts
+        // as the same option, so unchecking drops every alias of the
+        // value instead of leaving a stuck-selected ghost.
+        toggle: (o) => {
+          const canonicalOf = (c: string) =>
+            categoryCanonical.get(c.toLowerCase()) ?? c.toLowerCase();
+          const selected = filters.categories.some((c) => canonicalOf(c) === o.value);
           onChange({
             ...filters,
-            categories: toggleValue(filters.categories, o.value),
-          }),
+            categories: selected
+              ? filters.categories.filter((c) => canonicalOf(c) !== o.value)
+              : [...filters.categories, o.value],
+          });
+        },
       });
     }
 
@@ -285,7 +316,7 @@ export function RefinementRail({
     );
 
     return g;
-  }, [listings, filters, hideCategory, categoryNames, onChange]);
+  }, [listings, filters, hideCategory, categoryNames, categoryCanonical, onChange]);
 
   // Groups with no refinements under the current combination disappear —
   // an empty facet list is noise, not honesty. The availability row stays

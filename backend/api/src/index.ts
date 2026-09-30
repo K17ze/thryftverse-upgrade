@@ -23,6 +23,7 @@ import {
 import { validateCompositionDocument } from './lib/compositionValidation.js';
 import { settleCreatorEarningEntries } from './lib/creatorPayoutSettlement.js';
 import { buildListingSortPlan } from './lib/listingSort.js';
+import { categoryAliasTerms, categoryAliasTermsMany } from './lib/taxonomyValidation.js';
 import { performUserErasure } from './lib/userErasure.js';
 import {
   propagateUserDeletion,
@@ -16790,18 +16791,24 @@ app.get('/listings', async (request, reply) => {
     ? params.categories.split(',').map((c) => c.trim()).filter(Boolean)
     : [];
   if (categoriesList.length > 0) {
-    // Same case-insensitive semantics as the scalar filter, set-scoped.
+    // Same case-insensitive semantics as the scalar filter, set-scoped —
+    // expanded through the taxonomy alias map so rows stored under the
+    // node id, display key, or display name all match.
     conditions.push(`LOWER(l.category) = ANY($${args.length + 1})`);
-    args.push(categoriesList.map((c) => c.toLowerCase()));
+    args.push(await categoryAliasTermsMany(db, categoriesList));
   } else if (params.category) {
-    // Stored categories are taxonomy display names ("Women") while clients
-    // send route ids ("women") — normalize both sides to compare.
-    conditions.push(`LOWER(l.category) = LOWER($${args.length + 1})`);
-    args.push(params.category);
+    // l.category is mixed-vocabulary (display names from mobile, node ids
+    // from web, legacy free text) — resolve the param to every storable
+    // spelling for the matching taxonomy node.
+    conditions.push(`LOWER(l.category) = ANY($${args.length + 1})`);
+    args.push(await categoryAliasTerms(db, params.category));
   }
   if (params.subcategory) {
-    conditions.push(`l.subcategory ILIKE $${args.length + 1}`);
-    args.push(`%${params.subcategory}%`);
+    // Same mixed-vocabulary problem on l.subcategory — match any storable
+    // spelling as a substring (stored values are id or name forms).
+    const subTerms = await categoryAliasTerms(db, params.subcategory);
+    conditions.push(`l.subcategory ILIKE ANY($${args.length + 1})`);
+    args.push(subTerms.map((t) => `%${t}%`));
   }
   const brandsList = params.brands
     ? params.brands.split(',').map((b) => b.trim()).filter(Boolean)

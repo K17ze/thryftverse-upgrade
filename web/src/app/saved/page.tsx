@@ -10,6 +10,7 @@
 import { useMemo, useState } from 'react';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
+import { useQuery } from '@tanstack/react-query';
 import { ProfileTabs } from '@/components/profile/ProfileTabs';
 import { EmptyState } from '@/components/ui/EmptyState';
 import { Icon } from '@/components/ui/Icon';
@@ -27,9 +28,16 @@ import {
   useSavedSearches,
   describeFilters,
   searchHref,
+  type SavedSearch,
 } from '@/lib/store/savedSearches';
 import { Switch } from '@/components/settings/Switch';
 import { useSession } from '@/lib/session/SessionProvider';
+import { DATA_MODE } from '@/lib/api/client';
+import {
+  fetchNotificationEvents,
+  markNotificationRead,
+} from '@/lib/api/services/notifications';
+import { timeAgo } from '@/lib/utils/format';
 
 type Segment = 'favourites' | 'saved' | 'boards' | 'searches';
 
@@ -83,6 +91,47 @@ export default function SavedPage() {
   const searchesStale = useSavedSearches((s) => s.stale);
   const toggleAlert = useSavedSearches((s) => s.toggleAlert);
   const removeSearch = useSavedSearches((s) => s.removeSearch);
+
+  // "N new" per saved search — the durable server signal. The backend
+  // matcher queues a saved_search_match notification per new listing and
+  // stamps `last_notified_at` on the row; counting UNREAD match events by
+  // their payload.savedSearchId gives a real per-search new count (native
+  // useSavedSearchAlerts parity — the client never invents a diff).
+  const liveSearches = DATA_MODE === 'live' && !isGuest;
+  const matchCountsQ = useQuery({
+    queryKey: ['saved-search-match-counts'],
+    enabled: liveSearches && seg === 'searches',
+    staleTime: 60_000,
+    queryFn: async () => {
+      const page = await fetchNotificationEvents({
+        eventTypes: ['saved_search_match'],
+        unread: true,
+        limit: 100,
+      });
+      const bySearch = new Map<string, string[]>();
+      for (const e of page.entries) {
+        if (!e.savedSearchId) continue;
+        const ids = bySearch.get(e.savedSearchId) ?? [];
+        ids.push(e.id);
+        bySearch.set(e.savedSearchId, ids);
+      }
+      return bySearch;
+    },
+  });
+
+  const runSearch = (s: SavedSearch) => {
+    // Running the search is seeing the matches — mark the unread match
+    // events read so the "N new" badge clears (fire-and-forget; a failed
+    // mark-read just leaves the badge until the notifications surface
+    // clears it).
+    const unreadIds = matchCountsQ.data?.get(s.id);
+    if (unreadIds?.length) {
+      void Promise.allSettled(
+        unreadIds.map((id) => markNotificationRead(id)),
+      ).then(() => matchCountsQ.refetch());
+    }
+    router.push(searchHref(s));
+  };
 
   // Id lists resolve through the shared live/fixture hook — one batched
   // read for both lists (live: GET /listings/:id per id, misses dropped
@@ -194,12 +243,15 @@ export default function SavedPage() {
                 {searches.map((s) => {
                 const filterText = describeFilters(s.filters);
                 const isVisual = s.kind === 'visual';
+                const newMatches = s.alertsOn
+                  ? matchCountsQ.data?.get(s.id)?.length ?? 0
+                  : 0;
                 return (
                   <li key={s.id} className="border-b border-border-subtle last:border-0">
                     <div className="flex items-center gap-3 py-[var(--density-row-py)]">
                       <button
                         type="button"
-                        onClick={() => router.push(searchHref(s))}
+                        onClick={() => runSearch(s)}
                         className="pressable flex min-w-0 flex-1 items-center gap-3 text-left"
                         aria-label={`Run search${s.query ? ` “${s.query}”` : ''}`}
                       >
@@ -209,8 +261,18 @@ export default function SavedPage() {
                           className="shrink-0 text-text-muted"
                         />
                         <span className="min-w-0">
-                          <span className="clamp-1 block text-body font-semibold text-text-primary">
-                            {s.query || 'All items'}
+                          <span className="flex items-center gap-2">
+                            <span className="clamp-1 text-body font-semibold text-text-primary">
+                              {s.query || 'All items'}
+                            </span>
+                            {newMatches > 0 ? (
+                              <span
+                                className="shrink-0 rounded-full bg-brand px-1.5 py-px text-[11px] font-semibold text-white"
+                                aria-label={`${newMatches} new match${newMatches === 1 ? '' : 'es'}`}
+                              >
+                                {newMatches} new
+                              </span>
+                            ) : null}
                           </span>
                           <span className="clamp-1 block text-meta text-text-muted">
                             {[
@@ -220,6 +282,9 @@ export default function SavedPage() {
                                 : null,
                               s.resultCount !== undefined
                                 ? `${s.resultCount} result${s.resultCount === 1 ? '' : 's'} when saved`
+                                : null,
+                              s.lastNotifiedAt
+                                ? `Last match ${timeAgo(s.lastNotifiedAt)}`
                                 : null,
                             ]
                               .filter(Boolean)

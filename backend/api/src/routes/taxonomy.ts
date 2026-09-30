@@ -1,6 +1,7 @@
 import type { FastifyInstance, FastifyReply, FastifyRequest } from 'fastify';
 import type { Pool } from 'pg';
 import { z } from 'zod';
+import { categoryAliasTerms } from '../lib/taxonomyValidation.js';
 
 type TaxonomyRouteDependencies = {
   app: FastifyInstance;
@@ -107,5 +108,92 @@ export const registerTaxonomyRoutes = ({ app, db }: TaxonomyRouteDependencies) =
       ok: true,
       nodes: rows.map(mapRow),
     };
+  });
+
+  // GET /taxonomy/category-directory — the browse index the web /categories
+  // page and department nav read: every top-level category with its live
+  // listing count, a cover borrowed from its newest active listing, and
+  // counted children. l.category/l.subcategory are mixed-vocabulary columns
+  // (display names from mobile, node ids from web), so counts resolve
+  // through the alias map rather than comparing one spelling.
+  app.get('/taxonomy/category-directory', async (_request: FastifyRequest, reply: FastifyReply) => {
+    let nodes: TaxonomyNodeRow[] = [];
+    try {
+      const result = await db.query<TaxonomyNodeRow>(
+        `SELECT id, name, display_key, type, parent_id, sort_order, synonyms
+         FROM taxonomy_nodes
+         WHERE is_active = true AND type = 'category'
+         ORDER BY sort_order, name`,
+      );
+      nodes = result.rows;
+    } catch {
+      reply.code(503);
+      return {
+        ok: false,
+        error: 'Taxonomy table not available. Run migrations first.',
+        code: 'TAXONOMY_UNAVAILABLE',
+      };
+    }
+
+    const topLevel = nodes.filter((n) => n.parent_id === null);
+    const childrenByParent = new Map<string, TaxonomyNodeRow[]>();
+    for (const n of nodes) {
+      if (!n.parent_id) continue;
+      const list = childrenByParent.get(n.parent_id) ?? [];
+      list.push(n);
+      childrenByParent.set(n.parent_id, list);
+    }
+
+    const directory = await Promise.all(
+      topLevel.map(async (node) => {
+        // Storable spellings for this node — id / display_key / name —
+        // so counts cover rows written by either client.
+        const terms = await categoryAliasTerms(db, node.id);
+        const countResult = await db.query<{ count: string }>(
+          `SELECT COUNT(*)::text AS count FROM listings
+           WHERE status = 'active' AND LOWER(category) = ANY($1)`,
+          [terms],
+        );
+        const coverResult = await db.query<{ image_url: string | null }>(
+          `SELECT image_url FROM listings
+           WHERE status = 'active' AND LOWER(category) = ANY($1)
+             AND image_url IS NOT NULL
+           ORDER BY created_at DESC LIMIT 1`,
+          [terms],
+        );
+        const children = await Promise.all(
+          (childrenByParent.get(node.id) ?? []).map(async (child) => {
+            const childTerms = await categoryAliasTerms(db, child.id);
+            // Subcategory rows store the CHILD spelling in l.subcategory —
+            // substring match covers 'women-clothing' ids and 'Clothing'
+            // display names alike.
+            const subResult = await db.query<{ count: string }>(
+              `SELECT COUNT(*)::text AS count FROM listings
+               WHERE status = 'active'
+                 AND LOWER(category) = ANY($1)
+                 AND subcategory ILIKE ANY($2)`,
+              [terms, childTerms.map((t) => `%${t}%`)],
+            );
+            return {
+              id: child.id,
+              name: child.name,
+              displayKey: child.display_key,
+              count: Number(subResult.rows[0]?.count ?? 0),
+            };
+          }),
+        );
+        return {
+          id: node.id,
+          name: node.name,
+          displayKey: node.display_key,
+          sortOrder: node.sort_order,
+          count: Number(countResult.rows[0]?.count ?? 0),
+          cover: coverResult.rows[0]?.image_url ?? null,
+          children,
+        };
+      }),
+    );
+
+    return { ok: true, directory };
   });
 };
