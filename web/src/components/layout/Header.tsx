@@ -197,8 +197,16 @@ export function Header() {
                     : undefined
                 }
                 autoComplete="off"
-                className="h-10 w-full rounded-full border border-transparent bg-surface-alt pl-10 pr-4 text-body text-input-text placeholder:text-text-muted focus:border-border focus:bg-surface-raised focus:outline-none"
+                className="h-10 w-full rounded-full border border-transparent bg-surface-alt pl-10 pr-12 text-body text-input-text placeholder:text-text-muted focus:border-border focus:bg-surface-raised focus:outline-none"
               />
+              {/* ⌘K affordance — the shortcut lives in CommandPalette;
+                  this is the discoverable hint, not a separate trigger. */}
+              <kbd
+                aria-hidden
+                className="pointer-events-none absolute right-3.5 top-1/2 -translate-y-1/2 rounded border border-border px-1.5 py-0.5 text-[10px] font-medium text-text-muted"
+              >
+                ⌘K
+              </kbd>
             </label>
             {searchOpen ? (
               <SearchSuggestions

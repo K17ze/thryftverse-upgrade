@@ -5,6 +5,7 @@ import { usePathname, useRouter } from 'next/navigation';
 import { Header } from './Header';
 import { MobileTabBar } from './MobileTabBar';
 import { Footer } from './Footer';
+import { CommandPalette } from './CommandPalette';
 import { useHydrated, useStore } from '@/lib/store/useStore';
 import { useSettingsPrefs } from '@/lib/store/settingsPrefs';
 import { useNotificationRealtime } from '@/lib/hooks/chat-realtime';
@@ -114,6 +115,8 @@ export function AppShell({ children }: { children: React.ReactNode }) {
       </main>
       <Footer />
       {!immersive && <MobileTabBar />}
+      {/* ⌘K / `/` quick navigation — desktop power-user grammar. */}
+      <CommandPalette />
     </div>
   );
 }
