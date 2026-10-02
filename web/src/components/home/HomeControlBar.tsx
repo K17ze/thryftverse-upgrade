@@ -15,6 +15,7 @@ export function HomeControlBar({
   onSelectSignal,
   onRefresh,
   isRefreshing,
+  idBase,
 }: {
   mode: FeedMode;
   onSelectMode: (mode: FeedMode) => void;
@@ -24,6 +25,8 @@ export function HomeControlBar({
   onSelectSignal: (signal: HomeSignal) => void;
   onRefresh: () => void;
   isRefreshing: boolean;
+  /** Tab↔tabpanel pairing base — the caller's useId() (see ui/Tabs). */
+  idBase?: string;
 }) {
   return (
     <div className="sticky top-14 z-elevated flex items-center gap-3 border-b border-border-subtle bg-background px-4 py-2 sm:px-6 md:top-16">
@@ -35,6 +38,7 @@ export function HomeControlBar({
         active={mode}
         onChange={onSelectMode}
         ariaLabel="Feed mode"
+        idBase={idBase}
         hairline={false}
         className="shrink-0"
       />

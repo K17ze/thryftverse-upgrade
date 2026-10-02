@@ -75,10 +75,18 @@ export function HostLiveRoom({ stream, candidates, onPinsChange, onEnd }: HostLi
     return () => window.clearInterval(iv);
   }, [id, base]);
 
+  const endTimerRef = useRef<number | null>(null);
+  useEffect(
+    () => () => {
+      if (endTimerRef.current != null) window.clearTimeout(endTimerRef.current);
+    },
+    [],
+  );
+
   const end = () => {
     if (ending) return;
     setEnding(true);
-    window.setTimeout(() => onEnd({ ...statsRef.current }), 600);
+    endTimerRef.current = window.setTimeout(() => onEnd({ ...statsRef.current }), 600);
   };
 
   return (

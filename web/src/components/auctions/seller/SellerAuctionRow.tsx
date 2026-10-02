@@ -104,7 +104,9 @@ function SellerRowActions({ auction }: { auction: AuctionViewModel }) {
   if (actions.length === 0) return null;
 
   return (
-    <div className="pb-3 pl-28">
+    /* Indented past the media column — pl-28 tracks the mobile 96px+gap,
+       lg the same alignment against the 6rem media track + gap-x-5. */
+    <div className="pb-3 pl-28 lg:pl-[7.25rem]">
       {confirming == null ? (
         <div className="flex items-center justify-end gap-4">
           {actions.includes('accept_highest_bid') ? (
@@ -192,9 +194,13 @@ export function SellerAuctionRow({ auction }: { auction: AuctionViewModel }) {
 
   return (
     <li>
+      {/* Below lg the row is the mobile flex line — media + stacked
+          operational block. At lg it becomes a table row: the same facts
+          as real columns (auction | bids | current | ends | status |
+          action), mirroring the header the page renders. */}
       <Link
         href={`/auctions/${auction.id}`}
-        className="pressable flex items-start gap-4 py-3"
+        className="pressable flex items-start gap-4 py-3 lg:grid lg:grid-cols-[6rem_minmax(0,1.4fr)_4.5rem_minmax(0,7.5rem)_minmax(0,8.5rem)_5.5rem_minmax(0,7rem)] lg:items-center lg:gap-x-5"
         aria-label={`${auction.title}, ${presentation.stateLabel}`}
       >
         {/* Media — 96px, controlled radius, live dot while the window is open */}
@@ -220,13 +226,14 @@ export function SellerAuctionRow({ auction }: { auction: AuctionViewModel }) {
           ) : null}
         </span>
 
-        {/* Body — identity pinned top, operational block pinned to media bottom */}
-        <span className="flex min-h-24 min-w-0 flex-1 flex-col">
+        {/* Body — identity pinned top, operational block pinned to media
+            bottom (mobile only — at lg the block's facts are cells). */}
+        <span className="flex min-h-24 min-w-0 flex-1 flex-col lg:min-h-0">
           <span className="flex items-start justify-between gap-3">
             <span className="clamp-2 text-body-emphasis font-medium text-text-primary">
               {auction.title}
             </span>
-            <span className={`pt-0.5 text-label ${TONE_CLASS[presentation.stateTone]}`}>
+            <span className={`pt-0.5 text-label lg:hidden ${TONE_CLASS[presentation.stateTone]}`}>
               {presentation.stateLabel}
             </span>
           </span>
@@ -234,7 +241,7 @@ export function SellerAuctionRow({ auction }: { auction: AuctionViewModel }) {
             <span className="clamp-1 mt-0.5 block text-meta text-text-muted">{brand}</span>
           ) : null}
 
-          <span className="mt-auto block">
+          <span className="mt-auto block lg:hidden">
             <span className="my-2.5 block h-px bg-border-subtle" aria-hidden="true" />
             <span className="flex items-end justify-between gap-3">
               <span className="tnum text-price-list font-semibold text-text-primary">
@@ -259,6 +266,38 @@ export function SellerAuctionRow({ auction }: { auction: AuctionViewModel }) {
               ) : null}
             </span>
           </span>
+        </span>
+
+        {/* Desktop cells — bids / current / ends / status / action. */}
+        <span className="hidden min-w-0 lg:block">
+          <span className="tnum block text-body text-text-primary">
+            {auction.bidCount} {auction.bidCount === 1 ? 'bid' : 'bids'}
+          </span>
+          {watchers > 0 && presentation.stateLabel !== 'Sold' ? (
+            <span className="tnum mt-0.5 block text-meta text-text-muted">
+              {watchers} watching
+            </span>
+          ) : null}
+        </span>
+        <span className="hidden min-w-0 lg:block">
+          <span className="tnum block text-body-emphasis font-semibold text-text-primary">
+            {price.prefix ? (
+              <span className="text-meta font-medium text-text-secondary">{price.prefix}</span>
+            ) : null}
+            {formatPrice(price.amount)}
+          </span>
+        </span>
+        <span className="hidden min-w-0 lg:block">
+          <span className={`tnum clamp-1 block text-meta ${TONE_CLASS[presentation.leadingTone]}`}>
+            {presentation.leadingLabel}
+          </span>
+        </span>
+        <span className={`hidden lg:block text-label ${TONE_CLASS[presentation.stateTone]}`}>
+          {presentation.stateLabel}
+        </span>
+        <span className="hidden items-center gap-1 text-meta text-text-secondary lg:flex lg:justify-self-end">
+          {presentation.actionLabel}
+          <Icon name="forward" size={13} className="text-text-muted" />
         </span>
       </Link>
       <SellerRowActions auction={auction} />

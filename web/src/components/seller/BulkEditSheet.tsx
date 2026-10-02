@@ -273,7 +273,7 @@ export function BulkEditSheet({
                     >
                       <span className="clamp-1 text-text-secondary">{row.listing.title}</span>
                       <span className="shrink-0 text-text-primary">
-                        {formatPrice(row.listing.price)} → {formatPrice(item.patch.priceGbp)}
+                        {formatPrice(row.listing.price)} to {formatPrice(item.patch.priceGbp)}
                         {clamped ? <span className="text-warning-text"> (capped)</span> : null}
                       </span>
                     </li>

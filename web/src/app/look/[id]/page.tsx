@@ -39,5 +39,11 @@ export default async function LookPage({ params }: LookPageProps) {
   const { id } = await params;
   const resolution = await resolveLookForRoute(id);
   if (resolution.status === 'missing') notFound();
-  return <LookClient />;
+  // A resolved look seeds the client's detail query — the view paints
+  // the server's row instead of paying a second render-blocking fetch.
+  return (
+    <LookClient
+      initialLook={resolution.status === 'resolved' ? resolution.value : undefined}
+    />
+  );
 }

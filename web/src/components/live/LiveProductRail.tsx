@@ -104,7 +104,7 @@ export function LiveProductRail({ session }: LiveProductRailProps) {
           <div
             key={l.id}
             role="listitem"
-            className="flex w-[240px] shrink-0 items-center gap-2.5 rounded-lg border border-white/10 bg-overlay p-2 backdrop-blur-md sm:w-[252px]"
+            className="flex w-[240px] shrink-0 items-center gap-2.5 rounded-lg bg-overlay/90 p-2 sm:w-[252px]"
           >
             <Link
               href={`/item/${l.id}`}
@@ -121,7 +121,7 @@ export function LiveProductRail({ session }: LiveProductRailProps) {
                 />
                 {i === 0 ? (
                   <span
-                    className="absolute left-0.5 top-0.5 flex h-4 w-4 items-center justify-center rounded-sm bg-black/60 text-scrim-text-primary"
+                    className="absolute left-0.5 top-0.5 flex h-4 w-4 items-center justify-center rounded-sm bg-overlay text-scrim-text-primary"
                     title="Pinned now"
                   >
                     <Icon name="pin" filled size={10} />

@@ -204,9 +204,7 @@ export function PoolHistoryView() {
                     href={`/co-own/pools/${s.id}`}
                     className="pressable flex items-start gap-3 px-1 py-3.5 transition-colors hover:bg-row"
                   >
-                    <span className="mt-0.5 flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-surface-alt text-text-muted">
-                      <Icon name={KIND_ICON[e.kind] ?? 'info'} size={15} />
-                    </span>
+                    <Icon name={KIND_ICON[e.kind] ?? 'info'} size={16} className="mt-0.5 shrink-0 text-text-muted" />
                     <div className="min-w-0 flex-1">
                       <p className="text-body text-text-secondary">{eventText(e)}</p>
                       {e.note != null && e.kind !== 'note' ? (

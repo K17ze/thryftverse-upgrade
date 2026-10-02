@@ -2,9 +2,11 @@
 
 /**
  * ClosetsToFollow — the member-discovery band on Explore (Vinted
- * "members to follow" grammar). Compact closet cards: avatar, @handle,
- * live item count, a real Follow toggle — the card's media/identity is
- * the link, the button is a sibling (no nested-interactive anchors).
+ * "members to follow" grammar). Flat hairline rows — avatar, @handle,
+ * live item count, a real Follow toggle at the trailing edge — the same
+ * member-row grammar as search's MemberResults, composed two-up at lg
+ * (three-up at xl). The row's identity half is the link; the button is
+ * a sibling (no nested-interactive anchors).
  *
  * Fixture mode ranks USERS by follower reach (the member dataset is the
  * truth there). Live mode shares useFeaturedSellers — sellers are
@@ -18,7 +20,6 @@ import { Avatar } from '@/components/ui/Avatar';
 import { Icon } from '@/components/ui/Icon';
 import { FollowButton } from '@/components/profile/FollowButton';
 import { ModuleSection } from '@/components/home/modules/ModuleSection';
-import { Rail } from '@/components/home/modules/Rail';
 import { DATA_MODE } from '@/lib/api/client';
 import { CURRENT_USER, USERS } from '@/lib/data/fixtures';
 import { useFeaturedSellers } from '@/lib/hooks/home-modules';
@@ -30,7 +31,7 @@ const FIXTURE_CLOSETS = USERS.filter((u) => u.id !== CURRENT_USER.id)
   .sort((a, b) => b.followers - a.followers)
   .slice(0, 6);
 
-interface ClosetCardData {
+interface ClosetRowData {
   id: string;
   username: string;
   avatar: string | null;
@@ -38,48 +39,45 @@ interface ClosetCardData {
   itemCount: number;
 }
 
-function ClosetCard({ member }: { member: ClosetCardData }) {
+function ClosetRow({ member }: { member: ClosetRowData }) {
   return (
-    <div
-      role="listitem"
-      className="w-[176px] shrink-0 snap-start rounded-xl border border-border-subtle px-4 py-4"
-    >
-      <Link
-        href={`/u/${member.username}`}
-        aria-label={`@${member.username}'s closet — ${member.itemCount} item${member.itemCount === 1 ? '' : 's'}`}
-        className="pressable block rounded-md"
-      >
-        <Avatar src={member.avatar} name={member.username} size={48} />
-        <span className="mt-2.5 flex items-center gap-1">
-          <span className="clamp-1 text-body font-semibold text-text-primary">
-            @{member.username}
+    <li className="lg:border-b lg:border-border-subtle">
+      <div className="flex items-center gap-3">
+        <Link
+          href={`/u/${member.username}`}
+          aria-label={`@${member.username}'s closet — ${member.itemCount} item${member.itemCount === 1 ? '' : 's'}`}
+          className="pressable -mx-2 flex min-w-0 flex-1 items-center gap-3 rounded-lg px-2 py-2.5 hover:bg-row"
+        >
+          <Avatar src={member.avatar} name={member.username} size={40} />
+          <span className="min-w-0">
+            <span className="flex items-center gap-1">
+              <span className="truncate text-body font-medium text-text-primary">
+                @{member.username}
+              </span>
+              {member.verified ? (
+                <Icon
+                  name="verified"
+                  filled
+                  size={13}
+                  className="shrink-0 text-commerce-trust"
+                />
+              ) : null}
+            </span>
+            <span className="tnum mt-0.5 block text-meta text-text-muted">
+              {member.itemCount} item{member.itemCount === 1 ? '' : 's'}
+            </span>
           </span>
-          {member.verified ? (
-            <Icon
-              name="verified"
-              filled
-              size={13}
-              className="shrink-0 text-commerce-trust"
-            />
-          ) : null}
-        </span>
-        <span className="tnum mt-1 block text-meta text-text-muted">
-          {member.itemCount} item{member.itemCount === 1 ? '' : 's'}
-        </span>
-      </Link>
-      <FollowButton
-        userId={member.id}
-        size="sm"
-        className="mt-3 w-full"
-      />
-    </div>
+        </Link>
+        <FollowButton userId={member.id} size="sm" className="shrink-0" />
+      </div>
+    </li>
   );
 }
 
 export function ClosetsToFollow() {
   const live = useFeaturedSellers();
 
-  const members: ClosetCardData[] = LIVE
+  const members: ClosetRowData[] = LIVE
     ? (live.data ?? []).map((s) => ({
         id: s.id,
         username: s.username,
@@ -96,16 +94,18 @@ export function ClosetsToFollow() {
       }));
 
   // Editorial density, not critical path — an unsettled or empty live
-  // read hides the band rather than flashing skeleton cards.
+  // read hides the band rather than flashing skeleton rows.
   if (members.length === 0 || (LIVE && live.isLoading)) return null;
 
   return (
     <ModuleSection title="Closets to follow">
-      <Rail label="Members to follow">
+      {/* Same member-row grammar as MemberResults — hairline-separated,
+          composed into columns once the viewport has the room. */}
+      <ul className="divide-y divide-border-subtle px-4 sm:px-6 lg:grid lg:grid-cols-2 lg:gap-x-10 lg:divide-y-0 xl:grid-cols-3">
         {members.map((member) => (
-          <ClosetCard key={member.id} member={member} />
+          <ClosetRow key={member.id} member={member} />
         ))}
-      </Rail>
+      </ul>
     </ModuleSection>
   );
 }

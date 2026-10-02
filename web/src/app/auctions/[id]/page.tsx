@@ -38,5 +38,13 @@ export default async function AuctionDetailPage({ params }: AuctionPageProps) {
   const { id } = await params;
   const resolution = await resolveAuctionForRoute(id);
   if (resolution.status === 'missing') notFound();
-  return <AuctionClient />;
+  // A resolved auction seeds the client's detail query — the room paints
+  // the server's row instead of paying a second render-blocking fetch.
+  // 'unresolvable' (session-created fixtures) keeps the client-owned
+  // resolution path.
+  return (
+    <AuctionClient
+      initialAuction={resolution.status === 'resolved' ? resolution.value : undefined}
+    />
+  );
 }

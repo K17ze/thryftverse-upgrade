@@ -9,10 +9,10 @@
  * per-tab empty states.
  */
 
-import { Suspense } from 'react';
+import { Suspense, useId } from 'react';
 import dynamic from 'next/dynamic';
 import { Skeleton } from '@/components/ui/Skeleton';
-import { Tabs } from '@/components/ui/Tabs';
+import { Tabs, tabId, tabPanelId } from '@/components/ui/Tabs';
 import { RowSkeleton } from '@/components/orders/RowSkeleton';
 import { OfferConfirmSheet } from '@/components/offers/OfferConfirmSheet';
 import { OffersScopeBanner } from '@/components/offers/OffersScopeBanner';
@@ -53,6 +53,7 @@ function OffersView() {
     setCounterTarget,
     handleSendCounter,
   } = useOffersWorkflow();
+  const tabsId = useId();
 
   return (
     <div className="mx-auto max-w-[820px] px-4 py-8 sm:px-6 lg:max-w-[1280px]">
@@ -75,9 +76,15 @@ function OffersView() {
         active={tab}
         onChange={setTab}
         ariaLabel="Offer sections"
+        idBase={tabsId}
       />
 
-      <div className="mt-5">
+      <div
+        className="mt-5"
+        role="tabpanel"
+        id={tabPanelId(tabsId, tab)}
+        aria-labelledby={tabId(tabsId, tab)}
+      >
         <OffersListContent
           sessionLoading={sessionLoading}
           user={user}

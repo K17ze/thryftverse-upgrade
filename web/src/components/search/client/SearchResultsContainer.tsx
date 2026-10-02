@@ -26,6 +26,9 @@ interface SearchResultsContainerProps {
   isRelaxed: boolean;
   suggestion: string | null;
   weakSuggestion: string | null;
+  /** Zero-result recovery surface — rendered inside the results column
+   *  (rail, toolbar and applied-filter chips stay in place around it). */
+  recovery?: React.ReactNode;
   hasNextPage?: boolean;
   isFetchingNextPage: boolean;
   isFetchNextPageError: boolean;
@@ -48,6 +51,7 @@ export function SearchResultsContainer({
   isRelaxed,
   suggestion,
   weakSuggestion,
+  recovery,
   hasNextPage,
   isFetchingNextPage,
   isFetchNextPageError,
@@ -144,6 +148,7 @@ export function SearchResultsContainer({
               }
             : undefined
         }
+        emptyContent={recovery}
         emptyTitle={q ? `No results for “${q}”` : 'No matches with these filters'}
         emptySubtitle={
           q

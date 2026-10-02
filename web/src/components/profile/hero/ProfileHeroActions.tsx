@@ -93,7 +93,7 @@ export function ProfileHeroActions({
             className="mr-1 min-w-[104px]"
           />
           <IconButton name="share" aria-label="Share profile" onClick={onShareProfile} />
-          <ProfileOptionsMenu user={user} viewer={viewer} />
+          <ProfileOptionsMenu user={user} viewer={viewer} onShareProfile={onShareProfile} />
         </>
       )}
     </div>

@@ -13,6 +13,7 @@ import Link from 'next/link';
 import { Chip } from '@/components/ui/Chip';
 import { ClientTime } from '@/components/ui/ClientTime';
 import { EmptyState } from '@/components/ui/EmptyState';
+import { Icon } from '@/components/ui/Icon';
 import { SegmentedControl } from '@/components/feed/SegmentedControl';
 import { Skeleton } from '@/components/ui/Skeleton';
 import { useCoOwnAssets, useMarketTape } from '@/lib/hooks/coown-queries';
@@ -233,15 +234,20 @@ export function MarketTapeView() {
                   ? 'text-coown-down'
                   : 'text-text-primary';
             const sideLabel =
-              t.side === 'buy'
-                ? 'Buy'
-                : t.side === 'sell'
-                  ? 'Sell'
-                  : tick === 'up'
-                    ? '▲'
-                    : tick === 'down'
-                      ? '▼'
-                      : '·';
+              t.side === 'buy' ? (
+                'Buy'
+              ) : t.side === 'sell' ? (
+                'Sell'
+              ) : tick === 'up' || tick === 'down' ? (
+                <Icon
+                  name={tick === 'up' ? 'deltaUp' : 'deltaDown'}
+                  size={10}
+                  filled
+                  className="inline-block -translate-y-px"
+                />
+              ) : (
+                '·'
+              );
             // A print that never settled is marked, not passed off as
             // money that moved.
             const uncleared =

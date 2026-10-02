@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
-import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { useParams, useRouter } from 'next/navigation';
+import { useQueryClient } from '@tanstack/react-query';
 import { useMasonryColumns } from '@/components/feed/MasonryGrid';
 import { useToast } from '@/components/ui/Toast';
 import { useMoodboardActions } from '@/lib/hooks/moodboard-queries';
@@ -21,23 +21,21 @@ import {
   MOODBOARD_CANVAS,
   moodboardThemeById,
   publicMoodboardById,
-  type MoodboardItemPosition,
   type MoodboardVersionRow,
 } from '@/lib/data/fixtures-content';
 import { DATA_MODE } from '@/lib/api/client';
-import { parseApiError } from '@/lib/api/http';
 import * as socialService from '@/lib/api/services/social';
-import * as listingsService from '@/lib/api/services/listings';
 import { useUser } from '@/lib/hooks/queries';
 import { useSession } from '@/lib/session/SessionProvider';
 import {
   useMoodboardEdits,
   useMoodboardOverlay,
-  withItemsAdded,
-  withoutItemIds,
   type MoodboardOverlay,
 } from '@/lib/store/moodboards';
 import { useHydrated, useStore } from '@/lib/store/useStore';
+import { useMoodboardLiveQuery } from './useMoodboardLiveQuery';
+import { useMoodboardInvite } from './useMoodboardInvite';
+import { useMoodboardItemActions } from './useMoodboardItemActions';
 
 export function useMoodboardDetailWorkflow() {
   const params = useParams();
@@ -51,62 +49,7 @@ export function useMoodboardDetailWorkflow() {
 
   const id = String(params.id ?? '');
 
-  const liveBoardQuery = useQuery({
-    queryKey: ['moodboard', id, 'live'],
-    queryFn: async (): Promise<{
-      board: {
-        id: string;
-        ownerId: string;
-        title: string;
-        itemIds: string[];
-        isPrivate: boolean;
-        coverUri?: string | null;
-        createdAt?: string;
-        themeId: string | null;
-        viewerRole: string | null;
-      };
-      items: import('@/lib/contracts/domain').Listing[];
-      rowIdByListing: Record<string, string>;
-      positions: Record<string, MoodboardItemPosition>;
-    } | null> => {
-      const wire = await socialService.fetchMoodboard(id);
-      if (!wire) return null;
-      const shoppableIds = [...new Set(wire.items.map((i) => i.listingId).filter(Boolean))];
-      const hydratedItems = await Promise.all(
-        shoppableIds.map((listingId) =>
-          listingsService.fetchListingById(listingId).catch(() => null),
-        ),
-      );
-      const items = hydratedItems.filter(
-        (l): l is import('@/lib/contracts/domain').Listing => l != null,
-      );
-      const rowIdByListing: Record<string, string> = {};
-      const positions: Record<string, MoodboardItemPosition> = {};
-      for (const item of wire.items) {
-        if (!item.listingId) continue;
-        if (item.id) rowIdByListing[item.listingId] = item.id;
-        if (item.position) positions[item.listingId] = item.position;
-      }
-      return {
-        board: {
-          id: wire.id,
-          ownerId: wire.creatorId,
-          title: wire.title,
-          itemIds: items.map((l) => l.id),
-          isPrivate: !wire.isPublic,
-          coverUri: wire.coverImage,
-          createdAt: wire.createdAt,
-          themeId: wire.theme,
-          viewerRole: wire.viewerRole,
-        },
-        items,
-        rowIdByListing,
-        positions,
-      };
-    },
-    enabled: DATA_MODE === 'live' && !!id,
-  });
-
+  const liveBoardQuery = useMoodboardLiveQuery(id);
   const liveBoard = DATA_MODE === 'live' ? liveBoardQuery.data : undefined;
   const createdBoards = useBoardPrefs((s) => s.createdMoodboards);
   const setBoardPrivate = useBoardPrefs((s) => s.setPrivate);
@@ -190,9 +133,6 @@ export function useMoodboardDetailWorkflow() {
   );
 
   const [editing, setEditing] = useState(false);
-  const [selectMode, setSelectMode] = useState(false);
-  const [selectedIds, setSelectedIds] = useState<ReadonlySet<string>>(new Set());
-  const [importOpen, setImportOpen] = useState(false);
   const [titleDraft, setTitleDraft] = useState('');
   const [optionsOpen, setOptionsOpen] = useState(false);
   const [focusTitle, setFocusTitle] = useState(false);
@@ -234,54 +174,41 @@ export function useMoodboardDetailWorkflow() {
     setFocusTitle(false);
   }, [editing, focusTitle]);
 
-  const inviteHandled = useRef(false);
-  const [invitePending, setInvitePending] = useState(false);
-  useEffect(() => {
-    if (inviteHandled.current) return;
-    const token = new URLSearchParams(window.location.search).get('invite');
-    if (!token) return;
-    if (DATA_MODE !== 'live') {
-      inviteHandled.current = true;
-      router.replace(`/moodboard/${id}`);
-      return;
-    }
-    if (sessionLoading) return;
-    inviteHandled.current = true;
-    if (!me) {
-      show('Sign in to accept this invite', 'info');
-      router.replace(`/moodboard/${id}`);
-      return;
-    }
-    setInvitePending(true);
-    void socialService
-      .acceptMoodboardInvite(token)
-      .then(({ boardId }) => {
-        void queryClient.invalidateQueries({ queryKey: ['moodboard'] });
-        void queryClient.invalidateQueries({ queryKey: ['moodboards'] });
-        void queryClient.invalidateQueries({ queryKey: ['moodboard-members'] });
-        show('Joined the board', 'success');
-        router.replace(`/moodboard/${boardId || id}`);
-      })
-      .catch((err) => {
-        const status = parseApiError(err).status;
-        show(
-          status === 410
-            ? 'That invite has expired'
-            : status === 404
-              ? 'That invite link is no longer valid'
-              : parseApiError(err).message,
-          'error',
-        );
-        router.replace(`/moodboard/${id}`);
-      })
-      .finally(() => setInvitePending(false));
-  }, [id, me, sessionLoading, queryClient, router, show]);
+  const { invitePending } = useMoodboardInvite({
+    id,
+    me,
+    sessionLoading,
+    router,
+    queryClient,
+    show,
+  });
 
   const viewerRole = liveBoard?.board.viewerRole ?? null;
   const isOwner = me?.id === board?.ownerId || viewerRole === 'owner';
   const canEditItems = isOwner || viewerRole === 'editor';
   const canComment = isOwner || viewerRole === 'editor' || viewerRole === 'commenter';
   const isEditing = canEditItems && editing;
+
+  const {
+    selectMode,
+    setSelectMode,
+    selectedIds,
+    setSelectedIds,
+    importOpen,
+    setImportOpen,
+    toggleSelect,
+    removeWithUndo,
+    removeSelected,
+    addItems,
+  } = useMoodboardItemActions({
+    board,
+    itemIds,
+    rowIdByListing,
+    trackLive,
+    boardActions,
+    setBoardItems,
+    show,
+  });
 
   const shareBoard = () => {
     if (!board) return;
@@ -336,84 +263,6 @@ export function useMoodboardDetailWorkflow() {
     }
     setBoardPrivate(board.id, next);
     show(next ? 'Board is now private' : 'Board is now public', 'info');
-  };
-
-  const toggleSelect = (itemId: string) => {
-    setSelectedIds((prev) => {
-      const next = new Set(prev);
-      if (next.has(itemId)) next.delete(itemId);
-      else next.add(itemId);
-      return next;
-    });
-  };
-
-  const removeWithUndo = (ids: string[]) => {
-    if (!board || ids.length === 0) return;
-    const orderBefore = itemIds;
-    const rowIds = ids
-      .map((listingId) => rowIdByListing[listingId])
-      .filter((v): v is string => Boolean(v));
-    if (DATA_MODE === 'live') {
-      void trackLive(boardActions.removeItems(board.id, ids, rowIds))
-        .then(() =>
-          show(
-            ids.length === 1 ? 'Removed 1 item' : `Removed ${ids.length} items`,
-            'info',
-            {
-              label: 'Undo',
-              onPress: () => {
-                void trackLive(boardActions.addItems(board.id, ids)).catch(() =>
-                  show("Couldn't restore them — try again", 'error'),
-                );
-              },
-            },
-          ),
-        )
-        .catch(() => show("Couldn't remove those — try again", 'error'));
-    } else {
-      setBoardItems(board.id, withoutItemIds(itemIds, new Set(ids)));
-      show(
-        ids.length === 1 ? 'Removed 1 item' : `Removed ${ids.length} items`,
-        'info',
-        { label: 'Undo', onPress: () => setBoardItems(board.id, orderBefore) },
-      );
-    }
-    setSelectedIds((prev) => {
-      const next = new Set(prev);
-      for (const x of ids) next.delete(x);
-      return next;
-    });
-  };
-
-  const removeSelected = () => {
-    removeWithUndo([...selectedIds]);
-    setSelectMode(false);
-  };
-
-  const addItems = (ids: string[]) => {
-    if (!board) return;
-    setImportOpen(false);
-    if (DATA_MODE === 'live') {
-      void trackLive(boardActions.addItems(board.id, ids))
-        .then(() =>
-          show(
-            ids.length === 1 ? 'Added 1 item' : `Added ${ids.length} items`,
-            'success',
-          ),
-        )
-        .catch(() => show("Couldn't add those — try again", 'error'));
-      return;
-    }
-    const next = withItemsAdded(itemIds, ids);
-    setBoardItems(board.id, next);
-    show(
-      next.length === itemIds.length
-        ? 'Already on this board'
-        : ids.length === 1
-          ? 'Added 1 item'
-          : `Added ${ids.length} items`,
-      'success',
-    );
   };
 
   return {

@@ -28,7 +28,7 @@ interface HostLiveChatProps {
 }
 
 const actionBtn =
-  'pressable flex h-8 w-8 items-center justify-center rounded-md text-text-muted transition-colors hover:bg-surface-alt hover:text-text-primary disabled:opacity-40';
+  'pressable relative flex h-8 w-8 items-center justify-center rounded-md after:absolute after:-inset-1.5 after:content-[""] text-text-muted transition-colors hover:bg-surface-alt hover:text-text-primary disabled:opacity-40';
 
 export function HostLiveChat({
   messages,

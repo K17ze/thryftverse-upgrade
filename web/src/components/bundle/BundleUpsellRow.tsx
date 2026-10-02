@@ -300,7 +300,7 @@ export function BundleUpsellRow({ listing }: { listing: Listing }) {
                 </button>
                 <Link
                   href={`/item/${item.id}`}
-                  className="clamp-1 mt-1.5 block text-meta text-text-secondary hover:text-text-primary"
+                  className="clamp-1 tnum mt-1.5 block text-meta text-text-secondary hover:text-text-primary"
                 >
                   {formatPrice(item.price)}
                 </Link>

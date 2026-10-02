@@ -86,7 +86,7 @@ export function HostPinnedRail({ pinIds, candidates, max, onChange }: HostPinned
               type="button"
               onClick={() => onChange(pinIds.filter((id) => id !== listing.id))}
               aria-label={`Remove ${listing.title} from pins`}
-              className="pressable flex h-8 w-8 shrink-0 items-center justify-center rounded-md text-text-muted transition-colors hover:bg-surface-alt hover:text-text-primary"
+              className="pressable relative flex h-8 w-8 shrink-0 items-center justify-center rounded-md after:absolute after:-inset-1.5 after:content-[''] text-text-muted transition-colors hover:bg-surface-alt hover:text-text-primary"
             >
               <Icon name="close" size={14} />
             </button>

@@ -79,6 +79,9 @@ interface RefinedResultsProps {
   hasMore?: boolean;
   onLoadMore?: () => void;
   isLoadingMore?: boolean;
+  /** A failed append disarms the sentinel — pagination retries are
+   *  manual (inline retry button) until the host clears the flag. */
+  loadMoreError?: boolean;
   /** The active query — excluded from the related-searches row. */
   query?: string;
   /** Controlled sort — the page persists it in the URL. */
@@ -89,6 +92,11 @@ interface RefinedResultsProps {
   /** Content above the grid inside the results column (e.g. member matches). */
   preamble?: React.ReactNode;
   onSaveSearch?: (filters: ListingFilters) => void;
+  /** Full empty surface — when the result set is empty this renders in
+   *  place of both EmptyState branches, keeping the rail, toolbar and
+   *  chips intact around it (eBay: a zero-hit query keeps the facets).
+   *  /search passes its did-you-mean recovery; others leave it unset. */
+  emptyContent?: React.ReactNode;
   /** Empty state when the unfiltered set is empty. */
   emptyTitle?: string;
   emptySubtitle?: string;
@@ -112,12 +120,14 @@ export function RefinedResults({
   hasMore = false,
   onLoadMore,
   isLoadingMore = false,
+  loadMoreError = false,
   query,
   sort,
   onSortChange,
   notice,
   preamble,
   onSaveSearch,
+  emptyContent,
   emptyTitle = 'Nothing here yet',
   emptySubtitle = 'Check back soon — new items arrive daily.',
   emptyActionLabel,
@@ -125,9 +135,13 @@ export function RefinedResults({
 }: RefinedResultsProps) {
   const baseColumns = useResultColumns();
   const [dense, setDense] = useState(false);
-  const columns = dense ? Math.min(5, baseColumns + 1) : baseColumns;
+  // Compact adds a column at every breakpoint — the standard cap (5) is
+  // a readability ceiling, not a toggle ceiling: at xl the base is
+  // already 5, so dense is allowed one more before tiles read as a
+  // spreadsheet (≈175px tiles inside the railed column).
+  const columns = dense ? Math.min(6, baseColumns + 1) : baseColumns;
   const sentinelRef = useLoadMoreSentinel(
-    hasMore && !isLoadingMore && !!onLoadMore,
+    hasMore && !isLoadingMore && !loadMoreError && !!onLoadMore,
     onLoadMore,
   );
   const [sheetOpen, setSheetOpen] = useState(false);
@@ -138,8 +152,12 @@ export function RefinedResults({
   const filtered = useMemo(() => {
     const narrowed = applyListingFilters(listings, filters);
     // Server-ordered pages keep their rank — a client re-sort would only
-    // order the loaded subset and fight pagination.
-    return serverOrdered ? narrowed : sortListings(narrowed, sort, relevanceScores);
+    // order the loaded subset and fight pagination. Exception: discount
+    // has no backend sort enum, so it is a client-only ordering (same
+    // contract as the colour facet below).
+    return serverOrdered && sort !== 'discount-desc'
+      ? narrowed
+      : sortListings(narrowed, sort, relevanceScores);
   }, [listings, filters, sort, relevanceScores, serverOrdered]);
   const activeCount = countActiveFilters(filters);
   // The toolbar count — the backend's catalogue total when it reports
@@ -254,6 +272,8 @@ export function RefinedResults({
           >
             {isLoading || units.length > 0 ? (
               <MasonryGrid units={units} columns={columns} isLoading={isLoading} />
+            ) : emptyContent ? (
+              emptyContent
             ) : activeCount > 0 ? (
               <EmptyState
                 icon="filter"
@@ -283,6 +303,17 @@ export function RefinedResults({
             <p role="status" className="px-4 pt-4 text-center text-caption text-text-muted sm:px-6">
               Loading more…
             </p>
+          ) : null}
+          {loadMoreError && onLoadMore ? (
+            <div className="flex justify-center px-4 pt-4 sm:px-6">
+              <button
+                type="button"
+                onClick={onLoadMore}
+                className="pressable rounded-md px-3 py-2 text-caption font-semibold text-brand"
+              >
+                Couldn&apos;t load more — try again
+              </button>
+            </div>
           ) : null}
 
           {/* Searches related to — trailing row on populated sets, terms

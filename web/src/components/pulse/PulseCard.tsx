@@ -46,6 +46,9 @@ interface PulseCardProps {
    *  the role="feed" container reports real list semantics. */
   position?: number;
   total?: number;
+  /** Only the on-screen card ticks its countdown — parked cards would
+   *  run a 1s interval for nobody. */
+  active?: boolean;
   /** Creator ids the session is following — lifted to the feed so the
    *  same seller stays in sync across cards. */
   followed: boolean;
@@ -53,7 +56,7 @@ interface PulseCardProps {
   requireAuth: (action: SignupAction) => boolean;
 }
 
-export function PulseCard({ card, priority, position, total, followed, onToggleFollow, requireAuth }: PulseCardProps) {
+export function PulseCard({ card, priority, position, total, active = true, followed, onToggleFollow, requireAuth }: PulseCardProps) {
   const { show } = useToast();
   const creator = card.creator;
 
@@ -89,22 +92,29 @@ export function PulseCard({ card, priority, position, total, followed, onToggleF
   // `meta` string is only the pre-tick first paint).
   const [now, setNow] = useState<number | null>(null);
   useEffect(() => {
-    if (card.kind !== 'auction_live' || card.endsAt == null) return;
+    if (card.kind !== 'auction_live' || card.endsAt == null || !active) return;
     const update = () => setNow(Date.now());
     update();
     const timer = setInterval(update, 1000);
     return () => clearInterval(timer);
-  }, [card.kind, card.endsAt]);
+  }, [card.kind, card.endsAt, active]);
 
   let meta = card.meta;
   let metaTone = 'text-scrim-text-secondary';
+  // The LIVE signal rides the chip while the auction is actually running
+  // — an ended lot drops the badge and reports "Auction ended" instead
+  // of wearing a red presence chip that lies.
+  let auctionRunning = card.kind === 'auction_live';
   if (card.kind === 'auction_live' && card.endsAt != null && now !== null) {
     const msLeft = card.endsAt - now;
+    auctionRunning = msLeft > 0;
     if (msLeft > 0) {
       // Mobile metaAccent parity — the countdown warms as the lot closes.
       // The bid count is a real contract field; it only appears when the
-      // auction actually has bids.
-      meta = `Ends in ${formatDuration(msLeft)} · ${formatPrice(
+      // auction actually has bids. Compact grammar: the chip already
+      // carries the LIVE signal, so the meta is just the countdown +
+      // standing bid (no "Ends in" prefix, no second "LIVE AUCTION").
+      meta = `${formatDuration(msLeft)} · ${formatPrice(
         card.currentBid ?? 0,
       )}${card.bidCount ? ` · ${card.bidCount} ${card.bidCount === 1 ? 'bid' : 'bids'}` : ''}`;
       metaTone =
@@ -142,6 +152,27 @@ export function PulseCard({ card, priority, position, total, followed, onToggleF
       );
     });
   };
+  // Creator identity — shared between the profile link (creator resolved)
+  // and the inert row below; the fields stay optional-chained either way.
+  const creatorIdentity = (
+    <>
+      <Avatar src={creator?.avatar} name={creator?.username} size={36} ring />
+      <span className="min-w-0">
+        <span className="flex items-center gap-1.5 text-body font-semibold text-scrim-text-primary">
+          <span className="clamp-1">@{creator?.username ?? 'creator'}</span>
+          {creator?.isVerified ? (
+            <Icon name="verified" size={14} className="shrink-0 text-scrim-text-primary" filled />
+          ) : null}
+        </span>
+        {card.createdAt ? (
+          <span className="block text-meta text-scrim-text-secondary">
+            {timeAgo(card.createdAt)}
+          </span>
+        ) : null}
+      </span>
+    </>
+  );
+
   const handleShare = async () => {
     const url = `${window.location.origin}${card.href}`;
     if (typeof navigator !== 'undefined' && navigator.share) {
@@ -180,57 +211,39 @@ export function PulseCard({ card, priority, position, total, followed, onToggleF
       {/* Top scrim — creator row + kind chip */}
       <div className="pointer-events-none absolute inset-x-0 top-0 bg-gradient-to-b from-media-overlay-scrim to-transparent px-4 pb-14 pt-4">
         <div className="pointer-events-auto flex items-center gap-2.5">
-          <Link
-            href={creator ? `/u/${creator.username}` : '#'}
-            className="pressable flex min-w-0 flex-1 items-center gap-2.5"
-            aria-label={creator ? `View @${creator.username}'s profile` : 'Creator'}
-          >
-            <Avatar src={creator?.avatar} name={creator?.username} size={36} ring />
-            <span className="min-w-0">
-              <span className="flex items-center gap-1.5 text-body font-semibold text-scrim-text-primary">
-                <span className="clamp-1">@{creator?.username ?? 'creator'}</span>
-                {creator?.isVerified ? (
-                  <Icon name="verified" size={14} className="shrink-0 text-scrim-text-primary" filled />
-                ) : null}
-              </span>
-              {card.createdAt ? (
-                <span className="block text-meta text-scrim-text-secondary">
-                  {timeAgo(card.createdAt)}
-                </span>
-              ) : null}
+          {creator?.username ? (
+            <Link
+              href={`/u/${creator.username}`}
+              className="pressable flex min-w-0 flex-1 items-center gap-2.5"
+              aria-label={`View @${creator.username}'s profile`}
+            >
+              {creatorIdentity}
+            </Link>
+          ) : (
+            // Source rows can resolve without a creator record — the row
+            // goes inert rather than wearing a dead '#' anchor.
+            <span className="flex min-w-0 flex-1 items-center gap-2.5">
+              {creatorIdentity}
             </span>
-          </Link>
+          )}
           <button
             type="button"
             onClick={() => onToggleFollow(card.creatorId)}
             aria-pressed={followed}
             className={
               followed
-                ? 'pressable h-8 shrink-0 rounded-full border border-white/50 px-3.5 text-label text-scrim-text-primary'
-                : 'pressable h-8 shrink-0 rounded-full bg-white px-3.5 text-label text-black'
+                ? 'pressable h-8 shrink-0 rounded-full border border-scrim-text-primary/50 px-3.5 text-label text-scrim-text-primary'
+                : 'pressable h-8 shrink-0 rounded-full bg-scrim-text-primary px-3.5 text-label text-overlay'
             }
           >
             {followed ? 'Following' : 'Follow'}
           </button>
         </div>
 
-        {card.kind === 'auction_live' ? (
-          // Real live state — the red presence badge (not a styled label)
-          // beside the ticking lot meta. One link: the auction room.
-          <Link
-            href={card.href}
-            className="pressable pointer-events-auto mt-3 inline-flex max-w-full items-center gap-2"
-          >
-            <LiveBadge />
-            {meta ? (
-              <span className="inline-flex min-w-0 items-center rounded-full bg-overlay px-3 py-1.5">
-                <span className={`tnum clamp-1 text-meta font-semibold ${metaTone}`}>
-                  {meta}
-                </span>
-              </span>
-            ) : null}
-          </Link>
-        ) : kicker ? (
+        {/* Live-auction status rides ONE compact chip beside the product
+            chip below — not a triple-duty pill up here repeating state,
+            countdown and bid against the caption. */}
+        {kicker ? (
           <Link
             href={card.href}
             className="pressable pointer-events-auto mt-3 inline-flex items-center gap-1.5 rounded-full bg-overlay px-3 py-1.5"
@@ -333,8 +346,29 @@ export function PulseCard({ card, priority, position, total, followed, onToggleF
             {card.context}
           </p>
         ) : null}
-        {items.length > 0 ? (
-          <div className="pointer-events-auto no-scrollbar mt-3 flex gap-2 overflow-x-auto">
+        {/* One chip row: the live-auction chip (● LIVE · countdown · bid)
+            leads, product chips follow — the caption above stays the
+            single rendering of the item name. */}
+        {card.kind === 'auction_live' || items.length > 0 ? (
+          <div className="pointer-events-auto no-scrollbar mt-3 flex items-center gap-2 overflow-x-auto">
+            {card.kind === 'auction_live' ? (
+              <Link
+                href={card.href}
+                className="pressable flex min-w-0 shrink-0 items-center gap-1.5 rounded-full bg-overlay px-3 py-1.5"
+                aria-label={
+                  auctionRunning
+                    ? `Live auction${meta ? ` — ${meta}` : ''} — open the auction`
+                    : (meta ?? 'Auction ended — view the lot')
+                }
+              >
+                {auctionRunning ? <LiveBadge /> : null}
+                {meta ? (
+                  <span className={`tnum clamp-1 text-meta font-semibold ${metaTone}`}>
+                    {meta}
+                  </span>
+                ) : null}
+              </Link>
+            ) : null}
             {items.map((item) => (
               <Link
                 key={item.id}

@@ -139,13 +139,17 @@ export function ClosetListingsSection({
   return (
     <div>
       {/* Toolbar — search first (mobile ClosetToolbar), then sort + filters.
-          Sticky variant pins beneath the tab rail: 64px header + 50px rail. */}
+          On narrow rows the controls can't shrink (both are shrink-0), so
+          the row wraps and search takes its own full-width line — the
+          field must stay wide enough to render its placeholder whole.
+          Sticky variant pins flush beneath the tab rail: 56px header +
+          48px rail = 104 on mobile, 64 + 48 = 112 from md. */}
       <div
-        className={`flex items-center gap-1.5 px-4 pb-2.5 sm:px-6 ${
-          stickyToolbar ? 'sticky top-[114px] z-elevated bg-background pt-2.5' : ''
+        className={`flex flex-wrap items-center gap-1.5 px-4 pb-2.5 sm:px-6 ${
+          stickyToolbar ? 'sticky top-[104px] z-elevated bg-background pt-2.5 md:top-28' : ''
         }`}
       >
-        <div className="relative min-w-0 flex-1">
+        <div className="relative min-w-full flex-1 sm:min-w-0">
           <Icon
             name="search"
             size={16}
@@ -157,7 +161,7 @@ export function ClosetListingsSection({
             placeholder="Search this closet"
             aria-label="Search this closet"
             autoComplete="off"
-            className="h-9 w-full rounded-md bg-surface-alt pl-9 pr-8 text-body text-input-text placeholder:text-text-muted"
+            className="h-9 w-full rounded-md border border-transparent bg-surface-alt pl-9 pr-10 text-body text-input-text placeholder:text-text-muted focus:border-border focus:outline-none"
           />
           {filters.query.length > 0 ? (
             <button
@@ -195,7 +199,6 @@ export function ClosetListingsSection({
             onClick={() => set({ priceDropsOnly: !filters.priceDropsOnly })}
           >
             Price drops
-            <span className="tnum text-meta opacity-60">{priceDrops}</span>
           </Chip>
         </div>
       ) : null}
@@ -277,7 +280,7 @@ export function ClosetListingsSection({
           compact
         />
       ) : editable ? (
-        <div className="grid grid-cols-2 gap-2 px-4 sm:grid-cols-3 sm:px-6 lg:grid-cols-5 xl:grid-cols-6">
+        <div className="grid grid-cols-2 gap-[max(4px,var(--density-row-gap))] px-4 sm:grid-cols-3 sm:px-6 lg:grid-cols-5 xl:grid-cols-6">
           {filtered.map((item) => (
             <EditableClosetTile key={item.id} item={item} />
           ))}

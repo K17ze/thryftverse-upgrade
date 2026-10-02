@@ -4,45 +4,18 @@
  * /co-own/[id] orchestrator — market header, price panel + order book on the
  * left, sticky trade composer on the right, tabs below, related rail, risk
  * band. Mobile collapses the composer into a sticky dock + Sheet.
- *
- * All market data — orders included — comes from the shared coown hooks,
- * and every write (place, cancel) routes through the trading mutation in
- * components/trading, so this surface and Portfolio always agree.
+ * Factored into domain subcomponents:
+ * - useAssetDetailWorkflow: realtime stream, queries, watchlist, alert evaluator
+ * - AssetRestingOrders: resting orders with 2-tap cancel confirm
+ * - AssetMobileTradeDock: mobile dock with price, 24h pill, and action trigger
  */
 
-import { useRef, useState } from 'react';
 import Link from 'next/link';
-import { useRouter } from 'next/navigation';
-import { Button } from '@/components/ui/Button';
 import { EmptyState } from '@/components/ui/EmptyState';
-import { Tabs } from '@/components/ui/Tabs';
+import { Tabs, tabId, tabPanelId } from '@/components/ui/Tabs';
 import { Icon } from '@/components/ui/Icon';
 import { Sheet } from '@/components/ui/Sheet';
-import { useToast } from '@/components/ui/Toast';
-import { useCancelCoOwnOrder } from '@/components/trading/useCoOwnTrading';
-import type { CoOwnOrder, PriceWindow } from '@/lib/contracts/coown';
-import { coOwnMarkGbp } from '@/lib/contracts/coown';
-import {
-  useCoOwnActivity,
-  useCoOwnAsset,
-  useCoOwnAssets,
-  useCoOwnOrders,
-  useCoOwnPositions,
-  useDistributions,
-  useDueDiligence,
-  useGovernanceActions,
-  useMarketLedger,
-  useOrderBook,
-  usePriceHistory,
-} from '@/lib/hooks/coown-queries';
-import { gbp } from '../format';
-import { useCoOwnWatchlist } from '@/lib/store/coownWatchlist';
-import { useHydrated } from '@/lib/store/useStore';
-import { useOnlineStatus } from '@/lib/offline';
-import { useCoOwnOrderBookStream } from '@/lib/realtime/useCoOwnOrderBookStream';
-import { useCoOwnAlertsApi, useEvaluateCoOwnAlerts } from '../alertStore';
 import { CreateAlertSheet } from '../CreateAlertSheet';
-import { MovePill } from '../MovePill';
 import { ActivityTab } from './ActivityTab';
 import { AssetActionsMenu } from './AssetActionsMenu';
 import { AssetDetailSkeleton } from './AssetDetailSkeleton';
@@ -53,101 +26,53 @@ import { OwnershipTab } from './OwnershipTab';
 import { PricePanel } from './PricePanel';
 import { RelatedAssets } from './RelatedAssets';
 import { RiskDisclosure } from './RiskDisclosure';
-import { DelistedPanel, PausedNotice, PreviewPanel, TradePanel, type TradePrefill } from './TradePanel';
-import { useSession } from '@/lib/session/SessionProvider';
-
-type Tab = 'overview' | 'ownership' | 'activity';
-
-const TABS: { value: Tab; label: string }[] = [
-  { value: 'overview', label: 'Overview' },
-  { value: 'ownership', label: 'Ownership' },
-  { value: 'activity', label: 'Activity' },
-];
+import { DelistedPanel, PausedNotice, PreviewPanel, TradePanel } from './TradePanel';
+import { TABS, useAssetDetailWorkflow } from './useAssetDetailWorkflow';
+import { AssetRestingOrders } from './AssetRestingOrders';
+import { AssetMobileTradeDock } from './AssetMobileTradeDock';
 
 export function AssetDetailView({ id }: { id: string }) {
-  const router = useRouter();
-  const { data: asset, isLoading, isError } = useCoOwnAsset(id);
-  const { data: book } = useOrderBook(id);
-  const [range, setRange] = useState<PriceWindow>('1D');
-  const { data: history } = usePriceHistory(id, range);
-  // The day-range stat reads its own 1D slice so it stays honest when the
-  // chart is zoomed out to a wider window.
-  const { data: dayHistory } = usePriceHistory(id, '1D');
-  const { data: positions } = useCoOwnPositions();
-  const { data: allOrders } = useCoOwnOrders();
-  const { data: activity } = useCoOwnActivity(id);
-  const { data: ledger } = useMarketLedger(id);
-  const { data: diligence } = useDueDiligence(id);
-  const { data: distributions } = useDistributions(id);
-  // Governance overlay — persisted ballots fold into each row so the
-  // activity list shows the recorded vote, not the raw fixture.
-  const { data: actions } = useGovernanceActions(id);
-  const { data: allAssets } = useCoOwnAssets();
-  const hydrated = useHydrated();
-  // Live order book — SSE deltas write through the same query cache the
-  // REST snapshot owns, so every consumer (ladder, composer, spread band)
-  // stays in step without prop plumbing.
-  useCoOwnOrderBookStream(id);
-  const { isOffline } = useOnlineStatus();
-  // Mode-aware: server-persisted alerts in live mode, the device store
-  // under fixtures — `ready` plays the hydration role for both.
-  const { alerts, ready: alertsReady } = useCoOwnAlertsApi();
-  const hasAlert = alertsReady && alerts.some((a) => a.assetId === id && a.active);
-  const storedWatching = useCoOwnWatchlist((s) => s.watchedIds.includes(id));
-  const toggleWatch = useCoOwnWatchlist((s) => s.toggleWatch);
-  const watching = hydrated && storedWatching;
-  const { user } = useSession();
-  // Fixture-mode evaluator — no-op when the server owns evaluation.
-  useEvaluateCoOwnAlerts();
-
-  const [tab, setTab] = useState<Tab>('overview');
-  const [prefill, setPrefill] = useState<TradePrefill | null>(null);
-  const [composerOpen, setComposerOpen] = useState(false);
-  const [alertSheetOpen, setAlertSheetOpen] = useState(false);
-  const seq = useRef(0);
-  const { show } = useToast();
-  const { cancelOrder } = useCancelCoOwnOrder();
-  // Resting-order cancel is a two-tap armed confirm (same grammar as
-  // OpenOrders): the first tap arms the row, the confirm releases it.
-  const [confirmingId, setConfirmingId] = useState<string | null>(null);
-  const [cancellingId, setCancellingId] = useState<string | null>(null);
-
-  // Resting orders for this market — read straight from the shared cache
-  // so the list stays in step with Portfolio and open-orders surfaces.
-  const orders = (allOrders ?? []).filter(
-    (o) => o.assetId === id && (o.status === 'open' || o.status === 'partially_filled'),
-  );
-
-  const position = positions?.find((p) => p.assetId === id) ?? null;
-
-  const cancel = async (order: CoOwnOrder) => {
-    setCancellingId(order.id);
-    try {
-      const ok = await cancelOrder(order.id);
-      show(ok ? 'Order cancelled — remainder released' : 'Could not cancel that order', ok ? 'info' : 'error');
-    } catch (err) {
-      // Live mode throws — the backend's refusal (locked, not yours,
-      // already filled) is the message worth showing.
-      show(err instanceof Error ? err.message : 'Could not cancel that order', 'error');
-    } finally {
-      setCancellingId(null);
-      setConfirmingId(null);
-    }
-  };
-
-  // OpenOrders' armed-copy grammar — names exactly what releasing the
-  // order frees.
-  const confirmCancelCopy = (o: CoOwnOrder) => {
-    const remaining = o.units - o.filledUnits;
-    return `Cancel this ${o.side} order — ${remaining} unfilled ${
-      remaining === 1 ? 'unit is' : 'units are'
-    } released right away.`;
-  };
-
-  const pickLevel = (price: number, side: 'buy' | 'sell') => {
-    setPrefill({ price, side, seq: ++seq.current });
-    setComposerOpen(true);
-  };
+  const workflow = useAssetDetailWorkflow(id);
+  const {
+    router,
+    asset,
+    isLoading,
+    isError,
+    book,
+    range,
+    setRange,
+    history,
+    dayHistory,
+    position,
+    orders,
+    activity,
+    ledger,
+    diligence,
+    distributions,
+    actions,
+    allAssets,
+    isOffline,
+    hasAlert,
+    watching,
+    toggleWatch,
+    tab,
+    setTab,
+    tabsId,
+    prefill,
+    composerOpen,
+    setComposerOpen,
+    alertSheetOpen,
+    setAlertSheetOpen,
+    confirmingId,
+    setConfirmingId,
+    cancellingId,
+    cancel,
+    pickLevel,
+    halted,
+    preview,
+    delisted,
+    isIssuer,
+  } = workflow;
 
   if (isLoading) return <AssetDetailSkeleton />;
 
@@ -164,17 +89,6 @@ export function AssetDetailView({ id }: { id: string }) {
       </div>
     );
   }
-
-  const halted = asset.marketStatus === 'paused' || asset.marketStatus === 'closed';
-  // 'preview' = created but unsigned — the book is sealed server-side
-  // until the issuer signs the recourse agreement, so the composer swaps
-  // to the sign/not-live rail instead of pretending orders can rest.
-  const preview = asset.listingTier === 'preview';
-  // 'delisted' = pulled from the public market; the tier gate rejects
-  // orders server-side, so the panel must not pretend otherwise even
-  // when the market-status column still reads 'trading'.
-  const delisted = asset.listingTier === 'delisted';
-  const isIssuer = !!user && user.id === asset.issuer.id;
 
   const tradePanel = halted ? (
     <PausedNotice exitUnderway={asset.marketStatus === 'closed'} />
@@ -203,9 +117,7 @@ export function AssetDetailView({ id }: { id: string }) {
         actions={<AssetActionsMenu asset={asset} />}
       />
 
-      {/* Per-surface state strips — offline and book reconciliation.
-          The book is the most price-sensitive surface on the page, so a
-          stale or offline book says so rather than reading as fresh. */}
+      {/* Per-surface state strips — offline and book reconciliation */}
       {isOffline ? (
         <p
           role="status"
@@ -235,10 +147,8 @@ export function AssetDetailView({ id }: { id: string }) {
         </p>
       ) : null}
 
-      {/* Contract trading surface: fluid chart/book column + fixed 400px
-          sticky trade rail at lg. Mobile keeps the stacked order with the
-          fixed bottom dock. */}
-      <div className="mt-8 grid gap-10 lg:grid-cols-[minmax(0,1fr)_400px]">
+      {/* Contract trading surface: chart/book column + sticky trade rail */}
+      <div className="mt-8 grid grid-cols-1 gap-10 lg:grid-cols-[minmax(0,1fr)_400px]">
         <div className="min-w-0">
           <PricePanel
             asset={asset}
@@ -258,105 +168,37 @@ export function AssetDetailView({ id }: { id: string }) {
             />
           </div>
 
-          {orders.length > 0 ? (
-            <section className="mt-10" aria-labelledby="resting-heading">
-              <div className="flex items-baseline justify-between">
-                <h2
-                  id="resting-heading"
-                  className="text-micro font-semibold uppercase tracking-[0.08em] text-text-muted"
-                >
-                  Your resting orders
-                </h2>
-                <p className="text-meta text-text-muted tnum">{orders.length}</p>
-              </div>
-              <ul className="mt-3 divide-y divide-border-subtle border-y border-border-subtle">
-                {orders.map((o) => {
-                  const confirming = confirmingId === o.id;
-                  const busy = cancellingId === o.id;
-                  return (
-                    <li
-                      key={o.id}
-                      className="flex flex-wrap items-center justify-between gap-x-4 gap-y-2 py-3"
-                    >
-                      <p className="text-body text-text-primary tnum">
-                        <span
-                          className={`font-semibold ${o.side === 'buy' ? 'text-coown-up' : 'text-coown-down'}`}
-                        >
-                          {o.side === 'buy' ? 'Buy' : 'Sell'}
-                        </span>
-                        <span className="text-text-secondary">
-                          {' '}
-                          · {o.orderType === 'limit' ? 'Limit' : o.orderType === 'market' ? 'Market' : 'Protected'} ·{' '}
-                          {gbp(o.unitPriceGbp)} · {o.units} {o.units === 1 ? 'unit' : 'units'}
-                        </span>
-                      </p>
-                      <div className="flex items-center gap-3">
-                        <span className="text-meta text-text-muted">
-                          {o.status === 'open'
-                            ? 'Open'
-                            : `Partial — ${o.filledUnits} of ${o.units} filled`}
-                        </span>
-                        {confirming ? (
-                          <div className="flex items-center gap-2">
-                            <Button
-                              size="sm"
-                              variant="quiet"
-                              onClick={() => setConfirmingId(null)}
-                              disabled={busy}
-                            >
-                              Keep
-                            </Button>
-                            <Button
-                              size="sm"
-                              variant="danger"
-                              onClick={() => void cancel(o)}
-                              disabled={busy}
-                            >
-                              {busy ? 'Cancelling…' : 'Cancel order'}
-                            </Button>
-                          </div>
-                        ) : (
-                          <Button
-                            size="sm"
-                            variant="outline"
-                            onClick={() => setConfirmingId(o.id)}
-                          >
-                            Cancel
-                          </Button>
-                        )}
-                      </div>
-                      {confirming ? (
-                        <p className="w-full text-meta text-text-secondary">
-                          {confirmCancelCopy(o)}
-                        </p>
-                      ) : null}
-                    </li>
-                  );
-                })}
-              </ul>
-            </section>
-          ) : null}
+          <AssetRestingOrders
+            orders={orders}
+            confirmingId={confirmingId}
+            cancellingId={cancellingId}
+            onConfirmId={setConfirmingId}
+            onCancel={cancel}
+          />
         </div>
 
-        {/* Below the dock's breakpoint the composer lives only in the
-            mobile dock Sheet — a second inline instance here would mount
-            two divergent composers at once. */}
         <aside className="hidden min-w-0 md:block">
           <div className="lg:sticky lg:top-24">{tradePanel}</div>
         </aside>
       </div>
 
       <section className="mt-14" aria-label="Asset details">
-        <Tabs<Tab>
+        <Tabs
           tabs={TABS.map((t) => ({ key: t.value, label: t.label }))}
           active={tab}
           onChange={setTab}
           ariaLabel="Asset details"
+          idBase={tabsId}
           className="-mx-4 sm:-mx-6"
           railClassName="px-1 sm:px-3"
         />
 
-        <div role="tabpanel" className="mt-7">
+        <div
+          role="tabpanel"
+          id={tabPanelId(tabsId, tab)}
+          aria-labelledby={tabId(tabsId, tab)}
+          className="mt-7"
+        >
           {tab === 'overview' ? <OverviewTab asset={asset} diligence={diligence} /> : null}
           {tab === 'ownership' ? <OwnershipTab asset={asset} position={position} /> : null}
           {tab === 'activity' ? (
@@ -376,8 +218,7 @@ export function AssetDetailView({ id }: { id: string }) {
 
       <RiskDisclosure />
 
-      {/* Concierge line — same posture as the mobile asset footer: a
-          human-readable route into support, anchored to this market. */}
+      {/* Concierge line */}
       <p className="mt-8 flex items-start gap-2 text-meta text-text-muted">
         <Icon name="chat" size={15} className="mt-0.5 shrink-0" />
         <span>
@@ -399,40 +240,15 @@ export function AssetDetailView({ id }: { id: string }) {
         </span>
       </p>
 
-      {/* Mobile trade dock — price + entry point; the composer lives in the Sheet */}
-      <div
-        className="fixed inset-x-0 z-sticky border-t border-border-subtle bg-header/95 backdrop-blur-xl md:hidden"
-        style={{ bottom: 'calc(68px + env(safe-area-inset-bottom))' }}
-      >
-        <div className="flex items-center justify-between gap-3 px-4 py-3">
-          <div className="min-w-0">
-            <p className="text-body-emphasis font-semibold text-text-primary tnum">
-              {gbp(coOwnMarkGbp(asset))}
-            </p>
-            <MovePill pct={asset.marketMovePct24h} className="mt-0.5" />
-          </div>
-          {halted ? (
-            <span className="inline-flex items-center gap-1.5 text-meta font-semibold text-warning-text">
-              <Icon name="pause" size={16} />
-              {asset.marketStatus === 'closed' ? 'Exit underway' : 'Paused'}
-            </span>
-          ) : preview ? (
-            isIssuer ? (
-              <Button onClick={() => setComposerOpen(true)}>Sign</Button>
-            ) : (
-              <span className="text-meta font-semibold text-text-muted">
-                Not live
-              </span>
-            )
-          ) : delisted ? (
-            <span className="text-meta font-semibold text-text-muted">
-              Delisted
-            </span>
-          ) : (
-            <Button onClick={() => setComposerOpen(true)}>Trade</Button>
-          )}
-        </div>
-      </div>
+      {/* Mobile trade dock */}
+      <AssetMobileTradeDock
+        asset={asset}
+        halted={halted}
+        preview={preview}
+        delisted={delisted}
+        isIssuer={isIssuer}
+        onOpenComposer={() => setComposerOpen(true)}
+      />
 
       <Sheet
         open={composerOpen}

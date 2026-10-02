@@ -103,6 +103,14 @@ export const LIVE_SESSIONS: LiveSession[] = [
     aspectRatio: 4 / 5,
     status: 'ended',
     durationMinutes: 47,
+    endedAt: inHours(-6),
+    // Recorded replay — a stable public CC0 test clip lets fixture builds
+    // exercise the real /live/[id]/replay VOD path end to end (same
+    // disclosure rule as mobile's demo recordingUrl). Codec-safe webm/mp4
+    // so even headless/codec-free players reach the playing state.
+    recordingEnabled: true,
+    recordingUrl:
+      'https://interactive-examples.mdn.mozilla.net/media/cc0-videos/friday.mp4',
     category: 'Women',
   },
   {
@@ -113,6 +121,10 @@ export const LIVE_SESSIONS: LiveSession[] = [
     aspectRatio: 4 / 5,
     status: 'ended',
     durationMinutes: 63,
+    endedAt: inHours(-30),
+    recordingEnabled: true,
+    recordingUrl:
+      'https://interactive-examples.mdn.mozilla.net/media/cc0-videos/flower.webm',
     category: 'Bags',
   },
   {
@@ -123,6 +135,11 @@ export const LIVE_SESSIONS: LiveSession[] = [
     aspectRatio: 4 / 5,
     status: 'ended',
     durationMinutes: 38,
+    endedAt: inHours(-1),
+    // Recording was enabled but egress hasn't persisted a URL yet —
+    // exercises the honest "replay is being prepared" state.
+    recordingEnabled: true,
+    recordingUrl: null,
     category: 'Men',
   },
   {
@@ -133,6 +150,9 @@ export const LIVE_SESSIONS: LiveSession[] = [
     aspectRatio: 4 / 5,
     status: 'ended',
     durationMinutes: 52,
+    endedAt: inHours(-70),
+    // Never recorded — the replay route renders the honest no-recording
+    // state rather than a dead player.
     category: 'Accessories',
   },
 ];

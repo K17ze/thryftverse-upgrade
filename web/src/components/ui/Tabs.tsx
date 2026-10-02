@@ -14,6 +14,14 @@
  *   - route tabs (every tab carries href) → <nav> + <Link> with
  *     aria-current="page" — links, not ARIA tabs.
  *
+ * Tab↔panel pairing (state mode only): a caller that swaps a content
+ * region mints a stable idBase with useId() and passes `idBase`; each
+ * tab then carries id={tabId(idBase, key)} + aria-controls=
+ * {tabPanelId(idBase, key)}, and the caller renders the panel as
+ * role="tabpanel" id={tabPanelId(idBase, active)} aria-labelledby=
+ * {tabId(idBase, active)}. Never set idBase without rendering the panel
+ * — a dangling aria-controls is worse than none.
+ *
  * Counts are honest: only rendered when the caller passes a real number
  * greater than zero (quiet tabular meta, never a fabricated badge).
  * The rail scrolls horizontally when the set overflows — mobile parity
@@ -32,6 +40,11 @@ export interface TabItem<T extends string> {
   href?: string;
 }
 
+/** WAI-APG id grammar for the state-mode tab↔tabpanel pairing — one
+ *  source of truth so a caller-rendered panel always matches the tab. */
+export const tabId = (idBase: string, key: string) => `${idBase}-tab-${key}`;
+export const tabPanelId = (idBase: string, key: string) => `${idBase}-panel-${key}`;
+
 interface TabsProps<T extends string> {
   tabs: TabItem<T>[];
   active: T;
@@ -45,6 +58,10 @@ interface TabsProps<T extends string> {
   /** Set false when the parent already carries the baseline hairline and
    *  the tab indicator should overlap it instead (e.g. a toolbar row). */
   hairline?: boolean;
+  /** Opt in to tab↔tabpanel id pairing (state mode): a useId() minted at
+   *  the call site that also names the caller-rendered panel — see the
+   *  header comment. Omit when no panel exists. */
+  idBase?: string;
 }
 
 export function Tabs<T extends string>({
@@ -55,6 +72,7 @@ export function Tabs<T extends string>({
   className = '',
   railClassName = '',
   hairline = true,
+  idBase,
 }: TabsProps<T>) {
   const linkMode = tabs.length > 0 && tabs.every((t) => typeof t.href === 'string');
   const railRef = useRef<HTMLDivElement | null>(null);
@@ -74,7 +92,9 @@ export function Tabs<T extends string>({
     if (e.key === 'ArrowRight' || e.key === 'ArrowDown') {
       next = (current + 1) % tabs.length;
     } else if (e.key === 'ArrowLeft' || e.key === 'ArrowUp') {
-      next = (current - 1 + tabs.length) % tabs.length;
+      // current is -1 when a non-tab selection owns the view — left
+      // should land on the last tab, not skip to length-2.
+      next = current <= 0 ? tabs.length - 1 : current - 1;
     } else if (e.key === 'Home') {
       next = 0;
     } else if (e.key === 'End') {
@@ -127,7 +147,11 @@ export function Tabs<T extends string>({
         key={t.key}
         type="button"
         role="tab"
+        id={idBase ? tabId(idBase, t.key) : undefined}
         aria-selected={isActive}
+        // Only the active tab's panel exists — aria-controls on inactive
+        // tabs would dangle at ids that aren't mounted.
+        aria-controls={idBase && isActive ? tabPanelId(idBase, t.key) : undefined}
         tabIndex={i === activeIndex ? 0 : -1}
         onClick={() => onChange?.(t.key)}
         className={cls}

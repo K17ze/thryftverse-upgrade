@@ -20,15 +20,19 @@ import {
   detectAttributes,
   extractFeatures,
   matchListings,
+  passesDetectedConstraints,
+  passesManualFilters,
   type DecodedImage,
 } from '@/components/visualsearch/visualSearchEngine';
 import {
   ACCEPTED_IMAGE_TYPES,
+  EMPTY_MANUAL_FILTERS,
   MAX_FILE_BYTES,
   type AnalysisPhase,
   type DetectedAttribute,
   type ImageFeatures,
   type VisualSearchErrorKind,
+  type VisualSearchManualFilters,
   type VisualSearchRegion,
   type VisualSearchStatus,
   COLOR_VOCAB,
@@ -64,19 +68,71 @@ function fileToBase64(file: File): Promise<string> {
   });
 }
 
-/** Map the local attribute chips onto the backend's facet vocabulary —
- *  colour and style go in-query; other kinds remain post-filters. */
-function facetsFromAttributes(
+/**
+ * Build the request fields POST /visual-search accepts from the active
+ * detected chips plus the member's manual filters — the same payload
+ * mobile's useVisualSearchFilters.buildFilterPayload assembles:
+ * query/category/brand/price are dedicated request fields; colour and
+ * style are retrieval facets. A manual selection wins over the chip it
+ * overlaps (the member's word beats the guess); the detected brand chip
+ * feeds `brand` so removing it genuinely removes the filter.
+ */
+type VisualSearchRequestFields = Pick<
+  visualSearchService.VisualSearchRequest,
+  'query' | 'category' | 'brand' | 'minPrice' | 'maxPrice' | 'facets'
+>;
+
+function requestFields(
   attrs: DetectedAttribute[],
   inactive: ReadonlySet<DetectedAttribute['kind']>,
-): { color?: string; style?: string } | undefined {
+  manual: VisualSearchManualFilters,
+): VisualSearchRequestFields {
   const active = attrs.filter((a) => !inactive.has(a.kind));
-  const color = active.find((a) => a.kind === 'color')?.value;
-  // 'style' isn't a local attribute kind — the backend style facet maps to
-  // the category chip's value (streetwear, denim, etc.).
-  const style = active.find((a) => a.kind === 'category')?.value;
-  if (!color && !style) return undefined;
-  return { color, style };
+  const color = manual.color ?? active.find((a) => a.kind === 'color')?.value;
+  // The detected category chip rides the dedicated `category` field; only
+  // a member-chosen style populates the style facet.
+  const style = manual.style;
+  const category =
+    manual.category || active.find((a) => a.kind === 'category')?.value;
+  const brand =
+    manual.brand.trim() || active.find((a) => a.kind === 'brand')?.label || '';
+  const query = manual.query.trim();
+  const fields: VisualSearchRequestFields = {};
+  if (query) fields.query = query;
+  if (category) fields.category = category;
+  if (brand) fields.brand = brand;
+  if (manual.priceMin != null) fields.minPrice = manual.priceMin;
+  if (manual.priceMax != null) fields.maxPrice = manual.priceMax;
+  if (color || style) {
+    fields.facets = {
+      ...(color ? { color } : {}),
+      ...(style ? { style } : {}),
+    };
+  }
+  return fields;
+}
+
+/**
+ * Post-filter a live serve by the constraints the UI claims are active —
+ * the manual panel's predicate plus the detected category/brand chips.
+ * The backend honours the same request fields, so a correct serve passes
+ * through untouched; this is the belt-and-braces layer that keeps the
+ * displayed filters literally true whatever the serve returns. Colour
+ * affinity can't be re-derived for arbitrary listings (fixture colour
+ * table) — the colour chip's live narrowing stays server-side via
+ * facets.color.
+ */
+function filterServeItems(
+  items: Listing[],
+  attributes: DetectedAttribute[],
+  inactive: ReadonlySet<DetectedAttribute['kind']>,
+  manual: VisualSearchManualFilters,
+): Listing[] {
+  return items.filter(
+    (l) =>
+      passesDetectedConstraints(l, attributes, inactive) &&
+      passesManualFilters(l, manual),
+  );
 }
 
 let querySeq = 0;
@@ -111,6 +167,15 @@ export interface VisualSearchState {
   inactiveKinds: ReadonlySet<DetectedAttribute['kind']>;
   region: VisualSearchRegion | null;
   results: Listing[];
+  /** Member-added filters — committed state (the panel drafts locally,
+   *  Apply commits here and re-runs the match). */
+  manualFilters: VisualSearchManualFilters;
+  setManualFilters: (next: VisualSearchManualFilters) => void;
+  clearManualFilters: () => void;
+  /** Fixture-mode preview of a draft's result count — null in live mode
+   *  (the serve's count can't be previewed client-side) or before
+   *  features exist. */
+  previewCount: (manual: VisualSearchManualFilters) => number | null;
   /** Live serve disclosures — how the backend actually matched. */
   serveMeta: VisualSearchServeMeta | null;
   pickFile: (file: File) => void;
@@ -141,6 +206,8 @@ export function useVisualSearch(): VisualSearchState {
   );
   const [region, setRegion] = useState<VisualSearchRegion | null>(null);
   const [results, setResults] = useState<Listing[]>([]);
+  const [manualFilters, setManualFiltersState] =
+    useState<VisualSearchManualFilters>(EMPTY_MANUAL_FILTERS);
   const [serveMeta, setServeMeta] = useState<VisualSearchServeMeta | null>(null);
   const [urlLoading, setUrlLoading] = useState(false);
 
@@ -158,6 +225,10 @@ export function useVisualSearch(): VisualSearchState {
   // committed most recently, not the render the closure came from.
   const inactiveRef = useRef(inactiveKinds);
   const regionRef = useRef<VisualSearchRegion | null>(null);
+  // Committed manual filters live in a ref too — the async pipeline reads
+  // the latest apply, not the render the closure came from (same
+  // convention as inactiveRef/regionRef and mobile's filtersRef).
+  const manualRef = useRef<VisualSearchManualFilters>(manualFilters);
   useEffect(() => {
     inactiveRef.current = inactiveKinds;
   }, [inactiveKinds]);
@@ -190,6 +261,9 @@ export function useVisualSearch(): VisualSearchState {
     const dwell = (p: AnalysisPhase) => tick(mode === 'full' ? PHASE_DWELL_MS[p] : REFINE_DWELL_MS);
 
     setStatus('analyzing');
+    // The serve call is a transport failure, not a decode failure —
+    // catch maps them to different error copy.
+    let serveFailed = false;
 
     try {
       if (mode === 'full') {
@@ -222,13 +296,25 @@ export function useVisualSearch(): VisualSearchState {
         // are the only honest account of what matched.
         const imageBase64 = await fileToBase64(fileRef.current);
         if (!live()) return;
-        const serve = await visualSearchService.runVisualSearch({
-          imageBase64,
-          region: regionRef.current ?? undefined,
-          facets: facetsFromAttributes(nextAttrs, inactiveRef.current),
-        });
+        const serve = await visualSearchService
+          .runVisualSearch({
+            imageBase64,
+            region: regionRef.current ?? undefined,
+            ...requestFields(nextAttrs, inactiveRef.current, manualRef.current),
+          })
+          .catch((e) => {
+            serveFailed = true;
+            throw e;
+          });
         if (!live()) return;
-        matched = serve.items;
+        // Post-filter by the displayed constraints so a chip/panel value
+        // the serve ignored still holds true on screen.
+        matched = filterServeItems(
+          serve.items,
+          nextAttrs,
+          inactiveRef.current,
+          manualRef.current,
+        );
         nextServeMeta = {
           retrievalMeta: serve.retrievalMeta ?? null,
           similarityMethod: serve.similarityMethod ?? null,
@@ -243,6 +329,7 @@ export function useVisualSearch(): VisualSearchState {
           inactive: inactiveRef.current,
           attributes: nextAttrs,
           regionApplied: regionRef.current !== null,
+          manual: manualRef.current,
         });
       }
 
@@ -258,7 +345,7 @@ export function useVisualSearch(): VisualSearchState {
       // the full pipeline. The decoded bitmap is dropped; retry re-reads
       // the file rather than trusting a half-failed decode.
       setStatus('error');
-      setError('decode');
+      setError(serveFailed ? 'unreachable' : 'decode');
       decodedRef.current?.dispose();
       decodedRef.current = null;
       setFeatures(null);
@@ -276,17 +363,25 @@ export function useVisualSearch(): VisualSearchState {
       if (!features || (status !== 'populated' && status !== 'empty')) return;
       if (DATA_MODE === 'live' && fileRef.current) {
         const file = fileRef.current;
+        // Sequence against analyze — a newer photo pick or a later Apply
+        // supersedes this serve; its results must not clobber fresher state.
+        const my = ++runRef.current;
         void fileToBase64(file)
           .then((imageBase64) =>
             visualSearchService.runVisualSearch({
               imageBase64,
               region: regionRef.current ?? undefined,
-              facets: facetsFromAttributes(attributes, inactive),
+              ...requestFields(attributes, inactive, manualRef.current),
             }),
           )
           .then((serve) => {
-            if (!mountedRef.current) return;
-            const matched = serve.items;
+            if (!mountedRef.current || my !== runRef.current) return;
+            const matched = filterServeItems(
+              serve.items,
+              attributes,
+              inactive,
+              manualRef.current,
+            );
             setResults(matched);
             setServeMeta({
               retrievalMeta: serve.retrievalMeta ?? null,
@@ -304,6 +399,7 @@ export function useVisualSearch(): VisualSearchState {
         inactive,
         attributes,
         regionApplied: region !== null,
+        manual: manualRef.current,
       });
       setResults(matched);
       setStatus(matched.length > 0 ? 'populated' : 'empty');
@@ -338,6 +434,8 @@ export function useVisualSearch(): VisualSearchState {
       setResults([]);
       setServeMeta(null);
       setQueryId(nextQueryId());
+      // Manual filters persist across a replaced photo — the member's
+      // intent survives the new query (mobile keeps its fields too).
       void analyze('full');
     },
     [analyze, disposeImage],
@@ -403,6 +501,10 @@ export function useVisualSearch(): VisualSearchState {
     setResults([]);
     setServeMeta(null);
     setQueryId(null);
+    // Removing the photo clears the refinements with it — mobile's
+    // handleRemoveImage runs clearFields the same way.
+    manualRef.current = EMPTY_MANUAL_FILTERS;
+    setManualFiltersState(EMPTY_MANUAL_FILTERS);
   }, [disposeImage]);
 
   // Region confirm/clear — re-extracts features on the crop and re-ranks.
@@ -437,6 +539,40 @@ export function useVisualSearch(): VisualSearchState {
     rematch(next);
   }, [rematch]);
 
+  // Manual refinement — the panel drafts locally; Apply commits here and
+  // re-runs the match over the new constraint set. The ref write precedes
+  // the state update so a rematch reads the committed values, and rematch
+  // itself is a no-op until a result set exists to filter.
+  const setManualFilters = useCallback(
+    (next: VisualSearchManualFilters) => {
+      manualRef.current = next;
+      setManualFiltersState(next);
+      rematch(inactiveRef.current);
+    },
+    [rematch],
+  );
+
+  const clearManualFilters = useCallback(() => {
+    manualRef.current = EMPTY_MANUAL_FILTERS;
+    setManualFiltersState(EMPTY_MANUAL_FILTERS);
+    rematch(inactiveRef.current);
+  }, [rematch]);
+
+  // Fixture-mode Apply preview — the count the draft would produce, scored
+  // over the cached features. Live mode can't preview a serve client-side.
+  const previewCount = useCallback(
+    (manual: VisualSearchManualFilters): number | null => {
+      if (DATA_MODE === 'live' || !features) return null;
+      return matchListings(features, {
+        inactive: inactiveRef.current,
+        attributes,
+        regionApplied: region !== null,
+        manual,
+      }).length;
+    },
+    [features, attributes, region],
+  );
+
   const retry = useCallback(() => {
     if (fileRef.current && status === 'error') void analyze('full');
   }, [analyze, status]);
@@ -454,6 +590,10 @@ export function useVisualSearch(): VisualSearchState {
     inactiveKinds,
     region,
     results,
+    manualFilters,
+    setManualFilters,
+    clearManualFilters,
+    previewCount,
     serveMeta,
     pickFile,
     pickImageUrl,
@@ -482,10 +622,14 @@ export function useSaveVisualSearch() {
       attributes: DetectedAttribute[];
       inactiveKinds: ReadonlySet<DetectedAttribute['kind']>;
       results: Listing[];
+      /** Committed panel filters — they shape the result set, so they
+       *  shape what the saved search replays. */
+      manualFilters: VisualSearchManualFilters;
     }): SavedSearch => {
       const active = args.attributes.filter(
         (a) => !args.inactiveKinds.has(a.kind),
       );
+      const manual = args.manualFilters;
       const colourFor = (a: DetectedAttribute): string => {
         const hit = COLOR_VOCAB.find(
           (v) =>
@@ -495,19 +639,47 @@ export function useSaveVisualSearch() {
         );
         return hit?.name ?? a.label;
       };
+      const dedupe = (xs: string[]) => {
+        const seen = new Set<string>();
+        return xs.filter((x) => {
+          const k = x.toLowerCase();
+          if (seen.has(k)) return false;
+          seen.add(k);
+          return true;
+        });
+      };
       const filters = {
         ...EMPTY_FILTERS,
-        colours: active.filter((a) => a.kind === 'color').map(colourFor),
-        categories: active
-          .filter((a) => a.kind === 'category')
-          .map((a) => a.value),
-        brands: active.filter((a) => a.kind === 'brand').map((a) => a.label),
+        colours: dedupe([
+          ...active.filter((a) => a.kind === 'color').map(colourFor),
+          ...(manual.color ? [manual.color] : []),
+        ]),
+        categories: dedupe([
+          ...active.filter((a) => a.kind === 'category').map((a) => a.value),
+          ...(manual.category ? [manual.category] : []),
+        ]),
+        brands: dedupe([
+          ...active.filter((a) => a.kind === 'brand').map((a) => a.label),
+          ...(manual.brand.trim() ? [manual.brand.trim()] : []),
+        ]),
+        priceMin: manual.priceMin,
+        priceMax: manual.priceMax,
       };
-      const label =
+      // The saved query doubles as the replay text (?q= on /search) — a
+      // typed description replays exactly; style joins it as the same
+      // text-term the matcher treats it as. Otherwise the detected
+      // attributes keep their existing label grammar.
+      const queryText = [
+        manual.query.trim(),
+        ...(manual.style ? [`${manual.style} style`] : []),
+      ]
+        .filter(Boolean)
+        .join(' · ');
+      const fallback =
         active.length > 0
           ? `Photo search — ${active.map((a) => a.label).join(' · ')}`
           : 'Photo search';
-      return saveSearch(label, filters, {
+      return saveSearch(queryText || fallback, filters, {
         kind: 'visual',
         queryId: args.queryId ?? undefined,
         resultCount: args.results.length,

@@ -24,14 +24,25 @@ import { useShare } from '@/components/profile/useShare';
 import { Skeleton } from '@/components/ui/Skeleton';
 import { mapListingToDiscoverySummary, type Listing } from '@/lib/contracts/domain';
 import { listingById } from '@/lib/data/fixtures';
-import { GALLERIA_FEATURED_COLLECTIONS } from '@/lib/data/fixtures-media';
+import {
+  GALLERIA_FEATURED_COLLECTIONS,
+  type GalleriaFeaturedCollection,
+} from '@/lib/data/fixtures-media';
 import { DATA_MODE } from '@/lib/api/client';
 import * as galleriaService from '@/lib/api/services/galleria';
 import * as listingsService from '@/lib/api/services/listings';
 
 const isLive = DATA_MODE === 'live';
 
-export function GalleriaCollectionClient() {
+export function GalleriaCollectionClient({
+  initialCollection,
+}: {
+  /** Server-resolved collection row — paints the hero immediately while
+   *  the detail query (collection + per-item listing resolution) is in
+   *  flight. Never written into the query cache: its `resolved` composite
+   *  is a different shape than the server's payload. */
+  initialCollection?: GalleriaFeaturedCollection;
+}) {
   const params = useParams();
   const share = useShare();
   const id = String(params.id ?? '');
@@ -61,7 +72,12 @@ export function GalleriaCollectionClient() {
   const fixtureCollection = isLive
     ? undefined
     : GALLERIA_FEATURED_COLLECTIONS.find((c) => c.id === id);
-  const collection = isLive ? live.data?.collection : fixtureCollection;
+  // The seed only stands in while the query is in flight — a resolved
+  // null (unpublished edit) must win over it, so the fallback applies
+  // solely until data exists.
+  const collection = isLive
+    ? (live.data === undefined ? initialCollection : live.data?.collection)
+    : fixtureCollection;
 
   const items = useMemo(() => {
     if (isLive) {
@@ -82,7 +98,9 @@ export function GalleriaCollectionClient() {
     [live.data],
   );
 
-  if (isLive && live.isLoading) {
+  // A seeded hero skips the full-page skeleton — the server already
+  // resolved the collection; only the pieces grid is still in flight.
+  if (isLive && live.isLoading && !collection) {
     return (
       <div className="mx-auto max-w-[1440px] px-4 sm:px-6" aria-busy aria-label="Loading collection">
         <Skeleton className="mt-1 h-72 w-full rounded-xl sm:h-96" />
@@ -205,12 +223,26 @@ export function GalleriaCollectionClient() {
           </div>
         ) : null}
         {items.length === 0 && mediaOnly.length === 0 ? (
-          <EmptyState
-            icon="pricetag"
-            title="This edit is being restocked"
-            subtitle="The curator is refreshing the rail — check back soon."
-            compact
-          />
+          isLive && live.isLoading ? (
+            // Seed-render window — the hero is up but the per-item
+            // listing resolution hasn't landed; hold the grid's shape,
+            // never the "restocked" verdict.
+            <div
+              className="grid grid-cols-2 gap-x-4 gap-y-6 sm:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5"
+              aria-busy
+            >
+              {[0, 1, 2, 3].map((i) => (
+                <Skeleton key={i} className="aspect-[4/5] w-full rounded-lg" />
+              ))}
+            </div>
+          ) : (
+            <EmptyState
+              icon="pricetag"
+              title="This edit is being restocked"
+              subtitle="The curator is refreshing the rail — check back soon."
+              compact
+            />
+          )
         ) : null}
       </section>
     </div>

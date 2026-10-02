@@ -116,7 +116,7 @@ export default function ExplorePage() {
   // has a nextCursor; an exhausted feed reports hasNextPage === false.
   const loadMore = useCallback(() => void fetchNextPage(), [fetchNextPage]);
   const sentinelRef = useLoadMoreSentinel(
-    hasNextPage === true && !isFetchingNextPage,
+    hasNextPage === true && !isFetchingNextPage && !isFetchNextPageError,
     loadMore,
   );
 
@@ -127,13 +127,14 @@ export default function ExplorePage() {
 
   return (
     <div className="mx-auto max-w-[1440px]">
-      {/* Discovery search header — dominant, quiet. The camera sits at
-          the field's trailing edge (mobile AppSearchBar parity); the
-          conversational entry stays a quiet text link beneath, then the
-          honest query shortcuts — what members actually look for. */}
+      {/* Discovery search header — dominant, quiet. ≥lg the global
+          header already carries a field, so the page field, its camera
+          affordance and the conversational link stay compact-viewport
+          affordances (one primary input per viewport); the honest query
+          shortcuts — what members actually look for — remain for all. */}
       <div className="px-4 pb-4 pt-5 sm:px-6">
         <h1 className="text-screen-title text-text-primary">Explore</h1>
-        <div className="mt-3 flex max-w-2xl items-center gap-1">
+        <div className="mt-3 flex max-w-2xl items-center gap-1 lg:hidden">
           <SearchField
             value={q}
             onChange={setQ}
@@ -151,7 +152,7 @@ export default function ExplorePage() {
         </div>
         <Link
           href="/search/chat"
-          className="pressable mt-1.5 inline-flex items-center gap-1.5 rounded-md px-1.5 py-1 text-caption font-medium text-text-muted hover:text-text-primary"
+          className="pressable mt-1.5 inline-flex items-center gap-1.5 rounded-md px-1.5 py-1 text-caption font-medium text-text-muted hover:text-text-primary lg:hidden"
         >
           <Icon name="chat" size={13} />
           Describe what you&apos;re after
@@ -160,9 +161,10 @@ export default function ExplorePage() {
       </div>
 
       {/* Department shelf → explore themes → member-authored bands →
-          the full feed. Each module owns its own rhythm; the masonry
-          keeps its department pills directly above the grid so a filter
-          lands where the user sees it change. */}
+          the full feed. Every module rides the shared ModuleSection
+          rhythm (hairline + py, unbordered lead); the masonry keeps its
+          department pills directly above the grid so a filter lands
+          where the user sees it change. */}
       <CategoryShelf />
       <TrendingTopics />
       <CuratedEditsRail />
@@ -176,7 +178,12 @@ export default function ExplorePage() {
           active={activeCategory}
           onChange={setActiveCategory}
         />
-        <div className="mt-3">
+        {/* MasonryGrid bands carry their own edge padding
+            (px-1.5 sm:px-2 lg:px-4) — the shared feed grammar also used
+            on home. Here the wrapper tops that up so the grid's outer
+            columns land on the same 16/24px content edge as every
+            module above (and the pills row directly over it). */}
+        <div className="mt-3 px-2.5 sm:px-4 lg:px-2">
           <FeedControlsProvider
             source={DATA_MODE === 'live' ? 'feed' : 'fixture'}
             surface="explore"

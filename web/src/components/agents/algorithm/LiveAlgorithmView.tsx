@@ -103,104 +103,114 @@ export function LiveAlgorithmView() {
             </div>
           ) : null}
 
-          {/* Add — the inline add row, same grammar as native */}
-          <div className="mt-6 px-4 sm:px-6">
-            <div className="flex gap-2 lg:max-w-[440px]">
-              <input
-                type="text"
-                value={w.query}
-                onChange={(e) => w.setQuery(e.target.value)}
-                onKeyDown={(e) => {
-                  if (e.key === 'Enter') w.addTopic(w.query);
-                }}
-                placeholder="Add an interest"
-                maxLength={40}
-                aria-label="Add an interest"
-                className="h-11 min-w-0 flex-1 rounded-lg border border-border bg-input px-3.5 text-body text-input-text placeholder:text-text-muted focus:border-text-muted"
-              />
+          {/* lg composition — add + interests form the main column; the
+              server-derived signals ride a sticky side rail; reset
+              closes the main column's flow. DOM order preserves mobile:
+              add → interests → derived → reset. */}
+          <div className="lg:grid lg:grid-cols-[minmax(0,1fr)_360px] lg:gap-x-12">
+            <div className="min-w-0 lg:col-start-1 lg:row-start-1">
+              {/* Add — the inline add row, same grammar as native */}
+              <div className="mt-6 px-4 sm:px-6">
+                <div className="flex gap-2 lg:max-w-[440px]">
+                  <input
+                    type="text"
+                    value={w.query}
+                    onChange={(e) => w.setQuery(e.target.value)}
+                    onKeyDown={(e) => {
+                      if (e.key === 'Enter') w.addTopic(w.query);
+                    }}
+                    placeholder="Add an interest"
+                    maxLength={40}
+                    aria-label="Add an interest"
+                    className="h-11 min-w-0 flex-1 rounded-lg border border-border bg-input px-3.5 text-body text-input-text placeholder:text-text-muted focus:border-text-muted"
+                  />
+                  <button
+                    type="button"
+                    onClick={() => w.addTopic(w.query)}
+                    disabled={!w.query.trim() || w.existing.has(w.query.trim().toLowerCase()) || w.busyKey !== null}
+                    aria-label="Add"
+                    className="pressable flex h-11 w-11 shrink-0 items-center justify-center rounded-lg border border-border text-text-primary disabled:opacity-40"
+                  >
+                    <Icon name="plus" size={18} />
+                  </button>
+                </div>
+                {w.quickPicks.length > 0 ? (
+                  <div className="mt-3 flex flex-wrap gap-2">
+                    {w.quickPicks.map((s) => (
+                      <Chip key={s} onClick={() => w.addTopic(s)}>
+                        {s}
+                      </Chip>
+                    ))}
+                  </div>
+                ) : null}
+              </div>
+
+              {/* Signals — the removable user topics; the history-derived
+                  rows the server marks non-removable sit in the rail. */}
+              <section aria-label="Interests" className="mt-8">
+                <h2 className="px-4 text-label text-text-muted sm:px-6">Interests</h2>
+                {w.removableTopics.length > 0 ? (
+                  <ul className="mt-3 divide-y divide-border-subtle border-y border-border-subtle">
+                    {w.removableTopics.map((topic) => (
+                      <LiveTopicRow
+                        key={topic.id}
+                        topic={topic}
+                        pending={w.busyKey === topic.id}
+                        onWeight={(weight) => w.updateTopicWeight(topic.id, topic.label, weight)}
+                        onRemove={() => w.removeTopic(topic.id, topic.label)}
+                      />
+                    ))}
+                  </ul>
+                ) : (
+                  <p className="mt-3 border-y border-border-subtle px-4 py-6 text-center text-body text-text-muted sm:px-6">
+                    No interests yet — add one above and the feed listens.
+                  </p>
+                )}
+              </section>
+            </div>
+
+            {w.derivedTopics.length > 0 ? (
+              <aside className="lg:sticky lg:top-24 lg:col-start-2 lg:row-span-2 lg:row-start-1 lg:self-start">
+                <section aria-label="From your activity" className="mt-10 lg:mt-6">
+                  <h2 className="px-4 text-label text-text-muted sm:px-6">
+                    From your activity
+                  </h2>
+                  <p className="mt-1 px-4 text-caption text-text-secondary sm:px-6">
+                    Signals the server derived from what you browse and buy — you
+                    can tune them, but they can’t be removed.
+                  </p>
+                  <ul className="mt-3 divide-y divide-border-subtle border-y border-border-subtle">
+                    {w.derivedTopics.map((topic) => (
+                      <LiveTopicRow
+                        key={topic.id}
+                        topic={topic}
+                        pending={w.busyKey === topic.id}
+                        onWeight={(weight) => w.updateTopicWeight(topic.id, topic.label, weight)}
+                        onRemove={() => undefined}
+                      />
+                    ))}
+                  </ul>
+                </section>
+              </aside>
+            ) : null}
+
+            {/* Reset — the real POST /reset wire, destructive and honest. */}
+            <div className="mt-10 border-y border-border-subtle px-4 py-4 sm:px-6 lg:col-start-1 lg:row-start-2">
+              <p className="text-body-emphasis font-medium text-text-primary">
+                Reset your signals
+              </p>
+              <p className="mt-1 text-caption text-text-secondary">
+                Clears every topic — the feed starts listening fresh.
+              </p>
               <button
                 type="button"
-                onClick={() => w.addTopic(w.query)}
-                disabled={!w.query.trim() || w.existing.has(w.query.trim().toLowerCase()) || w.busyKey !== null}
-                aria-label="Add"
-                className="pressable flex h-11 w-11 shrink-0 items-center justify-center rounded-lg border border-border text-text-primary disabled:opacity-40"
+                onClick={() => void w.onReset()}
+                disabled={w.resetting}
+                className="pressable mt-3 text-body-emphasis font-semibold text-danger-text disabled:opacity-50"
               >
-                <Icon name="plus" size={18} />
+                {w.resetting ? 'Resetting…' : 'Reset all signals'}
               </button>
             </div>
-            {w.quickPicks.length > 0 ? (
-              <div className="mt-3 flex flex-wrap gap-2">
-                {w.quickPicks.map((s) => (
-                  <Chip key={s} onClick={() => w.addTopic(s)}>
-                    {s}
-                  </Chip>
-                ))}
-              </div>
-            ) : null}
-          </div>
-
-          {/* Signals — removable user topics first, then the
-              history-derived rows the server marks non-removable. */}
-          <section aria-label="Interests" className="mt-8">
-            <h2 className="px-4 text-label text-text-muted sm:px-6">Interests</h2>
-            {w.removableTopics.length > 0 ? (
-              <ul className="mt-3 divide-y divide-border-subtle border-y border-border-subtle">
-                {w.removableTopics.map((topic) => (
-                  <LiveTopicRow
-                    key={topic.id}
-                    topic={topic}
-                    pending={w.busyKey === topic.id}
-                    onWeight={(weight) => w.updateTopicWeight(topic.id, topic.label, weight)}
-                    onRemove={() => w.removeTopic(topic.id, topic.label)}
-                  />
-                ))}
-              </ul>
-            ) : (
-              <p className="mt-3 border-y border-border-subtle px-4 py-6 text-center text-body text-text-muted sm:px-6">
-                No interests yet — add one above and the feed listens.
-              </p>
-            )}
-          </section>
-
-          {w.derivedTopics.length > 0 ? (
-            <section aria-label="From your activity" className="mt-10">
-              <h2 className="px-4 text-label text-text-muted sm:px-6">
-                From your activity
-              </h2>
-              <p className="mt-1 px-4 text-caption text-text-secondary sm:px-6">
-                Signals the server derived from what you browse and buy — you
-                can tune them, but they can’t be removed.
-              </p>
-              <ul className="mt-3 divide-y divide-border-subtle border-y border-border-subtle">
-                {w.derivedTopics.map((topic) => (
-                  <LiveTopicRow
-                    key={topic.id}
-                    topic={topic}
-                    pending={w.busyKey === topic.id}
-                    onWeight={(weight) => w.updateTopicWeight(topic.id, topic.label, weight)}
-                    onRemove={() => undefined}
-                  />
-                ))}
-              </ul>
-            </section>
-          ) : null}
-
-          {/* Reset — the real POST /reset wire, destructive and honest. */}
-          <div className="mt-10 border-y border-border-subtle px-4 py-4 sm:px-6">
-            <p className="text-body-emphasis font-medium text-text-primary">
-              Reset your signals
-            </p>
-            <p className="mt-1 text-caption text-text-secondary">
-              Clears every topic — the feed starts listening fresh.
-            </p>
-            <button
-              type="button"
-              onClick={() => void w.onReset()}
-              disabled={w.resetting}
-              className="pressable mt-3 text-body-emphasis font-semibold text-danger-text disabled:opacity-50"
-            >
-              {w.resetting ? 'Resetting…' : 'Reset all signals'}
-            </button>
           </div>
         </>
       )}

@@ -12,9 +12,7 @@ import { Icon } from '@/components/ui/Icon';
 export function RouteErrorView({ onRetry }: { onRetry?: () => void }) {
   return (
     <div className="flex min-h-[60dvh] flex-col items-center justify-center px-6 text-center">
-      <div className="mb-4 flex h-16 w-16 items-center justify-center rounded-full bg-surface-alt text-text-muted">
-        <Icon name="warning" size={28} />
-      </div>
+      <Icon name="warning" size={36} className="mb-4 text-text-muted" />
       <h1 className="text-section-title font-semibold text-text-primary">Something went wrong</h1>
       <p className="mt-1.5 max-w-sm text-body text-text-secondary">
         An unexpected error occurred. You can try again — if it keeps happening, let us know.

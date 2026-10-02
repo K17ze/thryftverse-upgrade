@@ -7,11 +7,18 @@
  */
 
 import Link from 'next/link';
-import type { AuctionViewModel, CountdownUrgency } from '@/lib/contracts/auction';
+import type {
+  AuctionViewModel,
+  CountdownUrgency,
+  MyBidStatus,
+} from '@/lib/contracts/auction';
 import { AppImage } from '@/components/ui/AppImage';
 import { Avatar } from '@/components/ui/Avatar';
 import { Icon } from '@/components/ui/Icon';
-import { AuctionCountdownChip } from '@/components/auctions/AuctionCountdown';
+import {
+  AuctionCountdownChip,
+  URGENT_MS,
+} from '@/components/auctions/AuctionCountdown';
 import { AuctionWatchButton } from '@/components/auctions/AuctionWatchButton';
 import { LiveBadge } from '@/components/live/LiveBadge';
 import {
@@ -25,8 +32,6 @@ import { listingById, userById } from '@/lib/data/fixtures';
 import { DATA_MODE } from '@/lib/api/client';
 import { formatPrice } from '@/lib/utils/format';
 
-const MIN_MS = 60 * 1000;
-
 /** "8:30pm" — wall-clock start for scheduled auctions, not a countdown. */
 function startTime(iso: string): string {
   return new Date(iso)
@@ -37,11 +42,11 @@ function startTime(iso: string): string {
 
 /**
  * Card chip grammar — honest urgency only. Live ticks down from the real
- * endsAt ("Ends in 34m" / "Ends in 2h 14m"); inside the last ten minutes
- * the chip switches to ticking m:ss ("Ends in 8:42") — eBay urgency
- * grammar, not a flattened "Ending soon". The board's shared now-clock
- * re-renders every second, so the digits are real. Scheduled auctions
- * announce a wall-clock start; ended auctions just say so.
+ * endsAt ("Ends in 2h 14m"); inside the urgency hour the chip switches
+ * to ticking m:ss ("Ends in 34:12") — eBay escalation grammar, not a
+ * flattened "Ending soon". The board's shared now-clock re-renders every
+ * second, so the digits are real. Scheduled auctions announce a
+ * wall-clock start; ended auctions just say so.
  */
 export function auctionChipLabel(auction: AuctionViewModel): string {
   if (auction.lifecycle === 'ended') {
@@ -52,24 +57,72 @@ export function auctionChipLabel(auction: AuctionViewModel): string {
     return 'Ended';
   }
   if (auction.lifecycle === 'upcoming') return `Starts ${startTime(auction.startsAt)}`;
-  return auction.msToEnd < 10 * MIN_MS
+  return auction.msToEnd < URGENT_MS
     ? `Ends in ${formatClock(auction.msToEnd)}`
     : `Ends in ${formatDuration(auction.msToEnd)}`;
 }
 
+/** Tone rides the shared thresholds — under an hour warms to 'soon',
+ *  the final five minutes go 'final' (countdownUrgency). */
 export function auctionChipUrgency(auction: AuctionViewModel): CountdownUrgency {
-  if (auction.lifecycle === 'live' && auction.msToEnd < 10 * MIN_MS) {
-    return auction.msToEnd < 5 * MIN_MS ? 'final' : 'soon';
-  }
   return countdownUrgency(auction);
+}
+
+/**
+ * The viewer's own bid position on a tile — the same MyBidStatus the
+ * attention strip and the results ledger read (one source, no parallel
+ * derivation). Renders only when the board carries a real row for the
+ * auction: no bid, no badge.
+ */
+const VIEWER_STATUS_LABEL: Record<MyBidStatus, string> = {
+  winning: 'Leading',
+  active: 'Bid placed',
+  outbid: 'Outbid',
+  won: 'You won',
+  lost: 'Lost',
+};
+
+const VIEWER_CHIP_TONE: Record<MyBidStatus, string> = {
+  winning: 'text-success-text',
+  active: 'text-scrim-text-primary',
+  outbid: 'text-danger-text',
+  won: 'text-success-text',
+  lost: 'text-danger-text',
+};
+
+export function viewerStatusLabel(status: MyBidStatus): string {
+  return VIEWER_STATUS_LABEL[status];
+}
+
+/** Canvas tone — for contexts reading on the surface, not on media. */
+export function viewerStatusTone(status: MyBidStatus): string {
+  return status === 'outbid' || status === 'lost'
+    ? 'text-danger-text'
+    : status === 'active'
+      ? 'text-text-secondary'
+      : 'text-success-text';
+}
+
+/** Scrim chip on media — the countdown chip's grammar, minus the clock. */
+export function ViewerBidChip({ status }: { status: MyBidStatus }) {
+  return (
+    <span className="inline-flex items-center rounded-md bg-overlay px-2.5 py-1 text-meta font-semibold">
+      <span className={`drop-scrim ${VIEWER_CHIP_TONE[status]}`}>
+        {VIEWER_STATUS_LABEL[status]}
+      </span>
+    </span>
+  );
 }
 
 interface AuctionCardProps {
   auction: AuctionViewModel;
   priority?: boolean;
+  /** The viewer's bid position from the my-bids board — absent when they
+   *  have no bid on this lot, and nothing renders. */
+  viewerStatus?: MyBidStatus | null;
 }
 
-export function AuctionCard({ auction, priority }: AuctionCardProps) {
+export function AuctionCard({ auction, priority, viewerStatus }: AuctionCardProps) {
   // Live auctions carry the seller projection on the payload; fixture
   // auctions resolve through USERS. A live seller with no projection
   // renders no seller row rather than a fabricated handle.
@@ -115,6 +168,13 @@ export function AuctionCard({ auction, priority }: AuctionCardProps) {
         <div className="absolute bottom-2 left-2">
           <AuctionCountdownChip label={label} urgency={urgency} />
         </div>
+
+        {/* Viewer position — the board's own status, opposite corner */}
+        {viewerStatus ? (
+          <div className="absolute bottom-2 right-2">
+            <ViewerBidChip status={viewerStatus} />
+          </div>
+        ) : null}
       </div>
 
       <div className="flex flex-col gap-1 px-1 pt-2">
@@ -168,7 +228,9 @@ export function AuctionCard({ auction, priority }: AuctionCardProps) {
       <Link
         href={`/auctions/${auction.id}`}
         className="absolute inset-0 z-[1] rounded-lg"
-        aria-label={`${auction.title}, current bid ${formatPrice(auction.currentBid)}, ${label}`}
+        aria-label={`${auction.title}, current bid ${formatPrice(auction.currentBid)}, ${label}${
+          viewerStatus ? `, ${VIEWER_STATUS_LABEL[viewerStatus].toLowerCase()}` : ''
+        }`}
       />
     </article>
   );

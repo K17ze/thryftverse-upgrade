@@ -38,21 +38,31 @@ export function UserCollectionCard({
       aria-label={`${name}, ${count} items${isPrivate ? ', private' : ''}`}
     >
       <div className="relative aspect-square overflow-hidden rounded-lg bg-surface-alt">
+        {/* Adaptive collage — ≥4 tiles a 2×2, 3 gives the lead item the
+            left column, 2 splits the cover. A short board never leaves a
+            bare dark quadrant on the media surface. */}
         {cells.length > 1 ? (
-          <div className="grid h-full grid-cols-2 grid-rows-2 gap-0.5">
-            {Array.from({ length: 4 }).map((_, i) => (
-              <div key={i} className="relative overflow-hidden">
-                {cells[i] ? (
-                  <AppImage
-                    src={cells[i]}
-                    alt=""
-                    fill
-                    sizes="(max-width: 640px) 25vw, (max-width: 1024px) 17vw, (max-width: 1280px) 13vw, 10vw"
-                    className="h-full w-full media-zoom"
-                  />
-                ) : (
-                  <div className="h-full w-full bg-surface-raised" />
-                )}
+          <div
+            className={`grid h-full gap-0.5 ${
+              cells.length === 2
+                ? 'grid-cols-2 grid-rows-1'
+                : 'grid-cols-2 grid-rows-2'
+            }`}
+          >
+            {cells.map((src, i) => (
+              <div
+                key={i}
+                className={`relative overflow-hidden ${
+                  cells.length === 3 && i === 0 ? 'row-span-2' : ''
+                }`}
+              >
+                <AppImage
+                  src={src}
+                  alt=""
+                  fill
+                  sizes="(max-width: 640px) 25vw, (max-width: 1024px) 17vw, (max-width: 1280px) 13vw, 10vw"
+                  className="h-full w-full media-zoom"
+                />
               </div>
             ))}
           </div>
@@ -66,8 +76,9 @@ export function UserCollectionCard({
             fallbackIcon="layers"
           />
         ) : (
-          <div className="flex h-full w-full items-center justify-center text-text-muted">
-            <Icon name="folder" size={32} />
+          <div className="flex h-full w-full flex-col items-center justify-center gap-1.5 text-text-muted">
+            <Icon name="folder" size={28} />
+            <span className="text-micro">Empty collection</span>
           </div>
         )}
       </div>

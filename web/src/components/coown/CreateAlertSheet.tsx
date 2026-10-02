@@ -97,7 +97,7 @@ export function CreateAlertSheet({
         <legend className="text-micro font-semibold uppercase tracking-[0.08em] text-text-muted">
           Condition
         </legend>
-        <div className="mt-2 grid grid-cols-2 gap-2" role="group">
+        <div className="mt-2 grid grid-cols-2 rounded-full bg-surface-alt p-1" role="group">
           {(['above', 'below'] as const).map((d) => {
             const selected = direction === d;
             const up = d === 'above';
@@ -107,12 +107,12 @@ export function CreateAlertSheet({
                 type="button"
                 aria-pressed={selected}
                 onClick={() => setDirection(d)}
-                className={`pressable inline-flex h-11 items-center justify-center gap-1.5 rounded-md border text-body-emphasis font-semibold ${
+                className={`pressable inline-flex h-10 items-center justify-center gap-1.5 rounded-full text-body-emphasis font-semibold ${
                   selected
                     ? up
-                      ? 'border-coown-up/40 bg-coown-up-subtle text-coown-up'
-                      : 'border-coown-down/40 bg-coown-down-subtle text-coown-down'
-                    : 'border-border-subtle text-text-secondary hover:text-text-primary'
+                      ? 'bg-coown-up-subtle text-coown-up'
+                      : 'bg-coown-down-subtle text-coown-down'
+                    : 'text-text-secondary hover:text-text-primary'
                 }`}
               >
                 <Icon name={up ? 'chevronUp' : 'chevronDown'} size={16} />

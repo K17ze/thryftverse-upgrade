@@ -4,39 +4,35 @@
  * ChatMessageList — date-separated message stream renderer.
  * Handles same-sender runs, avatar grouping in group chats, unread divider,
  * offer cards, listing shares, message bubbles, and send failure affordances.
+ *
+ * Render cost is bounded two ways:
+ *  - every message row is memoized — SSE merges, typing ticks and menu
+ *    state re-run the parent map but skip rows whose props held (message
+ *    payloads keep React Query identity; the comparator tracks the
+ *    derived per-row values by field);
+ *  - each row carries `content-visibility: auto` — off-screen rows skip
+ *    layout/paint while staying in the a11y tree and find-in-page, and
+ *    the intrinsic hint keeps scroll geometry honest until first render
+ *    (the MasonryGrid virtualization-lite grammar).
  */
 
 import type { Conversation, Message } from '@/lib/contracts/domain';
 import type { OfferWithOrder } from '@/lib/commerce/offerAcceptance';
 import type { OfferRowAction } from '@/components/orders/OfferRow';
-import { Avatar } from '@/components/ui/Avatar';
-import { Icon } from '@/components/ui/Icon';
-import {
-  DeletedMessageTombstone,
-  MessageBubble,
-  type MessageCluster,
-} from '../MessageBubble';
-import { OfferCard } from '../OfferCard';
-import { ListingShareCard } from '../ListingShareCard';
-import {
-  effectiveOfferStatus,
-  resolveOfferActions,
-} from '@/components/orders/OfferRow';
-import { offerResolutionForMessage } from '../useChatOffers';
+import type { MessageCluster } from '../MessageBubble';
 import {
   senderAvatarFor,
   senderLabelFor,
 } from '../inboxModel';
 import {
-  NewMessagesDivider,
   sameRun,
-  isOffer,
   isMine,
   isSystem,
   type MessageGroup,
 } from './ChatStreamUtils';
+import { StreamRow } from './StreamRow';
 
-interface ChatMessageListProps {
+export interface ChatMessageListProps {
   groups: MessageGroup[];
   conversation: Conversation;
   isGroup: boolean;
@@ -47,7 +43,6 @@ interface ChatMessageListProps {
   flashId: string | null;
   failedIds: ReadonlySet<string>;
   lastMineReadId?: string;
-  nowMs: number;
   chatOffers?: OfferWithOrder[];
   replyable: (m: Message) => boolean;
   actionable: (m: Message) => boolean;
@@ -79,7 +74,6 @@ export function ChatMessageList({
   flashId,
   failedIds,
   lastMineReadId,
-  nowMs,
   chatOffers,
   replyable,
   actionable,
@@ -121,7 +115,6 @@ export function ChatMessageList({
                   : !hasNext
                     ? 'last'
                     : 'middle';
-            const tight = cluster === 'middle' || cluster === 'last';
 
             // Cluster-first incoming group message gets a sender label —
             // the same name resolution the mobile GroupChatScreen uses.
@@ -130,11 +123,9 @@ export function ChatMessageList({
                 ? senderLabelFor(conversation, m.senderId)
                 : undefined;
 
-            // Incoming group messages carry the sender's avatar on the
-            // run's LAST bubble (single or last), with an indent
-            // spacer on the earlier ones — the mobile ChatMessageItem
-            // avatar-recurrence rule, so consecutive senders are
-            // scannable without a label on every row.
+            // The run's LAST incoming bubble (single or last) carries the
+            // sender's avatar; earlier rows keep an indent spacer — the
+            // mobile ChatMessageItem avatar-recurrence rule.
             const groupIncoming =
               isGroup && !mine && !isSystem(m) && !m.isDeleted;
             const senderAvatar =
@@ -142,177 +133,38 @@ export function ChatMessageList({
                 ? senderAvatarFor(conversation, m.senderId)
                 : undefined;
 
-            const canReply = replyable(m);
-            // The actions menu opens on any persisted message, plus
-            // the two non-persisted edge cases the mobile grammar
-            // covers: a failed pending send (Retry / Discard — the
-            // only actions a message that never landed can offer) and
-            // a saved tombstone (Unsave — the backend still permits
-            // retracting a save on a deleted-for-everyone row).
-            const failed = failedIds.has(m.id);
-            const menuable =
-              actionable(m) || failed || (m.isDeleted === true && isSaved(m));
-
-            const handleContextMenu = (e: React.MouseEvent) => {
-              if (!menuable) return;
-              // Touch long-press / right-click opens the
-              // actions menu — the web analogue of the mobile
-              // long-press sheet.
-              e.preventDefault();
-              onOpenMenu(e.clientX, e.clientY, m);
-            };
-
             return (
-              <div
+              <StreamRow
                 key={m.id}
-                data-mid={m.id}
-                onContextMenu={handleContextMenu}
-                className={`-mx-2 rounded-xl px-2 transition-colors duration-300 ${
-                  flashId === m.id ? 'bg-brand-subtle' : ''
-                }`}
-              >
-                {m.id === unreadAnchorId ? <NewMessagesDivider /> : null}
-
-                <div className={groupIncoming ? 'flex items-end gap-2' : undefined}>
-                  {groupIncoming ? (
-                    <span
-                      className="w-6 shrink-0 pb-0.5"
-                      aria-hidden={senderAvatar ? undefined : true}
-                    >
-                      {senderAvatar ? (
-                        <Avatar
-                          src={senderAvatar.avatar}
-                          name={senderAvatar.name}
-                          size={24}
-                        />
-                      ) : null}
-                    </span>
-                  ) : null}
-
-                  <div className={groupIncoming ? 'min-w-0 flex-1' : undefined}>
-                    {m.isDeleted ? (
-                      <DeletedMessageTombstone
-                        mine={mine}
-                        senderLabel={senderLabel}
-                        tight={tight}
-                      />
-                    ) : isOffer(m) ? (
-                      (() => {
-                        // The standing record drives the card — effective
-                        // status, amount and the legal action set all come
-                        // from it; an unresolvable message renders read-only.
-                        // `via` keeps the provenance: a listing-fallback
-                        // card is labelled the standing offer, not the
-                        // offer this message described.
-                        const resolution = offerResolutionForMessage(
-                          m,
-                          conversation,
-                          chatOffers,
-                        );
-                        const offer = resolution.offer;
-                        return (
-                          <OfferCard
-                            message={m}
-                            mine={mine}
-                            offer={offer}
-                            standing={resolution.via === 'listing'}
-                            showSeen={m.id === lastMineReadId}
-                            status={
-                              offer
-                                ? effectiveOfferStatus(offer, nowMs)
-                                : (m.offerStatus ?? 'pending')
-                            }
-                            actions={
-                              offer
-                                ? resolveOfferActions(offer, viewerId, nowMs)
-                                : []
-                            }
-                            ownMove={
-                              offer
-                                ? offer.offeredByUserId === viewerId
-                                : mine
-                            }
-                            highlight={searchQuery || undefined}
-                            onReply={canReply ? () => onReply(m) : undefined}
-                            onReact={
-                              menuable
-                                ? (anchor) => onReact(m, anchor)
-                                : undefined
-                            }
-                            tight={tight}
-                            onAction={(action) => {
-                              if (!offer) return;
-                              if (action === 'counter') onCounterOffer(offer);
-                              else onRespondToOffer(offer, action);
-                            }}
-                          />
-                        );
-                      })()
-                    ) : m.type === 'listing_share' && m.listing ? (
-                      // Buyer-seat offer CTA (the native share card's
-                      // action dock): only when the viewer isn't the
-                      // listing's seller and the item isn't sold. An
-                      // unproven sellerId still shows it — the create
-                      // edge rejects own-listing offers honestly.
-                      <ListingShareCard
-                        message={m}
-                        mine={mine}
-                        showSeen={m.id === lastMineReadId}
-                        senderLabel={senderLabel}
-                        onReply={canReply ? () => onReply(m) : undefined}
-                        onReact={
-                          menuable
-                            ? (anchor) => onReact(m, anchor)
-                            : undefined
-                        }
-                        tight={tight}
-                        onMakeOffer={
-                          m.listing.isSold !== true &&
-                          (m.listing.sellerId
-                            ? m.listing.sellerId !== viewerId
-                            : true)
-                            ? () => onMakeShareOffer(m.listing!.id)
-                            : undefined
-                        }
-                      />
-                    ) : (
-                      <MessageBubble
-                        message={m}
-                        mine={mine}
-                        conversationId={conversationId}
-                        failed={failed}
-                        showSeen={m.id === lastMineReadId}
-                        senderLabel={senderLabel}
-                        highlight={searchQuery || undefined}
-                        replyTo={replyInfoFor(m)}
-                        replyable={canReply}
-                        menuable={menuable}
-                        onReplyPress={onReplyPress}
-                        onReply={onReply}
-                        onReact={onReact}
-                        onMediaPress={onMediaPress}
-                        onToggleReaction={onToggleReaction}
-                        onTogglePollVote={onTogglePollVote}
-                        cluster={cluster}
-                      />
-                    )}
-                  </div>
-                </div>
-
-                {failedIds.has(m.id) ? (
-                  <div
-                    className={`flex ${mine ? 'justify-end' : 'justify-start'}`}
-                  >
-                    <button
-                      type="button"
-                      onClick={(e) => onOpenMenu(e.clientX, e.clientY, m)}
-                      className="pressable mt-0.5 flex items-center gap-1 text-meta text-danger-text"
-                    >
-                      <Icon name="alert" size={13} aria-hidden /> Not delivered
-                    </button>
-                  </div>
-                ) : null}
-              </div>
+                m={m}
+                cluster={cluster}
+                isGroup={isGroup}
+                viewerId={viewerId}
+                conversationId={conversationId}
+                conversationListingId={conversation.listing?.id}
+                senderLabel={senderLabel}
+                senderAvatar={senderAvatar}
+                highlight={searchQuery || undefined}
+                replyTo={replyInfoFor(m)}
+                unreadAnchor={m.id === unreadAnchorId}
+                flashed={flashId === m.id}
+                failed={failedIds.has(m.id)}
+                showSeen={m.id === lastMineReadId}
+                chatOffers={chatOffers}
+                replyable={replyable}
+                actionable={actionable}
+                isSaved={isSaved}
+                onReply={onReply}
+                onReact={onReact}
+                onOpenMenu={onOpenMenu}
+                onReplyPress={onReplyPress}
+                onMediaPress={onMediaPress}
+                onToggleReaction={onToggleReaction}
+                onTogglePollVote={onTogglePollVote}
+                onRespondToOffer={onRespondToOffer}
+                onCounterOffer={onCounterOffer}
+                onMakeShareOffer={onMakeShareOffer}
+              />
             );
           })}
         </div>

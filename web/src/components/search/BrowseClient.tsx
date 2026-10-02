@@ -43,6 +43,7 @@ export function BrowseClient() {
     hasNextPage,
     fetchNextPage,
     isFetchingNextPage,
+    isFetchNextPageError,
   } = useListings(
     category ?? undefined,
     undefined,
@@ -84,10 +85,14 @@ export function BrowseClient() {
         isError={isError}
         onRetry={() => void refetch()}
         serverOrdered={DATA_MODE === 'live'}
-        totalCount={data?.total ?? null}
+        // Fixture mode counts the filtered set itself — the fixture
+        // total skips the client-only colour facet, so it could exceed
+        // what the grid shows. Same honesty rule as /search.
+        totalCount={DATA_MODE === 'live' ? (data?.total ?? null) : null}
         hasMore={DATA_MODE === 'live' && hasNextPage === true}
         onLoadMore={loadMore}
         isLoadingMore={isFetchingNextPage}
+        loadMoreError={isFetchNextPageError}
         filters={effectiveFilters}
         onFiltersChange={setFilters}
         sort={sort}

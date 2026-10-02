@@ -164,9 +164,7 @@ export function SizeGuideSheet({ open, onClose, guide, currentSize }: SizeGuideS
           </>
         ) : (
           <div className="flex flex-col items-center px-2 py-8 text-center">
-            <span className="mb-3 flex h-14 w-14 items-center justify-center rounded-full bg-surface-alt text-text-muted">
-              <Icon name="scan" size={26} />
-            </span>
+            <Icon name="scan" size={28} className="mb-3 text-text-muted" />
             <p className="text-body-emphasis font-semibold text-text-primary">
               No size guide available
             </p>

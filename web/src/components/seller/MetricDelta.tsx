@@ -1,6 +1,8 @@
 'use client';
 
-/** MetricDelta — ▲/▼ period change, colored, tabular. Null renders quiet. */
+import { Icon } from '@/components/ui/Icon';
+
+/** MetricDelta — caret + % period change, colored, tabular. Null renders quiet. */
 
 export function MetricDelta({ delta }: { delta: number | null }) {
   if (delta == null || delta === 0) {
@@ -13,7 +15,7 @@ export function MetricDelta({ delta }: { delta: number | null }) {
         up ? 'text-success-text' : 'text-danger-text'
       }`}
     >
-      <span aria-hidden="true">{up ? '▲' : '▼'}</span>
+      <Icon name={up ? 'deltaUp' : 'deltaDown'} size={10} filled />
       {Math.abs(delta)}%
       <span className="sr-only">{up ? ' up' : ' down'} vs previous period</span>
     </span>

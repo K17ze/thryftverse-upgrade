@@ -65,7 +65,7 @@ function PickerTile({
           <Icon name="check" size={13} />
         </span>
       </div>
-      <span className="clamp-1 mt-1 block px-0.5 text-meta text-text-secondary">
+      <span className="clamp-1 tnum mt-1 block px-0.5 text-meta text-text-secondary">
         {item.price != null ? `${formatPrice(item.price)} · ` : ''}
         {item.title}
       </span>

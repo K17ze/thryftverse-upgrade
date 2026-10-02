@@ -16,7 +16,7 @@ import * as usersService from '@/lib/api/services/users';
 import * as chatService from '@/lib/api/services/chat';
 import { uploadImageFile } from '@/lib/api/services/uploads';
 import { isLocalMediaUri } from '@/lib/utils/media';
-import { useSession } from '@/lib/session/SessionProvider';
+import { useSessionIdentity } from '@/lib/session/SessionProvider';
 import type { ListingFilters, SortKey } from '@/components/filters/filterTypes';
 import { useHydrated } from '@/lib/store/useStore';
 import { useInboxPrefs } from '@/lib/store/inboxPrefs';
@@ -131,6 +131,45 @@ export function useReviewSummary(userId: string) {
 }
 
 /**
+ * Shared observer config for the conversations list — the inbox rows,
+ * the header pill and the mobile tab badge all register this ONE query
+ * key, so react-query runs a single fetch + a single 45s poll no matter
+ * how many subscribers mount (the second and third badges cost nothing:
+ * no extra request, no extra interval).
+ */
+function conversationsQueryOptions(userId: string | undefined) {
+  return {
+    queryKey: ['conversations', userId ?? 'guest'] as const,
+    queryFn: ({ signal }: { signal: AbortSignal }) => data.conversations(userId, signal),
+    // Realtime (chat.user + per-conversation topics in useInboxRealtime)
+    // is the live path; this poll stays the baseline for guests, a dead
+    // stream, and anything the event merges don't cover. The `as` narrows
+    // `false` away from boolean so the option type stays honest.
+    refetchInterval: (DATA_MODE === 'live' ? 45_000 : false) as number | false,
+  };
+}
+
+/**
+ * The mute overlay — display-time suppression, never a write against the
+ * thread itself. Resolution order per thread: local override (inboxPrefs,
+ * hydrated) → live `isMuted` → not muted. Shared by the list reader and
+ * the badge count so both surfaces agree on what "unread" means.
+ */
+function applyMuteOverrides(
+  rows: Conversation[] | undefined,
+  hydrated: boolean,
+  mutedOverrides: Record<string, boolean>,
+): Conversation[] | undefined {
+  if (!rows || !hydrated) return rows;
+  return rows.map((c) => {
+    const muted = mutedOverrides[c.id] ?? c.isMuted === true;
+    return muted && (c.unread || (c.unreadCount ?? 0) > 0)
+      ? { ...c, unread: false, unreadCount: 0 }
+      : c;
+  });
+}
+
+/**
  * Conversation list — the single unread-accounting source every badge path
  * reads (header pill, mobile tab badge, inbox row). Muted threads keep
  * their data but report `unread: false` here, so a mute suppresses every
@@ -139,31 +178,19 @@ export function useReviewSummary(userId: string) {
  * override (inboxPrefs, hydrated) → live `isMuted` → not muted.
  */
 export function useConversations() {
-  const { user } = useSession();
+  const { user } = useSessionIdentity();
   const hydrated = useHydrated();
   const mutedOverrides = useInboxPrefs((s) => s.muted);
-  const query = useQuery({
-    queryKey: ['conversations', user?.id ?? 'guest'],
-    queryFn: ({ signal }) => data.conversations(user?.id, signal),
-    // Realtime (chat.user + per-conversation topics in useInboxRealtime)
-    // is the live path; this poll stays the baseline for guests, a dead
-    // stream, and anything the event merges don't cover.
-    refetchInterval: DATA_MODE === 'live' ? 45_000 : false,
-  });
-  const conversations = useMemo(() => {
-    if (!query.data || !hydrated) return query.data;
-    return query.data.map((c) => {
-      const muted = mutedOverrides[c.id] ?? c.isMuted === true;
-      return muted && (c.unread || (c.unreadCount ?? 0) > 0)
-        ? { ...c, unread: false, unreadCount: 0 }
-        : c;
-    });
-  }, [query.data, hydrated, mutedOverrides]);
+  const query = useQuery(conversationsQueryOptions(user?.id));
+  const conversations = useMemo(
+    () => applyMuteOverrides(query.data, hydrated, mutedOverrides),
+    [query.data, hydrated, mutedOverrides],
+  );
   return { ...query, data: conversations };
 }
 
 export function useConversation(id: string) {
-  const { user } = useSession();
+  const { user } = useSessionIdentity();
   return useQuery({
     queryKey: ['conversation', id, user?.id ?? 'guest'],
     queryFn: ({ signal }) => data.conversation(id, user?.id, signal),
@@ -173,7 +200,7 @@ export function useConversation(id: string) {
 
 export function useSendMessage(conversationId: string) {
   const qc = useQueryClient();
-  const { user } = useSession();
+  const { user } = useSessionIdentity();
   return useMutation({
     mutationFn: (text: string) => data.sendMessage(conversationId, { text }, user?.id),
     onSuccess: () => {
@@ -193,7 +220,7 @@ export function useSendMessage(conversationId: string) {
  */
 export function useMarkConversationRead() {
   const qc = useQueryClient();
-  const { user } = useSession();
+  const { user } = useSessionIdentity();
   const userKey = user?.id ?? 'guest';
   return useCallback(
     (conversationId: string) => {
@@ -260,23 +287,35 @@ export function useUnreadNotificationCount() {
 }
 
 /**
- * Header badge count for the inbox — derived from `useConversations` so
- * the mute overlay stays the single unread-accounting source. The chat
- * API has no unread-count endpoint; only the render surface shrinks
- * (the badge re-renders on count changes, not row-detail churn).
+ * Inbox badge count — a `select` projection on the SHARED conversations
+ * query (`['conversations', userKey]`), so every badge surface (header
+ * pill, mobile tab bar) is just another observer of the one fetch/poll —
+ * zero extra requests or intervals. `select` resolves to the scalar
+ * count, which means react-query notifies this observer only when the
+ * number actually moves: row-detail churn (preview text, timestamps,
+ * realtime merges) that leaves the count identical does not re-render
+ * the chrome. The chat API has no unread-count endpoint, and the mute +
+ * request-resolution overlays are folded in here so the badge agrees
+ * with what the inbox rows show.
  */
 export function useUnreadConversationCount() {
+  const { user } = useSessionIdentity();
   const hydrated = useHydrated();
+  const mutedOverrides = useInboxPrefs((s) => s.muted);
   const requestResolutions = useInboxPrefs((s) => s.requests);
-  const query = useConversations();
-  const count = useMemo(() => {
-    const convs = query.data ?? [];
-    return (
-      convs.filter((c) => c.unread && !c.isRequest).length +
-      convs.filter((c) => c.isRequest && !(hydrated && requestResolutions[c.id])).length
-    );
-  }, [query.data, hydrated, requestResolutions]);
-  return { ...query, data: count };
+  return useQuery({
+    ...conversationsQueryOptions(user?.id),
+    select: (rows) => {
+      // Message requests aren't message unread — pending requests count
+      // separately (the mobile TabNavigator badge grammar): unread
+      // threads that aren't requests + requests still unresolved.
+      const convs = applyMuteOverrides(rows, hydrated, mutedOverrides) ?? [];
+      return (
+        convs.filter((c) => c.unread && !c.isRequest).length +
+        convs.filter((c) => c.isRequest && !(hydrated && requestResolutions[c.id])).length
+      );
+    },
+  });
 }
 
 export function useOrders() {
@@ -622,7 +661,7 @@ const tick = (ms = 80) => new Promise((r) => setTimeout(r, ms));
  *  only fires when it can succeed. Fixture mode keeps the open directory
  *  (the composer sheets list everyone with an empty query). */
 export function useMemberDirectory(query: string) {
-  const { user } = useSession();
+  const { user } = useSessionIdentity();
   const q = query.trim().toLowerCase();
   return useQuery({
     queryKey: ['member-directory', q],
@@ -647,7 +686,7 @@ export function useMemberDirectory(query: string) {
  */
 export function useCreateConversation() {
   const qc = useQueryClient();
-  const { user } = useSession();
+  const { user } = useSessionIdentity();
   // Readers key on the session user ('guest' while signed out) — writes
   // must land on the same scope or the new thread never appears.
   const userKey = user?.id ?? 'guest';
@@ -721,7 +760,7 @@ export interface SendChatMessageInput {
  */
 export function useSendChatMessage(conversationId: string) {
   const qc = useQueryClient();
-  const { user } = useSession();
+  const { user } = useSessionIdentity();
   const userKey = user?.id ?? 'guest';
   return useMutation({
     mutationFn: async (input: SendChatMessageInput): Promise<void> => {

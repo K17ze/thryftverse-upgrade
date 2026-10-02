@@ -162,6 +162,12 @@ export interface DiscoveryListingSummary {
   subcategory?: string | null;
   createdAt?: string;
   sustainabilityGrade?: 'A' | 'B' | 'C' | 'D' | null;
+  shippingPayer?: string | null;
+  shippingPrice?: number | null;
+  authenticity?: {
+    status: 'not_offered' | 'eligible' | 'in_progress' | 'verified';
+    label?: string;
+  } | null;
 }
 
 export function mapListingToDiscoverySummary(source: Listing): DiscoveryListingSummary {
@@ -200,6 +206,9 @@ export function mapListingToDiscoverySummary(source: Listing): DiscoveryListingS
     subcategory: source.subcategory ?? null,
     createdAt: source.createdAt,
     sustainabilityGrade: source.sustainabilityGrade ?? null,
+    shippingPayer: source.shippingPayer ?? null,
+    shippingPrice: source.shippingPrice ?? null,
+    authenticity: source.authenticity ?? null,
   };
 }
 

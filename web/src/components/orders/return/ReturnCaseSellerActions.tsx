@@ -1,6 +1,7 @@
 'use client';
 
 import { useState } from 'react';
+import { Chip } from '@/components/ui/Chip';
 import type { ReturnCase, ReturnRemedy } from '@/lib/contracts/domain';
 import type { ReturnCaseTransition } from '@/lib/data/fixtures-commerce';
 import {
@@ -203,24 +204,15 @@ export function ReturnCaseSellerActions({
           }
         >
           <div className="flex flex-wrap gap-2">
-            {REMEDY_OPTIONS.map((opt) => {
-              const selected = remedy === opt.remedy;
-              return (
-                <button
-                  key={opt.remedy}
-                  type="button"
-                  aria-pressed={selected}
-                  onClick={() => setRemedy(opt.remedy)}
-                  className={`pressable rounded-full border px-3.5 py-1.5 text-caption font-medium ${
-                    selected
-                      ? 'border-brand bg-brand text-text-inverse'
-                      : 'border-border text-text-secondary hover:border-text-muted'
-                  }`}
-                >
-                  {opt.label}
-                </button>
-              );
-            })}
+            {REMEDY_OPTIONS.map((opt) => (
+              <Chip
+                key={opt.remedy}
+                selected={remedy === opt.remedy}
+                onClick={() => setRemedy(opt.remedy)}
+              >
+                {opt.label}
+              </Chip>
+            ))}
           </div>
           {remedy === 'partial_refund' ? (
             <input

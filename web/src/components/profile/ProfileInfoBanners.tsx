@@ -14,14 +14,16 @@ export function ProfileInfoBanners({
   user,
   aggregate,
   closetVisible,
-  closetListingsLength,
+  closetItemCount,
   closetThumbs,
   showMosaic,
 }: {
   user: User;
   aggregate?: PublicProfile | null;
   closetVisible: boolean;
-  closetListingsLength: number;
+  /** Real closet total (server stats / countable fixture closet) — the
+   *  paged grid's loaded length is a window, never the claim. */
+  closetItemCount: number;
   closetThumbs: string[];
   showMosaic: boolean;
 }) {
@@ -102,7 +104,7 @@ export function ProfileInfoBanners({
 
       {/* Closet banner — only when the closet is deep enough to browse and
           the mosaic hero isn't already serving the same destination. */}
-      {closetVisible && closetListingsLength >= CLOSET_BANNER_MIN && !showMosaic ? (
+      {closetVisible && closetItemCount >= CLOSET_BANNER_MIN && !showMosaic ? (
         <Link
           href={`/collection/closet-${user.id}`}
           className="pressable mx-4 mt-4 flex items-center justify-between gap-3 border-y border-border-subtle py-3 sm:mx-6"
@@ -121,7 +123,7 @@ export function ProfileInfoBanners({
             <span className="clamp-1 text-body text-text-secondary">
               Browse the full closet —{' '}
               <span className="tnum font-semibold text-text-primary">
-                {closetListingsLength} items
+                {closetItemCount} items
               </span>
             </span>
           </span>

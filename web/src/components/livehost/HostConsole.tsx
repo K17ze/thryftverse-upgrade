@@ -111,9 +111,7 @@ function FixtureHostConsole({ streamId }: HostConsoleProps) {
   if (!stream) {
     return (
       <div className="mx-auto flex w-full max-w-[440px] flex-col items-center px-4 py-24 text-center sm:px-6">
-        <span className="flex h-16 w-16 items-center justify-center rounded-full bg-surface-alt text-text-muted">
-          <Icon name="videocam" size={26} />
-        </span>
+        <Icon name="videocam" size={32} className="text-text-muted" />
         <h1 className="mt-5 text-screen-title text-text-primary">
           This console isn&apos;t available
         </h1>

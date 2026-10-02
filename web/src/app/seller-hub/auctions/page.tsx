@@ -8,11 +8,11 @@
  * hairlines, tnum — the hub grammar.
  */
 
-import { useMemo, useState } from 'react';
+import { useId, useMemo, useState } from 'react';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import { SellerSectionNav } from '@/components/seller/SellerSectionNav';
-import { Tabs } from '@/components/ui/Tabs';
+import { Tabs, tabId, tabPanelId } from '@/components/ui/Tabs';
 import { EmptyState } from '@/components/ui/EmptyState';
 import { Icon } from '@/components/ui/Icon';
 import {
@@ -34,6 +34,7 @@ export default function SellerAuctionsPage() {
   const counts = useFulfilmentCounts();
   const { auctions, isLoading, isError, refetch } = useSellerAuctionBoard();
   const [tab, setTab] = useState<SellerAuctionBucket>('scheduled');
+  const tabsId = useId();
 
   const stats = useMemo(() => computeSellerStats(auctions), [auctions]);
   const tabs = useMemo(() => buildSellerTabs(stats), [stats]);
@@ -84,9 +85,15 @@ export default function SellerAuctionsPage() {
             active={tab}
             onChange={setTab}
             ariaLabel="Auction sections"
+            idBase={tabsId}
           />
 
-          <section className="mt-4" aria-label={`${tab} auctions`}>
+          <section
+            className="mt-4"
+            role="tabpanel"
+            id={tabPanelId(tabsId, tab)}
+            aria-labelledby={tabId(tabsId, tab)}
+          >
             {visible.length === 0 ? (
               <EmptyState
                 compact
@@ -97,11 +104,28 @@ export default function SellerAuctionsPage() {
                 onAction={empty.cta ? () => router.push('/auctions/create') : undefined}
               />
             ) : (
-              <ul className="divide-y divide-border-subtle border-y border-border-subtle">
+              <>
+              {/* Column header — desktop table grammar; mirrors the row's
+                  lg grid (96px media, auction, bids, current, ends,
+                  status, action). Visual signpost only. */}
+              <div
+                aria-hidden="true"
+                className="hidden lg:grid lg:grid-cols-[6rem_minmax(0,1.4fr)_4.5rem_minmax(0,7.5rem)_minmax(0,8.5rem)_5.5rem_minmax(0,7rem)] lg:gap-x-5 lg:border-b lg:border-border-subtle lg:pb-2"
+              >
+                <span />
+                <span className="text-label text-text-muted">Auction</span>
+                <span className="text-label text-text-muted">Bids</span>
+                <span className="text-label text-text-muted">Current</span>
+                <span className="text-label text-text-muted">Ends</span>
+                <span className="text-label text-text-muted">Status</span>
+                <span />
+              </div>
+              <ul className="divide-y divide-border-subtle border-y border-border-subtle lg:border-t-0">
                 {visible.map((auction) => (
                   <SellerAuctionRow key={auction.id} auction={auction} />
                 ))}
               </ul>
+              </>
             )}
           </section>
         </>

@@ -1,10 +1,10 @@
 'use client';
 
 /**
- * SearchLanding — the empty-query search surface: recent searches,
- * trending queries, popular brands, then the browse canvas — an
+ * SearchLanding — the empty-query search surface: recent searches, the
+ * shared trending/brand shortcut block, then the browse canvas — an
  * editorial banner, the week's most-liked pieces and a category grid.
- * Flat canvas, hairline-free — spacing + labels carry the hierarchy.
+ * Flat canvas — spacing + labels carry the hierarchy.
  */
 
 import Link from 'next/link';
@@ -27,6 +27,7 @@ import {
   useTrendingSearches,
 } from '@/lib/hooks/search-queries';
 import { useCategoryDirectory } from './useCategoryDirectory';
+import { TrendingShortcuts } from './TrendingShortcuts';
 import {
   CATEGORY_DIRECTORY,
   POPULAR_BRANDS,
@@ -250,31 +251,14 @@ export function SearchLanding({
         </section>
       ) : null}
 
-      {trendingSearches.length > 0 ? (
-        <section className="mt-6">
-          <SectionLabel>Trending</SectionLabel>
-          <div className="mt-2.5 flex flex-wrap gap-1.5">
-            {trendingSearches.map((term) => (
-              <Chip key={term} icon="trending" onClick={() => onSelect(term)}>
-                {term}
-              </Chip>
-            ))}
-          </div>
-        </section>
-      ) : null}
-
-      {brands.length > 0 ? (
-        <section className="mt-6">
-          <SectionLabel>Popular brands</SectionLabel>
-          <div className="mt-2.5 flex flex-wrap gap-1.5">
-            {brands.map((brand) => (
-              <Chip key={brand} onClick={() => onSelect(brand)}>
-                {brand}
-              </Chip>
-            ))}
-          </div>
-        </section>
-      ) : null}
+      {/* One discovery unit — trending chips, a hairline, then the brand
+          scan-line (shared TrendingShortcuts grammar, same as Explore). */}
+      <TrendingShortcuts
+        terms={trendingSearches}
+        brands={brands}
+        onSelect={onSelect}
+        className="mt-6"
+      />
 
       <GalleriaBanner />
 

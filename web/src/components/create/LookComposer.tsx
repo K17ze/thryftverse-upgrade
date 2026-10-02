@@ -18,16 +18,22 @@ import type { Listing } from '@/lib/contracts/domain';
 import type { LookDraft, LookTagInput, LookVisibility } from '@/lib/api/services/creator';
 import * as creator from '@/lib/api/services/creator';
 import { parseApiError } from '@/lib/api/http';
+import { useMyListings } from '@/lib/hooks/queries';
 import { Button } from '@/components/ui/Button';
 import { Icon } from '@/components/ui/Icon';
 import { SellField, INPUT_CLASS, INPUT_ERROR_CLASS } from '@/components/sell/SellField';
 import { useToast } from '@/components/ui/Toast';
 import { MediaField, useStagedMedia } from './MediaField';
 import { TagSheet } from './TagSheet';
+import { LookTagCanvas, initialPinPosition } from './LookTagCanvas';
 
 interface LookComposerProps {
   /** Resumed server draft — PATCH path; absent = new POST. */
   draft?: LookDraft;
+  /** Captured-at-entry media (camera sheet) — stages through the same
+   *  pick() path as a file pick on mount, so the composer opens with the
+   *  preview live and the upload already running. */
+  initialFile?: File;
   /** Called after a draft save so the entry screen's list refreshes. */
   onDraftSaved: () => void;
   onBack: () => void;
@@ -41,20 +47,7 @@ interface LookErrors {
   submit?: string;
 }
 
-/** Deterministic pin layout: tags sit on a single row near the bottom of
- *  the frame, evenly spread — positions are fractions the detail surface
- *  can re-render against any crop. */
-function tagPosition(index: number, total: number): { x: number; y: number } {
-  const cols = Math.min(Math.max(total, 1), 3);
-  const col = index % cols;
-  const row = Math.floor(index / cols);
-  return {
-    x: (col + 1) / (cols + 1),
-    y: Math.min(0.9, 0.72 + row * 0.12),
-  };
-}
-
-export function LookComposer({ draft, onDraftSaved, onBack }: LookComposerProps) {
+export function LookComposer({ draft, initialFile, onDraftSaved, onBack }: LookComposerProps) {
   const router = useRouter();
   const toast = useToast();
   const { media, seed, pick, clear } = useStagedMedia('look');
@@ -68,32 +61,43 @@ export function LookComposer({ draft, onDraftSaved, onBack }: LookComposerProps)
   const [pending, setPending] = useState<Pending>(null);
   const seededRef = useRef(false);
 
-  // Seed the resumed draft's media once — a user pick afterwards replaces it.
+  // Seed once — the resumed draft's media, or a captured file carried in
+  // from the camera entry. A user pick afterwards replaces either.
   useEffect(() => {
-    if (draft && !seededRef.current) {
+    if (seededRef.current) return;
+    if (draft) {
       seededRef.current = true;
       seed(draft.mediaUrl, draft.mediaType);
+    } else if (initialFile) {
+      seededRef.current = true;
+      pick(initialFile);
     }
-  }, [draft, seed]);
+  }, [draft, initialFile, seed, pick]);
 
   const busy = pending !== null || media?.uploading === true;
 
   const toggleTag = (listing: Listing) => {
     setTags((current) => {
       const exists = current.some((t) => t.listingId === listing.id);
+      // Untag removes just that pin — the rest keep their placed positions.
       if (exists) return current.filter((t) => t.listingId !== listing.id);
-      const next = [...current, { id: `t${current.length}`, listingId: listing.id, label: listing.title, x: 0.5, y: 0.8 }];
-      // Re-layout all pins so spacing stays even as the set changes.
-      return next.map((t, i) => ({ ...t, id: `t${i}`, ...tagPosition(i, next.length) }));
+      // New pin drops near frame centre with a de-colliding jitter — the
+      // member drags it onto the piece (LookTagCanvas owns the gesture).
+      const { x, y } = initialPinPosition(current, listing.id);
+      return [
+        ...current,
+        { id: `t_${crypto.randomUUID().slice(0, 8)}`, listingId: listing.id, label: listing.title, x, y },
+      ];
     });
     setErrors((e) => (e.media ? { ...e, media: undefined } : e));
   };
 
   const removeTag = (tagId: string) => {
-    setTags((current) => {
-      const next = current.filter((t) => t.id !== tagId);
-      return next.map((t, i) => ({ ...t, id: `t${i}`, ...tagPosition(i, next.length) }));
-    });
+    setTags((current) => current.filter((t) => t.id !== tagId));
+  };
+
+  const moveTag = (tagId: string, x: number, y: number) => {
+    setTags((current) => current.map((t) => (t.id === tagId ? { ...t, x, y } : t)));
   };
 
   const validate = (): LookErrors => {
@@ -156,26 +160,23 @@ export function LookComposer({ draft, onDraftSaved, onBack }: LookComposerProps)
     }
   };
 
-  const tagOverlay = useMemo(
-    () =>
-      tags.length === 0 ? null : (
-        <div className="pointer-events-none absolute inset-0">
-          {tags.map((t) => (
-            <button
-              key={t.id}
-              type="button"
-              onClick={() => removeTag(t.id)}
-              aria-label={`Remove tag ${t.label ?? 'listing'}`}
-              title={t.label}
-              className="pressable pointer-events-auto absolute max-w-[55%] -translate-x-1/2 -translate-y-1/2 truncate rounded-full bg-media-overlay-scrim px-2.5 py-1 text-micro font-medium text-scrim-text-primary"
-              style={{ left: `${t.x * 100}%`, top: `${t.y * 100}%` }}
-            >
-              {t.label ?? 'Listing'}
-            </button>
-          ))}
-        </div>
-      ),
-    [tags],
+  /** Listing lookup for pin callouts (name + price). The same
+   *  'my-listings' query TagSheet uses — enabled only once pins exist so a
+   *  tag-less compose doesn't fetch the closet. */
+  const { data: myListings } = useMyListings({ enabled: tags.length > 0 });
+  const listingById = useMemo(
+    () => new Map((myListings ?? []).map((l) => [l.id, l])),
+    [myListings],
+  );
+
+  const tagOverlay = (
+    <LookTagCanvas
+      tags={tags}
+      resolveListing={(listingId) => (listingId ? listingById.get(listingId) : undefined)}
+      disabled={busy}
+      onMove={moveTag}
+      onRemove={removeTag}
+    />
   );
 
   return (
@@ -256,7 +257,7 @@ export function LookComposer({ draft, onDraftSaved, onBack }: LookComposerProps)
           label="Tag pieces"
           optional
           done={tags.length > 0}
-          hint={tags.length > 0 ? `${tags.length} tagged — tap a pin on the cover to remove it` : 'Link the listings you’re wearing so buyers can shop them'}
+          hint={tags.length > 0 ? `${tags.length} tagged — drag the pins on the cover to place them` : 'Link the listings you’re wearing so buyers can shop them'}
         >
           <button
             type="button"

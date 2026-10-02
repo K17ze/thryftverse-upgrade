@@ -10,11 +10,9 @@ import Link from 'next/link';
 import { usePathname, useRouter } from 'next/navigation';
 import { Icon } from '@/components/ui/Icon';
 import { Avatar } from '@/components/ui/Avatar';
-import { useSession } from '@/lib/session/SessionProvider';
+import { useSessionIdentity } from '@/lib/session/SessionProvider';
 import { useSignupWall, type SignupAction } from '@/components/auth/SignupWall';
-import { useConversations } from '@/lib/hooks/queries';
-import { useHydrated } from '@/lib/store/useStore';
-import { useInboxPrefs } from '@/lib/store/inboxPrefs';
+import { useUnreadConversationCount } from '@/lib/hooks/queries';
 import { useLocale } from '@/lib/i18n';
 import type { AppIconName } from '@/components/ui/Icon';
 
@@ -30,18 +28,16 @@ export function MobileTabBar() {
   const pathname = usePathname();
   const router = useRouter();
   const { t } = useLocale();
-  const { user, isGuest } = useSession();
+  const { user, isGuest } = useSessionIdentity();
   const { requireAuth, wall } = useSignupWall();
-  const { data: conversations } = useConversations();
-  const hydrated = useHydrated();
-  const requestResolutions = useInboxPrefs((s) => s.requests);
+  // The badge is a `select` on the shared conversations query — same key
+  // the header pill and inbox rows observe, so this subscription costs
+  // no extra fetch/poll and re-renders only when the count moves.
+  const { data: unreadCount } = useUnreadConversationCount();
+  const unread = unreadCount ?? 0;
   // Message requests aren't message unread — pending requests count
-  // separately, the mobile TabNavigator badge grammar.
-  const unread =
-    (conversations ?? []).filter((c) => c.unread && !c.isRequest).length +
-    (conversations ?? []).filter(
-      (c) => c.isRequest && !(hydrated && requestResolutions[c.id]),
-    ).length;
+  // separately; the mute + request-resolution + hydration accounting all
+  // lives inside the count hook so the badge agrees with the inbox rows.
 
   const item = (
     href: string,

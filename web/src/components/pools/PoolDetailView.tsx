@@ -46,7 +46,7 @@ function DetailSkeleton() {
     <div className="mx-auto w-full max-w-5xl px-4 pb-20 pt-8 sm:px-6 md:pt-10 lg:max-w-[1440px]">
       <div className="skeleton h-4 w-24 rounded-sm" aria-hidden="true" />
       <div className="mt-4 skeleton h-9 w-64 rounded-sm" aria-hidden="true" />
-      <div className="mt-8 grid gap-10 lg:grid-cols-[minmax(0,1fr)_19rem]">
+      <div className="mt-8 grid grid-cols-1 gap-10 lg:grid-cols-[minmax(0,1fr)_19rem]">
         <div className="space-y-6">
           <div className="skeleton h-24 rounded-lg" aria-hidden="true" />
           <div className="skeleton h-40 rounded-lg" aria-hidden="true" />
@@ -131,7 +131,7 @@ export function PoolDetailView({ id }: { id: string }) {
         </div>
       </header>
 
-      <div className="mt-8 grid gap-10 lg:grid-cols-[minmax(0,1fr)_19rem] lg:gap-12">
+      <div className="mt-8 grid grid-cols-1 gap-10 lg:grid-cols-[minmax(0,1fr)_19rem] lg:gap-12">
         {/* ── Left: target, members, order history ── */}
         <div className="min-w-0">
           <section aria-labelledby="pool-target">

@@ -15,6 +15,7 @@
 import { useState } from 'react';
 import { CandleChart, PriceChart } from '@/components/charts';
 import { SegmentedControl } from '@/components/feed/SegmentedControl';
+import { Icon } from '@/components/ui/Icon';
 import { Skeleton } from '@/components/ui/Skeleton';
 import type {
   CandlePoint,
@@ -131,7 +132,14 @@ export function PricePanel({
                 : 'text-coown-down'
           }`}
         >
-          {moveFlat ? null : <span aria-hidden="true">{moveUp ? '▲ ' : '▼ '}</span>}
+          {moveFlat ? null : (
+            <Icon
+              name={moveUp ? 'deltaUp' : 'deltaDown'}
+              size={11}
+              filled
+              className="mr-1 inline-block -translate-y-px"
+            />
+          )}
           {signedPct(move)}{' '}
           <span className="font-normal text-text-muted">past 24h</span>
         </p>
@@ -194,7 +202,7 @@ export function PricePanel({
           type="button"
           aria-pressed={asTable}
           onClick={() => setAsTable((v) => !v)}
-          className="pressable text-meta font-medium text-text-secondary underline-offset-4 hover:text-text-primary hover:underline"
+          className="pressable -my-3 px-1 py-3 text-meta font-medium text-text-secondary underline-offset-4 hover:text-text-primary hover:underline"
         >
           {asTable ? 'View as chart' : 'View as table'}
         </button>
@@ -221,7 +229,7 @@ export function PricePanel({
               )}
               {history.length >= 2 ? (
                 <p className="mt-1.5 text-meta text-text-muted tnum">
-                  {gbp(history[0]!.c)} → {gbp(history[history.length - 1]!.c)} over the window ·
+                  {gbp(history[0]!.c)} to {gbp(history[history.length - 1]!.c)} over the window ·
                   range {gbp(Math.min(...history.map((c) => c.l)))}–
                   {gbp(Math.max(...history.map((c) => c.h)))}
                 </p>

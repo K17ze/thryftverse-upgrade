@@ -5,6 +5,9 @@
  * Fulfilment / Earnings as route tabs on the shared ui/Tabs primitive
  * (hairline baseline, 2px ink underline, quiet tnum counts). Counts badge
  * the working surfaces so the radar is legible from anywhere.
+ *
+ * Below lg only — at lg the persistent SellerHubRail in the seller-hub
+ * layout owns section navigation, so the strip hides itself.
  */
 
 import { usePathname } from 'next/navigation';
@@ -32,6 +35,10 @@ export function SellerSectionNav({
     { href: '/seller-hub/analytics', label: 'Analytics' },
     { href: '/seller-hub/storefront', label: 'Storefront' },
     { href: '/seller-hub/settings', label: 'Settings' },
+    // Utility routes — bare surfaces (no rail of their own) reachable only
+    // through this nav grammar.
+    { href: '/seller-hub/import', label: 'Import' },
+    { href: '/seller-hub/quick-replies', label: 'Quick replies' },
   ];
   // Prefix-match only the section that owns child routes — the
   // per-listing manage surface keeps Listings lit.
@@ -45,7 +52,7 @@ export function SellerSectionNav({
 
   return (
     <Tabs
-      className="-mx-4 mt-5 sm:-mx-6"
+      className="-mx-4 mt-5 sm:-mx-6 lg:hidden"
       railClassName="px-1 sm:px-3"
       tabs={sections.map((s) => ({
         key: s.href,

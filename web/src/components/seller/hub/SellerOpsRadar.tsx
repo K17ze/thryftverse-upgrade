@@ -14,6 +14,12 @@ export function SellerOpsRadar({ todos, className = '' }: SellerOpsRadarProps) {
 
   return (
     <nav aria-label="To do" className={`mt-8 ${className}`}>
+      <div className="flex items-baseline justify-between pb-2">
+        <h2 className="text-label text-text-muted">To do</h2>
+        <span className="tnum text-meta text-text-muted">
+          {todos.length} {todos.length === 1 ? 'item' : 'items'}
+        </span>
+      </div>
       <ul className="divide-y divide-border-subtle border-y border-border-subtle">
         {todos.map((t) => (
           <li key={t.id}>

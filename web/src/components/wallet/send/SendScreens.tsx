@@ -58,11 +58,13 @@ export function SendingScreen({
         <h2 className="mt-4 text-section-title font-semibold text-text-primary">
           Sending your transfer
         </h2>
-        <p className="mt-1.5 text-body text-text-secondary">
-          Debiting your {sourceCurrency} pocket
-          {sameCurrency ? '' : ` and converting to ${targetCurrency}`}.
+        <p className="mt-3 flex items-center gap-2 text-body text-text-secondary" role="status">
+          <Spinner size={24} />
+          <span>
+            Debiting your {sourceCurrency} pocket
+            {sameCurrency ? '' : ` and converting to ${targetCurrency}`}.
+          </span>
         </p>
-        <Spinner size={32} className="mt-6" />
       </div>
     </div>
   );
@@ -89,9 +91,7 @@ export function SendReceipt({
       </div>
 
       <div className="flex flex-col items-center px-4 pt-10 text-center sm:px-6">
-        <div className="flex h-16 w-16 items-center justify-center rounded-full bg-surface-alt text-text-primary">
-          <Icon name="send" size={30} />
-        </div>
+        <Icon name="send" size={36} className="text-text-secondary" />
         <h2 className="mt-4 text-screen-title text-text-primary">
           {transferStateLabel(transfer.state)}
         </h2>

@@ -29,7 +29,7 @@ interface HostChatPanelProps {
 }
 
 const actionBtn =
-  'pressable flex h-8 w-8 items-center justify-center rounded-md text-text-muted transition-colors hover:bg-surface-alt hover:text-text-primary';
+  'pressable relative flex h-8 w-8 items-center justify-center rounded-md after:absolute after:-inset-1.5 after:content-[""] text-text-muted transition-colors hover:bg-surface-alt hover:text-text-primary';
 
 export function HostChatPanel({ sessionId, active }: HostChatPanelProps) {
   const [messages, setMessages] = useState<HostChatMessage[]>([]);

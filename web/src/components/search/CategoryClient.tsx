@@ -59,6 +59,7 @@ export function CategoryClient({ slug }: { slug: string }) {
     hasNextPage,
     fetchNextPage,
     isFetchingNextPage,
+    isFetchNextPageError,
   } = useListings(
     category ? slug : undefined,
     undefined,
@@ -148,10 +149,14 @@ export function CategoryClient({ slug }: { slug: string }) {
         onFiltersChange={setFilters}
         hideCategoryFilter
         serverOrdered={DATA_MODE === 'live'}
-        totalCount={data?.total ?? null}
+        // Fixture mode counts the filtered set itself — the fixture
+        // total skips the client-only colour facet, so it could exceed
+        // what the grid shows. Same honesty rule as /search.
+        totalCount={DATA_MODE === 'live' ? (data?.total ?? null) : null}
         hasMore={DATA_MODE === 'live' && hasNextPage === true}
         onLoadMore={loadMore}
         isLoadingMore={isFetchingNextPage}
+        loadMoreError={isFetchNextPageError}
         sort={sort}
         onSortChange={setSort}
         heading={(n) =>

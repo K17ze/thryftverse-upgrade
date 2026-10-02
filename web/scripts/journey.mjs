@@ -4,7 +4,7 @@
 // session seeded via localStorage before app JS runs.
 import { chromium } from 'playwright';
 
-const BASE = 'http://localhost:3000';
+const BASE = 'http://localhost:3010';
 const results = [];
 const ok = (name, pass, note = '') => {
   results.push(`${pass ? 'PASS' : 'FAIL'} ${name}${note ? ` — ${note}` : ''}`);
@@ -19,6 +19,11 @@ await ctx.addInitScript(() => {
     const s = raw ? JSON.parse(raw) : { version: 0, state: {} };
     s.state = { ...(s.state ?? {}), hasSeenOnboarding: true };
     localStorage.setItem(key, JSON.stringify(s));
+    const pk = 'thryftverse.web.settings-prefs';
+    const pr = localStorage.getItem(pk);
+    const ps = pr ? JSON.parse(pr) : { version: 0, state: {} };
+    ps.state = { ...(ps.state ?? {}), ageConfirmedAt: new Date().toISOString() };
+    localStorage.setItem(pk, JSON.stringify(ps));
   } catch {}
 });
 const page = await ctx.newPage();
@@ -47,6 +52,10 @@ const acceptBtn = page.locator('button:has-text("Accept")').first();
 const acceptCount = await page.locator('button:has-text("Accept")').count();
 if (acceptCount > 0) {
   await acceptBtn.click();
+  await page.waitForTimeout(1200);
+  // Accept opens a confirm dialog — commit with the dialog CTA.
+  const confirm = page.locator('[role="dialog"] button:has-text("Accept"), [role="alertdialog"] button:has-text("Accept")').first();
+  if (await confirm.count()) await confirm.click();
   await page.waitForTimeout(3500);
   ok('offers: accept navigates to order', /\/orders\//.test(page.url()), page.url());
 } else {

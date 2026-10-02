@@ -133,6 +133,84 @@ export const COLOR_VOCAB: VocabColor[] = [
 ];
 
 /**
+ * Manual refinement facets — the member-supplied filters the mobile
+ * visual-search panel offers (G11/F08). These lists are the shared
+ * vocabulary contract with the backend (COLOR_FACET_VALUES /
+ * STYLE_FACET_VALUES in routes/visualSearch.ts) — subset of COLOR_VOCAB
+ * for colour, the backend's own style words for style. Mirrors
+ * frontend/src/components/visualsearch/visualSearchTypes.ts.
+ */
+export const COLOR_FACETS = [
+  'Black',
+  'White',
+  'Blue',
+  'Red',
+  'Green',
+  'Brown',
+  'Grey',
+  'Pink',
+  'Beige',
+  'Navy',
+] as const;
+
+export const STYLE_FACETS = [
+  'Vintage',
+  'Minimal',
+  'Streetwear',
+  'Y2K',
+  'Formal',
+  'Casual',
+  'Sportswear',
+  'Luxury',
+] as const;
+
+/**
+ * Member-added filters — the manual refinement surface beside the
+ * detected-attribute chips. Single-value facets (mobile parity: one
+ * category/colour/style at a time) plus free-text query/brand and a
+ * price range. Every set value is a hard filter on the result set —
+ * fixture mode applies them inside matchListings before the result cap;
+ * live mode sends them on POST /visual-search and post-filters the serve
+ * with the same predicate.
+ */
+export interface VisualSearchManualFilters {
+  /** Free-text description — substring over title/description/brand/category. */
+  query: string;
+  /** Category value — same predicate as the detected category chip. */
+  category: string | null;
+  /** Brand fragment — substring match, same rule as the browse facet. */
+  brand: string;
+  priceMin: number | null;
+  priceMax: number | null;
+  /** COLOR_FACETS/COLOR_VOCAB name — strict "the listing names this colour". */
+  color: string | null;
+  /** STYLE_FACETS word — substring over the listing's own text. */
+  style: string | null;
+}
+
+export const EMPTY_MANUAL_FILTERS: VisualSearchManualFilters = {
+  query: '',
+  category: null,
+  brand: '',
+  priceMin: null,
+  priceMax: null,
+  color: null,
+  style: null,
+};
+
+export function manualFiltersActive(f: VisualSearchManualFilters): boolean {
+  return (
+    f.query.trim() !== '' ||
+    f.category !== null ||
+    f.brand.trim() !== '' ||
+    f.priceMin !== null ||
+    f.priceMax !== null ||
+    f.color !== null ||
+    f.style !== null
+  );
+}
+
+/**
  * Filename → category/subcategory cues. A photo can't reveal a category by
  * colour heuristic, but the filename often does — and it is honest signal
  * the user supplied. Values match against listing.category exactly or

@@ -37,18 +37,19 @@ import {
 } from '@/lib/hooks/profile-queries';
 import type { User } from '@/lib/contracts/domain';
 import type { ProfileViewerState } from './ProfileHero';
-import { useShare } from './useShare';
 
 interface ProfileOptionsMenuProps {
   user: User;
   /** Viewer-scoped flags from the profile aggregate — live truth for the
    *  mute/restrict labels; block also reads the local safety stores. */
   viewer?: ProfileViewerState;
+  /** Opens the share-passport sheet — the hero owns it so the menu's
+   *  share row lands on the same card the share button raises. */
+  onShareProfile: () => void;
 }
 
-export function ProfileOptionsMenu({ user, viewer }: ProfileOptionsMenuProps) {
+export function ProfileOptionsMenu({ user, viewer, onShareProfile }: ProfileOptionsMenuProps) {
   const { show } = useToast();
-  const share = useShare();
   const qc = useQueryClient();
   const { user: me } = useSession();
   const hydrated = useHydrated();
@@ -217,11 +218,7 @@ export function ProfileOptionsMenu({ user, viewer }: ProfileOptionsMenuProps) {
                 type="button"
                 onClick={() => {
                   setMenuOpen(false);
-                  void share({
-                    url: `${window.location.origin}/u/${user.username}`,
-                    title: `@${user.username} on ThryftVerse`,
-                    copiedLabel: 'Profile link copied',
-                  });
+                  onShareProfile();
                 }}
                 className="pressable flex min-h-12 w-full items-center gap-3.5 py-3 text-left text-text-primary"
               >

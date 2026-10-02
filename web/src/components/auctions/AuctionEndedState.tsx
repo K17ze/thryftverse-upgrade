@@ -194,7 +194,10 @@ export function AuctionEndedState({
       const orders = recordOrder([hammerListing]);
       void qc.invalidateQueries({ queryKey: ['orders'] });
       void qc.invalidateQueries({ queryKey: ['listing', auction.listingId] });
-      router.push(`/orders/${orders[0]?.id ?? ''}`);
+      // recordOrder can return an empty batch — never push a bare
+      // '/orders/' detail route; the index is the honest fallback.
+      const orderId = orders[0]?.id;
+      router.push(orderId ? `/orders/${orderId}` : '/orders');
     } catch (e) {
       show(
         e instanceof Error && e.message ? e.message : 'Could not complete the payment — try again',

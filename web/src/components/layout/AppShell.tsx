@@ -9,6 +9,8 @@ import { CommandPalette } from './CommandPalette';
 import { useHydrated, useStore } from '@/lib/store/useStore';
 import { useSettingsPrefs } from '@/lib/store/settingsPrefs';
 import { useNotificationRealtime } from '@/lib/hooks/chat-realtime';
+import { useLocale } from '@/lib/i18n/useLocale';
+import { Spinner } from '@/components/ui/Spinner';
 
 /** Routes that render without the global chrome (auth, onboarding, immersive surfaces). */
 const CHROMELESS_PREFIXES = ['/auth', '/onboarding'];
@@ -25,7 +27,7 @@ const IMMERSIVE_RE = /^\/(inbox|poster|look)\/.+/;
  * (bag, sell, inbox, settings, onboarding-adjacent flows).
  */
 const PUBLIC_RE =
-  /^\/($|item\/|u\/|poster\/|look\/|search|browse|collections|galleria|auctions|live|co-own|about|terms|privacy|support|help|category|categories|explore|pulse|moodboards|outfits|buyer-protection|agents|invite)/;
+  /^\/($|item\/|u\/|poster\/|look\/|search|browse|collections|collection\/|galleria|auctions|live|co-own|about|terms|privacy|support|help|category|categories|explore|pulse|moodboards|moodboard\/|outfits|buyer-protection|agents|invite)/;
 
 /** Where the pre-onboarding destination is stashed — consumed by the
  *  onboarding completion (OnboardingView) and validated there. */
@@ -43,6 +45,7 @@ export function AppShell({ children }: { children: React.ReactNode }) {
   // account-scoped surfaces (bag, sell, inbox, settings…) still hand off
   // to onboarding, and they stash the destination first so completion
   // can return to it. Hydration-gated: SSR can't know the stored flag.
+  const { t } = useLocale();
   const hydrated = useHydrated();
   const hasSeenOnboarding = useStore((s) => s.hasSeenOnboarding);
   const ageConfirmed = useSettingsPrefs((s) => s.ageConfirmedAt !== null);
@@ -98,9 +101,27 @@ export function AppShell({ children }: { children: React.ReactNode }) {
   }
 
   if (needsGate) {
-    // Redirect in flight — render nothing rather than flash the app shell
-    // for a frame before /onboarding lands.
-    return <main id="main-content" tabIndex={-1} className="min-h-dvh" />;
+    // Redirect in flight — don't flash the app shell for a frame before
+    // /onboarding lands, but don't leave a blank viewport either: the
+    // first-visit deep-link path can hold this state for a beat on slow
+    // networks, so a minimal brand mark + spinner carries the wait.
+    return (
+      <main
+        id="main-content"
+        tabIndex={-1}
+        className="flex min-h-dvh items-center justify-center"
+      >
+        <div role="status" className="flex flex-col items-center gap-3">
+          <span className="select-none text-[22px] font-extrabold tracking-[-0.8px] text-text-primary">
+            ThryftVerse
+          </span>
+          <span className="flex items-center gap-2 text-meta text-text-muted">
+            <Spinner size={14} tone="neutral" />
+            {t('states.loading')}
+          </span>
+        </div>
+      </main>
+    );
   }
 
   return (

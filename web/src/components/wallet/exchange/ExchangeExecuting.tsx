@@ -30,10 +30,12 @@ export function ExchangeExecuting({
         <h2 className="mt-4 text-section-title font-semibold text-text-primary">
           Exchanging your money
         </h2>
-        <p className="mt-1.5 text-body text-text-secondary">
-          Debiting {sourceCurrency} and crediting {targetCurrency} at the quoted rate.
+        <p className="mt-3 flex items-center gap-2 text-body text-text-secondary" role="status">
+          <Spinner size={24} />
+          <span>
+            Debiting {sourceCurrency} and crediting {targetCurrency} at the quoted rate.
+          </span>
         </p>
-        <Spinner size={32} className="mt-6" />
       </div>
     </div>
   );

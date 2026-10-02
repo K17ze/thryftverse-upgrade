@@ -10,6 +10,13 @@ interface SellerMetricsGridProps {
   period: SellerPeriod;
 }
 
+/** Quiet unit context for metrics whose denominator isn't self-evident —
+ *  same inline grammar as the `· est.` marker. Conversion is orders per
+ *  listing view, which reads small against raw view counts. */
+const METRIC_CONTEXT: Partial<Record<SellerMetric['key'], string>> = {
+  conversion: 'of listing views',
+};
+
 export function SellerMetricsGrid({ overview, period }: SellerMetricsGridProps) {
   return (
     <section aria-label="Performance metrics" className="mt-10">
@@ -20,6 +27,11 @@ export function SellerMetricsGrid({ overview, period }: SellerMetricsGridProps) 
               {m.label}
               {m.estimated ? (
                 <span className="ml-1 normal-case tracking-normal">· est.</span>
+              ) : null}
+              {METRIC_CONTEXT[m.key] ? (
+                <span className="ml-1 normal-case tracking-normal">
+                  · {METRIC_CONTEXT[m.key]}
+                </span>
               ) : null}
             </p>
             <p className="tnum mt-1.5 text-price-list font-semibold text-text-primary">
@@ -40,12 +52,12 @@ export function SellerMetricsGrid({ overview, period }: SellerMetricsGridProps) 
           {period === '7d' ? '7-day' : period === '90d' ? '90-day' : '30-day'} funnel
         </span>
         {' — '}
-        {formatCount(overview.funnel.views)} views →{' '}
-        {formatCount(overview.funnel.watchers)} watching →{' '}
+        {formatCount(overview.funnel.views)} views ·{' '}
+        {formatCount(overview.funnel.watchers)} watching ·{' '}
         {overview.funnel.offers != null
           ? `${formatCount(overview.funnel.offers)} offers`
           : '— offers'}{' '}
-        → {formatCount(overview.funnel.orders)} sold
+        · {formatCount(overview.funnel.orders)} sold
       </p>
       {overview.metrics.some((m: SellerMetric) => m.estimated) ? (
         <p className="mt-1.5 text-meta text-text-muted">

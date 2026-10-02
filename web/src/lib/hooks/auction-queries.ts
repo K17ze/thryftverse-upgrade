@@ -298,11 +298,18 @@ export function useAuctionHome() {
   return { home: data ?? null, skew, isLoading, isError };
 }
 
-export function useAuction(id: string) {
+export function useAuction(id: string, options?: { initialData?: AuctionMarketItem }) {
   const qc = useQueryClient();
   const now = useNowTick(1000);
   const { data, dataUpdatedAt, isLoading, isError, refetch } = useQuery({
     queryKey: ['auction', id],
+    // Server-shell seed — stamped "now", never epoch 0: the countdown
+    // skew math reads serverNow against dataUpdatedAt, so a 0 stamp
+    // would misread the clock until the poll's first tick. The default
+    // freshness window skips the redundant mount refetch; the lifecycle
+    // poll (refetchInterval) stays the revalidation channel.
+    initialData: options?.initialData,
+    initialDataUpdatedAt: options?.initialData ? Date.now() : undefined,
     queryFn: async ({ signal }) => {
       if (DATA_MODE === 'live') {
         const bundle = await auctionsService.fetchAuctionDetailBundle(id, signal);

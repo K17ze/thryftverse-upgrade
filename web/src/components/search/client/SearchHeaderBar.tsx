@@ -42,9 +42,12 @@ export function SearchHeaderBar({
   onHoverSuggestion,
 }: SearchHeaderBarProps) {
   return (
-    <div className="px-4 pt-4 sm:px-6 md:hidden">
+    // The landing owns its field at every breakpoint — it IS the page's
+    // job (Depop/Vinted search grammar). On a results view ≥md the
+    // global header carries search, so this bar stays a mobile affair.
+    <div className={`px-4 pt-4 sm:px-6 ${isLanding ? '' : 'md:hidden'}`}>
       <div
-        className="flex max-w-2xl items-center gap-1 lg:max-w-3xl"
+        className="flex max-w-2xl items-center gap-1"
         onBlur={onBlurContainer}
       >
         <div className="relative min-w-0 flex-1">

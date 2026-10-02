@@ -76,8 +76,14 @@ function fixtureAggregate(user: User, meId: string | undefined): PublicProfile {
   const blocked =
     useInboxSafety.getState().blockedUserIds.includes(user.id) ||
     useSettingsPrefs.getState().blockedIds.includes(user.id);
+  // The bundled listingCount is a display prop that outruns the actual
+  // fixture closet (u5 claims 67 on 6 rows). The live contract's
+  // activeListingCount/soldListingCount semantics apply here too: the
+  // profile may only claim what the closet can actually show.
+  const closet = listingsBySeller(user.id);
+  const soldListingCount = closet.filter((l) => l.isSold).length;
   return {
-    user,
+    user: { ...user, listingCount: closet.length - soldListingCount },
     isSelf: meId === user.id || user.id === 'me',
     isFollowing: false,
     canMessage: !blocked,
@@ -86,6 +92,7 @@ function fixtureAggregate(user: User, meId: string | undefined): PublicProfile {
     isRestricted: fixtureRestrictedIds.has(user.id),
     canViewSocialContent: true,
     canViewShop: true,
+    soldListingCount,
     trader: null,
     away: null,
     storefront: null,

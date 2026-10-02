@@ -16,7 +16,7 @@ export function PdpSkeleton() {
         <Skeleton className="h-3 w-48" />
       </div>
 
-      <div className="grid gap-6 px-4 py-4 sm:px-6 lg:grid-cols-[minmax(0,1fr)_400px] lg:gap-x-10 lg:gap-y-8">
+      <div className="grid grid-cols-1 gap-6 px-4 py-4 sm:px-6 lg:grid-cols-[minmax(0,1fr)_400px] lg:gap-x-10 lg:gap-y-8">
         {/* Media stage */}
         <div className="flex gap-3 lg:col-start-1 lg:row-start-1">
           <div className="hidden w-[72px] shrink-0 flex-col gap-2 lg:flex">

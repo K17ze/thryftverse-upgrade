@@ -7,32 +7,18 @@
  * Accept / Decline actions — resolved locally against fixture state.
  */
 
-import { Suspense, useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { useRouter, useSearchParams } from 'next/navigation';
-import { useQuery, useQueryClient } from '@tanstack/react-query';
-import type { Conversation } from '@/lib/contracts/domain';
-import { useConversations } from '@/lib/hooks/queries';
-import { data as dataApi, DATA_MODE } from '@/lib/api/client';
-import { blockUser } from '@/lib/api/services/users';
-import { useSession } from '@/lib/session/SessionProvider';
-import { useInboxPrefs } from '@/lib/store/inboxPrefs';
-import { useSettingsPrefs } from '@/lib/store/settingsPrefs';
-import { useToast } from '@/components/ui/Toast';
+import { Suspense, useEffect } from 'react';
+import { useSearchParams } from 'next/navigation';
 import { EmptyState } from '@/components/ui/EmptyState';
 import { StateGate } from '@/components/flagship/StateGate';
+import { tabId, tabPanelId } from '@/components/ui/Tabs';
 import { NewMessageSheet } from './NewMessageSheet';
 import { ConfirmSheet } from './ConfirmSheet';
-import { acceptFixtureRequest, liveConversationApi } from './groupAdmin';
-import { useInboxSafety } from './inboxSafety';
-import { useChatDrafts } from './useChatDrafts';
-import {
-  conversationRole,
-  conversationTitle,
-  isGroupConversation,
-} from './inboxModel';
-import { useConversationPrefs } from './useConversationPrefs';
+import { conversationTitle } from './inboxModel';
 import {
   isTab,
+  SECONDARY_LABELS,
+  SECONDARY_TABS,
   type Tab,
 } from './list/inboxListTypes';
 import { ConversationListSkeleton } from './list/ConversationListSkeleton';
@@ -40,6 +26,7 @@ import { ConversationRowItem } from './list/ConversationRowItem';
 import { RequestRow } from './list/RequestRow';
 import { ConversationListHeader } from './list/ConversationListHeader';
 import { ConversationListTabs } from './list/ConversationListTabs';
+import { useConversationListWorkflow } from './list/useConversationListWorkflow';
 
 export type { Tab } from './list/inboxListTypes';
 export { TABS, SECONDARY_TABS, isTab } from './list/inboxListTypes';
@@ -65,216 +52,41 @@ export function ConversationListPane({
   activeId?: string | null;
   className?: string;
 }) {
-  const router = useRouter();
-  const { user, isGuest } = useSession();
-  const { data, isLoading, isError, refetch } = useConversations();
-  const { data: rawConversations } = useQuery({
-    queryKey: ['conversations', user?.id ?? 'guest'],
-    queryFn: () => dataApi.conversations(user?.id),
-  });
-  const rawUnreadById = useMemo(() => {
-    const map = new Map<string, { unread: boolean; count: number }>();
-    for (const c of rawConversations ?? []) {
-      map.set(c.id, {
-        unread: c.unread || (c.unreadCount ?? 0) > 0,
-        count: c.unreadCount ?? 0,
-      });
-    }
-    return map;
-  }, [rawConversations]);
-  const qc = useQueryClient();
-  const toast = useToast();
-  const [tab, setTab] = useState<Tab>('all');
-  const [q, setQ] = useState('');
-  const [secondaryOpen, setSecondaryOpen] = useState(false);
-  const viewerId = user?.id ?? 'me';
-  const drafts = useChatDrafts((s) => s.drafts);
-  const listRef = useRef<HTMLDivElement>(null);
-  const requestResolutions = useInboxPrefs((s) => s.requests);
-  const setRequestResolution = useInboxPrefs((s) => s.setRequestResolution);
-  const [composeOpen, setComposeOpen] = useState(false);
-  const [blockTarget, setBlockTarget] = useState<Conversation | null>(null);
-  const { hydrated, isMuted, isArchived, isPinned } = useConversationPrefs();
-  const blockedUserIds = useInboxSafety((s) => s.blockedUserIds);
-  const toggleBlocked = useInboxSafety((s) => s.toggleBlocked);
-  const prefBlock = useSettingsPrefs((s) => s.blockUser);
-  const requestState = useCallback(
-    (id: string) => (hydrated ? requestResolutions[id] : undefined),
-    [hydrated, requestResolutions],
-  );
-
-  const conversations = useMemo(() => data ?? [], [data]);
-
-  const requests = useMemo(
-    () => conversations.filter((c) => c.isRequest && !requestState(c.id)),
-    [conversations, requestState],
-  );
-  const regular = useMemo(
-    () =>
-      conversations.filter(
-        (c) => (!c.isRequest || requestState(c.id) === 'accepted') && !isArchived(c),
-      ),
-    [conversations, requestState, isArchived],
-  );
-  const archived = useMemo(
-    () => conversations.filter((c) => isArchived(c)),
-    [conversations, isArchived],
-  );
-  const muted = useMemo(
-    () => regular.filter((c) => isMuted(c)),
-    [regular, isMuted],
-  );
-  const unreadThreads = useMemo(
-    () => regular.filter((c) => rawUnreadById.get(c.id)?.unread),
-    [regular, rawUnreadById],
-  );
-  const buying = useMemo(
-    () => regular.filter((c) => conversationRole(c, viewerId) === 'buying'),
-    [regular, viewerId],
-  );
-  const selling = useMemo(
-    () => regular.filter((c) => conversationRole(c, viewerId) === 'selling'),
-    [regular, viewerId],
-  );
-  const groupThreads = useMemo(
-    () => regular.filter((c) => isGroupConversation(c)),
-    [regular],
-  );
-  const unreadOf = useCallback(
-    (rows: Conversation[]) =>
-      rows.filter((c) => rawUnreadById.get(c.id)?.unread).length,
-    [rawUnreadById],
-  );
-
-  const query = q.trim().toLowerCase();
-  const matches = useCallback(
-    (c: Conversation) =>
-      !query ||
-      conversationTitle(c).toLowerCase().includes(query) ||
-      c.lastMessage.toLowerCase().includes(query) ||
-      c.participantProfiles?.some((p) =>
-        (p.displayName ?? p.username).toLowerCase().includes(query),
-      ) ||
-      c.listing?.title.toLowerCase().includes(query),
-    [query],
-  );
-
-  const visible = useMemo(() => {
-    const rows = (
-      tab === 'all'
-        ? regular
-        : tab === 'buying'
-          ? buying
-          : tab === 'selling'
-            ? selling
-            : tab === 'unread'
-              ? unreadThreads
-              : tab === 'requests'
-                ? requests
-                : tab === 'groups'
-                  ? groupThreads
-                  : tab === 'muted'
-                    ? muted
-                    : archived
-    ).filter(matches);
-    return [...rows].sort((a, b) => Number(isPinned(b)) - Number(isPinned(a)));
-  }, [
+  const {
+    router,
+    isGuest,
+    isLoading,
+    isError,
+    refetch,
+    rawUnreadById,
     tab,
-    regular,
+    setTab,
+    tabsId,
+    q,
+    setQ,
+    query,
+    secondaryOpen,
+    setSecondaryOpen,
+    drafts,
+    listRef,
+    composeOpen,
+    setComposeOpen,
+    blockTarget,
+    setBlockTarget,
+    hydrated,
+    requests,
     buying,
     selling,
     unreadThreads,
-    requests,
     groupThreads,
     muted,
-    archived,
-    matches,
-    isPinned,
-  ]);
-
-  const acceptRequest = (c: Conversation) => {
-    setRequestResolution(c.id, 'accepted');
-    if (DATA_MODE === 'live') {
-      liveConversationApi
-        .acceptRequest(c.id)
-        .then(() => qc.invalidateQueries({ queryKey: ['conversations'] }))
-        .catch(() => {
-          setRequestResolution(c.id, null);
-          toast.show("Couldn't accept the request — try again", 'error');
-        });
-      return;
-    }
-    acceptFixtureRequest(c.id);
-    void qc.invalidateQueries({ queryKey: ['conversations'] });
-    toast.show(`Request from ${c.participantName} accepted`, 'success');
-  };
-
-  const declineRequest = (c: Conversation) => {
-    setRequestResolution(c.id, 'declined');
-    if (DATA_MODE === 'live') {
-      liveConversationApi
-        .declineRequest(c.id)
-        .then(() => qc.invalidateQueries({ queryKey: ['conversations'] }))
-        .catch(() => {
-          setRequestResolution(c.id, null);
-          toast.show("Couldn't decline the request — try again", 'error');
-        });
-      return;
-    }
-    toast.show('Request declined', 'info');
-  };
-
-  const confirmBlockSender = (c: Conversation) => {
-    setBlockTarget(null);
-    const uid = c.participantId;
-    const name = conversationTitle(c);
-    if (!uid) {
-      toast.show("Couldn't block this account — try again", 'error');
-      return;
-    }
-    const write = DATA_MODE === 'live' ? blockUser(uid) : Promise.resolve();
-    void write
-      .then(() => {
-        if (!blockedUserIds.includes(uid)) toggleBlocked(uid);
-        prefBlock(uid);
-        setRequestResolution(c.id, 'declined');
-        if (DATA_MODE === 'live') {
-          void qc.invalidateQueries({ queryKey: ['conversations'] });
-        }
-        toast.show(`${name} blocked — they can't message you`, 'success');
-      })
-      .catch(() => {
-        toast.show("Couldn't block this account — try again", 'error');
-      });
-  };
-
-  const onListKeyDown = (e: React.KeyboardEvent) => {
-    if (
-      e.key !== 'ArrowDown' &&
-      e.key !== 'ArrowUp' &&
-      e.key !== 'Home' &&
-      e.key !== 'End'
-    )
-      return;
-    const rows = Array.from(
-      listRef.current?.querySelectorAll<HTMLElement>('[data-conversation-row]') ?? [],
-    );
-    if (!rows.length) return;
-    e.preventDefault();
-    const at = rows.indexOf(document.activeElement as HTMLElement);
-    let next: number;
-    if (e.key === 'Home') next = 0;
-    else if (e.key === 'End') next = rows.length - 1;
-    else if (at === -1) {
-      const activeIdx = rows.findIndex(
-        (r) => r.getAttribute('aria-current') === 'page',
-      );
-      next = activeIdx >= 0 ? activeIdx : 0;
-    } else {
-      next = e.key === 'ArrowDown' ? Math.min(rows.length - 1, at + 1) : Math.max(0, at - 1);
-    }
-    rows[next]?.focus();
-  };
+    visible,
+    unreadOf,
+    acceptRequest,
+    declineRequest,
+    confirmBlockSender,
+    onListKeyDown,
+  } = useConversationListWorkflow();
 
   if (isGuest) {
     return (
@@ -320,12 +132,28 @@ export function ConversationListPane({
           unreadThreadsCount={unreadThreads.length}
           groupThreadsCount={groupThreads.length}
           mutedThreadsCount={muted.length}
+          // While a secondary chip owns the list, no primary tab controls
+          // the panel — withhold pairing rather than fabricate references.
+          idBase={SECONDARY_TABS.includes(tab) ? undefined : tabsId}
+          // ...but the owning chip does — point it at the live panel id.
+          panelId={SECONDARY_TABS.includes(tab) ? tabPanelId(tabsId, tab) : undefined}
         />
       </div>
 
+      {/* The thread list is the rail's tabpanel */}
       <div
         ref={listRef}
         onKeyDown={onListKeyDown}
+        role="tabpanel"
+        id={tabPanelId(tabsId, tab)}
+        aria-labelledby={
+          SECONDARY_TABS.includes(tab) ? undefined : tabId(tabsId, tab)
+        }
+        aria-label={
+          SECONDARY_TABS.includes(tab)
+            ? SECONDARY_LABELS[tab as keyof typeof SECONDARY_LABELS]
+            : undefined
+        }
         className="min-h-0 flex-1 md:overflow-y-auto"
       >
         <StateGate

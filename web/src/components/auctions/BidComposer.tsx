@@ -81,6 +81,8 @@ export function BidComposer({
       ) : null}
 
       {outbid ? (
+        // Status line only — the re-bid verb lives once, on the
+        // state-aware submit below.
         <div
           role="status"
           className="flex items-center gap-3 rounded-lg border border-danger-border bg-danger-subtle p-3"
@@ -92,14 +94,6 @@ export function BidComposer({
               Top bid {formatPrice(auction.currentBid)}
             </p>
           </div>
-          <button
-            type="button"
-            disabled={upcoming}
-            onClick={() => onQuickBid(minimum)}
-            className="pressable h-9 shrink-0 rounded-md bg-danger px-3 text-caption font-semibold text-scrim-text-primary disabled:opacity-50"
-          >
-            Re-bid {formatPrice(minimum)}
-          </button>
         </div>
       ) : null}
 
@@ -131,7 +125,7 @@ export function BidComposer({
         </div>
 
         {invalid ? (
-          <p className="text-caption text-danger-text">
+          <p className="text-caption text-danger-text" role="alert">
             Bid at least {formatPrice(minimum)} — the current bid plus {INCREMENT_PCT}%.
           </p>
         ) : null}
@@ -217,7 +211,9 @@ export function BidComposer({
             ? 'Sign in to bid'
             : pending
               ? 'Placing bid…'
-              : `Place bid · ${formatPrice(intent)}`}
+              : outbid
+                ? `Re-bid · ${formatPrice(intent)}`
+                : `Place bid · ${formatPrice(intent)}`}
         </Button>
 
         {upcoming ? (
@@ -228,26 +224,26 @@ export function BidComposer({
       </form>
 
       {!upcoming ? (
-        <div>
-          <p className="mb-2 text-label text-text-muted">Quick bid</p>
-          <div className="flex gap-2">
-            {ladder.map((amount, index) => (
-              <button
-                key={amount}
-                type="button"
-                disabled={upcoming || pending}
-                onClick={() => onQuickBid(amount)}
-                aria-label={`Bid ${formatPrice(amount)}`}
-                className={`pressable h-9 flex-1 rounded-md text-caption font-semibold tnum ${
-                  index === 0
-                    ? 'bg-brand-subtle text-text-primary hover:bg-brand hover:text-text-inverse'
-                    : 'bg-surface-alt text-text-primary hover:bg-surface-raised'
-                } disabled:opacity-50`}
-              >
-                {formatPrice(amount)}
-              </button>
-            ))}
-          </div>
+        // The rungs above the floor — the floor itself is already the
+        // submit button's default and the "Next bid" line, so the first
+        // ladder step would only restate it.
+        <div className="flex gap-2">
+          {ladder.slice(1).map((amount, index) => (
+            <button
+              key={amount}
+              type="button"
+              disabled={upcoming || pending}
+              onClick={() => onQuickBid(amount)}
+              aria-label={`Bid ${formatPrice(amount)}`}
+              className={`pressable h-9 flex-1 rounded-md text-caption font-semibold tnum ${
+                index === 0
+                  ? 'bg-brand-subtle text-text-primary hover:bg-brand hover:text-text-inverse'
+                  : 'bg-surface-alt text-text-primary hover:bg-surface-raised'
+              } disabled:opacity-50`}
+            >
+              {formatPrice(amount)}
+            </button>
+          ))}
         </div>
       ) : null}
     </div>

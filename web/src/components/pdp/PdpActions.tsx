@@ -11,7 +11,6 @@ import type { Listing } from '@/lib/contracts/domain';
 import type { UseMutationResult } from '@tanstack/react-query';
 import { Badge } from '@/components/ui/Badge';
 import { Button } from '@/components/ui/Button';
-import { IconButton } from '@/components/ui/IconButton';
 import { Skeleton } from '@/components/ui/Skeleton';
 import { OfferToLikers } from './OfferToLikers';
 import { formatPrice, timeAgo } from '@/lib/utils/format';
@@ -176,12 +175,15 @@ export function PdpActions({
             Make an offer
           </Button>
         )}
-        <IconButton
-          name="bag"
-          aria-label={inBag ? 'View bag' : 'Add to bag'}
-          contained
+        <Button
+          variant="secondary"
+          size="md"
+          icon="bag"
+          iconFilled={inBag}
           onClick={onAddToBag}
-        />
+        >
+          {inBag ? 'View bag' : 'Bag'}
+        </Button>
       </div>
 
       <Button variant="quiet" size="sm" icon="chat" onClick={onMessage} className="self-center">

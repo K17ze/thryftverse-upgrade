@@ -14,8 +14,9 @@
  *  - useCreatorAnalyticsWorkflow
  */
 
+import { useId } from 'react';
 import { EmptyState } from '@/components/ui/EmptyState';
-import { Tabs } from '@/components/ui/Tabs';
+import { Tabs, tabId, tabPanelId } from '@/components/ui/Tabs';
 import { parseApiError } from '@/lib/api/http';
 import {
   PERIODS,
@@ -30,6 +31,7 @@ import { CreatorAnalyticsEarnings } from '@/components/creatorAnalytics/CreatorA
 
 export default function CreatorAnalyticsPage() {
   const workflow = useCreatorAnalyticsWorkflow();
+  const tabsId = useId();
 
   const {
     router,
@@ -64,8 +66,15 @@ export default function CreatorAnalyticsPage() {
         active={period}
         onChange={setPeriod}
         ariaLabel="Analytics period"
+        idBase={tabsId}
       />
 
+      {/* Every state below is the active period's panel. */}
+      <div
+        role="tabpanel"
+        id={tabPanelId(tabsId, period)}
+        aria-labelledby={tabId(tabsId, period)}
+      >
       {sessionLoading || (armed && summaryQuery.isLoading) ? (
         <AnalyticsSkeleton />
       ) : liveUnavailable ? (
@@ -136,6 +145,7 @@ export default function CreatorAnalyticsPage() {
           </p>
         </>
       )}
+      </div>
     </div>
   );
 }

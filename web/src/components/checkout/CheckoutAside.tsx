@@ -80,13 +80,14 @@ export function CheckoutAside({
         <Icon name="forward" size={14} className="text-text-muted" />
       </button>
 
-      {/* Escrow Guarantee Pill */}
-      <div className="mt-3.5 flex items-center gap-2 rounded-lg border border-border-subtle bg-surface-alt/50 px-3 py-2 text-caption">
-        <Icon name="shieldCheck" size={16} className="shrink-0 text-commerce-trust" />
-        <span className="text-meta text-text-secondary">
-          <strong className="font-semibold text-text-primary">ThryftVerse Escrow:</strong> Payment released to seller only after delivery is confirmed.
+      {/* Escrow guarantee — quiet meta row, not a boxed pill */}
+      <p className="mt-3.5 flex items-start gap-2 text-meta text-text-secondary">
+        <Icon name="shieldCheck" size={15} className="mt-px shrink-0 text-commerce-trust" />
+        <span>
+          <span className="font-semibold text-text-primary">ThryftVerse Escrow</span> — payment
+          is released to the seller only after delivery is confirmed.
         </span>
-      </div>
+      </p>
 
       {/* Primary Pay Action */}
       <Button

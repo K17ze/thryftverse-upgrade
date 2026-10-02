@@ -38,7 +38,7 @@ export function AuctionRowSkeleton() {
 /** Detail skeleton — media stage left, transaction rail right. */
 export function AuctionDetailSkeleton() {
   return (
-    <div className="grid gap-8 px-4 py-6 sm:px-6 lg:grid-cols-[minmax(0,1fr)_400px] lg:gap-10">
+    <div className="grid grid-cols-1 gap-8 px-4 py-6 sm:px-6 lg:grid-cols-[minmax(0,1fr)_400px] lg:gap-10">
       <div className="flex flex-col gap-3">
         <Skeleton className="aspect-[0.8] w-full rounded-xl" />
         <div className="flex gap-2">

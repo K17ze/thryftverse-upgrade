@@ -118,6 +118,9 @@ export function ComposerInputBar({
           value={value}
           onChange={(e) => onTextChange(e.target.value)}
           onKeyDown={(e) => {
+            // Enter mid-IME-composition commits the candidate, not the
+            // message — let the IME own the keypress.
+            if (e.nativeEvent.isComposing) return;
             if (e.key === 'Enter' && !e.shiftKey) {
               e.preventDefault();
               onSubmit();

@@ -55,8 +55,13 @@ if (envDataMode !== 'fixture' && envDataMode !== 'live') {
 }
 export const DATA_MODE = envDataMode as 'fixture' | 'live';
 
-// Fixture latency — keeps skeleton states honest without feeling slow.
-const tick = (ms = 120) => new Promise((r) => setTimeout(r, ms));
+// Fixture latency — opt-in via NEXT_PUBLIC_SIMULATE_LATENCY=1. It keeps
+// skeleton states honest in dev/demo, but the default fixture read must
+// not pay a serialized 120ms floor on every query (waterfalls stack it).
+const tick = (ms = 120) =>
+  process.env.NEXT_PUBLIC_SIMULATE_LATENCY === '1'
+    ? new Promise((r) => setTimeout(r, ms))
+    : Promise.resolve();
 
 export interface FeedPage {
   units: DiscoveryFeedUnit[];
@@ -64,13 +69,17 @@ export interface FeedPage {
 }
 
 /** SortKey → wire enum, per endpoint contract. /search/listings ranks by
- *  `relevance`; /listings' nearest equivalent is `recommended`. */
+ *  `relevance`; /listings' nearest equivalent is `recommended`.
+ *  `discount-desc` has no backend enum — the fetch keeps the default
+ *  ranking and RefinedResults re-sorts the loaded set client-side
+ *  (same contract as the colour facet). */
 const SEARCH_SORT_WIRE: Record<SortKey, string> = {
   relevance: 'relevance',
   newest: 'recent',
   'most-liked': 'most_liked',
   'price-asc': 'price_asc',
   'price-desc': 'price_desc',
+  'discount-desc': 'relevance',
   'ending-soon': 'ending_soon',
 };
 
@@ -80,6 +89,7 @@ const BROWSE_SORT_WIRE: Record<SortKey, string> = {
   'most-liked': 'most_liked',
   'price-asc': 'price_asc',
   'price-desc': 'price_desc',
+  'discount-desc': 'recommended',
   'ending-soon': 'ending_soon',
 };
 
@@ -339,8 +349,32 @@ export const data = {
 
   async sellerListings(sellerId: string, signal?: AbortSignal): Promise<Listing[]> {
     if (DATA_MODE === 'live') {
-      const page = await listingsService.fetchSellerListings(sellerId, {}, signal);
-      return page.items;
+      // The flat Listing[] contract predates keyset pagination — a
+      // one-shot first page silently dropped every listing past the
+      // limit. Walk the cursor so consumers (closet collection, seller
+      // rails) see the real inventory. Bounded so a looping cursor
+      // still terminates.
+      const items: Listing[] = [];
+      const seenIds = new Set<string>();
+      let cursor: string | undefined;
+      for (let guard = 0; guard < 25; guard += 1) {
+        const page = await listingsService.fetchSellerListings(
+          sellerId,
+          { cursor, limit: 200 },
+          signal,
+        );
+        for (const item of page.items) {
+          if (!seenIds.has(item.id)) {
+            seenIds.add(item.id);
+            items.push(item);
+          }
+        }
+        // Bail on a non-advancing cursor (server echoing the same token)
+        // so the walk can't re-push the same page 25x.
+        if (!page.nextCursor || page.nextCursor === cursor) break;
+        cursor = page.nextCursor;
+      }
+      return items;
     }
     await tick();
     return listingsBySeller(sellerId);
@@ -435,8 +469,26 @@ export const data = {
 
   async myListings(signal?: AbortSignal): Promise<Listing[]> {
     if (DATA_MODE === 'live') {
-      const page = await listingsService.fetchMyListings({}, signal);
-      return page.items;
+      // Owner inventory is unbounded — walk the keyset cursor so the
+      // profile shop count and management surfaces reflect the whole
+      // closet, not just the first 200 rows. Bounded so a looping
+      // cursor still terminates.
+      const items: Listing[] = [];
+      const seenIds = new Set<string>();
+      let cursor: string | undefined;
+      for (let guard = 0; guard < 25; guard += 1) {
+        const page = await listingsService.fetchMyListings({ cursor }, signal);
+        for (const item of page.items) {
+          if (!seenIds.has(item.id)) {
+            seenIds.add(item.id);
+            items.push(item);
+          }
+        }
+        // Bail on a non-advancing cursor — same guard as sellerListings.
+        if (!page.nextCursor || page.nextCursor === cursor) break;
+        cursor = page.nextCursor;
+      }
+      return items;
     }
     await tick();
     return MY_LISTINGS;

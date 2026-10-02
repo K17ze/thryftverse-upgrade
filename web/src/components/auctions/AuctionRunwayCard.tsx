@@ -10,29 +10,41 @@
  */
 
 import Link from 'next/link';
-import type { AuctionViewModel } from '@/lib/contracts/auction';
+import type { AuctionViewModel, MyBidStatus } from '@/lib/contracts/auction';
 import { AppImage } from '@/components/ui/AppImage';
 import { Avatar } from '@/components/ui/Avatar';
 import { Icon } from '@/components/ui/Icon';
 import { AuctionCountdownChip } from '@/components/auctions/AuctionCountdown';
 import { AuctionWatchButton } from '@/components/auctions/AuctionWatchButton';
 import { LiveBadge } from '@/components/live/LiveBadge';
-import { auctionChipLabel, auctionChipUrgency } from '@/components/auctions/AuctionCard';
+import {
+  auctionChipLabel,
+  auctionChipUrgency,
+  ViewerBidChip,
+  viewerStatusLabel,
+  viewerStatusTone,
+} from '@/components/auctions/AuctionCard';
 import { userById } from '@/lib/data/fixtures';
+import { DATA_MODE } from '@/lib/api/client';
 import { formatPrice } from '@/lib/utils/format';
 
 export function AuctionRunwayCard({
   auction,
   priority = false,
+  viewerStatus,
 }: {
   auction: AuctionViewModel;
   /** Opt-in — pass only when this card is the page's LCP candidate. */
   priority?: boolean;
+  /** The viewer's bid position from the my-bids board — absent when they
+   *  have no bid on this lot, and nothing renders. */
+  viewerStatus?: MyBidStatus | null;
 }) {
   // Wire-provided seller identity first (live mapper populates it);
   // fixture catalogue only for fixture-mode ids — a live id colliding
   // with a catalogue id would attribute the lot to the wrong member.
-  const seller = auction.seller ?? userById(auction.sellerId);
+  const seller =
+    auction.seller ?? (DATA_MODE === 'live' ? null : userById(auction.sellerId));
   const label = auctionChipLabel(auction);
   const urgency = auctionChipUrgency(auction);
 
@@ -58,6 +70,12 @@ export function AuctionRunwayCard({
         <div className="absolute bottom-3 left-3">
           <AuctionCountdownChip label={label} urgency={urgency} />
         </div>
+        {/* Viewer position — the board's own status, opposite corner */}
+        {viewerStatus ? (
+          <div className="absolute bottom-3 right-3">
+            <ViewerBidChip status={viewerStatus} />
+          </div>
+        ) : null}
       </div>
 
       <div className="flex items-end justify-between gap-4 px-1 pt-3">
@@ -66,10 +84,16 @@ export function AuctionRunwayCard({
             {auction.title}
           </h3>
           <div className="mt-1 flex items-center gap-1.5 text-text-secondary">
-            <Avatar src={seller?.avatar} name={seller?.username ?? null} size={20} />
-            <span className="clamp-1 text-meta font-medium">
-              @{seller?.username ?? 'seller'}
-            </span>
+            {/* Live payloads without a seller projection render no row —
+                "@seller" would fabricate attribution. */}
+            {seller ? (
+              <>
+                <Avatar src={seller.avatar} name={seller.username} size={20} />
+                <span className="clamp-1 text-meta font-medium">
+                  @{seller.username}
+                </span>
+              </>
+            ) : null}
             {/* Verification rides the fixture User; the wire seller shape
                 carries no verification field, so the badge stays off
                 rather than being assumed. */}
@@ -94,7 +118,9 @@ export function AuctionRunwayCard({
       <Link
         href={`/auctions/${auction.id}`}
         className="absolute inset-0 z-[1] rounded-xl"
-        aria-label={`${auction.title}, current bid ${formatPrice(auction.currentBid)}, ${label}`}
+        aria-label={`${auction.title}, current bid ${formatPrice(auction.currentBid)}, ${label}${
+          viewerStatus ? `, ${viewerStatusLabel(viewerStatus).toLowerCase()}` : ''
+        }`}
       />
     </article>
   );
@@ -102,9 +128,17 @@ export function AuctionRunwayCard({
 
 /**
  * Supporting tile — the row companion stacked beside the runway: edge
- * media, title, urgency countdown and the standing bid.
+ * media, title, urgency countdown and the standing bid. The viewer's own
+ * position, when the board carries one, rides the price line as a toned
+ * caption (the small media edge has no room for a second chip).
  */
-export function AuctionSupportingTile({ auction }: { auction: AuctionViewModel }) {
+export function AuctionSupportingTile({
+  auction,
+  viewerStatus,
+}: {
+  auction: AuctionViewModel;
+  viewerStatus?: MyBidStatus | null;
+}) {
   const label = auctionChipLabel(auction);
   const urgency = auctionChipUrgency(auction);
   const hot = urgency === 'final' || urgency === 'soon';
@@ -140,6 +174,11 @@ export function AuctionSupportingTile({ auction }: { auction: AuctionViewModel }
           <span className="ml-1.5 font-normal text-text-muted">
             · {auction.bidCount} {auction.bidCount === 1 ? 'bid' : 'bids'}
           </span>
+          {viewerStatus ? (
+            <span className={`ml-1.5 ${viewerStatusTone(viewerStatus)}`}>
+              · {viewerStatusLabel(viewerStatus)}
+            </span>
+          ) : null}
         </p>
       </div>
       <Icon
@@ -150,7 +189,9 @@ export function AuctionSupportingTile({ auction }: { auction: AuctionViewModel }
       <Link
         href={`/auctions/${auction.id}`}
         className="absolute inset-0 z-[1]"
-        aria-label={`${auction.title}, current bid ${formatPrice(auction.currentBid)}, ${label}`}
+        aria-label={`${auction.title}, current bid ${formatPrice(auction.currentBid)}, ${label}${
+          viewerStatus ? `, ${viewerStatusLabel(viewerStatus).toLowerCase()}` : ''
+        }`}
       />
     </article>
   );

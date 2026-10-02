@@ -20,6 +20,12 @@ interface ConversationListTabsProps {
   unreadThreadsCount: number;
   groupThreadsCount: number;
   mutedThreadsCount: number;
+  /** Tab↔tabpanel pairing base — the caller's useId() (see ui/Tabs). */
+  idBase?: string;
+  /** Live tabpanel id while a secondary chip owns the list — the active
+   *  chip carries it as aria-controls (only the active panel exists, so
+   *  inactive chips must not reference it). */
+  panelId?: string;
 }
 
 export function ConversationListTabs({
@@ -33,6 +39,8 @@ export function ConversationListTabs({
   unreadThreadsCount,
   groupThreadsCount,
   mutedThreadsCount,
+  idBase,
+  panelId,
 }: ConversationListTabsProps) {
   return (
     <>
@@ -58,6 +66,7 @@ export function ConversationListTabs({
           active={tab}
           onChange={onTabChange}
           ariaLabel="Inbox sections"
+          idBase={idBase}
         />
         <IconButton
           name="filter"
@@ -80,6 +89,7 @@ export function ConversationListTabs({
             <Chip
               key={key}
               selected={tab === key}
+              aria-controls={tab === key ? panelId : undefined}
               onClick={() => {
                 // Picking the active chip again returns to All
                 onTabChange(tab === key ? 'all' : key);

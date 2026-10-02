@@ -23,18 +23,23 @@ import {
 
 const KIND_META: Record<
   WalletLedgerEntry['kind'],
-  { icon: AppIconName; iconClass: string }
+  { icon: AppIconName; iconClass: string; label: string }
 > = {
-  topup: { icon: 'card', iconClass: 'text-text-secondary' },
-  withdrawal: { icon: 'payout', iconClass: 'text-text-secondary' },
-  sale: { icon: 'arrowUp', iconClass: 'text-coown-up' },
-  purchase: { icon: 'bag', iconClass: 'text-text-secondary' },
-  fee: { icon: 'receipt', iconClass: 'text-text-muted' },
-  conversion: { icon: 'sort', iconClass: 'text-text-secondary' },
-  refund: { icon: 'repeat', iconClass: 'text-text-secondary' },
-  transfer: { icon: 'send', iconClass: 'text-text-secondary' },
-  other: { icon: 'receipt', iconClass: 'text-text-muted' },
+  topup: { icon: 'card', iconClass: 'text-text-secondary', label: 'Top-up' },
+  withdrawal: { icon: 'payout', iconClass: 'text-text-secondary', label: 'Payout' },
+  sale: { icon: 'arrowUp', iconClass: 'text-coown-up', label: 'Sale' },
+  purchase: { icon: 'bag', iconClass: 'text-text-secondary', label: 'Purchase' },
+  fee: { icon: 'receipt', iconClass: 'text-text-muted', label: 'Fee' },
+  conversion: { icon: 'sort', iconClass: 'text-text-secondary', label: 'Conversion' },
+  refund: { icon: 'repeat', iconClass: 'text-text-secondary', label: 'Refund' },
+  transfer: { icon: 'send', iconClass: 'text-text-secondary', label: 'Transfer' },
+  other: { icon: 'receipt', iconClass: 'text-text-muted', label: 'Movement' },
 };
+
+/** The lg table grid — date | type | description | amount | status |
+ *  chevron. Header and rows share this template so columns align. */
+const LEDGER_GRID =
+  'lg:grid-cols-[2.5rem_minmax(0,8.5rem)_minmax(0,1fr)_minmax(0,9rem)_minmax(0,6.5rem)_1.25rem]';
 
 /** Day-of-month for the desktop date column — the month group header
  *  already carries month + year, so the cell stays a bare day number. */
@@ -44,23 +49,36 @@ function dayOfMonth(iso: string): string {
 }
 
 /** One ledger row — type icon, day column (lg+), description, signed
- *  amount + running balance, with click inspection. */
+ *  amount + running balance, with click inspection. With `table` the row
+ *  becomes a real grid at lg (date | type | description | amount |
+ *  status) — the history surface's column grammar; the wallet-home
+ *  preview keeps the compact row. */
 export function LedgerRow({
   entry,
   desktopOnly = false,
+  table = false,
   onSelect,
 }: {
   entry: WalletLedgerEntry;
   /** Renders at lg+ only — the wallet home preview keeps three rows on
    *  mobile and deepens the ledger column on desktop. */
   desktopOnly?: boolean;
+  table?: boolean;
   onSelect?: (entry: WalletLedgerEntry) => void;
 }) {
   const meta = KIND_META[entry.kind] ?? {
     icon: 'receipt',
     iconClass: 'text-text-secondary',
+    label: 'Movement',
   };
   const positive = entry.amount > 0;
+  // lg:grid never doubles up with lg:flex — the two display utilities
+  // would be order-dependent, so the class resolves once here.
+  const display = desktopOnly
+    ? table
+      ? 'hidden lg:grid'
+      : 'hidden lg:flex'
+    : 'flex';
 
   return (
     <li
@@ -78,26 +96,40 @@ export function LedgerRow({
         entry.currency,
         entry.asset,
       )}`}
-      className={`${
-        desktopOnly ? 'hidden lg:flex' : 'flex'
-      } items-center gap-3.5 px-4 py-3.5 sm:px-6 transition-colors ${
+      className={`group ${display} items-center gap-3.5 px-4 py-3.5 sm:px-6 transition-colors ${
+        table ? `lg:grid ${LEDGER_GRID} lg:items-center lg:gap-x-5` : ''
+      } ${
         onSelect
           ? 'cursor-pointer hover:bg-surface-raised/70 active:bg-surface-raised focus:outline-none focus:bg-surface-raised/50'
           : ''
       }`}
     >
-      <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-surface-alt/70">
-        <Icon name={meta.icon} size={18} className={meta.iconClass} />
-      </span>
-      <span className="hidden w-8 shrink-0 text-right text-meta text-text-muted tnum lg:block">
-        {dayOfMonth(entry.date)}
+      {/* Date — the month group carries month + year, so the cell stays
+          a bare day number. Table mode only: `lg:w-full` would seize the
+          whole flex row in the compact preview and push siblings
+          off-canvas. */}
+      {table ? (
+        <span className="hidden w-8 shrink-0 text-right text-meta text-text-muted tnum lg:block lg:w-full lg:justify-self-end">
+          {dayOfMonth(entry.date)}
+        </span>
+      ) : null}
+      {/* Type — bare icon at every size (no chrome well on flat canvas);
+          the label is the lg column text. */}
+      <span className="flex min-w-0 shrink-0 items-center gap-2.5">
+        <Icon name={meta.icon} size={18} className={`shrink-0 ${meta.iconClass}`} />
+        {table ? (
+          <span className="clamp-1 hidden text-meta text-text-secondary lg:inline">
+            {meta.label}
+          </span>
+        ) : null}
       </span>
       <div className="min-w-0 flex-1">
         <p className="clamp-1 text-body text-text-primary">{entry.description}</p>
         {entry.status === 'pending' ? (
-          <div className="mt-1 flex items-center gap-1.5">
+          // In table rows the pending badge files under Status at lg.
+          <div className={`mt-1 flex items-center gap-1.5 ${table ? 'lg:hidden' : ''}`}>
             <span className="h-1.5 w-1.5 animate-pulse rounded-full bg-warning" />
-            <Badge variant="warning" className="py-0 text-[10px]">
+            <Badge variant="warning" className="py-0 text-micro">
               Pending clearance
             </Badge>
           </div>
@@ -117,8 +149,19 @@ export function LedgerRow({
             : formatLedgerMoney(entry.balance, entry.currency, entry.asset)}
         </p>
       </div>
+      {table ? (
+        <span className="hidden min-w-0 lg:block">
+          {entry.status === 'pending' ? (
+            <Badge variant="warning" className="py-0 text-micro">
+              Pending
+            </Badge>
+          ) : (
+            <span className="text-meta text-text-muted">—</span>
+          )}
+        </span>
+      ) : null}
       {onSelect ? (
-        <span className="hidden text-text-muted opacity-0 group-hover:opacity-100 sm:block">
+        <span className="hidden text-text-muted opacity-0 group-hover:opacity-100 sm:block lg:justify-self-end">
           <Icon name="forward" size={14} />
         </span>
       ) : null}
@@ -154,6 +197,19 @@ export function LedgerList({
 
   return (
     <div className="border-t border-border-subtle">
+      {/* Column header — desktop table grammar; mirrors the row grid.
+          Visual signpost only (month rails carry the grouping). */}
+      <div
+        aria-hidden="true"
+        className={`hidden border-b border-border-subtle px-4 pb-2 pt-3 sm:px-6 lg:grid ${LEDGER_GRID} lg:gap-x-5`}
+      >
+        <span className="text-right text-label text-text-muted">Date</span>
+        <span className="text-label text-text-muted">Type</span>
+        <span className="text-label text-text-muted">Description</span>
+        <span className="text-right text-label text-text-muted">Amount</span>
+        <span className="text-label text-text-muted">Status</span>
+        <span />
+      </div>
       {groups.map(([month, items]) => {
         // Per-currency month nets — one segment per currency present,
         // never a blended figure across currencies (mirrors native's
@@ -189,6 +245,7 @@ export function LedgerList({
                 <LedgerRow
                   key={entry.id}
                   entry={entry}
+                  table
                   onSelect={onSelectEntry}
                 />
               ))}

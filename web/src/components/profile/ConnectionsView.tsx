@@ -53,14 +53,17 @@ function pool(user: User, kind: ConnectionKind, followingIds: string[]): User[] 
  *  skeleton, which belongs to profile surfaces). */
 export function ConnectionsSkeleton({ count = 7 }: { count?: number }) {
   return (
-    <div className="mx-auto w-full max-w-xl px-4 pt-5 sm:px-0" aria-busy aria-label="Loading connections">
+    <div className="mx-auto w-full max-w-xl px-4 pt-5 sm:px-0 lg:max-w-[720px]" aria-busy aria-label="Loading connections">
       <Skeleton className="h-6 w-40" />
       <Skeleton className="mt-5 h-10 w-full rounded-none" />
       <div className="mt-2">
         {Array.from({ length: count }).map((_, i) => (
-          <div key={i} className="flex items-center gap-3 py-3">
+          <div
+            key={i}
+            className="flex items-center gap-3 py-3 lg:grid lg:grid-cols-[2.75rem_minmax(0,1.1fr)_minmax(0,1.3fr)_auto] lg:gap-x-6"
+          >
             <Skeleton className="size-11 shrink-0 rounded-full" />
-            <div className="flex-1 space-y-1.5">
+            <div className="flex-1 space-y-1.5 lg:contents">
               <Skeleton className="h-4 w-32" />
               <Skeleton className="h-3 w-48" />
             </div>
@@ -76,12 +79,16 @@ function RowSkeleton({ count = 6 }: { count?: number }) {
   return (
     <div aria-busy aria-label="Loading list">
       {Array.from({ length: count }).map((_, i) => (
-        <div key={i} className="flex items-center gap-3 px-4 py-3 sm:px-0">
+        <div
+          key={i}
+          className="flex items-center gap-3 px-4 py-3 sm:px-0 lg:grid lg:grid-cols-[2.75rem_minmax(0,1.1fr)_minmax(0,1.3fr)_auto] lg:gap-x-6"
+        >
           <Skeleton className="size-11 shrink-0 rounded-full" />
-          <div className="flex-1 space-y-1.5">
+          <div className="flex-1 space-y-1.5 lg:contents">
             <Skeleton className="h-4 w-32" />
             <Skeleton className="h-3 w-48" />
           </div>
+          <Skeleton className="hidden h-8 w-24 rounded-md lg:block" />
         </div>
       ))}
     </div>
@@ -169,7 +176,7 @@ export function ConnectionsView({ user, kind }: { user: User; kind: ConnectionKi
     : rows;
 
   return (
-    <div className="mx-auto w-full max-w-xl">
+    <div className="mx-auto w-full max-w-xl lg:max-w-[720px]">
       <BackBar />
       {/* Context header — the tabs carry the mode, so the title is the
           member, not a repeat of the active tab label. */}
@@ -212,7 +219,7 @@ export function ConnectionsView({ user, kind }: { user: User; kind: ConnectionKi
               placeholder={`Search ${kind}`}
               aria-label={`Search ${kind}`}
               autoComplete="off"
-              className="h-9 w-full rounded-md bg-surface-alt pl-9 pr-9 text-body text-input-text placeholder:text-text-muted"
+              className="h-9 w-full rounded-md border border-transparent bg-surface-alt pl-9 pr-9 text-body text-input-text placeholder:text-text-muted focus:border-border focus:outline-none"
             />
             {query ? (
               <button
@@ -253,15 +260,22 @@ export function ConnectionsView({ user, kind }: { user: User; kind: ConnectionKi
         <>
           <ul className="divide-y divide-border-subtle pt-2">
             {visible.map((u) => (
-              <li key={u.id} className="flex items-center gap-3 px-4 py-3 sm:px-0">
+              // lg: the link's wrappers dissolve (display:contents, the
+              // AgentRunRow trick) so the row re-forms as columns —
+              // avatar | member | meta | action — the Vinted follower-
+              // list grammar: one list, not a 576px phone strip.
+              <li
+                key={u.id}
+                className="flex items-center gap-3 px-4 py-3 sm:px-0 lg:grid lg:grid-cols-[2.75rem_minmax(0,1.1fr)_minmax(0,1.3fr)_auto] lg:gap-x-6 lg:has-[:focus-visible]:bg-surface-alt/60"
+              >
                 <Link
                   href={`/u/${u.username}`}
-                  className="pressable flex min-w-0 flex-1 items-center gap-3 rounded-md"
+                  className="pressable flex min-w-0 flex-1 items-center gap-3 rounded-md lg:contents"
                   aria-label={`Open @${u.username}'s profile`}
                 >
                   <Avatar src={u.avatar} name={u.username} size={44} />
-                  <span className="min-w-0">
-                    <span className="flex items-center gap-1">
+                  <span className="min-w-0 lg:contents">
+                    <span className="flex min-w-0 items-center gap-1">
                       <span className="truncate text-body font-semibold text-text-primary">
                         {u.username}
                       </span>
@@ -275,13 +289,17 @@ export function ConnectionsView({ user, kind }: { user: User; kind: ConnectionKi
                         />
                       ) : null}
                     </span>
-                    <span className="clamp-1 block text-meta text-text-muted">
+                    <span className="clamp-1 block min-w-0 text-meta text-text-muted">
                       {u.subline}
                     </span>
                   </span>
                 </Link>
                 {u.id !== (LIVE ? me?.id : CURRENT_USER.id) ? (
-                  <FollowButton userId={u.id} size="sm" className="shrink-0" />
+                  <FollowButton
+                    userId={u.id}
+                    size="sm"
+                    className="shrink-0 lg:justify-self-end"
+                  />
                 ) : null}
               </li>
             ))}

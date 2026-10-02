@@ -37,15 +37,13 @@ import { useOnlineStatus } from '@/lib/offline/useOnlineStatus';
 const LIVE = DATA_MODE === 'live';
 
 /** Rail skeleton — three board-shaped tiles matching the owned rail's
- *  square cover + two-line meta. */
+ *  square collage cover (title + count overlay inside the frame). */
 function RailSkeleton() {
   return (
     <>
       {[0, 1, 2].map((i) => (
         <div key={i} className="w-40 shrink-0 sm:w-44 lg:w-48" aria-hidden>
           <Skeleton className="aspect-square w-full rounded-lg" />
-          <Skeleton className="mt-2 h-3.5 w-3/4" />
-          <Skeleton className="mt-1.5 h-3 w-1/3" />
         </div>
       ))}
     </>
@@ -246,10 +244,7 @@ export default function MoodboardsPage() {
 
       {/* Your boards — horizontal rail led by the create tile */}
       <section aria-label="Your moodboards" className="mt-3">
-        <div className="flex items-baseline justify-between px-4 sm:px-6">
-          <h2 className="text-body-emphasis font-semibold text-text-primary">
-            Your moodboards
-          </h2>
+        <div className="flex items-baseline justify-end px-4 sm:px-6">
           <button
             type="button"
             onClick={() => setCreateOpen(true)}

@@ -12,6 +12,11 @@
  * parity). Rows prefill the trade composer's limit price on click.
  * Every figure comes from the ORDER_BOOKS / MARKET_LEDGER contracts —
  * nothing is fabricated for missing depth.
+ * Decomposed into modular domain components (< 400 LOC standard):
+ *  - SpreadBand
+ *  - BookSide
+ *  - DepthChart
+ *  - TradeTape
  */
 
 import { useState } from 'react';
@@ -19,12 +24,13 @@ import { DepthChart } from '@/components/charts';
 import { EmptyState } from '@/components/ui/EmptyState';
 import { Skeleton } from '@/components/ui/Skeleton';
 import type {
-  OrderBookLevel,
   OrderBookSnapshot,
   TradeLedgerEntry,
 } from '@/lib/contracts/coown';
 import { gbp } from '../format';
 import { TradeTape } from './TradeLedger';
+import { SpreadBand } from './orderbook/SpreadBand';
+import { BookSide, cumulative } from './orderbook/BookSide';
 
 const MAX_LEVELS = 6;
 const TAPE_ROWS = 8;
@@ -36,191 +42,6 @@ const VIEWS: { value: BookView; label: string }[] = [
   { value: 'depth', label: 'Depth' },
   { value: 'trades', label: 'Trades' },
 ];
-
-/** Cumulative units from the best price outward — the fan scale. */
-function cumulative(levels: OrderBookLevel[]): number[] {
-  const out: number[] = [];
-  let cum = 0;
-  for (const level of levels) {
-    cum += level.units;
-    out.push(cum);
-  }
-  return out;
-}
-
-function LevelRow({
-  level,
-  side,
-  cum,
-  maxCum,
-  onSelect,
-}: {
-  level: OrderBookLevel;
-  side: 'bid' | 'ask';
-  /** Cumulative units at this level — the depth-bar fill. */
-  cum: number;
-  maxCum: number;
-  onSelect: (price: number, side: 'buy' | 'sell') => void;
-}) {
-  const bid = side === 'bid';
-  return (
-    <li>
-      <button
-        type="button"
-        onClick={() => onSelect(level.unitPriceGbp, bid ? 'sell' : 'buy')}
-        aria-label={`${bid ? 'Bid' : 'Ask'} ${gbp(level.unitPriceGbp)}, ${level.units} units, ${cum} cumulative. Sets limit price`}
-        className="pressable relative grid w-full grid-cols-[5.5rem_4.5rem_minmax(0,1fr)] items-center gap-3 px-1.5 py-2 text-left hover:bg-row"
-      >
-        <span
-          aria-hidden="true"
-          className={`absolute inset-y-0.5 ${bid ? 'left-0' : 'right-0'} ${
-            bid ? 'bg-coown-up-subtle' : 'bg-coown-down-subtle'
-          }`}
-          style={{ width: `${Math.min(100, (cum / maxCum) * 100)}%` }}
-        />
-        <span
-          className={`relative text-body font-medium tnum ${
-            bid ? 'text-coown-up' : 'text-coown-down'
-          }`}
-        >
-          {gbp(level.unitPriceGbp)}
-        </span>
-        <span className="relative text-right text-body text-text-primary tnum">
-          {level.units}
-        </span>
-        <span className="relative text-right text-body text-text-secondary tnum">
-          {cum}
-        </span>
-      </button>
-    </li>
-  );
-}
-
-function BookSide({
-  side,
-  levels,
-  cums,
-  maxCum,
-  onSelect,
-}: {
-  side: 'bid' | 'ask';
-  /** Display order — asks arrive reversed (worst→best, best at spread). */
-  levels: OrderBookLevel[];
-  /** Cumulative per displayed row, aligned with `levels`. */
-  cums: number[];
-  maxCum: number;
-  onSelect: (price: number, side: 'buy' | 'sell') => void;
-}) {
-  const bid = side === 'bid';
-  return (
-    <div>
-      <p
-        className={`px-1.5 pb-1 pt-2 text-micro font-semibold uppercase tracking-[0.08em] ${
-          bid ? 'text-coown-up' : 'text-coown-down'
-        }`}
-      >
-        {bid ? 'Bids' : 'Asks'}
-      </p>
-      {levels.length === 0 ? (
-        <p className="px-1.5 py-3 text-meta text-text-muted">
-          No {bid ? 'bids' : 'asks'} on the book
-        </p>
-      ) : (
-        <ul>
-          {levels.map((level, i) => (
-            <LevelRow
-              key={`${side}-${level.unitPriceGbp}`}
-              level={level}
-              side={side}
-              cum={cums[i] ?? level.units}
-              maxCum={maxCum}
-              onSelect={onSelect}
-            />
-          ))}
-        </ul>
-      )}
-    </div>
-  );
-}
-
-/**
- * Spread band — best bid and best ask anchor each edge on their side's
- * tint; the neutral centre carries the spread (with bps) and the last
- * print, coloured by the tick rule (at/above ask → buy lift, at/below
- * bid → sell hit, inside → neutral).
- */
-function SpreadBand({
-  bestBid,
-  bestAsk,
-  lastPrice,
-}: {
-  bestBid: number | null;
-  bestAsk: number | null;
-  lastPrice: number | null;
-}) {
-  const spread = bestBid != null && bestAsk != null ? bestAsk - bestBid : null;
-  const mid = spread != null ? (bestBid! + bestAsk!) / 2 : null;
-  const bps = spread != null && mid != null && mid > 0 ? (spread / mid) * 10_000 : null;
-  const lastSide =
-    lastPrice == null
-      ? null
-      : bestAsk != null && lastPrice >= bestAsk
-        ? 'buy'
-        : bestBid != null && lastPrice <= bestBid
-          ? 'sell'
-          : null;
-
-  return (
-    <div
-      className="my-1.5 grid grid-cols-[1fr_auto_1fr] items-stretch border-y border-border-subtle"
-      aria-label={`Best bid ${gbp(bestBid)}, best ask ${gbp(bestAsk)}${
-        spread != null ? `, spread ${gbp(spread)}` : ''
-      }`}
-    >
-      <div
-        className={`px-1.5 py-2 ${bestBid != null ? 'bg-coown-up-subtle' : ''}`}
-      >
-        <p className="text-micro font-semibold uppercase tracking-[0.08em] text-text-muted">Bid</p>
-        <p className={`text-body-emphasis font-semibold tnum ${bestBid != null ? 'text-coown-up' : 'text-text-muted'}`}>
-          {gbp(bestBid)}
-        </p>
-      </div>
-      <div className="flex min-w-28 flex-col items-center justify-center gap-0.5 px-3 py-2 text-center">
-        <p className="text-meta text-text-muted tnum">
-          Spread{' '}
-          <span className="font-semibold text-text-secondary">
-            {spread != null ? gbp(spread) : '—'}
-            {bps != null ? ` · ${bps.toFixed(0)}bps` : ''}
-          </span>
-        </p>
-        {lastPrice != null ? (
-          <p className="text-meta text-text-muted tnum">
-            Last{' '}
-            <span
-              className={`font-semibold ${
-                lastSide === 'buy'
-                  ? 'text-coown-up'
-                  : lastSide === 'sell'
-                    ? 'text-coown-down'
-                    : 'text-text-secondary'
-              }`}
-            >
-              {gbp(lastPrice)}
-            </span>
-          </p>
-        ) : null}
-      </div>
-      <div
-        className={`px-1.5 py-2 text-right ${bestAsk != null ? 'bg-coown-down-subtle' : ''}`}
-      >
-        <p className="text-micro font-semibold uppercase tracking-[0.08em] text-text-muted">Ask</p>
-        <p className={`text-body-emphasis font-semibold tnum ${bestAsk != null ? 'text-coown-down' : 'text-text-muted'}`}>
-          {gbp(bestAsk)}
-        </p>
-      </div>
-    </div>
-  );
-}
 
 export function OrderBookPanel({
   book,
@@ -319,7 +140,10 @@ export function OrderBookPanel({
           >
             {v.label}
             {view === v.value ? (
-              <span aria-hidden="true" className="absolute inset-x-0 -bottom-px h-0.5 bg-text-primary" />
+              <span
+                aria-hidden="true"
+                className="absolute inset-x-0 -bottom-px h-0.5 bg-text-primary"
+              />
             ) : null}
           </button>
         ))}
@@ -384,7 +208,11 @@ export function OrderBookPanel({
             onSelect={onPickLevel}
           />
 
-          <SpreadBand bestBid={bestBid} bestAsk={bestAsk} lastPrice={lastPrice} />
+          <SpreadBand
+            bestBid={bestBid}
+            bestAsk={bestAsk}
+            lastPrice={lastPrice}
+          />
 
           <BookSide
             side="bid"

@@ -69,9 +69,9 @@ export function PayoutSetupSheet({ open, onClose, onReady }: PayoutSetupSheetPro
     <Sheet open={open} onClose={onClose} title="Set up payouts" maxWidth={440}>
       <div className="px-5 py-5">
         {state.phase === 'working' ? (
-          <div className="flex flex-col items-center py-8 text-center" aria-busy>
+          <div className="flex items-center gap-2.5 py-8" aria-busy role="status">
             <Spinner size={24} tone="neutral" />
-            <p className="mt-4 text-body text-text-secondary">
+            <p className="text-body text-text-secondary">
               Checking your payout setup…
             </p>
           </div>

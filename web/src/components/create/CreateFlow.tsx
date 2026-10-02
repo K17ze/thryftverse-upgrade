@@ -11,11 +11,12 @@
  * GET /posters?creatorId=&status=draft; discard is DELETE on each route.
  */
 
-import { useCallback, useState } from 'react';
+import { useCallback, useEffect, useState } from 'react';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { useSession } from '@/lib/session/SessionProvider';
+import { DATA_MODE } from '@/lib/api/client';
 import * as creator from '@/lib/api/services/creator';
 import type { CreatorDraft } from '@/lib/api/services/creator';
 import { dropDraftReceipt } from '@/lib/creator/draftReceipts';
@@ -24,6 +25,8 @@ import { timeAgo } from '@/lib/utils/format';
 import { Icon, type AppIconName } from '@/components/ui/Icon';
 import { Button } from '@/components/ui/Button';
 import { useToast } from '@/components/ui/Toast';
+import { isCameraCaptureSupported } from '@/lib/media/cameraSupport';
+import { CreateCameraSheet } from './CreateCameraSheet';
 import { LookComposer } from './LookComposer';
 import { PosterComposer } from './PosterComposer';
 
@@ -55,11 +58,27 @@ export function CreateFlow() {
   const [confirmDiscardId, setConfirmDiscardId] = useState<string | null>(null);
   const [discardingId, setDiscardingId] = useState<string | null>(null);
   const [draftsError, setDraftsError] = useState<string | null>(null);
+  /** Which composer the open camera sheet is capturing for — capture
+   *  commits straight into that composer (mobile camera-first entry). */
+  const [cameraFor, setCameraFor] = useState<'look' | 'poster' | null>(null);
+  /** Captured file carried into the next composer mount. */
+  const [initialFile, setInitialFile] = useState<File | null>(null);
+  /** getUserMedia is a secure-context, post-mount capability — detected in
+   *  an effect so SSR and unsupported browsers never render a dead
+   *  affordance; the honest fallback is the upload entry alone. */
+  const [cameraSupported, setCameraSupported] = useState(false);
+
+  useEffect(() => {
+    setCameraSupported(isCameraCaptureSupported());
+  }, []);
 
   const draftsQuery = useQuery({
     queryKey: ['creator-drafts', user?.id],
     queryFn: ({ signal }) => creator.fetchCreatorDrafts(user!.id, signal),
-    enabled: Boolean(user && !isGuest),
+    // Draft rows are live-backend entities — fixture mode has no
+    // look/poster draft source, so the honest tray is an empty list, not
+    // a dead request to :4000.
+    enabled: DATA_MODE === 'live' && Boolean(user && !isGuest),
     staleTime: 15_000,
   });
 
@@ -87,6 +106,7 @@ export function CreateFlow() {
   const backToEntry = useCallback(() => {
     setMode('entry');
     setResume(null);
+    setInitialFile(null);
   }, []);
 
   // ── Session resolving — skeleton mirrors the entry geometry ────────
@@ -106,9 +126,7 @@ export function CreateFlow() {
   if (isGuest || !user) {
     return (
       <div className="mx-auto flex w-full max-w-[440px] flex-col items-center px-4 py-24 text-center sm:px-6">
-        <span className="flex h-16 w-16 items-center justify-center rounded-full bg-surface-alt text-text-muted">
-          <Icon name="create" size={28} />
-        </span>
+        <Icon name="create" size={36} className="text-text-muted" />
         <h1 className="mt-5 text-screen-title text-text-primary">Create on ThryftVerse</h1>
         <p className="mt-2 text-body text-text-secondary">
           Sign in to publish looks and posters — drafts save to your account.
@@ -130,6 +148,7 @@ export function CreateFlow() {
     return (
       <LookComposer
         draft={resume?.kind === 'look' ? resume : undefined}
+        initialFile={resume ? undefined : (initialFile ?? undefined)}
         onDraftSaved={refreshDrafts}
         onBack={backToEntry}
       />
@@ -139,6 +158,7 @@ export function CreateFlow() {
     return (
       <PosterComposer
         draft={resume?.kind === 'poster' ? resume : undefined}
+        initialFile={resume ? undefined : (initialFile ?? undefined)}
         onDraftSaved={refreshDrafts}
         onBack={backToEntry}
       />
@@ -164,32 +184,46 @@ export function CreateFlow() {
 
       <div className="mt-6 border-t border-border-subtle">
         {CHOICES.map((choice) => (
-          <button
-            key={choice.mode}
-            type="button"
-            onClick={() => {
-              setResume(null);
-              setMode(choice.mode);
-            }}
-            className="pressable flex w-full items-center gap-4 border-b border-border-subtle py-5 text-left"
-          >
-            <span className="flex h-12 w-12 shrink-0 items-center justify-center rounded-full bg-surface-alt text-text-primary">
-              <Icon name={choice.icon} size={22} />
-            </span>
-            <span className="min-w-0 flex-1">
-              <span className="block text-body-emphasis font-semibold text-text-primary">{choice.title}</span>
-              <span className="mt-0.5 block text-caption text-text-secondary">{choice.sub}</span>
-            </span>
-            <Icon name="forward" size={18} className="shrink-0 text-text-muted" />
-          </button>
+          <div key={choice.mode} className="border-b border-border-subtle">
+            <button
+              type="button"
+              onClick={() => {
+                setResume(null);
+                setInitialFile(null);
+                setMode(choice.mode);
+              }}
+              className="pressable flex w-full items-center gap-4 py-5 text-left"
+            >
+              <Icon name={choice.icon} size={22} className="shrink-0 text-text-secondary" />
+              <span className="min-w-0 flex-1">
+                <span className="block text-body-emphasis font-semibold text-text-primary">{choice.title}</span>
+                <span className="mt-0.5 block text-caption text-text-secondary">{choice.sub}</span>
+              </span>
+              <Icon name="forward" size={18} className="shrink-0 text-text-muted" />
+            </button>
+            {/* Camera-first entry — the mobile root state, offered per
+                composer path so a capture lands in the right composer.
+                Rendered only where getUserMedia is real. */}
+            {cameraSupported ? (
+              <div className="-mt-2 pb-4 pl-16">
+                <button
+                  type="button"
+                  aria-label={`Take a photo for a new ${choice.mode}`}
+                  onClick={() => setCameraFor(choice.mode)}
+                  className="pressable flex h-11 items-center gap-2 rounded-md text-body font-medium text-text-secondary transition-colors hover:text-text-primary"
+                >
+                  <Icon name="camera" size={16} />
+                  Take a photo
+                </button>
+              </div>
+            ) : null}
+          </div>
         ))}
         <Link
           href="/sell"
           className="pressable flex w-full items-center gap-4 border-b border-border-subtle py-5 text-left"
         >
-          <span className="flex h-12 w-12 shrink-0 items-center justify-center rounded-full bg-surface-alt text-text-primary">
-            <Icon name="pricetag" size={20} />
-          </span>
+          <Icon name="pricetag" size={22} className="shrink-0 text-text-secondary" />
           <span className="min-w-0 flex-1">
             <span className="block text-body-emphasis font-semibold text-text-primary">Sell an item</span>
             <span className="mt-0.5 block text-caption text-text-secondary">List something from your closet</span>
@@ -238,6 +272,7 @@ export function CreateFlow() {
                   type="button"
                   onClick={() => {
                     setResume(draft);
+                    setInitialFile(null);
                     setMode(draft.kind);
                   }}
                   className="pressable flex min-w-0 flex-1 items-center gap-3 text-left"
@@ -307,6 +342,26 @@ export function CreateFlow() {
           </p>
         ) : null}
       </section>
+
+      {/* Camera capture — one slot (a look/poster takes a single frame).
+          Commit carries the file into that composer's staged-media path. */}
+      {cameraSupported ? (
+        <CreateCameraSheet
+          open={cameraFor !== null}
+          onClose={() => setCameraFor(null)}
+          onCapture={(files) => {
+            const file = files[0];
+            const target = cameraFor;
+            setCameraFor(null);
+            if (file && target) {
+              setResume(null);
+              setInitialFile(file);
+              setMode(target);
+            }
+          }}
+          remainingSlots={1}
+        />
+      ) : null}
     </div>
   );
 }

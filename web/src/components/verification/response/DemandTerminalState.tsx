@@ -21,9 +21,7 @@ export function DemandTerminalState({ demand }: { demand: SellerVerificationDema
   return (
     <DemandShell>
       <div className="flex flex-col items-center py-12 text-center" aria-live="polite">
-        <span className="flex h-16 w-16 items-center justify-center rounded-full bg-surface-alt">
-          <Icon name={meta.icon} size={30} className="text-text-muted" />
-        </span>
+        <Icon name={meta.icon} size={36} className="text-text-muted" />
         <h2 className="mt-5 text-section-title font-semibold text-text-primary">
           {demand.status === 'expired' ? 'Deadline passed' : meta.label}
         </h2>

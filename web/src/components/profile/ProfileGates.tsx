@@ -18,6 +18,7 @@ export function ProfileGates({
   aggregate,
   unblockPending,
   onUnblock,
+  children,
 }: {
   isLoading: boolean;
   isError: boolean;
@@ -28,6 +29,7 @@ export function ProfileGates({
   aggregate: PublicProfile | null | undefined;
   unblockPending: boolean;
   onUnblock: () => void;
+  children?: React.ReactNode;
 }) {
   if (isLoading) {
     return (
@@ -99,5 +101,5 @@ export function ProfileGates({
     );
   }
 
-  return null;
+  return children ?? null;
 }

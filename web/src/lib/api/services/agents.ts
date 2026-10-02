@@ -25,8 +25,6 @@ import type {
   AgentBot,
   AgentBotStatus,
   AgentCapability,
-  AgentMemory,
-  AgentMemorySettings,
   AgentModelId,
   AgentPurposeId,
   AgentRunEntry,
@@ -38,6 +36,9 @@ import {
   SUPPORTED_MODELS,
   isAgentCapability,
 } from '@/lib/contracts/agents';
+
+export * from './agentIntent';
+export * from './agentMemory';
 
 interface ApiAgentConfig {
   instructions?: string;
@@ -235,9 +236,6 @@ export async function createAgentBot(input: {
   triggerMode?: AgentTriggerMode;
   purposeId?: AgentPurposeId | null;
 }): Promise<AgentBot> {
-  // The instructions are real — this is the system prompt written to
-  // agent_config. Composed from the name + job description, well past the
-  // 20-char publish minimum.
   const instructions =
     `You are ${input.name}, a ThryftVerse agent. ${input.description}`.slice(0, 8000);
   const commandHint = `/${
@@ -326,134 +324,4 @@ export async function setAgentBotEnabled(botId: string, enabled: boolean): Promi
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({ status: enabled ? 'available' : 'disabled' }),
   });
-}
-
-// ---------------------------------------------------------------------------
-// Recommendation intent — GET/POST /recommendations/intent/:userId/*
-// (backend/api/src/routes/recommendationIntent.ts). The intent profile is
-// the real "Your algorithm" wire: topics carry a server-side influence band
-// and a removable flag derived from whether the signal came from history.
-// No local fallback — when the backend can't answer, callers show the
-// honest unavailable state, never seed topics (same rule as the native
-// YourAlgorithmScreen).
-// ---------------------------------------------------------------------------
-
-export interface AlgorithmIntentTopic {
-  id: string;
-  label: string;
-  category: string;
-  influenceBand: 'more' | 'usual' | 'less' | 'excluded' | string;
-  sourceType: string;
-  evidenceCount: number;
-  removable: boolean;
-  paused: boolean;
-  lastEvidenceAt: string | null;
-  updatedAt: string;
-}
-
-export interface AlgorithmIntentProfile {
-  intentVersion: number;
-  profileMode: string;
-  topics: AlgorithmIntentTopic[];
-}
-
-export async function fetchAlgorithmIntentProfile(
-  userId: string,
-  signal?: AbortSignal,
-): Promise<AlgorithmIntentProfile> {
-  return fetchJson<AlgorithmIntentProfile>(
-    `/recommendations/intent/${encodeURIComponent(userId)}/profile`,
-    undefined,
-    { signal },
-  );
-}
-
-export type AlgorithmIntentDirection =
-  | 'more'
-  | 'usual'
-  | 'less'
-  | 'exclude'
-  | 'add'
-  | 'remove';
-
-export async function mutateAlgorithmIntent(
-  userId: string,
-  input: {
-    idempotencyKey: string;
-    targetId: string;
-    targetLabel: string;
-    direction: AlgorithmIntentDirection;
-    topicCategory?: string;
-    expectedIntentVersion?: number;
-  },
-): Promise<{ mutationId: number; intentVersion: number; status: string }> {
-  return fetchJson(`/recommendations/intent/${encodeURIComponent(userId)}/mutate`, {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({
-      idempotencyKey: input.idempotencyKey,
-      scope: 'topic',
-      targetId: input.targetId,
-      targetLabel: input.targetLabel,
-      direction: input.direction,
-      source: 'your_algorithm',
-      ...(input.topicCategory ? { topicCategory: input.topicCategory } : {}),
-      ...(input.expectedIntentVersion !== undefined
-        ? { expectedIntentVersion: input.expectedIntentVersion }
-        : {}),
-    }),
-  });
-}
-
-export async function resetAlgorithmIntent(
-  userId: string,
-): Promise<{ intentVersion: number; status: string }> {
-  return fetchJson(`/recommendations/intent/${encodeURIComponent(userId)}/reset`, {
-    method: 'POST',
-  });
-}
-
-// ---------------------------------------------------------------------------
-// Agent memory — mirrors the mobile botsApi /agent-memory endpoints 1:1.
-// Every record is a real server row scoped to the authenticated caller.
-// ---------------------------------------------------------------------------
-
-export async function fetchAgentMemory(botId?: string): Promise<{
-  settings: AgentMemorySettings;
-  memories: AgentMemory[];
-}> {
-  const suffix = botId ? `?botId=${encodeURIComponent(botId)}` : '';
-  const payload = await fetchJson<{
-    ok: true;
-    settings: AgentMemorySettings;
-    memories: AgentMemory[];
-  }>(`/agent-memory${suffix}`);
-  return { settings: payload.settings, memories: payload.memories };
-}
-
-export async function updateAgentMemorySettings(
-  patch: Partial<AgentMemorySettings>,
-): Promise<AgentMemorySettings> {
-  const payload = await fetchJson<{ ok: true; settings: AgentMemorySettings }>(
-    '/agent-memory/settings',
-    {
-      method: 'PUT',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify(patch),
-    },
-  );
-  return payload.settings;
-}
-
-export async function retractAgentMemory(memoryId: string): Promise<void> {
-  await fetchJson(`/agent-memory/${encodeURIComponent(memoryId)}`, { method: 'DELETE' });
-}
-
-export async function clearAgentMemories(botId?: string): Promise<number> {
-  const payload = await fetchJson<{ ok: true; cleared: number }>('/agent-memory/clear', {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify(botId ? { botId } : {}),
-  });
-  return payload.cleared;
 }

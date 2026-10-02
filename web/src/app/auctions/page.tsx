@@ -11,7 +11,8 @@
  */
 
 import Link from 'next/link';
-import { Tabs } from '@/components/ui/Tabs';
+import { useId } from 'react';
+import { Tabs, tabId, tabPanelId } from '@/components/ui/Tabs';
 import { Icon } from '@/components/ui/Icon';
 import { AuctionAttentionStrip } from '@/components/auctions';
 import { AUCTION_SCOPES } from '@/components/auctions/hub/AuctionsHubPrimitives';
@@ -40,6 +41,7 @@ export default function AuctionsPage() {
     counts,
     attention,
   } = useAuctionsHubWorkflow();
+  const tabsId = useId();
 
   return (
     <div className="mx-auto w-full max-w-[1280px] px-4 pb-16 pt-6 sm:px-6">
@@ -78,6 +80,7 @@ export default function AuctionsPage() {
         active={scope}
         onChange={setScope}
         ariaLabel="Auction scopes"
+        idBase={tabsId}
       />
 
       {/* Personal strip — the single auction asking for the viewer now */}
@@ -91,34 +94,43 @@ export default function AuctionsPage() {
         </div>
       ) : null}
 
-      {/* Category filter & live sort controls */}
-      <AuctionsFilterSortBar
-        scope={scope}
-        facets={facets}
-        selectedCategories={selectedCategories}
-        onToggleCategory={toggleCategory}
-        isLoading={isLoading}
-        isError={isError}
-        scopedLength={scoped.length}
-        liveSort={liveSort}
-        onSelectLiveSort={setLiveSort}
-      />
+      {/* Scope-swapped region — the panel for the scope tablist above
+          (the controls are tab-scoped too: categories and live sort
+          change with the scope). */}
+      <div
+        role="tabpanel"
+        id={tabPanelId(tabsId, scope)}
+        aria-labelledby={tabId(tabsId, scope)}
+      >
+        {/* Category filter & live sort controls */}
+        <AuctionsFilterSortBar
+          scope={scope}
+          facets={facets}
+          selectedCategories={selectedCategories}
+          onToggleCategory={toggleCategory}
+          isLoading={isLoading}
+          isError={isError}
+          scopedLength={scoped.length}
+          liveSort={liveSort}
+          onSelectLiveSort={setLiveSort}
+        />
 
-      {/* Main content area */}
-      <AuctionsContentArea
-        isLoading={isLoading}
-        isError={isError}
-        refetch={() => void refetch()}
-        scope={scope}
-        isGuest={isGuest}
-        hydrated={hydrated}
-        watchedBoard={watchedBoard}
-        scoped={scoped}
-        viewerStatus={viewerStatus}
-        onNavigateAuth={() => router.push('/auth')}
-        onNavigateCreate={() => router.push('/auctions/create')}
-        onSwitchLiveScope={() => setScope('live')}
-      />
+        {/* Main content area */}
+        <AuctionsContentArea
+          isLoading={isLoading}
+          isError={isError}
+          refetch={() => void refetch()}
+          scope={scope}
+          isGuest={isGuest}
+          hydrated={hydrated}
+          watchedBoard={watchedBoard}
+          scoped={scoped}
+          viewerStatus={viewerStatus}
+          onNavigateAuth={() => router.push('/auth')}
+          onNavigateCreate={() => router.push('/auctions/create')}
+          onSwitchLiveScope={() => setScope('live')}
+        />
+      </div>
     </div>
   );
 }

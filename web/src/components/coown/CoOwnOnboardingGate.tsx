@@ -13,6 +13,7 @@ import { Button } from '@/components/ui/Button';
 import { Icon, type AppIconName } from '@/components/ui/Icon';
 import { IconButton } from '@/components/ui/IconButton';
 import { lockBodyScroll } from '@/lib/a11y/scrollLock';
+import { restoreFocus } from '@/lib/a11y/focus';
 
 // Distinct from TradePanel's 'thryftverse:coown-onboarded' — that key is
 // the first-trade education consent, not this marketing tour. Sharing it
@@ -106,7 +107,7 @@ export function CoOwnOnboardingGate() {
     return () => {
       document.removeEventListener('keydown', onKey);
       unlock();
-      prev?.focus();
+      restoreFocus(prev);
     };
   }, [visible, dismiss]);
 

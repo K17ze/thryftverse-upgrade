@@ -16,6 +16,7 @@ import { ProductTile } from '@/components/cards/ProductTile';
 import { useRecentlyViewedListings } from '@/lib/hooks/home-modules';
 import { useSession } from '@/lib/session/SessionProvider';
 import { PdpSectionTitle } from './PdpSectionTitle';
+import { PdpRailScroller } from './PdpRailScroller';
 
 const RAIL_CAP = 10;
 
@@ -37,13 +38,13 @@ export function PdpRecentlyViewed({ listing }: { listing: Listing }) {
       <PdpSectionTitle id="pdp-recently-viewed" className="mb-4 px-4 sm:px-6">
         Recently viewed
       </PdpSectionTitle>
-      <div className="no-scrollbar flex gap-2 overflow-x-auto px-4 sm:px-6" role="list">
+      <PdpRailScroller>
         {items.slice(0, RAIL_CAP).map((item) => (
           <div key={item.id} role="listitem" className="w-[150px] shrink-0 sm:w-[180px]">
             <ProductTile item={mapListingToDiscoverySummary(item)} />
           </div>
         ))}
-      </div>
+      </PdpRailScroller>
     </section>
   );
 }

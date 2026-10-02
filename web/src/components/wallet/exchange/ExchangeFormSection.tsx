@@ -154,7 +154,7 @@ export function ExchangeFormSection({
                 type="button"
                 onClick={() => handleQuickPercent(frac)}
                 disabled={sourceBalanceMinor <= 0}
-                className="pressable rounded border border-border-subtle bg-surface-alt px-1.5 py-0.5 text-[11px] font-semibold text-text-secondary hover:border-border hover:text-text-primary disabled:opacity-40"
+                className="pressable rounded border border-border-subtle bg-surface-alt px-1.5 py-0.5 text-meta font-semibold text-text-secondary hover:border-border hover:text-text-primary disabled:opacity-40"
               >
                 {frac === 1 ? 'Max' : `${frac * 100}%`}
               </button>
@@ -189,7 +189,7 @@ export function ExchangeFormSection({
           type="button"
           onClick={onSwap}
           aria-label="Swap currencies"
-          className="pressable -my-2 flex h-10 w-10 items-center justify-center rounded-full border border-border bg-surface-raised text-text-secondary transition-colors hover:border-brand hover:text-text-primary"
+          className="pressable -my-2 flex h-11 w-11 items-center justify-center rounded-full border border-border bg-surface-raised text-text-secondary transition-colors hover:border-brand hover:text-text-primary"
         >
           <Icon name="sort" size={18} />
         </button>

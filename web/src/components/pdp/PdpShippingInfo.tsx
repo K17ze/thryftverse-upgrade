@@ -5,7 +5,7 @@
  * physical authenticity guarantees, and expandable Buyer Protection accordion.
  */
 
-import { useState } from 'react';
+import { useState, type ReactNode } from 'react';
 import Link from 'next/link';
 import type { Listing } from '@/lib/contracts/domain';
 import { Icon } from '@/components/ui/Icon';
@@ -16,6 +16,10 @@ import { formatPrice } from '@/lib/utils/format';
 interface PdpShippingInfoProps {
   listing: Listing;
   sellerLocation?: string | null;
+  /** Optional trailing control row merged into this hairline section
+   *  (e.g. the price-drop alert switch) so coupled controls read as one
+   *  block instead of two stacked competitors. */
+  children?: ReactNode;
 }
 
 function formatEtaDay(iso: string): string | null {
@@ -68,7 +72,7 @@ function returnsLine(listing: Listing): string {
   return 'Return policy confirmed at checkout';
 }
 
-export function PdpShippingInfo({ listing, sellerLocation }: PdpShippingInfoProps) {
+export function PdpShippingInfo({ listing, sellerLocation, children }: PdpShippingInfoProps) {
   const [protectionOpen, setProtectionOpen] = useState(false);
 
   return (
@@ -186,7 +190,7 @@ export function PdpShippingInfo({ listing, sellerLocation }: PdpShippingInfoProp
           </p>
           <ul className="flex flex-col gap-1 list-disc pl-4 text-text-muted">
             <li>Full refund if the item does not arrive</li>
-            <li>48-hour return window if the item is significantly not as described</li>
+            <li>Returns accepted within 14 days if the item isn&apos;t as described</li>
             <li>Dispute resolution team on standby for every transaction</li>
           </ul>
           <Link
@@ -197,6 +201,8 @@ export function PdpShippingInfo({ listing, sellerLocation }: PdpShippingInfoProp
           </Link>
         </div>
       ) : null}
+
+      {children}
     </div>
   );
 }

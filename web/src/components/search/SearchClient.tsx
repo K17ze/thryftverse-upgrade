@@ -17,11 +17,11 @@ import { useListings } from '@/lib/hooks/queries';
 import type { Listing } from '@/lib/contracts/domain';
 import { useLoadMoreSentinel } from '@/lib/hooks/useLoadMoreSentinel';
 import { useSavedSearches } from '@/lib/store/savedSearches';
+import { aiFeatureOn, useAIPrefs } from '@/lib/store/aiPrefs';
 import { countActiveFilters } from '@/components/filters/filterTypes';
 import { DATA_MODE } from '@/lib/api/client';
 import { fetchAutocompleteSuggestions } from '@/lib/api/services/search';
 import { useDebouncedValue } from '@/lib/hooks/useDebouncedValue';
-import { MemberResults } from './MemberResults';
 import { SearchLanding } from './SearchLanding';
 import { SearchRecovery } from './SearchRecovery';
 import { categoryLabel } from './categoryDirectoryStore';
@@ -33,6 +33,7 @@ import {
   type QuerySuggestion,
 } from './searchMatch';
 import { useRecentSearches } from './searchHistory';
+import { isFocusRestore } from '@/lib/a11y/focus';
 import { useFacetParams } from './useFacetParams';
 import { useSortParam } from './useSortParam';
 import { SearchHeaderBar } from './client/SearchHeaderBar';
@@ -151,13 +152,22 @@ export function SearchClient() {
   const [fieldFocused, setFieldFocused] = useState(false);
   const [activeSug, setActiveSug] = useState(-1);
 
+  // Device AI preference (/settings/recommendations) — off keeps the
+  // field a plain search box: no dropdown, no autocomplete wire call.
+  const autocompleteOn = useAIPrefs((s) =>
+    aiFeatureOn(s, 'searchAutocomplete'),
+  );
+
   const debouncedInput = useDebouncedValue(input.trim(), 220);
   const autocomplete = useQuery({
     queryKey: ['search', 'autocomplete', 'results-field', debouncedInput],
     queryFn: ({ signal }) =>
       fetchAutocompleteSuggestions(debouncedInput, 8, signal),
     enabled:
-      DATA_MODE === 'live' && fieldFocused && debouncedInput.length >= 2,
+      DATA_MODE === 'live' &&
+      fieldFocused &&
+      autocompleteOn &&
+      debouncedInput.length >= 2,
     staleTime: 30_000,
     retry: false,
   });
@@ -214,7 +224,8 @@ export function SearchClient() {
     useSavedSearches.setState({ syncError: null });
   }, [savedSyncError, toast]);
 
-  const suggestOpen = fieldFocused && !suggestDismissed && rows.length > 0;
+  const suggestOpen =
+    fieldFocused && !suggestDismissed && autocompleteOn && rows.length > 0;
   const SUGGEST_ID = 'search-suggestions';
   const optionId = (i: number) => `${SUGGEST_ID}-opt-${i}`;
 
@@ -292,6 +303,9 @@ export function SearchClient() {
         onKeyDown={onFieldKeyDown}
         onFocus={() => {
           setFieldFocused(true);
+          // An overlay focus restore (⌘K Esc back into the field) is not
+          // the user re-entering search — keep the layer dismissed.
+          if (isFocusRestore()) return;
           setSuggestDismissed(false);
           setActiveSug(-1);
         }}
@@ -307,46 +321,50 @@ export function SearchClient() {
       />
 
       {q || hasFacets ? (
-        exhausted ? (
-          <div className="pt-4">
-            <MemberResults query={q} />
-            <SearchRecovery
-              query={q}
-              suggestion={suggestion}
-              hasActiveFilters={hasFacets}
-              onSelect={(term) => runSearch(term)}
-            />
-          </div>
-        ) : (
-          <SearchResultsContainer
-            query={q}
-            listings={surfaceListings}
-            isLoading={surfaceLoading}
-            isError={isError}
-            filters={filters}
-            onFiltersChange={setFilters}
-            relevanceScores={surfaceScores}
-            totalCount={
-              isRelaxed
+        <SearchResultsContainer
+          query={q}
+          listings={surfaceListings}
+          isLoading={surfaceLoading}
+          isError={isError}
+          filters={filters}
+          onFiltersChange={setFilters}
+          relevanceScores={surfaceScores}
+          totalCount={
+            DATA_MODE === 'live'
+              ? isRelaxed
                 ? (correctedFetched?.total ?? null)
                 : (fetched?.total ?? null)
-            }
-            sort={sort}
-            onSortChange={setSort}
-            isRelaxed={isRelaxed}
-            suggestion={suggestion}
-            weakSuggestion={weakSuggestion}
-            hasNextPage={hasNextPage}
-            isFetchingNextPage={isFetchingNextPage}
-            isFetchNextPageError={isFetchNextPageError}
-            onFetchNextPage={() => void fetchNextPage()}
-            sentinelRef={resultsSentinelRef}
-            onRetry={() => {
-              void refetch();
-              void refetchCorrected();
-            }}
-          />
-        )
+              : null
+          }
+          sort={sort}
+          onSortChange={setSort}
+          isRelaxed={isRelaxed}
+          suggestion={suggestion}
+          weakSuggestion={weakSuggestion}
+          // Zero-hit queries keep the full results chrome — rail,
+          // toolbar and applied chips — with the recovery surface
+          // sitting where the grid would be (Vinted/eBay grammar:
+          // facets stay interactive on an empty set).
+          recovery={
+            exhausted ? (
+              <SearchRecovery
+                query={q}
+                suggestion={suggestion}
+                hasActiveFilters={hasFacets}
+                onSelect={(term) => runSearch(term)}
+              />
+            ) : undefined
+          }
+          hasNextPage={hasNextPage}
+          isFetchingNextPage={isFetchingNextPage}
+          isFetchNextPageError={isFetchNextPageError}
+          onFetchNextPage={() => void fetchNextPage()}
+          sentinelRef={resultsSentinelRef}
+          onRetry={() => {
+            void refetch();
+            void refetchCorrected();
+          }}
+        />
       ) : (
         <SearchLanding
           recent={recent}

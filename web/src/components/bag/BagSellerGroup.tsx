@@ -11,9 +11,10 @@
  * window.confirm.
  */
 
-import { useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import Link from 'next/link';
 import type { Listing } from '@/lib/contracts/domain';
+import { focusAdjacentGroupControl } from '@/lib/a11y/focus';
 import { DATA_MODE } from '@/lib/api/client';
 import { BUNDLE_RULE, BUNDLE_RULE_LABEL, type SellerGroup } from '@/lib/data/fixtures';
 import { bundleSuggestions } from '@/lib/data/fixtures-commerce';
@@ -29,14 +30,17 @@ const pctLabel = `${Math.round(BUNDLE_RULE.discountPct * 100)}%`;
 function TextAction({
   onClick,
   tone = 'default',
+  ref,
   children,
 }: {
   onClick: () => void;
   tone?: 'default' | 'danger';
+  ref?: React.Ref<HTMLButtonElement>;
   children: React.ReactNode;
 }) {
   return (
     <button
+      ref={ref}
       type="button"
       onClick={onClick}
       className={`pressable -my-1.5 rounded-sm py-2 text-caption font-medium ${
@@ -63,9 +67,43 @@ function BagLineItem({
   onSaveForLater: () => void;
 }) {
   const [confirming, setConfirming] = useState<'remove' | 'save' | null>(null);
+  const confirmRef = useRef<HTMLButtonElement>(null);
+  const saveRef = useRef<HTMLButtonElement>(null);
+  const removeRef = useRef<HTMLButtonElement>(null);
+  const wasConfirming = useRef<'remove' | 'save' | null>(null);
+
+  // The action row and the confirm strip swap on press — whichever side
+  // held focus unmounts, so each transition moves focus explicitly:
+  // into the strip's confirm button on open, back to the originating
+  // action on Keep. A confirmed move/remove unmounts the whole row;
+  // that path parks focus before the write runs (below).
+  useEffect(() => {
+    if (confirming !== null) {
+      confirmRef.current?.focus();
+    } else if (wasConfirming.current !== null) {
+      (wasConfirming.current === 'save' ? saveRef : removeRef).current?.focus();
+    }
+    wasConfirming.current = confirming;
+  }, [confirming]);
+
+  /** A confirmed move/remove unmounts this row while the strip's button
+   *  may still hold focus — park on the adjacent row's item link first,
+   *  falling back to the main landmark when no sibling row exists (the
+   *  notifications dismiss-row grammar). */
+  const parkFocusBeforeUnmount = () => {
+    if (
+      focusAdjacentGroupControl(
+        confirmRef.current,
+        '[data-bag-row]',
+        'a[href^="/item/"]',
+      )
+    )
+      return;
+    document.getElementById('main-content')?.focus({ preventScroll: true });
+  };
 
   return (
-    <li className="flex items-start gap-3.5 py-3.5">
+    <li data-bag-row className="flex items-start gap-3.5 py-3.5">
       <Link
         href={`/item/${listing.id}`}
         className="group pressable relative w-20 shrink-0 overflow-hidden rounded-md bg-surface-alt"
@@ -96,13 +134,13 @@ function BagLineItem({
         </p>
         <div className="mt-1 flex flex-wrap items-center gap-2">
           {listing.likes && listing.likes > 15 ? (
-            <span className="inline-flex items-center gap-1 rounded bg-brand-subtle px-1.5 py-0.5 text-[11px] font-medium text-brand">
+            <span className="inline-flex items-center gap-1 rounded bg-brand-subtle px-1.5 py-0.5 text-meta font-medium text-brand">
               <Icon name="heart" size={11} />
               {listing.likes} saves
             </span>
           ) : null}
           {listing.price >= 150 ? (
-            <span className="inline-flex items-center gap-1 rounded bg-surface-alt px-1.5 py-0.5 text-[11px] font-medium text-text-muted">
+            <span className="inline-flex items-center gap-1 rounded bg-surface-alt px-1.5 py-0.5 text-meta font-medium text-text-muted">
               <Icon name="verified" size={11} className="text-commerce-trust" />
               Auth included
             </span>
@@ -111,20 +149,39 @@ function BagLineItem({
         <div className="mt-2.5 flex min-h-7 items-center gap-4">
           {confirming === null ? (
             <>
-              <TextAction onClick={() => setConfirming('save')}>Save for later</TextAction>
+              <TextAction ref={saveRef} onClick={() => setConfirming('save')}>
+                Save for later
+              </TextAction>
               <span className="text-text-muted/40">·</span>
-              <TextAction onClick={() => setConfirming('remove')}>Remove</TextAction>
+              <TextAction ref={removeRef} onClick={() => setConfirming('remove')}>
+                Remove
+              </TextAction>
             </>
           ) : confirming === 'save' ? (
             <>
               <span className="text-caption text-text-secondary">Move to Saved items?</span>
-              <TextAction onClick={onSaveForLater}>Move</TextAction>
+              <TextAction
+                ref={confirmRef}
+                onClick={() => {
+                  parkFocusBeforeUnmount();
+                  onSaveForLater();
+                }}
+              >
+                Move
+              </TextAction>
               <TextAction onClick={() => setConfirming(null)}>Keep in bag</TextAction>
             </>
           ) : (
             <>
               <span className="text-caption text-text-secondary">Remove from bag?</span>
-              <TextAction tone="danger" onClick={onRemove}>
+              <TextAction
+                ref={confirmRef}
+                tone="danger"
+                onClick={() => {
+                  parkFocusBeforeUnmount();
+                  onRemove();
+                }}
+              >
                 Remove
               </TextAction>
               <TextAction onClick={() => setConfirming(null)}>Keep</TextAction>
@@ -161,7 +218,7 @@ export function BagSellerGroup({
     : `/item/${group.items[0]?.id ?? ''}#bundle`;
 
   return (
-    <section aria-label={username ? `Items from @${username}` : 'Seller items'} className="rounded-xl border border-border-subtle bg-surface p-4 sm:p-5">
+    <section aria-label={username ? `Items from @${username}` : 'Seller items'} className="py-7 first:pt-0 last:pb-0">
       {/* Seller Identity & Location */}
       <header className="flex flex-wrap items-center justify-between gap-3 pb-3">
         <div className="flex items-center gap-2.5">
@@ -202,22 +259,22 @@ export function BagSellerGroup({
         ) : null}
       </header>
 
-      {/* Interactive Bundle Progress Meter — exists only to sell the
-          fixture BUNDLE_RULE; live mode never offers the discount. */}
+      {/* Bundle progress — one line + a thin bar on canvas. Exists only
+          to sell the fixture BUNDLE_RULE; live mode never offers it. */}
       {DATA_MODE !== 'live' ? (
-      <div className="my-2 rounded-lg bg-surface-alt/60 p-2.5">
-        <div className="flex items-center justify-between text-caption font-medium">
+      <div className="pb-4 pt-1">
+        <div className="flex items-center justify-between gap-2 text-caption font-medium">
           <span className="flex items-center gap-1.5 text-text-secondary">
             <Icon name="pricetag" size={14} className={group.qualifies ? 'text-success-text' : 'text-brand'} />
             {group.qualifies
               ? `Bundle discount unlocked (${BUNDLE_RULE_LABEL})`
               : `Add ${missing} more ${missing === 1 ? 'item' : 'items'} from this seller to get ${pctLabel} off`}
           </span>
-          <span className="tnum text-text-muted">
+          <span className="tnum shrink-0 text-text-muted">
             {group.items.length} / {BUNDLE_RULE.minItems} items
           </span>
         </div>
-        <div className="mt-2 h-1.5 w-full overflow-hidden rounded-full bg-border-subtle">
+        <div className="mt-2 h-1 w-full overflow-hidden rounded-full bg-border-subtle">
           <div
             className={`h-full transition-all duration-300 ${
               group.qualifies ? 'bg-success-text' : 'bg-brand'

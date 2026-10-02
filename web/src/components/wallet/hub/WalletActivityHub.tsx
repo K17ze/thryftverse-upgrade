@@ -48,7 +48,7 @@ export function WalletActivityHub({
           href="/wallet/history"
           className="pressable text-caption font-semibold text-text-secondary hover:text-text-primary"
         >
-          View full ledger →
+          View full ledger
         </Link>
       </div>
 

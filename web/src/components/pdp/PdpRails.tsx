@@ -20,6 +20,7 @@ import { Avatar } from '@/components/ui/Avatar';
 import { Icon } from '@/components/ui/Icon';
 import { Skeleton } from '@/components/ui/Skeleton';
 import { PdpSectionTitle } from './PdpSectionTitle';
+import { PdpRailScroller } from './PdpRailScroller';
 import { formatCount } from '@/lib/utils/format';
 
 interface PdpRailsProps {
@@ -150,13 +151,13 @@ export function PdpRails({
               More from this seller
             </PdpSectionTitle>
           )}
-          <div className="no-scrollbar flex gap-2 overflow-x-auto px-4 sm:px-6" role="list">
+          <PdpRailScroller>
             {sellerItems.map((item) => (
               <div key={item.id} role="listitem" className="w-[150px] shrink-0 sm:w-[180px]">
                 <ProductTile item={mapListingToDiscoverySummary(item)} />
               </div>
             ))}
-          </div>
+          </PdpRailScroller>
         </section>
       ) : null}
 
@@ -168,13 +169,13 @@ export function PdpRails({
               {similarItems.length} {similarItems.length === 1 ? 'item' : 'items'}
             </span>
           </div>
-          <div className="no-scrollbar flex gap-2 overflow-x-auto px-4 sm:px-6" role="list">
+          <PdpRailScroller>
             {similarItems.map((item) => (
               <div key={item.id} role="listitem" className="w-[150px] shrink-0 sm:w-[180px]">
                 <ProductTile item={mapListingToDiscoverySummary(item)} />
               </div>
             ))}
-          </div>
+          </PdpRailScroller>
         </section>
       ) : similarLoading ? (
         /* Related-listings read in flight — a quiet skeleton band, never

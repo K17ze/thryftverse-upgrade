@@ -3,6 +3,9 @@
  * PdpLightbox) and portal menus (FeedItemMenu).
  */
 
+/** True for the duration of a restoreFocus() dispatch — see below. */
+let focusRestoreActive = false;
+
 /** Tabbable-candidate selector for focus traps. The dialog shell itself
  *  is `tabIndex={-1}` — a programmatic focus target, never a tab stop —
  *  so it's deliberately excluded; a trap that picks it up would treat
@@ -100,4 +103,28 @@ export function focusAdjacentMatch(
   // target is off-viewport, and a just-moved focus must be visible.
   target.focus();
   return true;
+}
+
+/** Programmatic focus return — an overlay unmount handing focus back to
+ *  the invoking element (dialog Esc, sheet close), or a combobox
+ *  collapsing back to its field. That dispatch is not the user
+ *  re-entering the target, so open-on-focus handlers (combobox
+ *  suggestion layers — header search, /search field, tag input) skip it
+ *  via isFocusRestore(); otherwise a ⌘K Esc pops the layer back open the
+ *  moment it settles. The flag covers only the synchronous focus()
+ *  dispatch — real focus intent is never swallowed. */
+export function restoreFocus(el: HTMLElement | null | undefined): void {
+  if (!el?.isConnected) return;
+  const was = focusRestoreActive;
+  focusRestoreActive = true;
+  try {
+    el.focus({ preventScroll: true });
+  } finally {
+    focusRestoreActive = was;
+  }
+}
+
+/** True while a focus event dispatched by restoreFocus() is running. */
+export function isFocusRestore(): boolean {
+  return focusRestoreActive;
 }

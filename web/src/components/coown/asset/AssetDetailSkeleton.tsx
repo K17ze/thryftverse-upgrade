@@ -15,7 +15,7 @@ export function AssetDetailSkeleton() {
         </div>
       </div>
 
-      <div className="mt-8 grid gap-10 lg:grid-cols-[minmax(0,1fr)_400px]">
+      <div className="mt-8 grid grid-cols-1 gap-10 lg:grid-cols-[minmax(0,1fr)_400px]">
         <div className="min-w-0">
           {/* Quote hero + signed move */}
           <Skeleton className="h-8 w-44" />

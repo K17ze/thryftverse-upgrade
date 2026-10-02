@@ -203,16 +203,14 @@ export function AddMoneySheet({ open, onClose, currency }: AddMoneySheetProps) {
                       }`}
                     >
                       <div className="flex items-center gap-3">
-                        <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-md border border-border-subtle bg-surface-raised">
-                          <Icon name={m.icon} size={18} className="text-text-primary" />
-                        </div>
+                        <Icon name={m.icon} size={18} className="shrink-0 text-text-secondary" />
                         <div>
                           <div className="flex items-center gap-2">
                             <span className="text-body font-medium text-text-primary">
                               {m.name}
                             </span>
                             {m.recommended ? (
-                              <Badge variant="neutral" className="py-0 text-[10px]">
+                              <Badge variant="neutral" className="py-0 text-micro">
                                 Instant &amp; Free
                               </Badge>
                             ) : null}
@@ -289,9 +287,9 @@ export function AddMoneySheet({ open, onClose, currency }: AddMoneySheetProps) {
         )}
 
         {step === 'processing' && (
-          <div className="py-12 text-center">
-            <Spinner size={56} className="mx-auto block" />
-            <h3 className="mt-6 text-section-title font-semibold text-text-primary">
+          <div className="py-12 text-center" role="status">
+            <h3 className="flex items-center justify-center gap-2.5 text-section-title font-semibold text-text-primary">
+              <Spinner size={24} className="shrink-0" />
               Simulating {selectedMethod.name}…
             </h3>
             <p className="mt-2 text-body text-text-secondary">

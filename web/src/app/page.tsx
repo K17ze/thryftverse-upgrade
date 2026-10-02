@@ -3,9 +3,14 @@
 /**
  * Home — port of HomeScreen, in the mobile module order: the sticky
  * control bar leads (For you / Following tabs + signal chip rail + the
- * refresh affordance), then the poster story rail, then the authored
- * feed — a product rail, denser masonry, and quiet editorial/members
- * breaks interleaved.
+ * refresh affordance), then the poster story rail, then the "Start here"
+ * entry band — the single lead shelf, so the first viewport is chrome →
+ * one dominant media rail → grid — then the authored feed where every
+ * other shelf (fresh drops, recently viewed, looks, member edits,
+ * sellers, Galleria) interleaves between masonry chunks. On ≥lg the
+ * story rail demotes into the feed (the break after the first masonry
+ * chunk) — an IG-story strip heading a desktop page reads as stretched
+ * mobile chrome.
  *
  * Serve truth: signed-in live mode calls GET /recommendations/:userId
  * (server-ranked, reason codes + serve attribution); guests and fixture
@@ -14,14 +19,17 @@
  * baseline only where it matches feed content.
  */
 
+import { useId } from 'react';
 import { StoryRail } from '@/components/feed/StoryRail';
 import { FeedControlsProvider } from '@/components/feed/FeedControls';
+import { useMediaQuery } from '@/components/filters/useMediaQuery';
 import { HomeFeed } from '@/components/home/HomeFeed';
 import { EntryBand } from '@/components/home/modules/EntryBand';
 import { HomeControlBar } from '@/components/home/HomeControlBar';
 import { NewDropsPill } from '@/components/home/NewDropsPill';
 import { BackToTop } from '@/components/home/BackToTop';
 import { useHomeFeedWorkflow } from '@/components/home/useHomeFeedWorkflow';
+import { tabId, tabPanelId } from '@/components/ui/Tabs';
 
 export default function HomePage() {
   const {
@@ -49,6 +57,14 @@ export default function HomePage() {
     emptyConfig,
   } = useHomeFeedWorkflow();
 
+  // ≥lg composition — the rail moves inside the feed (HomeFeed owns the
+  // slot). useSyncExternalStore-backed, so the desktop order corrects
+  // during the hydration commit — no post-paint shuffle, and the DOM
+  // order always matches the visual order (tab/SR sequence stays honest).
+  const desktopRail = useMediaQuery('(min-width: 1024px)');
+  // Tab↔panel pairing base — the feed-mode tabs own the feed below.
+  const tabsId = useId();
+
   return (
     <div className="mx-auto max-w-[1440px]">
       <HomeControlBar
@@ -63,6 +79,7 @@ export default function HomePage() {
           void activeFeed.refetch();
         }}
         isRefreshing={isRefreshing}
+        idBase={tabsId}
       />
 
       <NewDropsPill
@@ -70,10 +87,17 @@ export default function HomePage() {
         onDismiss={() => setNewDrops(0)}
       />
 
-      <StoryRail />
+      {desktopRail ? null : <StoryRail />}
 
       <EntryBand />
 
+      {/* The feed is the mode tablist's panel — For you / Following swap
+          the whole region. */}
+      <div
+        role="tabpanel"
+        id={tabPanelId(tabsId, mode)}
+        aria-labelledby={tabId(tabsId, mode)}
+      >
       <FeedControlsProvider
         source={feedSource}
         metaByListing={followingLive ? {} : metaByListing}
@@ -95,8 +119,10 @@ export default function HomePage() {
           loadMoreError={loadMoreError}
           onLoadMore={loadMore}
           empty={emptyConfig}
+          storyRail={desktopRail ? <StoryRail /> : undefined}
         />
       </FeedControlsProvider>
+      </div>
 
       <BackToTop />
     </div>

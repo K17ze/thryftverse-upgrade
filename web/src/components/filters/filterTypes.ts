@@ -26,6 +26,7 @@ export type SortKey =
   | 'most-liked'
   | 'price-asc'
   | 'price-desc'
+  | 'discount-desc'
   | 'ending-soon';
 
 // Labels use native casing (frontend filterTypes.ts: 'Newest',
@@ -39,6 +40,7 @@ export const SORT_OPTIONS: { value: SortKey; label: string }[] = [
   { value: 'most-liked', label: 'Most liked' },
   { value: 'price-asc', label: 'Price: Low to High' },
   { value: 'price-desc', label: 'Price: High to Low' },
+  { value: 'discount-desc', label: 'Biggest discount' },
 ];
 
 /** "Ending soon" only applies to auction listings — meaningless for
@@ -121,10 +123,6 @@ export function countActiveFilters(f: ListingFilters): number {
     f.colours.length +
     (f.includeSold ? 1 : 0)
   );
-}
-
-export function filtersAreEmpty(f: ListingFilters): boolean {
-  return countActiveFilters(f) === 0;
 }
 
 // ---------------------------------------------------------------------------
@@ -225,6 +223,14 @@ function engagementScore(l: Listing): number {
   );
 }
 
+/** Fractional markdown vs the was-price; listings with no baseline return
+ *  -1 so they sort to the tail instead of posing as undiscounted. */
+function discountScore(l: Listing): number {
+  return l.originalPrice && l.originalPrice > l.price
+    ? (l.originalPrice - l.price) / l.originalPrice
+    : -1;
+}
+
 export function sortListings(
   listings: Listing[],
   sort: SortKey,
@@ -261,6 +267,14 @@ export function sortListings(
       break;
     case 'price-desc':
       out.sort((a, b) => b.price - a.price || a.id.localeCompare(b.id));
+      break;
+    case 'discount-desc':
+      out.sort(
+        (a, b) =>
+          discountScore(b) - discountScore(a) ||
+          engagementScore(b) - engagementScore(a) ||
+          a.id.localeCompare(b.id),
+      );
       break;
   }
   return out;

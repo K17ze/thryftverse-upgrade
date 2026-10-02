@@ -44,5 +44,13 @@ export default async function GalleriaEditorialPage({
   const { id } = await params;
   const resolution = await resolveGalleriaEditorialForRoute(id);
   if (resolution.status === 'missing') notFound();
-  return <GalleriaEditorialClient />;
+  // A resolved story rides down as the client's first-paint fallback —
+  // the article renders the server's row while the detail query (which
+  // also resolves the issue's sibling stories) revalidates in the
+  // background.
+  return (
+    <GalleriaEditorialClient
+      initialEditorial={resolution.status === 'resolved' ? resolution.value : undefined}
+    />
+  );
 }

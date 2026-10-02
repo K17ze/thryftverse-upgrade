@@ -27,14 +27,25 @@ import { IconButton } from '@/components/ui/IconButton';
 import { Skeleton } from '@/components/ui/Skeleton';
 import { mapListingToDiscoverySummary, type Listing } from '@/lib/contracts/domain';
 import { listingById } from '@/lib/data/fixtures';
-import { GALLERIA_EDITORIALS } from '@/lib/data/fixtures-media';
+import {
+  GALLERIA_EDITORIALS,
+  type GalleriaEditorial,
+} from '@/lib/data/fixtures-media';
 import { DATA_MODE } from '@/lib/api/client';
 import * as galleriaService from '@/lib/api/services/galleria';
 import { formatDate } from '@/lib/utils/format';
 
 const isLive = DATA_MODE === 'live';
 
-export function GalleriaEditorialClient() {
+export function GalleriaEditorialClient({
+  initialEditorial,
+}: {
+  /** Server-resolved story — paints the article immediately while the
+   *  detail query (story + same-issue siblings) is in flight. Never
+   *  written into the query cache: its {editorial, siblings} composite
+   *  is a different shape than the server's payload. */
+  initialEditorial?: GalleriaEditorial;
+}) {
   const params = useParams();
   const share = useShare();
   const id = String(params.id ?? '');
@@ -58,7 +69,12 @@ export function GalleriaEditorialClient() {
     retry: false,
   });
 
-  const editorial = isLive ? live.data?.editorial : GALLERIA_EDITORIALS.find((e) => e.id === id);
+  // The seed only stands in while the query is in flight — a resolved
+  // null (unpublished/moved piece) must win over it, so the fallback
+  // applies solely until data exists.
+  const editorial = isLive
+    ? (live.data === undefined ? initialEditorial : live.data.editorial)
+    : GALLERIA_EDITORIALS.find((e) => e.id === id);
 
   const items = useMemo(
     () =>
@@ -78,7 +94,9 @@ export function GalleriaEditorialClient() {
     [id, editorial, live.data],
   );
 
-  if (isLive && live.isLoading) {
+  // A seeded story skips the skeleton — the server already resolved it;
+  // only the sibling rail is still in flight.
+  if (isLive && live.isLoading && !editorial) {
     return (
       <div className="mx-auto w-full max-w-[860px] px-4 sm:px-6" aria-busy aria-label="Loading story">
         <Skeleton className="mt-4 h-4 w-40" />

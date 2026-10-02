@@ -4,6 +4,10 @@
  * BulkDraftGrid — the multi-item draft rows for /seller-hub/bulk. Each row
  * carries its own validation truth (Ready / Needs work / Published /
  * Failed) and publish progress is reported per row, never averaged.
+ *
+ * Below xl the rows are a single hairline list; at xl they compose as a
+ * draft tray — 2-col cards (3-col at 2xl) so a wide canvas doesn't render
+ * one stretched phone-width strip.
  */
 
 import { AppImage } from '@/components/ui/AppImage';
@@ -39,7 +43,9 @@ interface BulkDraftGridProps {
 
 export function BulkDraftGrid({ items, publishing, onEdit, onRemove }: BulkDraftGridProps) {
   return (
-    <ul className="divide-y divide-border-subtle border-y border-border-subtle">
+    // divide-y stays live at xl — its hairline lands exactly on each
+    // card's own top border, so the grid needs no undo classes.
+    <ul className="divide-y divide-border-subtle border-y border-border-subtle xl:grid xl:grid-cols-2 xl:gap-4 xl:border-y-0 2xl:grid-cols-3">
       {items.map((item) => {
         const locked = publishing || item.status === 'published';
         const price = item.price > 0 ? formatPrice(item.price) : 'No price yet';
@@ -53,7 +59,10 @@ export function BulkDraftGrid({ items, publishing, onEdit, onRemove }: BulkDraft
           .filter(Boolean)
           .join(' · ');
         return (
-          <li key={item.tempId} className="flex items-start gap-3.5 py-3">
+          <li
+            key={item.tempId}
+            className="flex items-start gap-3.5 py-3 xl:rounded-md xl:border xl:border-border-subtle xl:p-4"
+          >
             <button
               type="button"
               onClick={() => onEdit(item)}

@@ -1,62 +1,28 @@
 'use client';
 
 /**
- * Live shopping home — orchestrator. Category-segmented rails (Whatnot
- * grammar: one filter over everything), LIVE NOW dominant media, today's
- * schedule as a timetable, Coming up rail, Replays grid. Skeleton mirrors
- * geometry; empty states are authored and category-honest. Mirrors
- * mobile's LiveShoppingHomeScreen surface grammar.
+ * Live shopping home — orchestrator. A flat category chip row (one filter
+ * over everything), LIVE NOW as dominant hero + a right-docked board of
+ * compact rows (the rest of the on-air lineup, then the schedule in
+ * chronological order), Your shows for the host, Replays grid. Skeleton
+ * mirrors geometry; empty states are authored and category-honest.
+ * Mirrors mobile's LiveShoppingHomeScreen surface grammar.
  */
 
 import { useEffect, useMemo, useState } from 'react';
-import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import type { LiveSession } from '@/lib/data/fixtures-media';
-import { useLiveSessions, liveSellerOf } from './useLiveSessions';
+import { useLiveSessions } from './useLiveSessions';
 import { LiveNowCard } from './LiveNowCard';
-import { UpcomingRail, formatScheduled } from './UpcomingRail';
 import { ReplaysGrid } from './ReplaysGrid';
-import { ScheduleTimeline, isSameDay } from './ScheduleTimeline';
 import { LiveViewerOverlay } from './LiveViewerOverlay';
-import { LiveBadge } from './LiveBadge';
-import { SegmentedControl } from '@/components/feed/SegmentedControl';
 import { EmptyState } from '@/components/ui/EmptyState';
-import { Skeleton } from '@/components/ui/Skeleton';
 import { Icon } from '@/components/ui/Icon';
-import { AppImage } from '@/components/ui/AppImage';
 import { useSession } from '@/lib/session/SessionProvider';
-
-function SectionHeader({ title, meta }: { title: string; meta?: string }) {
-  return (
-    <div className="mb-3 flex items-baseline justify-between">
-      <h2 className="text-section-title font-semibold text-text-primary">{title}</h2>
-      {meta ? <span className="tnum text-meta text-text-muted">{meta}</span> : null}
-    </div>
-  );
-}
-
-function LiveSkeleton() {
-  return (
-    <div className="space-y-10" aria-busy aria-label="Loading live shopping">
-      <div>
-        <Skeleton className="mb-3 h-6 w-28" />
-        <Skeleton className="aspect-[4/3] w-full rounded-xl sm:aspect-[21/9]" />
-      </div>
-      <div>
-        <Skeleton className="mb-3 h-6 w-32" />
-        <div className="flex gap-4">
-          {[0, 1, 2].map((i) => (
-            <div key={i} className="w-[220px] shrink-0">
-              <Skeleton className="aspect-[4/5] w-full rounded-lg" />
-              <Skeleton className="mt-2.5 h-4 w-4/5" />
-              <Skeleton className="mt-2 h-3 w-2/5" />
-            </div>
-          ))}
-        </div>
-      </div>
-    </div>
-  );
-}
+import { SectionHeader, LiveSkeleton } from './hub/LiveSkeleton';
+import { CategoryFilter } from './hub/CategoryFilter';
+import { YourShowRow } from './hub/YourShowRow';
+import { LiveDock } from './hub/LiveDock';
 
 export function LiveView() {
   const router = useRouter();
@@ -139,21 +105,25 @@ export function LiveView() {
   const upcoming = data.filter((s) => s.status === 'upcoming' && inCategory(s));
   const replays = data.filter((s) => s.status === 'ended' && inCategory(s));
 
-  // Today's timetable vs the later rail — honest split, no padded rows.
-  const now = new Date();
-  const todays = upcoming.filter((s) => s.scheduledAt != null && isSameDay(s.scheduledAt, now));
-  const later = upcoming.filter(
-    (s) => s.scheduledAt == null || !isSameDay(s.scheduledAt, now),
-  );
+  // The dock's "Up next" column — chronological; shows with no clock time
+  // settle at the end rather than jumping the queue.
+  const upNext = [...upcoming].sort((a, b) => {
+    if (a.scheduledAt == null) return b.scheduledAt == null ? 0 : 1;
+    if (b.scheduledAt == null) return -1;
+    return a.scheduledAt.localeCompare(b.scheduledAt);
+  });
 
   if (live.length === 0 && upcoming.length === 0 && replays.length === 0) {
     return (
       <div className="pb-10">
-        <CategoryFilter
-          categories={categories}
-          category={category}
-          onChange={setCategory}
-        />
+        <div className="no-scrollbar -mx-4 overflow-x-auto border-b border-border-subtle px-4 pb-4 sm:-mx-6 sm:px-6">
+          <CategoryFilter
+            categories={categories}
+            category={category}
+            onChange={setCategory}
+            className="w-max"
+          />
+        </div>
         <div className="mt-8">
           <EmptyState
             icon="videocam"
@@ -183,10 +153,10 @@ export function LiveView() {
   return (
     <>
       <div className="space-y-10 pb-10">
-        {/* Category rails — one filter across every section; only when
-            the contract actually carries more than one category. */}
+        {/* Category chips — one filter across the surface; flat chip row
+            on canvas with a hairline, the home/explore grammar (no bar). */}
         {categories.length > 1 ? (
-          <div className="no-scrollbar -mx-4 overflow-x-auto px-4 sm:-mx-6 sm:px-6">
+          <div className="no-scrollbar -mx-4 overflow-x-auto border-b border-border-subtle px-4 pb-4 sm:-mx-6 sm:px-6">
             <CategoryFilter
               categories={categories}
               category={category}
@@ -196,23 +166,28 @@ export function LiveView() {
           </div>
         ) : null}
 
-        {/* Live now */}
+        {/* Live now — the hero keeps the stage; the rest of the on-air
+            board and the forward schedule dock as compact media rows in
+            a right column, so a second live show is never a sliver under
+            the fold. */}
         <section aria-label="Live now">
           <SectionHeader
             title="Live now"
             meta={live.length ? `${live.length} streaming` : undefined}
           />
           {hero ? (
-            <>
+            <div
+              className={
+                restLive.length > 0 || upNext.length > 0
+                  ? 'grid grid-cols-1 gap-6 lg:grid-cols-[minmax(0,8fr)_minmax(0,5fr)] lg:gap-8'
+                  : ''
+              }
+            >
               <LiveNowCard session={hero} onWatch={openSession} variant="hero" />
-              {restLive.length > 0 ? (
-                <div className="no-scrollbar -mx-4 mt-4 flex gap-4 overflow-x-auto px-4 pb-1 sm:-mx-6 sm:px-6">
-                  {restLive.map((s) => (
-                    <LiveNowCard key={s.id} session={s} onWatch={openSession} />
-                  ))}
-                </div>
+              {restLive.length > 0 || upNext.length > 0 ? (
+                <LiveDock live={restLive} upcoming={upNext} onWatch={openSession} />
               ) : null}
-            </>
+            </div>
           ) : (
             <p className="flex items-center gap-2 py-2 text-body text-text-secondary">
               <Icon name="videocam" size={16} className="text-text-muted" />
@@ -221,23 +196,10 @@ export function LiveView() {
                 : `Nothing live in ${category} right now — the next shows are below.`}
             </p>
           )}
+          {!hero && upNext.length > 0 ? (
+            <LiveDock live={[]} upcoming={upNext} onWatch={openSession} className="mt-6" />
+          ) : null}
         </section>
-
-        {/* Today's schedule — timetable rows while the day has bookings */}
-        {todays.length > 0 ? (
-          <section aria-label="Today's schedule">
-            <SectionHeader title="Today's schedule" meta={`${todays.length} today`} />
-            <ScheduleTimeline sessions={todays} />
-          </section>
-        ) : null}
-
-        {/* Coming up — scheduled beyond today */}
-        {later.length > 0 ? (
-          <section aria-label="Coming up">
-            <SectionHeader title="Coming up" meta={`${later.length} scheduled`} />
-            <UpcomingRail sessions={later} />
-          </section>
-        ) : null}
 
         {/* Your shows — the seller's own lineup/past shows, linking back
             to the host console each row belongs to. */}
@@ -263,75 +225,5 @@ export function LiveView() {
 
       <LiveViewerOverlay session={watchingFresh} onClose={closeSession} />
     </>
-  );
-}
-
-/** One row of "Your shows" — hairline timetable grammar shared with the
- *  schedule timeline: status where the clock sits, title, scheduled time,
- *  chevron into that show's host console. */
-function YourShowRow({ session }: { session: LiveSession }) {
-  const seller = liveSellerOf(session);
-  return (
-    <li>
-      <Link
-        href={`/live/host/${session.id}`}
-        aria-label={`Manage “${session.title}” — host console`}
-        className="pressable -mx-2 flex items-center gap-3 rounded-md px-2 py-2.5 hover:bg-surface-alt"
-      >
-        <span className="relative h-11 w-11 shrink-0 overflow-hidden rounded-md bg-surface-alt">
-          <AppImage
-            src={session.coverUri}
-            alt=""
-            fill
-            sizes="44px"
-            className="h-full w-full"
-          />
-        </span>
-        <span className="min-w-0 flex-1">
-          <span className="clamp-1 block text-body-emphasis text-text-primary">
-            {session.title}
-          </span>
-          <span className="tnum mt-0.5 block text-meta text-text-muted">
-            {session.status === 'upcoming' && session.scheduledAt
-              ? formatScheduled(session.scheduledAt)
-              : session.status === 'ended'
-                ? `Ended${session.durationMinutes != null ? ` · ${session.durationMinutes} min` : ''}`
-                : (seller?.username ? `@${seller.username}` : 'On air')}
-          </span>
-        </span>
-        {session.status === 'live' ? (
-          <LiveBadge className="shrink-0" />
-        ) : (
-          <span className="shrink-0 rounded-md bg-surface-alt px-2 py-1 text-meta font-semibold uppercase tracking-wide text-text-secondary">
-            {session.status === 'upcoming' ? 'Scheduled' : 'Replay'}
-          </span>
-        )}
-        <Icon name="forward" size={16} className="shrink-0 text-text-muted" />
-      </Link>
-    </li>
-  );
-}
-
-function CategoryFilter({
-  categories,
-  category,
-  onChange,
-  className,
-}: {
-  categories: string[];
-  category: string;
-  onChange: (next: string) => void;
-  className?: string;
-}) {
-  return (
-    <SegmentedControl
-      options={[
-        { value: 'all', label: 'All' },
-        ...categories.map((name) => ({ value: name, label: name })),
-      ]}
-      value={category}
-      onChange={onChange}
-      className={className}
-    />
   );
 }

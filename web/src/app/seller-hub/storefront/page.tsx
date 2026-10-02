@@ -12,15 +12,18 @@
  *  - useStorefrontWorkflow
  */
 
+import { useMemo } from 'react';
 import { SellerSectionNav } from '@/components/seller/SellerSectionNav';
 import { Button } from '@/components/ui/Button';
 import { EmptyState } from '@/components/ui/EmptyState';
 import { Icon } from '@/components/ui/Icon';
 import { DATA_MODE } from '@/lib/api/client';
+import type { Listing } from '@/lib/contracts/domain';
 import { StorefrontSkeleton } from '@/components/seller/storefront/StorefrontPrimitives';
 import { StorefrontStatusBanner } from '@/components/seller/storefront/StorefrontStatusBanner';
 import { StorefrontBoardSection } from '@/components/seller/storefront/StorefrontBoardSection';
 import { StorefrontFeaturedRail } from '@/components/seller/storefront/StorefrontFeaturedRail';
+import { StorefrontPreviewAside } from '@/components/seller/storefront/StorefrontPreviewAside';
 import { StorefrontRollbackSheet } from '@/components/seller/storefront/StorefrontRollbackSheet';
 import { useStorefrontWorkflow } from '@/components/seller/storefront/useStorefrontWorkflow';
 
@@ -60,6 +63,16 @@ export default function StorefrontEditorPage() {
     setConfirmRollback,
   } = workflow;
 
+  // The preview rail resolves picked ids against the full inventory — a
+  // pinned item stays previewable even once it stops being featureable.
+  const previewFeatured = useMemo(
+    () =>
+      picked
+        .map((id) => (listings.data ?? []).find((l) => l.id === id))
+        .filter((l): l is Listing => Boolean(l)),
+    [picked, listings.data],
+  );
+
   return (
     <div className="mx-auto w-full max-w-3xl px-4 pb-16 pt-8 sm:px-6 md:pt-12 lg:max-w-[1440px]">
       <h1 className="text-screen-title text-text-primary">Storefront</h1>
@@ -89,6 +102,11 @@ export default function StorefrontEditorPage() {
         </div>
       ) : (
         <>
+        {/* Editor + live preview — at lg the form column stays fluid and
+            the preview pins to a 360px sticky aside (the sell flow's
+            feed-preview grammar). */}
+        <div className="lg:grid lg:grid-cols-[minmax(0,1fr)_360px] lg:items-start lg:gap-12 xl:gap-16">
+        <div>
           <StorefrontStatusBanner
             sf={sf}
             status={status}
@@ -153,6 +171,18 @@ export default function StorefrontEditorPage() {
               We couldn&apos;t save that change — check the highlighted items and try again.
             </p>
           ) : null}
+        </div>
+        <StorefrontPreviewAside
+          username={user?.username ?? null}
+          avatar={user?.avatar ?? null}
+          status={status}
+          announcement={announcement}
+          shipping={shipping}
+          returnsPolicy={returnsPolicy}
+          additional={additional}
+          featured={previewFeatured}
+        />
+        </div>
         </>
       )}
 

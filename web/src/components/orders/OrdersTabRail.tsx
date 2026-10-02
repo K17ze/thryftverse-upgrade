@@ -26,15 +26,18 @@ interface Props {
   onChange: (tab: OrdersTab) => void;
   /** Real per-tab counts (client-side list — always honest). */
   counts?: Partial<Record<OrdersTab, number>>;
+  /** Tab↔tabpanel pairing base — the caller's useId() (see ui/Tabs). */
+  idBase?: string;
 }
 
-export function OrdersTabRail({ activeTab, onChange, counts }: Props) {
+export function OrdersTabRail({ activeTab, onChange, counts, idBase }: Props) {
   return (
     <Tabs
       tabs={ORDERS_TABS.map((t) => ({ ...t, count: counts?.[t.key] }))}
       active={activeTab}
       onChange={onChange}
       ariaLabel="Order categories"
+      idBase={idBase}
       // Page container is px-4 sm:px-6 — bleed the hairline to the
       // screen edge while keeping the first label flush with content.
       className="-mx-4 sm:-mx-6"

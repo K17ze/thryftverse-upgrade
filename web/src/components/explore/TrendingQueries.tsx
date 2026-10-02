@@ -2,8 +2,10 @@
 
 /**
  * TrendingQueries — the query-shortcut block under the Explore search
- * field (Vinted browse grammar): what members are actually looking for,
- * one chip per term, each running a real filtered search.
+ * field (Vinted browse grammar): what members are actually looking for.
+ * Composition lives in the shared TrendingShortcuts so /search and
+ * /explore render one grammar — trend chips, a hairline, then a
+ * single-line brand row.
  *
  * Fixture mode reads the authored TRENDING_SEARCHES + catalogue-derived
  * POPULAR_BRANDS; live mode reads GET /search/trending and ranks brands
@@ -12,7 +14,7 @@
  */
 
 import { useRouter } from 'next/navigation';
-import { Chip } from '@/components/ui/Chip';
+import { TrendingShortcuts } from '@/components/search/TrendingShortcuts';
 import { DATA_MODE } from '@/lib/api/client';
 import {
   rankBrands,
@@ -33,37 +35,16 @@ export function TrendingQueries() {
 
   const terms = LIVE ? searches.terms : TRENDING_SEARCHES;
   const brands = LIVE ? rankBrands(trending.listings) : POPULAR_BRANDS;
-  if (terms.length === 0 && brands.length === 0) return null;
 
   const run = (term: string) =>
     router.push(`/search?q=${encodeURIComponent(term)}`);
 
   return (
-    <div className="mt-4 flex flex-col gap-3">
-      {terms.length > 0 ? (
-        <div>
-          <h2 className="text-label text-text-muted">Trending</h2>
-          <div className="mt-2 flex flex-wrap gap-1.5">
-            {terms.map((term) => (
-              <Chip key={term} icon="trending" onClick={() => run(term)}>
-                {term}
-              </Chip>
-            ))}
-          </div>
-        </div>
-      ) : null}
-      {brands.length > 0 ? (
-        <div>
-          <h2 className="text-label text-text-muted">Popular brands</h2>
-          <div className="mt-2 flex flex-wrap gap-1.5">
-            {brands.map((brand) => (
-              <Chip key={brand} onClick={() => run(brand)}>
-                {brand}
-              </Chip>
-            ))}
-          </div>
-        </div>
-      ) : null}
-    </div>
+    <TrendingShortcuts
+      terms={terms}
+      brands={brands}
+      onSelect={run}
+      className="mt-4"
+    />
   );
 }

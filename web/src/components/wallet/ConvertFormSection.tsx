@@ -160,7 +160,7 @@ export function ConvertFormSection({
                 }
                 className="pressable mt-2 text-caption font-semibold text-brand underline underline-offset-2"
               >
-                {pocketsQueryError ? 'Try again' : 'Switch back to 1ZE → Fiat'}
+                {pocketsQueryError ? 'Try again' : 'Switch back: 1ZE to Fiat'}
               </button>
             </div>
           </div>

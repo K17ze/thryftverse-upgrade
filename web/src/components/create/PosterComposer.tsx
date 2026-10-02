@@ -28,6 +28,9 @@ interface PosterComposerProps {
   /** Resumed server draft row — re-saves upsert the same id; publishing
    *  mints the story under it and deletes the draft row. */
   draft?: PosterDraft;
+  /** Captured-at-entry media (camera sheet) — stages through the same
+   *  pick() path as a file pick on mount, becoming the story's frame. */
+  initialFile?: File;
   onDraftSaved: () => void;
   onBack: () => void;
 }
@@ -39,7 +42,7 @@ interface PosterErrors {
   submit?: string;
 }
 
-export function PosterComposer({ draft, onDraftSaved, onBack }: PosterComposerProps) {
+export function PosterComposer({ draft, initialFile, onDraftSaved, onBack }: PosterComposerProps) {
   const router = useRouter();
   const toast = useToast();
   const { media, seed, pick, clear } = useStagedMedia('poster');
@@ -52,11 +55,15 @@ export function PosterComposer({ draft, onDraftSaved, onBack }: PosterComposerPr
   const idRef = useRef(draft?.id ?? `ps_${crypto.randomUUID()}`);
 
   useEffect(() => {
-    if (draft && !seededRef.current) {
+    if (seededRef.current) return;
+    if (draft) {
       seededRef.current = true;
       seed(draft.mediaUrl, draft.mediaType, readDraftReceipt(draft.id));
+    } else if (initialFile) {
+      seededRef.current = true;
+      pick(initialFile);
     }
-  }, [draft, seed]);
+  }, [draft, initialFile, seed, pick]);
 
   const busy = pending !== null || media?.uploading === true;
 
@@ -68,7 +75,9 @@ export function PosterComposer({ draft, onDraftSaved, onBack }: PosterComposerPr
       e.media = media.uploading
         ? 'Wait for the upload to finish'
         : 'Re-add the media — publishing needs a verified upload';
-    } else if (!media.receipt && !draft) {
+    } else if (!media.receipt && (!draft || media.previewUrl !== draft.mediaUrl)) {
+      // Re-staged media without a receipt must never write its blob:
+      // preview into the draft row — the durable mediaUrl survives.
       e.media = media.uploading ? 'Wait for the upload to finish' : 'Re-add the media — the upload didn’t finish';
     }
     return e;
@@ -87,7 +96,7 @@ export function PosterComposer({ draft, onDraftSaved, onBack }: PosterComposerPr
       if (status === 'draft') {
         await creator.upsertPoster({
           id,
-          mediaUrl: receipt?.publicUrl ?? media!.previewUrl,
+          mediaUrl: receipt?.publicUrl ?? draft?.mediaUrl ?? media!.previewUrl,
           ...(receipt ? { mediaFinalizationId: receipt.finalizationId } : {}),
           caption: caption.trim(),
           status: 'draft',

@@ -7,9 +7,9 @@
  * persisted session watchlist the asset detail stars into.
  */
 
-import { useEffect, useMemo, useRef, useState } from 'react';
+import { useEffect, useId, useMemo, useRef, useState } from 'react';
 import { EmptyState } from '@/components/ui/EmptyState';
-import { Tabs } from '@/components/ui/Tabs';
+import { Tabs, tabId, tabPanelId } from '@/components/ui/Tabs';
 import { DATA_MODE } from '@/lib/api/client';
 import { useCoOwnAssets, useCoOwnPositions } from '@/lib/hooks/coown-queries';
 import {
@@ -64,6 +64,7 @@ export function CoOwnHubView() {
   const [query, setQuery] = useState('');
   const [sort, setSort] = useState<HubSortKey>('volume');
   const hydrated = useHydrated();
+  const tabsId = useId();
 
   // Persisted watchlist — empty until hydration so SSR and first paint agree.
   const storedWatchedIds = useCoOwnWatchlist((s) => s.watchedIds);
@@ -233,8 +234,16 @@ export function CoOwnHubView() {
           setSegment(ALL_SEGMENTS);
         }}
         ariaLabel="Co-own sections"
+        idBase={tabsId}
       />
 
+      {/* The controls + board are the active section's panel — both swap
+          with the view. */}
+      <div
+        role="tabpanel"
+        id={tabPanelId(tabsId, view)}
+        aria-labelledby={tabId(tabsId, view)}
+      >
       {view !== 'watchlist' ? (
         <HubMarketControls
           view={view}
@@ -273,6 +282,7 @@ export function CoOwnHubView() {
           isWatchlistError={watchlistQ.isError}
           onRetryWatchlist={() => void watchlistQ.refetch()}
         />
+      </div>
       </div>
 
       <EducationBand />

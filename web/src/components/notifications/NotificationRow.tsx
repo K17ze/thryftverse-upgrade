@@ -43,26 +43,42 @@ export function NotificationRow({ notification: n, onOpen, onDismiss }: Notifica
 
   const inner = (
     <>
-      <div className="relative shrink-0 self-start pt-0.5">
-        <AppImage
-          src={n.image}
-          alt=""
-          sizes="44px"
-          className={`h-11 w-11 ${n.isActor ? 'rounded-full' : 'rounded-md'}`}
-          fallbackIcon={n.isActor ? 'profile' : 'image'}
-        />
+      {/* Leading cell — mobile: the composed avatar/thumb with unread
+          dot + kind badge. At lg the kind glyph alone leads and the
+          entity thumb becomes its own trailing column. */}
+      <div className="relative shrink-0 self-start pt-0.5 lg:self-center lg:pt-0">
+        <span className="relative block lg:hidden">
+          <AppImage
+            src={n.image}
+            alt=""
+            sizes="44px"
+            className={`h-11 w-11 ${n.isActor ? 'rounded-full' : 'rounded-md'}`}
+            fallbackIcon={n.isActor ? 'profile' : 'image'}
+          />
+          {/* Kind badge — the type-colour coding is load-bearing
+              (scanability), so the overlay badge stays; the glyph is
+              sized ≥14px so it reads as the kind mark, not a smudge. */}
+          <span
+            className={`absolute -bottom-1 -right-1 flex h-6 w-6 items-center justify-center rounded-full border border-border-subtle bg-surface-elevated ${accent.className}`}
+            aria-hidden
+          >
+            <Icon name={accent.icon} size={14} filled={accent.filled} />
+          </span>
+        </span>
+        {/* lg leading cell — a bare accent-tinted glyph (no well); the
+            colour alone carries the type coding. */}
+        <span
+          className={`hidden h-9 w-9 items-center justify-center lg:flex ${accent.className}`}
+          aria-hidden
+        >
+          <Icon name={accent.icon} size={18} filled={accent.filled} />
+        </span>
         {n.unread ? (
           <span
             className="absolute -right-0.5 -top-0.5 h-2.5 w-2.5 rounded-full bg-brand ring-2 ring-background"
             aria-hidden
           />
         ) : null}
-        <span
-          className={`absolute -bottom-1 -right-1 flex h-5 w-5 items-center justify-center rounded-full border border-border-subtle bg-surface-elevated ${accent.className}`}
-          aria-hidden
-        >
-          <Icon name={accent.icon} size={10} filled={accent.filled} />
-        </span>
       </div>
 
       <div className="min-w-0 flex-1">
@@ -92,6 +108,20 @@ export function NotificationRow({ notification: n, onOpen, onDismiss }: Notifica
           </span>
         ) : null}
       </div>
+
+      {/* Entity thumb — the lg column's own cell; below lg it lives in
+          the composed leading visual. Empty cells keep the grid honest. */}
+      <span className="hidden lg:block lg:justify-self-end">
+        {n.image ? (
+          <AppImage
+            src={n.image}
+            alt=""
+            sizes="44px"
+            className={`h-11 w-11 ${n.isActor ? 'rounded-full' : 'rounded-md'}`}
+            fallbackIcon={n.isActor ? 'profile' : 'image'}
+          />
+        ) : null}
+      </span>
 
       <span className="flex shrink-0 flex-col items-end gap-1.5">
         <span className="pt-0.5 text-meta text-text-muted">{n.time}</span>
@@ -149,13 +179,17 @@ export function NotificationRow({ notification: n, onOpen, onDismiss }: Notifica
   // No `pressable` on the row: the :active scale transform creates a
   // mid-press stacking context that lets the stretched layer steal the
   // hit-test from the in-row actions between pointerdown/up.
+  // At lg the row is a real grid — icon | copy | entity thumb | time +
+  // actions — inside the widened feed column.
   const className =
-    'group/nrow flex w-full items-start gap-3 px-2 py-3 text-left hover:bg-row-pressed lg:py-2.5';
+    'group/nrow flex w-full items-start gap-3 px-2 py-3 text-left hover:bg-row-pressed lg:grid lg:grid-cols-[2.25rem_minmax(0,1fr)_2.75rem_minmax(0,10rem)] lg:items-center lg:gap-x-4 lg:py-2.5';
   const label = `${n.text}${n.unread ? ' — unread' : ''}`;
 
   // In-row actions need the stretched-layer pattern — real buttons can't
-  // nest inside the anchor/button.
-  const needsLayer = Boolean(onDismiss) || (n.unread && n.href != null) ||
+  // nest inside the anchor/button. Unread alone forces it: the
+  // mark-as-read button renders inside `inner` whenever the row is
+  // unread, so without the layer it would sit inside the row's <button>.
+  const needsLayer = Boolean(onDismiss) || n.unread ||
     (n.kind === 'follow' && n.actorId != null);
 
   if (needsLayer) {

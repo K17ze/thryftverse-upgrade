@@ -36,6 +36,7 @@ import {
   type ListingPendingAction,
 } from '@/components/seller/detail/ListingManageActionMenu';
 import { ListingManageSheets } from '@/components/seller/detail/ListingManageSheets';
+import { SmartSellCard } from '@/components/sell/SmartSellCard';
 
 export default function ManageListingPage({
   params,
@@ -212,21 +213,31 @@ export default function ManageListingPage({
             <ListingManageActivityMetrics listing={listing} stats={stats.data} />
           </div>
 
-          <ListingManageActionMenu
-            listing={listing}
-            status={status}
-            likerCount={likerCount}
-            lastOfferCreatedAt={lastOffer.data?.createdAt}
-            onShare={() => void share()}
-            onOpenStats={() => setStatsOpen(true)}
-            onOpenOffer={() => setOfferOpen(true)}
-            onOpenPromote={() => setPromoteOpen(true)}
-            onOpenPrice={() => {
-              setPriceDraft(listing.price > 0 ? listing.price.toFixed(2) : '');
-              setPriceOpen(true);
-            }}
-            onSelectAction={setPending}
-          />
+          <div>
+            <ListingManageActionMenu
+              listing={listing}
+              status={status}
+              likerCount={likerCount}
+              lastOfferCreatedAt={lastOffer.data?.createdAt}
+              onShare={() => void share()}
+              onOpenStats={() => setStatsOpen(true)}
+              onOpenOffer={() => setOfferOpen(true)}
+              onOpenPromote={() => setPromoteOpen(true)}
+              onOpenPrice={() => {
+                setPriceDraft(listing.price > 0 ? listing.price.toFixed(2) : '');
+                setPriceOpen(true);
+              }}
+              onSelectAction={setPending}
+            />
+
+            {/* Smart Sell policy — real listing ids only; the card reads the
+                same /smart-sell contract mobile uses (preview store in
+                fixture mode, labelled honestly). Same visibility gate as the
+                repricing action — no policy surface on sold/draft rows. */}
+            {status === 'active' || status === 'paused' ? (
+              <SmartSellCard listingId={listing.id} listingPrice={listing.price} />
+            ) : null}
+          </div>
         </div>
       )}
 

@@ -19,7 +19,7 @@ import { TRENDING_TOPICS } from './topics';
 
 export function TrendingTopics() {
   return (
-    <ModuleSection title="Explore themes" href="/search" bordered={false}>
+    <ModuleSection title="Explore themes" href="/search">
       <div
         className="no-scrollbar flex snap-x snap-mandatory gap-2.5 overflow-x-auto px-4 sm:grid sm:grid-cols-3 sm:overflow-visible sm:px-6 lg:grid-cols-6"
         role="list"

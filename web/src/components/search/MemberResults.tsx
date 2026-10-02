@@ -73,17 +73,29 @@ export function MemberResults({ query }: { query: string }) {
                     />
                   ) : null}
                 </span>
-                <span className="clamp-1 mt-0.5 block text-caption text-text-muted">
-                  {[
-                    m.listingCount > 0
-                      ? `${m.listingCount} item${m.listingCount === 1 ? '' : 's'}`
-                      : null,
-                    m.reviewCount > 0
-                      ? `★ ${m.rating.toFixed(1)}`
-                      : null,
-                  ]
-                    .filter(Boolean)
-                    .join(' · ') || 'Member'}
+                <span className="mt-0.5 flex min-w-0 items-center gap-1 text-caption text-text-muted">
+                  {m.listingCount > 0 ? (
+                    <span className="truncate">
+                      {m.listingCount} item{m.listingCount === 1 ? '' : 's'}
+                    </span>
+                  ) : null}
+                  {m.listingCount > 0 && m.reviewCount > 0 ? (
+                    <span aria-hidden>·</span>
+                  ) : null}
+                  {m.reviewCount > 0 ? (
+                    <span className="flex shrink-0 items-center gap-0.5">
+                      <Icon
+                        name="star"
+                        filled
+                        size={12}
+                        className="text-rating-star"
+                      />
+                      <span className="tnum">{m.rating.toFixed(1)}</span>
+                    </span>
+                  ) : null}
+                  {m.listingCount === 0 && m.reviewCount === 0
+                    ? 'Member'
+                    : null}
                 </span>
               </span>
               <Icon

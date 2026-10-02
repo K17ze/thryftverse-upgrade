@@ -11,6 +11,7 @@ import Link from 'next/link';
 import { useMemo, useState } from 'react';
 import { AppImage } from '@/components/ui/AppImage';
 import { Icon } from '@/components/ui/Icon';
+import { SoldOverlay } from '@/components/ui/SoldOverlay';
 import { Sheet } from '@/components/ui/Sheet';
 import { Button } from '@/components/ui/Button';
 import { useToast } from '@/components/ui/Toast';
@@ -62,7 +63,7 @@ export function ShopRail({ ownerId, isOwner = false, listings = [] }: ShopRailPr
               setDraft(pinnedIds);
               setPinOpen(true);
             }}
-            className="pressable text-body font-medium text-brand"
+            className="pressable -mx-1.5 -my-2.5 rounded-sm px-1.5 py-2.5 text-body font-medium text-brand"
           >
             Edit
           </button>
@@ -117,7 +118,7 @@ export function ShopRail({ ownerId, isOwner = false, listings = [] }: ShopRailPr
                 </span>
                 <span className="min-w-0 flex-1">
                   <span className="clamp-1 block text-body text-text-primary">{l.title}</span>
-                  <span className="text-meta text-text-muted">{formatPrice(l.price)}</span>
+                  <span className="tnum text-meta text-text-muted">{formatPrice(l.price)}</span>
                 </span>
                 <span
                   className={`flex h-5 w-5 items-center justify-center rounded-full border ${
@@ -167,7 +168,7 @@ function ShopRailCard({ item }: { item: ShopRailItem }) {
       className="pressable group block w-[132px] shrink-0 lg:w-[168px]"
       aria-label={`${item.title}, ${formatPrice(item.price)}${item.isSold ? ', sold' : ''}`}
     >
-      <span className="relative block aspect-[3/4] overflow-hidden rounded-lg bg-surface-alt">
+      <div className="relative block aspect-[3/4] overflow-hidden rounded-lg bg-surface-alt">
         <AppImage
           src={item.imageUri}
           alt=""
@@ -176,19 +177,16 @@ function ShopRailCard({ item }: { item: ShopRailItem }) {
           className="h-full w-full media-zoom"
           fallbackIcon="heart"
         />
-        {item.isSold ? (
-          <span className="absolute inset-0 flex items-center justify-center bg-black/45 text-meta font-semibold uppercase tracking-wide text-scrim-text-primary">
-            Sold
-          </span>
-        ) : null}
-      </span>
+        {/* Sold — the shared overlay grammar, identical to closet tiles. */}
+        {item.isSold ? <SoldOverlay size="sm" /> : null}
+      </div>
       <span className="clamp-1 mt-1.5 block text-body font-medium text-text-primary">
         {item.brand ?? item.title}
       </span>
       <span className="clamp-1 block text-meta text-text-muted">
         {item.brand ? item.title : ''}
       </span>
-      <span className="block text-body font-semibold text-text-primary">
+      <span className="tnum block text-body font-semibold text-text-primary">
         {formatPrice(item.price)}
       </span>
     </Link>

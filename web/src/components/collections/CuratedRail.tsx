@@ -95,13 +95,13 @@ function CuratedCard({
             {collection.title}
           </h3>
           {collection.curatorName ? (
-            <p className="mt-1.5 flex items-center gap-1.5 text-meta text-scrim-text-secondary">
+            <div className="mt-1.5 flex items-center gap-1.5 text-meta text-scrim-text-secondary">
               <Avatar src={collection.curatorAvatar} name={collection.curatorName} size={18} />
               <span className="clamp-1 font-medium">{collection.curatorName}</span>
               {collection.curatorVerified ? (
                 <Icon name="verified" filled size={11} className="text-scrim-text-primary" />
               ) : null}
-            </p>
+            </div>
           ) : null}
         </div>
       </div>

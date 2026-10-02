@@ -29,6 +29,7 @@ import { Icon } from '@/components/ui/Icon';
 import { useToast } from '@/components/ui/Toast';
 import { ConfirmSheet, type ConfirmSheetState } from '@/components/orders/ConfirmSheet';
 import { useAuction, useAuctionBids } from '@/lib/hooks/auction-queries';
+import type { AuctionMarketItem } from '@/lib/contracts/auction';
 import { usePdpSimilarListings } from '@/lib/hooks/pdp-market-queries';
 import { useSession } from '@/lib/session/SessionProvider';
 import { DATA_MODE } from '@/lib/api/client';
@@ -41,7 +42,7 @@ import { formatPrice } from '@/lib/utils/format';
 
 const LIVE = DATA_MODE === 'live';
 
-export function AuctionClient() {
+export function AuctionClient({ initialAuction }: { initialAuction?: AuctionMarketItem }) {
   const params = useParams<{ id: string }>();
   const router = useRouter();
   const id = params?.id ?? '';
@@ -50,7 +51,9 @@ export function AuctionClient() {
   // authored fixture bids would masquerade as theirs.
   const viewerId = user?.id;
 
-  const { auction, isLoading, isError, refetch } = useAuction(id);
+  const { auction, isLoading, isError, refetch } = useAuction(id, {
+    initialData: initialAuction,
+  });
   const {
     data: bids,
     isLoading: bidsLoading,
@@ -174,7 +177,7 @@ export function AuctionClient() {
 
   return (
     <div className="mx-auto w-full max-w-[1280px] pb-16">
-      <div className="grid gap-8 px-4 pt-4 sm:px-6 lg:grid-cols-[minmax(0,1fr)_400px] lg:gap-10 lg:pt-6">
+      <div className="grid grid-cols-1 gap-8 px-4 pt-4 sm:px-6 lg:grid-cols-[minmax(0,1fr)_400px] lg:gap-10 lg:pt-6">
         {/* Media + evidence */}
         <div className="min-w-0">
           <div className="mb-3 lg:hidden">

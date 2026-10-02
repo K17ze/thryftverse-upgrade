@@ -35,8 +35,21 @@ import {
   type OrderRole,
 } from './orderCapabilities';
 
-export function OrderStatusBadge({ status }: { status: Order['status'] | string }) {
-  return <Badge variant={statusBadgeVariant(status)}>{humaniseStatus(status)}</Badge>;
+export function OrderStatusBadge({
+  status,
+  needsAttention = false,
+}: {
+  status: Order['status'] | string;
+  /** One status grammar — the needs-action cue folds into the pill as a
+   *  leading glyph (and an sr-only prefix) rather than floating beside it. */
+  needsAttention?: boolean;
+}) {
+  return (
+    <Badge variant={statusBadgeVariant(status)} icon={needsAttention ? 'alert' : undefined}>
+      {needsAttention ? <span className="sr-only">Needs your action — </span> : null}
+      {humaniseStatus(status)}
+    </Badge>
+  );
 }
 
 interface ShipBy {
@@ -117,7 +130,7 @@ export function OrderRow({
   const imageUri = meta?.listingImageUrl ?? getListingCoverUri(listing?.images);
   const category = meta ? undefined : listing?.category;
   const role: OrderRole = isBuyer ? 'buyer' : 'seller';
-  const attentionIcon = needsAction(order.status, role);
+  const needsViewerAction = needsAction(order.status, role);
 
   const enrichment = meta || LIVE ? null : orderEnrichmentFor(order.id);
   const hasReview = meta?.hasReview ?? enrichment?.hasReview === true;
@@ -159,7 +172,7 @@ export function OrderRow({
     <li>
       <Link
         href={href}
-        className="pressable flex items-center gap-3 py-[var(--density-row-py)] hover:bg-row-pressed sm:gap-4 lg:grid lg:grid-cols-[3.5rem_minmax(0,1.4fr)_minmax(0,0.8fr)_8.5rem_auto_auto_1.25rem] lg:gap-x-5"
+        className="pressable flex items-center gap-3 py-[var(--density-row-py)] hover:bg-row-pressed sm:gap-4 lg:grid lg:grid-cols-[3.5rem_minmax(0,1fr)_11rem_8.5rem_auto_auto_1.25rem] lg:gap-x-5"
       >
         <span className="w-14 shrink-0 overflow-hidden rounded-md">
           <AppImage
@@ -194,7 +207,7 @@ export function OrderRow({
                     ? 'text-warning-text'
                     : captionTone === 'muted'
                       ? 'text-text-muted'
-                      : 'text-commerce-trust'
+                      : 'text-text-secondary'
               }`}
             >
               {captionTone === 'muted' && hasReview && !reviewIsAuto ? (
@@ -224,11 +237,11 @@ export function OrderRow({
             {formatDate(order.createdAt)}
           </span>
         </span>
-        <span className="flex shrink-0 items-center gap-1.5 lg:justify-self-end">
-          {attentionIcon ? (
-            <Icon name="alert" size={14} className="text-warning-text" aria-label="Needs your action" />
-          ) : null}
-          <OrderStatusBadge status={order.status} />
+        {/* Status cell — one grammar: a single semantic pill per status,
+            the needs-action cue folded inside it, never a second glyph
+            floating beside the badge. */}
+        <span className="flex shrink-0 items-center lg:justify-self-end">
+          <OrderStatusBadge status={order.status} needsAttention={needsViewerAction} />
         </span>
         <span className="tnum shrink-0 text-body font-semibold text-text-primary lg:justify-self-end lg:text-right">
           {formatPrice(order.totalPrice)}

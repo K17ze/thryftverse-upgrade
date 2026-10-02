@@ -7,147 +7,41 @@
  * destructive action behind a confirm sheet.
  */
 
-import { useState } from 'react';
 import Link from 'next/link';
-import { useRouter } from 'next/navigation';
-import { Button } from '@/components/ui/Button';
 import { EmptyState } from '@/components/ui/EmptyState';
 import { Icon } from '@/components/ui/Icon';
-import { Sheet } from '@/components/ui/Sheet';
-import { useToast } from '@/components/ui/Toast';
-import { useSignupWall } from '@/components/auth/SignupWall';
-import { Switch } from '@/components/settings/Switch';
-import { useCoOwnAssets } from '@/lib/hooks/coown-queries';
-import { formatDate } from '@/lib/utils/format';
-import {
-  useCoOwnAlertsApi,
-  useEvaluateCoOwnAlerts,
-  type CoOwnAlert,
-} from './alertStore';
-import { gbp } from './format';
-
-function AlertRow({
-  alert,
-  title,
-  paused,
-  fired,
-  onToggle,
-  onDelete,
-}: {
-  alert: CoOwnAlert;
-  title: string;
-  paused: boolean;
-  fired: boolean;
-  onToggle: () => void;
-  onDelete: () => void;
-}) {
-  const isAbove = alert.direction === 'above';
-  return (
-    <li className={`flex items-center gap-3 py-3.5 ${paused && !fired ? 'opacity-60' : ''}`}>
-      <Link
-        href={`/co-own/${alert.assetId}`}
-        className="pressable flex min-w-0 flex-1 items-center gap-3"
-        aria-label={`View ${title}`}
-      >
-        <span
-          className={`flex h-9 w-9 shrink-0 items-center justify-center rounded-full ${
-            fired
-              ? 'bg-brand-subtle text-brand'
-              : paused
-                ? 'bg-surface-alt text-text-muted'
-                : isAbove
-                  ? 'bg-coown-up-subtle text-coown-up'
-                  : 'bg-coown-down-subtle text-coown-down'
-          }`}
-        >
-          <Icon name={fired ? 'check' : isAbove ? 'chevronUp' : 'chevronDown'} filled={fired} size={16} />
-        </span>
-        <span className="min-w-0 flex-1">
-          <span className="block text-body text-text-secondary">
-            <span className="clamp-1 font-semibold text-text-primary">{title}</span>
-            <span className="text-text-muted"> · </span>
-            <span className="tnum">{isAbove ? 'Above' : 'Below'} {gbp(alert.targetPriceGbp)}</span>
-          </span>
-          <span className="mt-0.5 block text-meta text-text-muted">
-            {fired && alert.triggeredAt
-              ? `Fired ${formatDate(alert.triggeredAt)} — price crossed your target · set ${formatDate(alert.createdAt)}`
-              : `${paused ? 'Paused · ' : ''}Alerts when the last-trade price ${
-                  isAbove ? 'rises above' : 'drops below'
-                } ${gbp(alert.targetPriceGbp)} · set ${formatDate(alert.createdAt)}`}
-          </span>
-        </span>
-      </Link>
-      {/* Fired alerts keep the switch — re-enabling re-arms the alert
-          (server clears triggered_at; the device store mirrors it). */}
-      <Switch
-        checked={alert.active}
-        onChange={onToggle}
-        aria-label={
-          alert.active ? `Pause alert for ${title}` : `Enable alert for ${title}`
-        }
-      />
-      <button
-        type="button"
-        aria-label="Delete alert"
-        onClick={onDelete}
-        className="pressable inline-flex h-11 w-11 shrink-0 items-center justify-center rounded-full text-danger-text hover:bg-danger-subtle"
-      >
-        <Icon name="trash" size={18} />
-      </button>
-    </li>
-  );
-}
+import { AlertRow, AlertsTableHead } from './alerts/AlertRow';
+import { DeleteAlertSheet } from './alerts/DeleteAlertSheet';
+import { usePriceAlertsWorkflow } from './alerts/usePriceAlertsWorkflow';
 
 export function PriceAlertsView() {
-  const router = useRouter();
-  const assetsQ = useCoOwnAssets();
-  // One API for both backends — server-persisted in live mode, the
-  // device store in fixture mode. `ready` is the authoritative-source
-  // equivalent of hydration.
   const {
+    router,
+    assetsQ,
     alerts,
     ready,
-    error: alertsError,
-    refetch: refetchAlerts,
+    alertsError,
+    refetchAlerts,
     source,
     requiresAuth,
-    toggleAlert,
-    removeAlert,
-  } = useCoOwnAlertsApi();
-  const { show } = useToast();
-  const { requireAuth, wall } = useSignupWall();
-  const [pendingDelete, setPendingDelete] = useState<CoOwnAlert | null>(null);
-  const [deleting, setDeleting] = useState(false);
-  // Fixture-mode evaluator — no-op when the server owns evaluation.
-  useEvaluateCoOwnAlerts();
-
-  const titleFor = (assetId: string) =>
-    assetsQ.data?.find((a) => a.id === assetId)?.title ?? 'Unknown market';
-
-  const isFired = (a: CoOwnAlert) => a.triggeredAt != null;
-  const active = alerts.filter((a) => a.active && !isFired(a));
-  const fired = alerts.filter(isFired);
-  const paused = alerts.filter((a) => !a.active && !isFired(a));
-
-  // Await the action before toasting — a rolled-back write must surface
-  // the failure, never a fabricated success.
-  const onToggleAlert = (a: CoOwnAlert) => {
-    const wasActive = a.active;
-    void toggleAlert(a).then(
-      () => show(wasActive ? 'Alert paused' : 'Alert enabled', 'info'),
-      (err: unknown) =>
-        show(
-          err instanceof Error ? err.message : "Couldn't update the alert",
-          'error',
-        ),
-    );
-  };
+    requireAuth,
+    wall,
+    pendingDelete,
+    setPendingDelete,
+    deleting,
+    titleFor,
+    active,
+    fired,
+    paused,
+    onToggleAlert,
+    handleConfirmDelete,
+  } = usePriceAlertsWorkflow();
 
   // `ready` only advances on a resolved read — a failed alerts query
   // must fall through to the error branch, not skeleton forever.
   if (assetsQ.isLoading || (!ready && !alertsError)) {
     return (
-      <div className="mx-auto w-full max-w-3xl px-4 pb-20 pt-8 sm:px-6 md:pt-10 lg:max-w-[1440px]">
+      <div className="mx-auto w-full max-w-3xl px-4 pb-20 pt-8 sm:px-6 md:pt-10 lg:max-w-[1100px]">
         <div className="skeleton h-8 w-44 rounded-sm" aria-hidden="true" />
         <div className="mt-8 space-y-1.5" aria-hidden="true">
           {[0, 1, 2].map((i) => (
@@ -163,7 +57,7 @@ export function PriceAlertsView() {
   // for a failed alerts read: retry whichever source errored.
   if (assetsQ.isError || !assetsQ.data || alertsError) {
     return (
-      <div className="mx-auto w-full max-w-3xl px-4 pb-20 pt-8 sm:px-6 md:pt-10 lg:max-w-[1440px]">
+      <div className="mx-auto w-full max-w-3xl px-4 pb-20 pt-8 sm:px-6 md:pt-10 lg:max-w-[1100px]">
         <h1 className="text-editorial-display text-text-primary">Price alerts</h1>
         <EmptyState
           icon="notifications"
@@ -180,7 +74,7 @@ export function PriceAlertsView() {
   }
 
   return (
-    <div className="mx-auto w-full max-w-3xl px-4 pb-20 pt-8 sm:px-6 md:pt-10 lg:max-w-[1440px]">
+    <div className="mx-auto w-full max-w-3xl px-4 pb-20 pt-8 sm:px-6 md:pt-10 lg:max-w-[1100px]">
       <header className="flex flex-wrap items-end justify-between gap-x-6 gap-y-3">
         <div>
           <h1 className="text-editorial-display text-text-primary">Price alerts</h1>
@@ -223,7 +117,11 @@ export function PriceAlertsView() {
       ) : (
         <>
           <p className="mt-6 flex items-start gap-2 border-b border-border-subtle pb-5 text-meta text-text-secondary">
-            <Icon name="info" size={14} className="mt-0.5 shrink-0 text-text-muted" />
+            <Icon
+              name="info"
+              size={14}
+              className="mt-0.5 shrink-0 text-text-muted"
+            />
             {source === 'server'
               ? 'Alerts evaluate server-side against live last-trade prices — a fired alert notifies you and lands under Triggered below.'
               : 'Alerts evaluate against last-trade prices on this device while you browse. There\u2019s no push delivery — fired alerts land under Triggered below.'}
@@ -237,7 +135,8 @@ export function PriceAlertsView() {
               >
                 Active
               </h2>
-              <ul className="divide-y divide-border-subtle">
+              <AlertsTableHead />
+              <ul className="divide-y divide-border-subtle lg:border-b lg:border-border-subtle">
                 {active.map((a) => (
                   <AlertRow
                     key={a.id}
@@ -261,7 +160,8 @@ export function PriceAlertsView() {
               >
                 Triggered
               </h2>
-              <ul className="divide-y divide-border-subtle">
+              <AlertsTableHead />
+              <ul className="divide-y divide-border-subtle lg:border-b lg:border-border-subtle">
                 {fired.map((a) => (
                   <AlertRow
                     key={a.id}
@@ -285,7 +185,8 @@ export function PriceAlertsView() {
               >
                 Paused
               </h2>
-              <ul className="divide-y divide-border-subtle">
+              <AlertsTableHead />
+              <ul className="divide-y divide-border-subtle lg:border-b lg:border-border-subtle">
                 {paused.map((a) => (
                   <AlertRow
                     key={a.id}
@@ -303,49 +204,13 @@ export function PriceAlertsView() {
         </>
       )}
 
-      <Sheet
-        open={pendingDelete != null}
+      <DeleteAlertSheet
+        pendingDelete={pendingDelete}
+        title={pendingDelete ? titleFor(pendingDelete.assetId) : ''}
+        deleting={deleting}
+        onConfirm={handleConfirmDelete}
         onClose={() => setPendingDelete(null)}
-        title="Delete alert?"
-        maxWidth={420}
-      >
-        <div className="p-5">
-          <p className="text-body text-text-secondary">
-            {pendingDelete
-              ? `Remove the ${pendingDelete.direction} ${gbp(pendingDelete.targetPriceGbp)} alert on ${titleFor(pendingDelete.assetId)}?`
-              : ''}
-          </p>
-          <div className="mt-5 flex gap-2">
-            <Button variant="secondary" fullWidth onClick={() => setPendingDelete(null)}>
-              Cancel
-            </Button>
-            <Button
-              variant="danger"
-              fullWidth
-              disabled={deleting}
-              onClick={() => {
-                const target = pendingDelete;
-                if (!target || deleting) return;
-                setDeleting(true);
-                void removeAlert(target.id)
-                  .then(() => {
-                    show('Alert deleted', 'success');
-                    setPendingDelete(null);
-                  })
-                  .catch((err: unknown) =>
-                    show(
-                      err instanceof Error ? err.message : "Couldn't delete the alert",
-                      'error',
-                    ),
-                  )
-                  .finally(() => setDeleting(false));
-              }}
-            >
-              {deleting ? 'Deleting…' : 'Delete'}
-            </Button>
-          </div>
-        </div>
-      </Sheet>
+      />
       {wall}
     </div>
   );

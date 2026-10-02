@@ -67,6 +67,14 @@ export function StoryRail() {
         const isUnwatched = !story.seen;
         // The count badge rides the first unwatched tile (mobile parity).
         const showBadge = isUnwatched && idx === 0 && unwatched > 1;
+        // The 76px tile holds ≈8 glyphs at meta size, so the handle is
+        // shown whole — first segment only ("@archive") — or deliberately
+        // dropped: "@marie…" reads identically on every tile, so a
+        // truncated handle is noise, not identity. Dropped handles leave
+        // the status dot as the on-media marker; the full handle stays
+        // in the aria-label.
+        const handle = `@${(story.username || 'member').split(/[._-]/, 1)[0] || 'member'}`;
+        const nameFits = handle.length <= 8;
         return (
           <Link
             key={story.id}
@@ -82,7 +90,11 @@ export function StoryRail() {
                 isUnwatched ? 'bg-brand' : 'bg-border-subtle'
               }`}
             >
-              <div className="relative h-full w-full overflow-hidden rounded-[10px] bg-surface-alt">
+              {/* Inner radius snaps to the grammar: the ring is
+                  rounded-lg with a 2px pad, so the media corner sits just
+                  inside the concentric arc (rounded-md, not an arbitrary
+                  10px). */}
+              <div className="relative h-full w-full overflow-hidden rounded-md bg-surface-alt">
                 <AppImage
                   src={story.coverUri}
                   alt={`${story.username || 'Poster'} story`}
@@ -90,17 +102,21 @@ export function StoryRail() {
                   sizes="(max-width: 1024px) 76px, 94px"
                   className="h-full w-full media-zoom"
                 />
-                {/* Name chip — scrim pill + fresh/seen status dot */}
-                <div className="absolute inset-x-1 bottom-1 flex items-center gap-1 rounded-md bg-overlay px-1.5 py-1">
-                  <span className="clamp-1 min-w-0 flex-1 text-meta font-semibold text-scrim-text-primary">
-                    @{story.username || 'member'}
-                  </span>
-                  <span
-                    aria-hidden
-                    className={`h-[7px] w-[7px] shrink-0 rounded-full ${
-                      isUnwatched ? 'bg-brand' : 'bg-scrim-text-tertiary'
-                    }`}
-                  />
+                {/* Name chip — scrim pill carrying the handle when it
+                    fits whole, else just the fresh/seen status dot. */}
+                <div className="absolute inset-x-1 bottom-1 flex items-center justify-center gap-1 rounded-md bg-overlay px-1.5 py-1">
+                  {nameFits ? (
+                    <span className="clamp-1 min-w-0 text-meta font-semibold text-scrim-text-primary">
+                      {handle}
+                    </span>
+                  ) : (
+                    <span
+                      aria-hidden
+                      className={`h-[7px] w-[7px] shrink-0 rounded-full ${
+                        isUnwatched ? 'bg-brand' : 'bg-scrim-text-tertiary'
+                      }`}
+                    />
+                  )}
                 </div>
                 {showBadge ? (
                   <span className="absolute right-1 top-1 rounded-md bg-brand px-1.5 py-0.5 text-micro font-semibold text-text-inverse">

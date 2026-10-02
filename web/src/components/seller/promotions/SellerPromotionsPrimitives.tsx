@@ -63,6 +63,33 @@ export function PromotionStatsLine({ promotionId }: { promotionId: string }) {
   );
 }
 
+/** Per-promotion stats — the lg table-cell variant: impressions lead,
+ *  taps and billed days sit beneath as the quieter metrics. Same stats
+ *  resolver as the line variant; an empty result reads as an honest dash,
+ *  never a placeholder number. */
+export function PromotionStatsCells({ promotionId }: { promotionId: string }) {
+  const stats = usePromotionStats(promotionId);
+  if (stats.isLoading) {
+    return <Skeleton className="h-4 w-24" />;
+  }
+  if (!stats.data) {
+    return <span className="text-meta text-text-muted">—</span>;
+  }
+  const s = stats.data;
+  return (
+    <>
+      <p className="tnum text-body font-medium text-text-primary">
+        {s.impressions.toLocaleString()}
+        <span className="text-meta font-normal text-text-muted"> impressions</span>
+      </p>
+      <p className="tnum mt-0.5 text-meta text-text-muted">
+        {s.clicks.toLocaleString()} taps · {s.chargedDays} day
+        {s.chargedDays === 1 ? '' : 's'} billed
+      </p>
+    </>
+  );
+}
+
 export function PromotionsSkeleton() {
   return (
     <div className="mt-8 space-y-4" aria-busy aria-label="Loading promotions">

@@ -15,6 +15,7 @@ import { useRef, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { useQueryClient } from '@tanstack/react-query';
 import { Button } from '@/components/ui/Button';
+import { Icon } from '@/components/ui/Icon';
 import { useToast } from '@/components/ui/Toast';
 import { useSignupWall } from '@/components/auth/SignupWall';
 import { useSession } from '@/lib/session/SessionProvider';
@@ -127,13 +128,27 @@ export function PdpBuyDock({ listing }: { listing: Listing }) {
     >
       <div className="mx-auto flex max-w-[720px] items-center gap-3">
         <div className="min-w-0 flex-1">
-          <p className="tnum text-price-list font-bold text-text-primary">
-            {listing.price > 0 ? formatPrice(listing.price) : '—'}
-          </p>
+          <div className="flex flex-wrap items-baseline gap-1.5">
+            <p className="tnum text-price-list font-bold text-text-primary">
+              {listing.price > 0 ? formatPrice(listing.price) : '—'}
+            </p>
+            {listing.shippingPayer === 'seller' ||
+            (typeof listing.shippingPrice === 'number' && listing.shippingPrice === 0) ? (
+              <span className="text-[11px] font-medium text-commerce-trust">
+                Free delivery
+              </span>
+            ) : null}
+          </div>
           {typeof listing.priceWithProtection === 'number' && !isSold ? (
             <p className="tnum text-meta text-text-muted">
               {formatPrice(listing.priceWithProtection)} incl. protection
             </p>
+          ) : null}
+          {listing.authenticity?.status === 'verified' ? (
+            <span className="flex items-center gap-1 text-[11px] font-medium text-commerce-trust">
+              <Icon name="verified" size={11} />
+              <span>Authentic</span>
+            </span>
           ) : null}
         </div>
         {isSold ? (

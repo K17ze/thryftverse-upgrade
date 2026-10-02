@@ -136,7 +136,11 @@ export function ConversationRow({ conversation: c, active, rawUnread, draft }: C
           <span className="flex min-w-0 items-center gap-1">
             <span
               className={`clamp-1 text-body-emphasis text-text-primary ${
-                unread ? 'font-bold' : 'font-semibold'
+                // Mobile parity (InboxConversationRow nameUnread): read
+                // names sit at body weight, unread steps up to semibold —
+                // the weight delta IS the unread affordance alongside the
+                // badge, so the pair must differ.
+                unread ? 'font-semibold' : 'font-normal'
               }`}
             >
               {title}

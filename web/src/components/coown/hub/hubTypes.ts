@@ -20,8 +20,8 @@ export const HUB_SORTS: { value: HubSortKey; label: string }[] = [
   { value: 'volume', label: 'Volume' },
   { value: 'newest', label: 'Newest' },
   ...(DATA_MODE === 'live' ? [] : [{ value: 'movers' as HubSortKey, label: 'Movers' }]),
-  { value: 'price_desc', label: 'Price ↓' },
-  { value: 'price_asc', label: 'Price ↑' },
+  { value: 'price_desc', label: 'Price: high to low' },
+  { value: 'price_asc', label: 'Price: low to high' },
 ];
 
 export const INFORMATIVE_TAG_STATES: Record<HubView, readonly AssetLifecycleState[]> = {

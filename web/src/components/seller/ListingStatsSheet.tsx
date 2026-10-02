@@ -86,7 +86,7 @@ export function ListingStatsSheet({
                 value={stats.data.purchases > 0 ? String(stats.data.purchases) : 'None yet'}
               />
               <StatRow
-                label="View → sale conversion"
+                label="View-to-sale conversion"
                 value={
                   stats.data.conversionRate != null
                     ? `${stats.data.conversionRate.toFixed(1)}%`
@@ -113,7 +113,7 @@ export function ListingStatsSheet({
                 <ul className="mt-2 space-y-1.5">
                   {stats.data.priceHistory.map((p) => (
                     <li key={p.changedAt} className="tnum text-meta text-text-secondary">
-                      {formatPrice(p.previousPrice)} → {formatPrice(p.newPrice)}
+                      {formatPrice(p.previousPrice)} to {formatPrice(p.newPrice)}
                       <span className="text-text-muted"> · {formatDate(p.changedAt)}</span>
                     </li>
                   ))}

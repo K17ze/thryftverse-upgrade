@@ -308,7 +308,7 @@ export function ItemStep({
                 <span className="min-w-0">
                   <span className="block text-body text-text-primary">{c.label}</span>
                   <span className="tnum block truncate text-meta text-text-muted">
-                    “{c.detected}” → {c.resolved}
+                    “{c.detected}” to {c.resolved}
                   </span>
                 </span>
                 <Badge variant={c.confidence === 'low' ? 'warning' : 'neutral'}>

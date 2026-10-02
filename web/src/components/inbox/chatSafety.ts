@@ -153,7 +153,7 @@ export function detectThreadSafetyWarning(
   // always carries, fired once per dismissal (it never escalates itself).
   return {
     level: 'info',
-    message: 'Never pay outside Thryftverse. Use checkout for buyer protection.',
+    message: 'Never pay outside ThryftVerse. Use checkout for buyer protection.',
     dismissible: true,
   };
 }

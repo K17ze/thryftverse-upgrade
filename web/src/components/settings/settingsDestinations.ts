@@ -29,6 +29,13 @@ export function isSettingsSheetId(value: unknown): value is SettingsSheetId {
   return typeof value === 'string' && (SHEET_IDS as readonly string[]).includes(value);
 }
 
+/** Deterministic anchor id for an index <section> — SettingsView stamps
+ *  it on the element, the desktop rail's jump links point at it. One slug
+ *  function shared by both ends so they can never drift. */
+export function settingsSectionId(section: string): string {
+  return `settings-${section.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-+|-+$/g, '')}`;
+}
+
 export type SettingsTarget =
   | { kind: 'route'; href: string }
   | { kind: 'sheet'; sheet: SettingsSheetId }
@@ -75,6 +82,7 @@ export const SETTINGS_DESTINATIONS: SettingsDestination[] = [
   { id: 'accent', label: 'Accent colour', section: 'Experience', icon: 'palette', keywords: 'color appearance highlight brand sage clay slate plum', target: { kind: 'sheet', sheet: 'accent' } },
   { id: 'density', label: 'Density', section: 'Experience', icon: 'layers', keywords: 'compact regular editorial layout spacing room', target: { kind: 'sheet', sheet: 'density' } },
   { id: 'personalisation', label: 'Personalisation', section: 'Experience', icon: 'options', keywords: 'content preferences audience gender size brand members discovery feed', target: { kind: 'route', href: '/settings/personalisation' } },
+  { id: 'recommendations', label: 'Recommendations', section: 'Experience', icon: 'sparkles', keywords: 'assisted ai suggestions listing photo enhancement title price autocomplete chat agents negotiation confidence', target: { kind: 'route', href: '/settings/recommendations' } },
   { id: 'language', label: 'Language', section: 'Experience', icon: 'language', keywords: 'locale region english', target: { kind: 'sheet', sheet: 'language' } },
   { id: 'accessibility', label: 'Accessibility', section: 'Experience', icon: 'accessibility', keywords: 'text size reduce motion high contrast screen reader zoom', target: { kind: 'route', href: '/settings/accessibility' } },
   { id: 'feed', label: 'Your feed', section: 'Experience', icon: 'feed', keywords: 'algorithm recommendations topics signals', target: { kind: 'route', href: '/agents/algorithm' } },

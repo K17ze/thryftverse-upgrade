@@ -95,7 +95,7 @@ export interface OfferResolution {
  */
 export function offerResolutionForMessage(
   m: Message,
-  conversation: Conversation | null | undefined,
+  threadListingId: string | null | undefined,
   offers: OfferWithOrder[] | undefined,
 ): OfferResolution {
   if (!offers?.length) return { offer: undefined, via: null };
@@ -103,7 +103,7 @@ export function offerResolutionForMessage(
     const found = offers.find((o) => o.id === m.offerId);
     return { offer: found, via: found ? 'offerId' : null };
   }
-  const listingId = m.listing?.id ?? conversation?.listing?.id;
+  const listingId = m.listing?.id ?? threadListingId ?? undefined;
   if (!listingId) return { offer: undefined, via: null };
   const candidates = offers.filter((o) => o.listingId === listingId);
   if (!candidates.length) return { offer: undefined, via: null };
@@ -123,7 +123,7 @@ export function offerForMessage(
   conversation: Conversation | null | undefined,
   offers: OfferWithOrder[] | undefined,
 ): OfferWithOrder | undefined {
-  return offerResolutionForMessage(m, conversation, offers).offer;
+  return offerResolutionForMessage(m, conversation?.listing?.id, offers).offer;
 }
 
 /**

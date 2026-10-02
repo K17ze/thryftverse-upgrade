@@ -4,7 +4,7 @@
  * CommandPalette — ⌘K / Ctrl+K (and `/`) quick navigation.
  *
  * Desktop grammar (Linear/Vercel): a filtered action list driven entirely
- * by the keyboard — ArrowUp/Down move, Enter commits, Esc closes (via
+ * by the keyboard — arrows wrap, Home/End jump, Enter commits, Esc closes (via
  * Sheet). Actions are honest: every row is a real destination or a real
  * search submission; nothing here fabricates state. Recent searches come
  * from the same persisted bucket the header search writes.
@@ -44,6 +44,12 @@ export function CommandPalette() {
   const inputRef = useRef<HTMLInputElement>(null);
   const listId = useId();
   const listRef = useRef<HTMLUListElement>(null);
+  // The key listener is bound once ([] deps) — mirror `open` so ⌘K can
+  // tell "close my own dialog" from "don't stack over someone else's".
+  const openRef = useRef(open);
+  useEffect(() => {
+    openRef.current = open;
+  }, [open]);
 
   // Global shortcut — ⌘K/Ctrl+K toggles anywhere; `/` opens unless the
   // keystroke is headed for an editable field.
@@ -51,6 +57,16 @@ export function CommandPalette() {
     const onKey = (e: KeyboardEvent) => {
       if ((e.metaKey || e.ctrlKey) && e.key.toLowerCase() === 'k') {
         e.preventDefault();
+        // A modal sheet already owns the keystroke context (share sheet,
+        // filters, signup wall) — stacking a second aria-modal dialog
+        // would strand focus between two traps. Only toggle when the
+        // open dialog is this palette (or none is).
+        if (
+          !openRef.current &&
+          document.querySelector('[role="dialog"][aria-modal="true"]')
+        ) {
+          return;
+        }
         setOpen((v) => !v);
         return;
       }
@@ -140,12 +156,20 @@ export function CommandPalette() {
   };
 
   const onInputKey = (e: React.KeyboardEvent<HTMLInputElement>) => {
+    // Same highlight grammar as the header popover: arrows wrap, Home/End
+    // jump to the edges, Enter commits, Esc closes (via Sheet).
     if (e.key === 'ArrowDown') {
       e.preventDefault();
-      setActive((i) => Math.min(i + 1, items.length - 1));
+      if (items.length) setActive((i) => (i + 1) % items.length);
     } else if (e.key === 'ArrowUp') {
       e.preventDefault();
-      setActive((i) => Math.max(i - 1, 0));
+      if (items.length) setActive((i) => (i <= 0 ? items.length - 1 : i - 1));
+    } else if (e.key === 'Home') {
+      e.preventDefault();
+      setActive(0);
+    } else if (e.key === 'End') {
+      e.preventDefault();
+      setActive(Math.max(0, items.length - 1));
     } else if (e.key === 'Enter') {
       e.preventDefault();
       const item = items[active];
@@ -173,11 +197,13 @@ export function CommandPalette() {
             placeholder={t('chrome.header.searchPlaceholder')}
             role="combobox"
             aria-expanded="true"
+            aria-autocomplete="list"
+            aria-haspopup="listbox"
             aria-controls={listId}
             aria-activedescendant={items[active] ? `${listId}-${items[active].id}` : undefined}
             className="min-w-0 flex-1 bg-transparent text-body text-text-primary placeholder:text-text-muted focus:outline-none"
           />
-          <kbd className="hidden shrink-0 rounded border border-border px-1.5 py-0.5 text-[10px] font-medium text-text-muted sm:block">
+          <kbd className="hidden shrink-0 rounded border border-border px-1.5 py-0.5 text-micro text-text-muted sm:block">
             esc
           </kbd>
         </label>

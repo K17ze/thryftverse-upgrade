@@ -53,9 +53,7 @@ function ReportRow({ report }: { report: MyReport }) {
 
   return (
     <li className="flex items-start gap-3.5 py-4">
-      <span className="mt-0.5 flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-surface-raised text-text-secondary">
-        <Icon name="flag" size={16} />
-      </span>
+      <Icon name="flag" size={16} className="mt-1 shrink-0 text-text-secondary" />
       <div className="min-w-0 flex-1">
         <p className="text-body text-text-primary">
           {KIND_LABEL[report.kind]} · {labelFor(report.reason)}
@@ -86,7 +84,7 @@ export function MyReportsSection() {
         <div className="mt-2 divide-y divide-border-subtle">
           {Array.from({ length: 2 }).map((_, i) => (
             <div key={i} className="flex items-center gap-3.5 py-4">
-              <Skeleton className="h-9 w-9 rounded-full" />
+              <Skeleton className="mt-1 h-4 w-4 rounded-sm" />
               <div className="flex-1">
                 <Skeleton className="h-4 w-3/5" />
                 <Skeleton className="mt-1.5 h-3 w-2/5" />

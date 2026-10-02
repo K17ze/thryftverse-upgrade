@@ -7,11 +7,12 @@
  * with a recovery CTA.
  */
 
-import { useMemo, useState } from 'react';
+import { useId, useMemo, useState } from 'react';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import { useQuery } from '@tanstack/react-query';
 import { ProfileTabs } from '@/components/profile/ProfileTabs';
+import { tabId, tabPanelId } from '@/components/ui/Tabs';
 import { EmptyState } from '@/components/ui/EmptyState';
 import { Icon } from '@/components/ui/Icon';
 import { ClosetGrid, ClosetGridSkeleton } from '@/components/profile/ClosetGrid';
@@ -75,6 +76,7 @@ export default function SavedPage() {
   const router = useRouter();
   const { user, isGuest } = useSession();
   const [seg, setSeg] = useState<Segment>('favourites');
+  const tabsId = useId();
   // Store hydration gate — wishlist/saved/searches persist to localStorage.
   const mounted = useHydrated();
   // Hold-to-file web equivalent — the tile being offered to a board.
@@ -170,10 +172,20 @@ export default function SavedPage() {
       </div>
 
       <div className="mt-4">
-        <ProfileTabs tabs={tabs} active={seg} onChange={setSeg} />
+        <ProfileTabs
+          tabs={tabs}
+          active={seg}
+          onChange={setSeg}
+          idBase={tabsId}
+        />
       </div>
 
-      <div className="py-4">
+      <div
+        className="py-4"
+        role="tabpanel"
+        id={tabPanelId(tabsId, seg)}
+        aria-labelledby={tabId(tabsId, seg)}
+      >
         {(savedSyncError || savedListsStale) && (seg === 'favourites' || seg === 'saved') ? (
           <p className="px-4 pb-2 text-meta text-warning-text sm:px-6">
             {savedSyncError
@@ -246,6 +258,18 @@ export default function SavedPage() {
                 const newMatches = s.alertsOn
                   ? matchCountsQ.data?.get(s.id)?.length ?? 0
                   : 0;
+                // Two clauses max — the filters it saved and when it last
+                // matched. The visual-search caveat lives on the alert
+                // switch's label; the save-time count was context, not
+                // state worth a third clause.
+                const meta = [
+                  filterText,
+                  s.lastNotifiedAt
+                    ? `Last match ${timeAgo(s.lastNotifiedAt)}`
+                    : null,
+                ]
+                  .filter(Boolean)
+                  .join(' · ');
                 return (
                   <li key={s.id} className="border-b border-border-subtle last:border-0">
                     <div className="flex items-center gap-3 py-[var(--density-row-py)]">
@@ -267,29 +291,18 @@ export default function SavedPage() {
                             </span>
                             {newMatches > 0 ? (
                               <span
-                                className="shrink-0 rounded-full bg-brand px-1.5 py-px text-[11px] font-semibold text-white"
+                                className="shrink-0 rounded-full bg-brand px-1.5 py-px text-meta font-semibold text-text-inverse"
                                 aria-label={`${newMatches} new match${newMatches === 1 ? '' : 'es'}`}
                               >
                                 {newMatches} new
                               </span>
                             ) : null}
                           </span>
-                          <span className="clamp-1 block text-meta text-text-muted">
-                            {[
-                              filterText,
-                              isVisual
-                                ? 'Matches on the detected details — the photo isn’t kept.'
-                                : null,
-                              s.resultCount !== undefined
-                                ? `${s.resultCount} result${s.resultCount === 1 ? '' : 's'} when saved`
-                                : null,
-                              s.lastNotifiedAt
-                                ? `Last match ${timeAgo(s.lastNotifiedAt)}`
-                                : null,
-                            ]
-                              .filter(Boolean)
-                              .join(' · ')}
-                          </span>
+                          {meta ? (
+                            <span className="clamp-1 block text-meta text-text-muted">
+                              {meta}
+                            </span>
+                          ) : null}
                         </span>
                         <Icon name="forward" size={14} className="shrink-0 text-text-muted" />
                       </button>

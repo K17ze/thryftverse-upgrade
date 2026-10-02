@@ -65,7 +65,7 @@ export function BundleBuilderSkeleton() {
           <Skeleton className="mt-1.5 h-3 w-24" />
         </div>
       </div>
-      <div className="mt-6 grid gap-10 lg:grid-cols-[minmax(0,1fr)_340px]">
+      <div className="mt-6 grid grid-cols-1 gap-10 lg:grid-cols-[minmax(0,1fr)_340px]">
         <div className="grid grid-cols-2 gap-3 sm:grid-cols-3">
           {Array.from({ length: 6 }).map((_, i) => (
             <div key={i}>
@@ -324,7 +324,7 @@ export function BundleBuilder({ username }: { username: string }) {
           onAction={() => router.push(shopHref)}
         />
       ) : (
-        <div className="mt-5 grid gap-10 px-4 sm:px-6 lg:grid-cols-[minmax(0,1fr)_340px]">
+        <div className="mt-5 grid grid-cols-1 gap-10 px-4 sm:px-6 lg:grid-cols-[minmax(0,1fr)_340px]">
           <div className="min-w-0">
             {eligible.length < BUNDLE_MIN_ITEMS ? (
               <p className="mb-3 flex items-center gap-1.5 text-caption text-text-muted">

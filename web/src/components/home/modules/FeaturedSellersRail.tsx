@@ -2,8 +2,10 @@
 
 /**
  * FeaturedSellersRail — "Featured sellers" module band. A snap-scroll
- * strip of top-rated seller cards (avatar, username, rating, listings
- * count, "View shop" affordance → /u/{username}).
+ * strip of flat seller cells: avatar, @handle, rating + listings meta
+ * and a real Follow toggle. No boxed cards — the identity block is the
+ * link to /u/{username}, the button is a sibling (no nested-interactive
+ * anchors); the same flat-row grammar as the member-discovery band.
  *
  * Live mode: the backend has no featured-sellers endpoint, so the rail
  * derives candidates from the real trending feed and enriches each via
@@ -19,6 +21,7 @@ import { CURRENT_USER, USERS } from '@/lib/data/fixtures';
 import { useFeaturedSellers } from '@/lib/hooks/home-modules';
 import { Avatar } from '@/components/ui/Avatar';
 import { Icon } from '@/components/ui/Icon';
+import { FollowButton } from '@/components/profile/FollowButton';
 import { formatCount } from '@/lib/utils/format';
 import { ModuleSection } from './ModuleSection';
 import { Rail } from './Rail';
@@ -31,6 +34,7 @@ const FEATURED_SELLERS: User[] = USERS.filter((u) => u.id !== CURRENT_USER.id)
   .slice(0, 6);
 
 interface SellerCardData {
+  id: string;
   username: string;
   avatar: string | null;
   verified: boolean;
@@ -39,36 +43,36 @@ interface SellerCardData {
   listingCount: number;
 }
 
-function SellerCard({ seller }: { seller: SellerCardData }) {
+function SellerCell({ seller }: { seller: SellerCardData }) {
   return (
-    <Link
-      href={`/u/${seller.username}`}
-      role="listitem"
-      aria-label={`View @${seller.username}'s shop`}
-      className="pressable w-[168px] shrink-0 snap-start rounded-xl border border-border-subtle px-4 py-4 transition-colors hover:bg-surface"
-    >
-      <Avatar src={seller.avatar} name={seller.username} size={48} />
-      <div className="mt-2.5 flex items-center gap-1">
-        <span className="clamp-1 text-body font-semibold text-text-primary">
-          @{seller.username}
+    <div role="listitem" className="w-[172px] shrink-0 snap-start">
+      <Link
+        href={`/u/${seller.username}`}
+        aria-label={`View @${seller.username}'s shop`}
+        className="pressable block rounded-md"
+      >
+        <Avatar src={seller.avatar} name={seller.username} size={48} />
+        <span className="mt-2.5 flex items-center gap-1">
+          <span className="clamp-1 text-body font-semibold text-text-primary">
+            @{seller.username}
+          </span>
+          {seller.verified ? (
+            <Icon name="verified" filled size={13} className="shrink-0 text-commerce-trust" />
+          ) : null}
         </span>
-        {seller.verified ? (
-          <Icon name="verified" filled size={13} className="shrink-0 text-commerce-trust" />
+        {seller.rating !== null ? (
+          <span className="mt-1 flex items-center gap-1 text-meta text-text-secondary">
+            <Icon name="star" filled size={11} className="text-rating-star" />
+            <span className="tnum font-medium">{seller.rating.toFixed(1)}</span>
+            <span className="text-text-muted">· {formatCount(seller.reviewCount)} reviews</span>
+          </span>
         ) : null}
-      </div>
-      {seller.rating !== null ? (
-        <div className="mt-1 flex items-center gap-1 text-meta text-text-secondary">
-          <Icon name="star" filled size={11} className="text-rating-star" />
-          <span className="tnum font-medium">{seller.rating.toFixed(1)}</span>
-          <span className="text-text-muted">· {formatCount(seller.reviewCount)} reviews</span>
-        </div>
-      ) : null}
-      <div className="mt-0.5 text-meta text-text-muted">{seller.listingCount} listings</div>
-      <span className="mt-3 flex items-center gap-0.5 text-caption font-semibold text-brand">
-        View shop
-        <Icon name="forward" size={12} />
-      </span>
-    </Link>
+        <span className="tnum mt-0.5 block text-meta text-text-muted">
+          {seller.listingCount} listing{seller.listingCount === 1 ? '' : 's'}
+        </span>
+      </Link>
+      <FollowButton userId={seller.id} size="sm" className="mt-3 w-full" />
+    </div>
   );
 }
 
@@ -77,6 +81,7 @@ export function FeaturedSellersRail() {
 
   const sellers: SellerCardData[] = LIVE
     ? (live.data ?? []).map((s) => ({
+        id: s.id,
         username: s.username,
         avatar: s.avatar,
         verified: s.verified,
@@ -85,6 +90,7 @@ export function FeaturedSellersRail() {
         listingCount: s.activeListingCount,
       }))
     : FEATURED_SELLERS.map((u) => ({
+        id: u.id,
         username: u.username,
         avatar: u.avatar,
         verified: u.isVerified,
@@ -98,7 +104,7 @@ export function FeaturedSellersRail() {
     <ModuleSection title="Featured sellers" moduleId="featured-sellers">
       <Rail label="Featured sellers">
         {sellers.map((seller) => (
-          <SellerCard key={seller.username} seller={seller} />
+          <SellerCell key={seller.username} seller={seller} />
         ))}
       </Rail>
     </ModuleSection>

@@ -69,6 +69,12 @@ export function AppImage({
       className={`appimg relative overflow-hidden bg-surface-alt ${className}`}
       style={aspectRatio ? { aspectRatio: String(aspectRatio) } : undefined}
     >
+      {/* Shimmer under the fading img while a real source loads — the
+          flat bg-surface-alt alone read as a dead box. Skipped when a
+          blurDataURL LQIP already covers the loading silhouette. */}
+      {usable && !loaded && !blurDataURL ? (
+        <div className="skeleton absolute inset-0" aria-hidden />
+      ) : null}
       {usable ? (
         local ? (
           // Local file picks (blob:/data:) bypass next/image — the optimizer
@@ -78,6 +84,11 @@ export function AppImage({
             src={src}
             alt={alt}
             decoding="async"
+            // Hydration edge: a blob/data image can finish before React
+            // attaches onLoad — check completeness on mount too.
+            ref={(el) => {
+              if (el?.complete && el.naturalWidth > 0) setLoaded(true);
+            }}
             onLoad={() => setLoaded(true)}
             onError={() => setFailed(true)}
             className={`img-fade h-full w-full object-cover ${
@@ -117,9 +128,7 @@ export function AppImage({
           role="img"
           aria-label={alt}
         >
-          <div className="flex h-14 w-14 items-center justify-center rounded-full border border-border text-text-muted">
-            <Icon name={fallbackIcon} size={24} />
-          </div>
+          <Icon name={fallbackIcon} size={24} className="text-text-muted" />
         </div>
       )}
     </div>

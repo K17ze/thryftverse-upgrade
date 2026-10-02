@@ -159,7 +159,10 @@ export function EntryBand() {
               sizes="(max-width: 640px) 160px, 192px"
               className="h-full w-full media-zoom"
             />
-            <div className="absolute inset-x-0 bottom-0 bg-gradient-to-t from-media-overlay-scrim via-media-overlay-scrim/40 to-transparent px-2.5 pb-1.5 pt-7">
+            {/* Label scrim — the mid-stop carries real depth (60%) so the
+                label stays legible on near-white media; a 40% haze left
+                pale garments washing the text out. */}
+            <div className="absolute inset-x-0 bottom-0 bg-gradient-to-t from-media-overlay-scrim via-media-overlay-scrim/60 to-transparent px-2.5 pb-2 pt-12">
               <span className="clamp-1 block text-body-emphasis font-semibold leading-tight text-scrim-text-primary">
                 {entry.label}
               </span>

@@ -18,15 +18,13 @@
  */
 
 import { useRouter } from 'next/navigation';
-import { EmptyState } from '@/components/ui/EmptyState';
 import { Icon } from '@/components/ui/Icon';
+import { Chip } from '@/components/ui/Chip';
 import { IconButton } from '@/components/ui/IconButton';
-import { Composer } from './Composer';
 import { CLOSED_CONFIRM } from './ConfirmSheet';
 import { ChatSafetyBanner } from './ChatSafetyBanner';
 
 // Domain components
-import { ChatSkeleton } from './panel/ChatSkeleton';
 import { ChatHeader } from './panel/ChatHeader';
 import { ChatSearchRail } from './panel/ChatSearchRail';
 import { ChatListingContext } from './panel/ChatListingContext';
@@ -35,6 +33,8 @@ import { PinnedMessageBar } from './panel/PinnedMessageBar';
 import { ChatMessageList } from './panel/ChatMessageList';
 import { ChatModals } from './panel/ChatModals';
 import { ChatActionMenuWrapper } from './panel/ChatActionMenuWrapper';
+import { ChatPanelEarlyStates } from './panel/ChatPanelEarlyStates';
+import { ChatComposerSlot } from './panel/ChatComposerSlot';
 import { useChatPanelWorkflow } from './panel/useChatPanelWorkflow';
 import { isMine, isSystem } from './panel/ChatStreamUtils';
 
@@ -42,49 +42,16 @@ export function ChatPanel({ conversationId }: { conversationId: string }) {
   const router = useRouter();
   const workflow = useChatPanelWorkflow(conversationId);
 
-  // Guests never reach the thread — the inbox is account-bound, so the
-  // sign-in surface replaces it rather than rendering fixture 'me' data.
-  if (workflow.isGuest) {
+  // Early states: Guest barrier, loading skeleton, error retry, or not-found
+  if (workflow.isGuest || workflow.isLoading || workflow.isError || !workflow.conversation) {
     return (
-      <div className="flex h-full items-center justify-center bg-background">
-        <EmptyState
-          icon="chat"
-          title="Sign in to message"
-          subtitle="Messages and offers live on your account."
-          actionLabel="Sign in"
-          onAction={() => router.push('/auth')}
-        />
-      </div>
-    );
-  }
-
-  if (workflow.isLoading) return <ChatSkeleton />;
-
-  if (workflow.isError) {
-    return (
-      <div className="flex h-full items-center justify-center bg-background">
-        <EmptyState
-          icon="alert"
-          title="Couldn't load this conversation"
-          subtitle="Check your connection and try again."
-          actionLabel="Try again"
-          onAction={() => void workflow.refetch()}
-        />
-      </div>
-    );
-  }
-
-  if (!workflow.conversation) {
-    return (
-      <div className="flex h-full items-center justify-center">
-        <EmptyState
-          icon="chat"
-          title="Conversation not found"
-          subtitle="It may have been archived or deleted."
-          actionLabel="Back to inbox"
-          onAction={() => router.push('/inbox')}
-        />
-      </div>
+      <ChatPanelEarlyStates
+        isGuest={workflow.isGuest}
+        isLoading={workflow.isLoading}
+        isError={workflow.isError}
+        hasConversation={!!workflow.conversation}
+        onRetry={() => void workflow.refetch()}
+      />
     );
   }
 
@@ -197,19 +164,17 @@ export function ChatPanel({ conversationId }: { conversationId: string }) {
                 history reads its end state once. */}
             {workflow.history.hasMore || workflow.history.loading ? (
               <div className="mb-1 flex justify-center">
-                <button
-                  type="button"
+                <Chip
                   onClick={workflow.loadOlder}
                   disabled={workflow.history.loading}
                   aria-live="polite"
-                  className="pressable relative rounded-full border border-border-subtle bg-surface px-3.5 py-1.5 text-meta font-semibold text-text-secondary after:absolute after:-inset-y-2 after:content-[''] hover:text-text-primary disabled:opacity-60"
                 >
                   {workflow.history.loading
                     ? 'Loading…'
                     : workflow.history.error
                       ? 'Couldn’t load — try again'
                       : 'Load older messages'}
-                </button>
+                </Chip>
               </div>
             ) : workflow.history.older.length > 0 ? (
               <p className="mb-1 text-center text-meta text-text-muted">
@@ -233,21 +198,20 @@ export function ChatPanel({ conversationId }: { conversationId: string }) {
                 flashId={workflow.flashId}
                 failedIds={workflow.failedIds}
                 lastMineReadId={workflow.lastMineReadId}
-                nowMs={workflow.nowMs}
                 chatOffers={workflow.chatOffers}
                 replyable={workflow.replyable}
                 actionable={workflow.actionable}
                 isSaved={workflow.threadActions.isSaved}
                 onReply={workflow.replyMessage}
                 onReact={workflow.reactAt}
-                onOpenMenu={(x, y, m) => workflow.setMsgMenu({ id: m.id, x, y })}
+                onOpenMenu={workflow.openMessageMenu}
                 onReplyPress={workflow.scrollToMessage}
                 onMediaPress={workflow.openMediaFor}
                 onToggleReaction={workflow.toggleReactionFor}
                 onTogglePollVote={workflow.togglePollVoteFor}
                 onRespondToOffer={workflow.respondToOffer}
-                onCounterOffer={(offer) => workflow.setCounterTarget(offer)}
-                onMakeShareOffer={(listingId) => workflow.setShareOfferId(listingId)}
+                onCounterOffer={workflow.setCounterTarget}
+                onMakeShareOffer={workflow.setShareOfferId}
                 replyInfoFor={workflow.replyInfoFor}
               />
             )}
@@ -317,69 +281,30 @@ export function ChatPanel({ conversationId }: { conversationId: string }) {
         onClose={() => workflow.setMsgMenu(null)}
       />
 
-      {/* Typing — three-dot indicator (the mobile TypingIndicator
-          grammar) anchored above the composer; entries expire 4s after
-          the last event so a stale "typing…" never lingers. */}
-      {workflow.peerTyping ? (
-        <div className="shrink-0 px-4 pb-1" aria-live="polite">
-          <div className="mx-auto flex w-full items-center gap-1.5 lg:max-w-3xl">
-            {[0, 1, 2].map((i) => (
-              <span
-                key={i}
-                aria-hidden
-                className="h-1.5 w-1.5 animate-pulse rounded-full bg-text-muted"
-                style={{ animationDelay: `${i * 150}ms` }}
-              />
-            ))}
-            <span className="sr-only">{title} is typing</span>
-          </div>
-        </div>
-      ) : null}
+      <ChatComposerSlot
+        conversationId={conversationId}
+        title={title}
+        participantId={conversation.participantId}
+        peerTyping={workflow.peerTyping}
+        pendingRequest={Boolean(workflow.pendingRequest)}
+        counterpartyBlocked={workflow.counterpartyBlocked}
+        groupReadOnly={workflow.groupReadOnly}
+        quickReplyRole={workflow.quickReplyRole}
+        isSending={workflow.sendMessage.isPending}
+        onSend={workflow.send}
+        replyTarget={workflow.replyTarget}
+        onCancelReply={() => workflow.setReplyTarget(null)}
+        senderNameFor={workflow.senderNameFor}
+        previewTextFor={workflow.previewTextFor}
+        editing={workflow.editing}
+        onEditSubmit={(id, text) => {
+          workflow.threadActions.editMessage(id, text);
+          workflow.setEditing(null);
+        }}
+        onCancelEdit={() => workflow.setEditing(null)}
+        onToggleBlocked={workflow.toggleBlocked}
+      />
 
-      {workflow.pendingRequest ? null : workflow.counterpartyBlocked ? (
-        <div className="shrink-0 border-t border-border-subtle px-4 py-3">
-          <div className="mx-auto flex w-full items-center justify-between gap-3 lg:max-w-3xl">
-            <p className="text-meta text-text-muted">
-              You blocked {title} — unblock to send messages.
-            </p>
-            <button
-              type="button"
-              onClick={() => workflow.toggleBlocked(conversation.participantId)}
-              className="pressable shrink-0 text-body-emphasis font-semibold text-brand"
-            >
-              Unblock
-            </button>
-          </div>
-        </div>
-      ) : workflow.groupReadOnly ? (
-        <div className="shrink-0 border-t border-border-subtle px-4 py-3.5">
-          <p className="mx-auto w-full text-center text-meta text-text-muted lg:max-w-3xl">
-            Only admins can send messages in this group.
-          </p>
-        </div>
-      ) : (
-        <Composer
-          threadId={conversationId}
-          quickReplyRole={workflow.quickReplyRole}
-          sending={workflow.sendMessage.isPending}
-          onSend={workflow.send}
-          replyTo={
-            workflow.replyTarget
-              ? {
-                  senderName: workflow.senderNameFor(workflow.replyTarget),
-                  text: workflow.previewTextFor(workflow.replyTarget),
-                }
-              : null
-          }
-          onCancelReply={() => workflow.setReplyTarget(null)}
-          editTarget={workflow.editing ? { id: workflow.editing.id, text: workflow.editing.text ?? '' } : null}
-          onEditSubmit={(id, text) => {
-            workflow.threadActions.editMessage(id, text);
-            workflow.setEditing(null);
-          }}
-          onCancelEdit={() => workflow.setEditing(null)}
-        />
-      )}
 
       <ChatModals
         confirmState={workflow.confirm}

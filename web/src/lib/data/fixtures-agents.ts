@@ -192,7 +192,7 @@ export const AGENT_RUNS: AgentRunEntry[] = [
     action: 'Price-drop alert',
     target: 'Saved: Doc Martens 1460',
     outcome: 'succeeded',
-    detail: '£95 → £72',
+    detail: '£95 to £72',
     at: '2026-09-27T09:14:00Z',
   },
   {
@@ -227,7 +227,7 @@ export const AGENT_RUNS: AgentRunEntry[] = [
     action: 'Price-drop alert',
     target: 'Saved: Filson Mackinaw cruiser',
     outcome: 'succeeded',
-    detail: '£210 → £185',
+    detail: '£210 to £185',
     at: '2026-09-25T07:58:00Z',
   },
   {
@@ -305,7 +305,7 @@ export const AGENT_RUNS: AgentRunEntry[] = [
     action: 'Price-drop alert',
     target: 'Saved: Omega Geneve watch',
     outcome: 'succeeded',
-    detail: '£340 → £300',
+    detail: '£340 to £300',
     at: '2026-09-18T06:40:00Z',
   },
   {

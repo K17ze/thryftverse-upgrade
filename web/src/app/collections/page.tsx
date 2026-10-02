@@ -186,16 +186,11 @@ export default function CollectionsPage() {
       </div>
 
       <section aria-label="Your collections" className="mt-6">
-        <div className="flex items-center justify-between border-b border-border-subtle px-4 pb-3 sm:px-6">
-          <h2 className="text-section-title font-semibold text-text-primary">
-            Your collections
-          </h2>
-          <span className="flex items-center gap-3">
-            <span className="tnum text-meta text-text-muted">
-              {boards.length + 1} {boards.length + 1 === 1 ? 'board' : 'boards'}
-            </span>
-            <BoardSortControl />
+        <div className="flex items-center justify-end gap-3 border-b border-border-subtle px-4 pb-3 sm:px-6">
+          <span className="tnum text-meta text-text-muted">
+            {boards.length + 1} {boards.length + 1 === 1 ? 'board' : 'boards'}
           </span>
+          <BoardSortControl />
         </div>
 
         {nothingToShow ? (

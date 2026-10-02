@@ -105,7 +105,7 @@ export function FulfilmentRow({
       </div>
 
       {overdue ? (
-        <Badge variant="danger" icon="warning" className="hidden shrink-0 md:inline-flex lg:hidden">
+        <Badge variant="danger" icon="warning" className="shrink-0 max-md:hidden lg:hidden">
           Overdue
         </Badge>
       ) : null}

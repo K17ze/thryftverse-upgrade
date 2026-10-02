@@ -44,7 +44,7 @@ const tick = (ms = 280) => new Promise((r) => setTimeout(r, ms));
  *  identity stable while the look itself is still loading. */
 const EMPTY_ITEM_IDS: string[] = [];
 
-function useLook(id: string) {
+function useLook(id: string, initialData?: LookWithCounts) {
   return useQuery<LookWithCounts | null>({
     queryKey: ['look', id, DATA_MODE],
     queryFn: async () => {
@@ -52,10 +52,15 @@ function useLook(id: string) {
       await tick();
       return lookById(id) ?? null;
     },
+    // Server-shell seed — the same read the queryFn makes, so the first
+    // paint skips the duplicate fetch. Stamped stale (epoch 0) so the
+    // mount refetch still revalidates it in the background.
+    initialData,
+    initialDataUpdatedAt: initialData ? 0 : undefined,
   });
 }
 
-function LookSkeleton() {
+export function LookSkeleton() {
   return (
     <div
       className="mx-auto w-full max-w-3xl px-4 pt-4 sm:px-6 lg:max-w-[1100px]"
@@ -83,14 +88,14 @@ function LookSkeleton() {
   );
 }
 
-export function LookClient() {
+export function LookClient({ initialLook }: { initialLook?: LookWithCounts }) {
   const params = useParams<{ id: string }>();
   const id = params?.id ?? '';
   const router = useRouter();
   const { show } = useToast();
   const share = useShare();
   const { requireAuth, wall } = useSignupWall();
-  const { data: look, isLoading, isError, refetch } = useLook(id);
+  const { data: look, isLoading, isError, refetch } = useLook(id, initialLook);
   // Creator identity — live resolves GET /sellers/:id (the wire row is the
   // identity; a failed read renders the placeholder, never a fixture
   // ghost); fixture keeps the catalogue user.
@@ -155,12 +160,39 @@ export function LookClient() {
   const creatorName = fixtureCreator?.username ?? seller?.username ?? null;
   const creatorAvatar = fixtureCreator?.avatar ?? seller?.avatar ?? null;
   const creatorVerified = fixtureCreator?.isVerified ?? seller?.verified ?? false;
-  const creatorMeta = fixtureCreator
-    ? `${formatCount(fixtureCreator.followers)} followers`
-    : seller?.rating != null
-      ? `★ ${seller.rating.toFixed(1)}${seller.reviewCount > 0 ? ` · ${seller.reviewCount} reviews` : ''}`
-      : null;
+  const creatorMeta = fixtureCreator ? (
+    `${formatCount(fixtureCreator.followers)} followers`
+  ) : seller?.rating != null ? (
+    <>
+      <span className="inline-flex items-center gap-1">
+        <Icon name="star" filled size={12} className="text-rating-star" />
+        <span className="tnum">{seller.rating.toFixed(1)}</span>
+      </span>
+      {seller.reviewCount > 0 ? ` · ${seller.reviewCount} reviews` : ''}
+    </>
+  ) : null;
   const following = hydrated && followingIds.includes(look.creatorId);
+
+  // Creator identity — shared between the profile link (handle resolved)
+  // and the inert row below; the fields are null-safe either way.
+  const creatorIdentity = (
+    <>
+      <Avatar src={creatorAvatar} name={creatorName} size={42} />
+      <span className="min-w-0">
+        <span className="flex items-center gap-1.5 text-body-emphasis font-semibold text-text-primary">
+          <span className="clamp-1">@{creatorName ?? 'creator'}</span>
+          {creatorVerified ? (
+            <Icon name="verified" size={15} className="shrink-0 text-commerce-trust" filled />
+          ) : null}
+        </span>
+        <span className="block text-meta text-text-muted">
+          {creatorMeta}
+          {creatorMeta && look.createdAt ? ' · ' : null}
+          {look.createdAt ? timeAgo(look.createdAt) : null}
+        </span>
+      </span>
+    </>
+  );
 
   const likeCount = (look.likeCount ?? 0) + (liked ? 1 : 0);
   // Comment count — live rows carry comment_count; fixtures resolve the
@@ -206,26 +238,21 @@ export function LookClient() {
         <div>
           {/* Creator row */}
           <div className="mt-5 flex items-center gap-3 lg:mt-0">
-            <Link
-              href={creatorName ? `/u/${creatorName}` : '#'}
-              className="pressable flex min-w-0 items-center gap-3"
-              aria-label={creatorName ? `View @${creatorName}'s profile` : 'Creator'}
-            >
-              <Avatar src={creatorAvatar} name={creatorName} size={42} />
-              <span className="min-w-0">
-                <span className="flex items-center gap-1.5 text-body-emphasis font-semibold text-text-primary">
-                  <span className="clamp-1">@{creatorName ?? 'creator'}</span>
-                  {creatorVerified ? (
-                    <Icon name="verified" size={15} className="shrink-0 text-commerce-trust" filled />
-                  ) : null}
-                </span>
-                <span className="block text-meta text-text-muted">
-                  {[creatorMeta, look.createdAt ? timeAgo(look.createdAt) : null]
-                    .filter(Boolean)
-                    .join(' · ')}
-                </span>
+            {creatorName ? (
+              <Link
+                href={`/u/${creatorName}`}
+                className="pressable flex min-w-0 items-center gap-3"
+                aria-label={`View @${creatorName}'s profile`}
+              >
+                {creatorIdentity}
+              </Link>
+            ) : (
+              // Handle unresolved (live fetch still settling or failed) —
+              // inert identity, never a dead '#' link.
+              <span className="flex min-w-0 items-center gap-3">
+                {creatorIdentity}
               </span>
-            </Link>
+            )}
             <Button
               variant={following ? 'secondary' : 'primary'}
               size="sm"

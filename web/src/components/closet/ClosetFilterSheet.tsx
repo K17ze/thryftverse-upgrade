@@ -37,9 +37,9 @@ function SectionLabel({ children }: { children: React.ReactNode }) {
   );
 }
 
-function FacetCount({ count }: { count: number }) {
-  return <span className="tnum text-meta opacity-60">{count}</span>;
-}
+/* Facet chips render labels only — mobile's filter options carry no
+   per-option count, and a sheet of "Option 1" suffixes is noise. The
+   facet data still drives `facetHasChoice` and the "Show N results" CTA. */
 
 export function ClosetFilterSheet({
   open,
@@ -87,7 +87,6 @@ export function ClosetFilterSheet({
                     }
                   >
                     {b.label}
-                    <FacetCount count={b.count} />
                   </Chip>
                 ))}
               </div>
@@ -105,7 +104,6 @@ export function ClosetFilterSheet({
                     onClick={() => toggleSize(s.value)}
                   >
                     {s.label}
-                    <FacetCount count={s.count} />
                   </Chip>
                 ))}
               </div>
@@ -137,9 +135,6 @@ export function ClosetFilterSheet({
                         {on ? <Icon name="check" size={14} /> : null}
                       </span>
                       <span className="text-body text-text-primary">{c.label}</span>
-                      <span className="tnum ml-auto text-meta text-text-muted">
-                        {c.count}
-                      </span>
                     </button>
                   );
                 })}
@@ -164,7 +159,6 @@ export function ClosetFilterSheet({
                     }
                   >
                     {cat.label}
-                    <FacetCount count={cat.count} />
                   </Chip>
                 ))}
               </div>

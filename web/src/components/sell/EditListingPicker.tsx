@@ -28,7 +28,7 @@ export function EditListingPicker({ listings }: EditListingPickerProps) {
         type="button"
         onClick={() => setOpen((v) => !v)}
         aria-expanded={open}
-        className="pressable flex items-center gap-1.5 text-caption text-text-muted transition-colors hover:text-text-secondary"
+        className="pressable -my-2 flex items-center gap-1.5 px-1 py-2 text-caption text-text-muted transition-colors hover:text-text-secondary"
       >
         <Icon name="edit" size={13} />
         <span>Editing something you&apos;ve already listed?</span>

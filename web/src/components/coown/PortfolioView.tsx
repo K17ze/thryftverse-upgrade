@@ -11,6 +11,7 @@ import { useMemo } from 'react';
 import { useRouter } from 'next/navigation';
 import Link from 'next/link';
 import { EmptyState } from '@/components/ui/EmptyState';
+import { Icon } from '@/components/ui/Icon';
 import { useToast } from '@/components/ui/Toast';
 import { useSession } from '@/lib/session/SessionProvider';
 import { coOwnMarkGbp } from '@/lib/contracts/coown';
@@ -20,6 +21,7 @@ import {
   useCoOwnPortfolioMeta,
   useCoOwnPositions,
   useDistributionReceipts,
+  useMyIssuances,
 } from '@/lib/hooks/coown-queries';
 import { useCancelCoOwnOrder } from '@/components/trading/useCoOwnTrading';
 import { PortfolioSummary } from './PortfolioSummary';
@@ -42,6 +44,10 @@ export function PortfolioView() {
   const ordersQ = useCoOwnOrders();
   const receiptsQ = useDistributionReceipts();
   const portfolioMetaQ = useCoOwnPortfolioMeta();
+  // Subscribed here only so the rail's section index knows whether the
+  // issuances block mounts — the section itself reads the same cached
+  // query, so this is a shared subscription, not a second fetch.
+  const issuancesQ = useMyIssuances();
   const { cancelOrder: cancel } = useCancelCoOwnOrder();
   const { show } = useToast();
 
@@ -197,6 +203,23 @@ export function PortfolioView() {
 
   const hasPositions = rows.length > 0;
 
+  // The rail's section index — every link points at a block that is
+  // actually mounted below, so the conditional sections mirror their
+  // own render conditions (issuances hide entirely for non-issuers,
+  // income only exists once receipts land or the read fails).
+  const showOrders = openOrders.length + terminalOrders.length > 0 || ordersQ.isError;
+  const showIssuances =
+    issuancesQ.isLoading || issuancesQ.isError || (issuancesQ.data ?? []).length > 0;
+  const showIncome = receiptsQ.isError || (receiptsQ.data ?? []).length > 0;
+  const sectionLinks: { id: string; label: string }[] = [
+    { id: 'portfolio-positions', label: 'Positions' },
+    ...(showOrders ? [{ id: 'portfolio-orders', label: 'Orders' }] : []),
+    ...(showIssuances ? [{ id: 'portfolio-issuances', label: 'Issued markets' }] : []),
+    ...(showIncome ? [{ id: 'portfolio-income', label: 'Income' }] : []),
+    { id: 'portfolio-settlements', label: 'Settlements' },
+    { id: 'portfolio-activity', label: 'Activity' },
+  ];
+
   return (
     <div className="mx-auto w-full max-w-5xl px-4 pb-20 pt-8 sm:px-6 md:pt-10 lg:max-w-[1440px]">
       <header className="flex flex-wrap items-end justify-between gap-x-6 gap-y-3">
@@ -241,57 +264,95 @@ export function PortfolioView() {
           role="status"
           className="mt-4 flex items-start gap-2 border-y border-warning-border bg-warning-subtle px-3 py-2.5 text-meta text-warning-text"
         >
-          <svg viewBox="0 0 20 20" fill="currentColor" className="mt-0.5 h-3.5 w-3.5 shrink-0" aria-hidden="true">
-            <path fillRule="evenodd" d="M8.485 2.495c.673-1.167 2.357-1.167 3.03 0l6.28 10.875c.673 1.167-.17 2.625-1.516 2.625H3.72c-1.347 0-2.189-1.458-1.515-2.625L8.485 2.495zM10 6a.75.75 0 01.75.75v3.5a.75.75 0 01-1.5 0v-3.5A.75.75 0 0110 6zm0 9a1 1 0 100-2 1 1 0 000 2z" clipRule="evenodd" />
-          </svg>
+          <Icon name="warning" size={14} className="mt-0.5 shrink-0" />
           The portfolio read degraded — some holdings may be missing
           below. Retry in a moment.
         </p>
       ) : null}
 
-      {hasPositions ? <PortfolioSummary {...summary} /> : null}
+      {/* lg composition — the summary plus a section index pin to a
+          sticky 360px rail; the sections form the main column. The rail
+          is DOM-first so mobile keeps its summary → sections flow. */}
+      <div className="lg:grid lg:grid-cols-[360px_minmax(0,1fr)] lg:gap-x-12">
+        <aside className="lg:sticky lg:top-24 lg:mt-10 lg:self-start">
+          {hasPositions ? <PortfolioSummary {...summary} /> : null}
+          <nav
+            aria-label="Portfolio sections"
+            className={`hidden lg:block ${
+              hasPositions ? 'mt-8 border-t border-border-subtle pt-5' : ''
+            }`}
+          >
+            <ul className="space-y-2.5">
+              {sectionLinks.map((l) => (
+                <li key={l.id}>
+                  <a
+                    href={`#${l.id}`}
+                    className="pressable text-meta text-text-secondary underline-offset-4 transition-colors hover:text-text-primary hover:underline"
+                  >
+                    {l.label}
+                  </a>
+                </li>
+              ))}
+            </ul>
+          </nav>
+        </aside>
 
-      <PortfolioPositionsSection
-        rows={rows}
-        hasPositions={hasPositions}
-        isError={positionsQ.isError}
-        isLoading={positionsQ.isLoading}
-        onRetry={() => void positionsQ.refetch()}
-      />
+        <div className="min-w-0">
+          <div id="portfolio-positions" className="scroll-mt-24">
+            <PortfolioPositionsSection
+              rows={rows}
+              hasPositions={hasPositions}
+              isError={positionsQ.isError}
+              isLoading={positionsQ.isLoading}
+              onRetry={() => void positionsQ.refetch()}
+            />
+          </div>
 
-      <PortfolioOrdersSection
-        openOrders={openOrders}
-        terminalOrders={terminalOrders}
-        titleFor={titleFor}
-        onCancelOrder={cancelOrder}
-        isError={ordersQ.isError}
-        isLoading={ordersQ.isLoading}
-        onRetry={() => void ordersQ.refetch()}
-      />
+          <div id="portfolio-orders" className="scroll-mt-24">
+            <PortfolioOrdersSection
+              openOrders={openOrders}
+              terminalOrders={terminalOrders}
+              titleFor={titleFor}
+              onCancelOrder={cancelOrder}
+              isError={ordersQ.isError}
+              isLoading={ordersQ.isLoading}
+              onRetry={() => void ordersQ.refetch()}
+            />
+          </div>
 
-      {/* The issuer's own markets */}
-      <PortfolioIssuancesSection />
+          {/* The issuer's own markets */}
+          <div id="portfolio-issuances" className="scroll-mt-24">
+            <PortfolioIssuancesSection />
+          </div>
 
-      {receiptsQ.isError ? (
-        <section className="mt-10" aria-label="Distributions">
-          <PortfolioSectionState
-            loading={receiptsQ.isLoading}
-            error
-            onRetry={() => void receiptsQ.refetch()}
-            hasRows={(receiptsQ.data ?? []).length > 0}
-          />
-        </section>
-      ) : null}
+          <div id="portfolio-income" className="scroll-mt-24">
+            {receiptsQ.isError ? (
+              <section className="mt-10" aria-label="Distributions">
+                <PortfolioSectionState
+                  loading={receiptsQ.isLoading}
+                  error
+                  onRetry={() => void receiptsQ.refetch()}
+                  hasRows={(receiptsQ.data ?? []).length > 0}
+                />
+              </section>
+            ) : null}
 
-      {(receiptsQ.data ?? []).length > 0 ? (
-        <section className="mt-10">
-          <DistributionsTable receipts={receiptsQ.data ?? []} assetTitle={titleFor} />
-        </section>
-      ) : null}
+            {(receiptsQ.data ?? []).length > 0 ? (
+              <section className="mt-10">
+                <DistributionsTable receipts={receiptsQ.data ?? []} assetTitle={titleFor} />
+              </section>
+            ) : null}
+          </div>
 
-      {/* Account-scoped ledgers */}
-      <PortfolioSettlementsSection assetTitle={titleFor} />
-      <PortfolioActivitySection />
+          {/* Account-scoped ledgers */}
+          <div id="portfolio-settlements" className="scroll-mt-24">
+            <PortfolioSettlementsSection assetTitle={titleFor} />
+          </div>
+          <div id="portfolio-activity" className="scroll-mt-24">
+            <PortfolioActivitySection />
+          </div>
+        </div>
+      </div>
     </div>
   );
 }

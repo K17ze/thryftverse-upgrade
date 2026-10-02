@@ -11,10 +11,11 @@
  *  - useOrdersListWorkflow
  */
 
-import { Suspense, useEffect } from 'react';
+import { Suspense, useEffect, useId } from 'react';
 import { useSearchParams } from 'next/navigation';
 import { IconButton } from '@/components/ui/IconButton';
 import { OrdersTabRail, ORDERS_TABS, type OrdersTab } from '@/components/orders/OrdersTabRail';
+import { tabId, tabPanelId } from '@/components/ui/Tabs';
 import { OrdersFilterSheet, EMPTY_ORDERS_FILTER } from '@/components/orders/OrdersFilterSheet';
 import { useOrdersListWorkflow } from '@/components/orders/list/useOrdersListWorkflow';
 import { OrdersSearchBar } from '@/components/orders/list/OrdersSearchBar';
@@ -40,6 +41,7 @@ function TabFromUrl({ onTab }: { onTab: (tab: OrdersTab) => void }) {
 
 export default function OrdersPage() {
   const workflow = useOrdersListWorkflow();
+  const tabsId = useId();
 
   const {
     user,
@@ -105,9 +107,20 @@ export default function OrdersPage() {
       />
 
       <div className="mt-4">
-        <OrdersTabRail activeTab={tab} onChange={setTab} counts={counts} />
+        <OrdersTabRail
+          activeTab={tab}
+          onChange={setTab}
+          counts={counts}
+          idBase={tabsId}
+        />
       </div>
 
+      {/* The rail's tabpanel — the whole list region swaps per tab. */}
+      <div
+        role="tabpanel"
+        id={tabPanelId(tabsId, tab)}
+        aria-labelledby={tabId(tabsId, tab)}
+      >
       <OrdersListContent
         user={user}
         sessionLoading={sessionLoading}
@@ -131,6 +144,7 @@ export default function OrdersPage() {
         isFetchingNextPage={isFetchingNextPage}
         isFetchNextPageError={isFetchNextPageError}
       />
+      </div>
 
       <OrdersFilterSheet
         open={filterOpen}

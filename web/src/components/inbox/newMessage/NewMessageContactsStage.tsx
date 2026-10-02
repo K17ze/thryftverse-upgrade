@@ -69,9 +69,7 @@ export function NewMessageContactsStage({
             onClick={onStartGroup}
             className="pressable flex w-full items-center gap-3 border-b border-border-subtle px-4 py-3 text-left"
           >
-            <span className="flex h-10 w-10 items-center justify-center rounded-full bg-brand-subtle text-brand">
-              <Icon name="people" size={20} />
-            </span>
+            <Icon name="people" size={20} className="shrink-0 text-text-secondary" />
             <span className="min-w-0 flex-1">
               <span className="block text-body-emphasis font-semibold text-text-primary">
                 Start group chat

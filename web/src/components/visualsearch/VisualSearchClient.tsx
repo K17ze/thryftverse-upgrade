@@ -15,7 +15,9 @@ import {
   useVisualSearch,
 } from '@/lib/hooks/visual-search-queries';
 import { honestMatchNote, liveMatchNote } from './visualSearchEngine';
+import { manualFiltersActive } from './visualSearchTypes';
 import { VisualSearchDropzone } from './VisualSearchDropzone';
+import { VisualSearchFilterPanel } from './VisualSearchFilterPanel';
 import { VisualSearchQueryPanel } from './VisualSearchQueryPanel';
 import { VisualSearchRefinementBar } from './VisualSearchRefinementBar';
 import { VisualSearchResults } from './VisualSearchResults';
@@ -27,6 +29,12 @@ export function VisualSearchClient() {
   // The queryId this surface already persisted — prevents duplicate saves
   // of the same photo's derived query. Resets when a new photo lands.
   const [savedForQuery, setSavedForQuery] = useState<string | null>(null);
+
+  // Refining after a save leaves the persisted entry stale — re-arm the
+  // button so the updated filter set can be saved again.
+  useEffect(() => {
+    setSavedForQuery(null);
+  }, [vs.queryId, vs.manualFilters, vs.inactiveKinds]);
 
   // ?image=<url> deep link — the entry point a "visually similar" tile
   // affordance targets. Read once on mount (analysis can never SSR, so a
@@ -103,6 +111,21 @@ export function VisualSearchClient() {
                   />
                 </div>
               ) : null}
+              {/* Manual refinement — the member adds what the photo didn't
+                  say. Renders once a result set exists (populated or empty);
+                  Apply re-runs the match through the hook. */}
+              {vs.features !== null &&
+              (vs.status === 'populated' || vs.status === 'empty') ? (
+                <div className="mt-6 border-t border-border-subtle pt-5">
+                  <VisualSearchFilterPanel
+                    committed={vs.manualFilters}
+                    facetCounts={vs.serveMeta?.facetCounts ?? null}
+                    previewCount={vs.previewCount}
+                    onApply={vs.setManualFilters}
+                    onClear={vs.clearManualFilters}
+                  />
+                </div>
+              ) : null}
             </div>
           </aside>
 
@@ -112,7 +135,9 @@ export function VisualSearchClient() {
                 <p className="text-meta text-text-muted">
                   {savedForQuery !== null && savedForQuery === vs.queryId
                     ? 'Saved — replay and alerts use the detected details, not the photo.'
-                    : 'Save the detected details to re-run this match later.'}
+                    : manualFiltersActive(vs.manualFilters)
+                      ? 'Save the detected details and your added filters to re-run this match.'
+                      : 'Save the detected details to re-run this match later.'}
                 </p>
                 <button
                   type="button"
@@ -124,6 +149,7 @@ export function VisualSearchClient() {
                         attributes: vs.attributes,
                         inactiveKinds: vs.inactiveKinds,
                         results: vs.results,
+                        manualFilters: vs.manualFilters,
                       }).queryId ?? vs.queryId,
                     )
                   }
@@ -157,6 +183,8 @@ export function VisualSearchClient() {
               }
               hasRemovedAttributes={vs.inactiveKinds.size > 0}
               onRestoreAttributes={vs.resetAttributes}
+              hasManualFilters={manualFiltersActive(vs.manualFilters)}
+              onClearManualFilters={vs.clearManualFilters}
               onChooseAnother={() => {
                 // Re-enter the picker via the panel's Replace action.
                 handleRemove();

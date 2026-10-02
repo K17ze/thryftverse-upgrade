@@ -8,13 +8,13 @@
  * take the danger accent. Skeleton, per-tab empty states.
  */
 
-import { useMemo, useState } from 'react';
+import { useId, useMemo, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { SellerSectionNav } from '@/components/seller/SellerSectionNav';
 import { FulfilmentRow } from '@/components/seller/FulfilmentRow';
 import { DispatchSheet } from '@/components/orders/DispatchSheet';
 import { DispatchExtensionSheet } from '@/components/seller/DispatchExtensionSheet';
-import { Tabs } from '@/components/ui/Tabs';
+import { Tabs, tabId, tabPanelId } from '@/components/ui/Tabs';
 import { EmptyState } from '@/components/ui/EmptyState';
 import { Skeleton } from '@/components/ui/Skeleton';
 import { useToast } from '@/components/ui/Toast';
@@ -59,6 +59,7 @@ export default function FulfilmentPage() {
   const proposeExtension = useProposeDispatchExtension();
   const assertHandoff = useAssertHandoff();
   const [tab, setTab] = useState<Tab>('to-post');
+  const tabsId = useId();
   /** The job the dispatch sheet is collecting tracking for — null closed. */
   const [dispatchJob, setDispatchJob] = useState<FulfilmentJob | null>(null);
   /** The job the extension sheet is proposing extra days for — null closed. */
@@ -162,9 +163,15 @@ export default function FulfilmentPage() {
         active={tab}
         onChange={setTab}
         ariaLabel="Fulfilment stages"
+        idBase={tabsId}
       />
 
-      <div className="mt-4">
+      <div
+        className="mt-4"
+        role="tabpanel"
+        id={tabPanelId(tabsId, tab)}
+        aria-labelledby={tabId(tabsId, tab)}
+      >
         {isLoading ? (
           <ul className="divide-y divide-border-subtle border-y border-border-subtle" aria-busy aria-label="Loading dispatch queue">
             {[0, 1, 2].map((i) => (

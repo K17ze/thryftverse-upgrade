@@ -12,6 +12,7 @@
 import { useMemo, useState } from 'react';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
+import { Button } from '@/components/ui/Button';
 import { Chip } from '@/components/ui/Chip';
 import { EmptyState } from '@/components/ui/EmptyState';
 import { Icon } from '@/components/ui/Icon';
@@ -71,7 +72,7 @@ function LinkRow({
   detail,
 }: {
   href: string;
-  icon: 'receipt' | 'trending' | 'bookmark';
+  icon: 'receipt' | 'trending' | 'bookmark' | 'key';
   label: string;
   detail: string;
 }) {
@@ -85,7 +86,7 @@ function LinkRow({
       </span>
       <span className="min-w-0 flex-1">
         <span className="block text-body-emphasis text-text-primary">{label}</span>
-        <span className="clamp-1 block text-caption text-text-muted">{detail}</span>
+        <span className="clamp-2 mt-0.5 block text-caption text-text-muted">{detail}</span>
       </span>
       <Icon name="forward" size={16} className="shrink-0 text-text-muted" />
     </Link>
@@ -237,6 +238,12 @@ export function AgentsHub() {
           </h2>
           <div className="divide-y divide-border-subtle border-y border-border-subtle">
             <LinkRow
+              href="/agents/studio"
+              icon="key"
+              label="Agent studio"
+              detail="Connections, approvals and device keys"
+            />
+            <LinkRow
               href="/agents/ledger"
               icon="receipt"
               label="Agent ledger"
@@ -267,7 +274,9 @@ function HubHeader({ onCreate }: { onCreate: () => void }) {
     <div className="flex items-center gap-1 px-2 pt-1 sm:px-4">
       <IconButton name="back" aria-label="Back" onClick={() => router.back()} />
       <h1 className="flex-1 text-screen-title text-text-primary">Agents</h1>
-      <IconButton name="plus" aria-label="Create an agent" onClick={onCreate} />
+      <Button variant="secondary" size="sm" icon="plus" onClick={onCreate}>
+        New agent
+      </Button>
     </div>
   );
 }

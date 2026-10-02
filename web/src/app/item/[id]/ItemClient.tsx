@@ -19,7 +19,9 @@
 
 import { useMemo } from 'react';
 import { notFound, useParams, useRouter } from 'next/navigation';
+import { useQueryClient } from '@tanstack/react-query';
 import { useListing, useSellerListings } from '@/lib/hooks/queries';
+import type { Listing } from '@/lib/contracts/domain';
 import { usePdpSimilarListings } from '@/lib/hooks/pdp-market-queries';
 import { PdpGallery } from '@/components/pdp/PdpGallery';
 import { BuyPanel } from '@/components/pdp/BuyPanel';
@@ -41,10 +43,22 @@ import { IconButton } from '@/components/ui/IconButton';
 import { useRecordListingView } from '@/lib/store/recentlyViewed';
 import { useIsBlockedUser } from '@/components/inbox/inboxSafety';
 
-export function ItemClient() {
+export function ItemClient({ initialListing }: { initialListing?: Listing }) {
   const params = useParams<{ id: string }>();
   const router = useRouter();
   const id = params?.id ?? '';
+  const queryClient = useQueryClient();
+  // Hydrate the ['listing', id] entry with the server-resolved row before
+  // useListing subscribes — the PDP's first paint skips the second
+  // render-blocking fetch (initialData semantics for the shared hook,
+  // whose signature lives outside this route's reach). Stamped stale so
+  // the mount revalidation still re-reads it in the background; a cached
+  // row (earlier visit, session write) is never clobbered by the seed.
+  if (id && initialListing && queryClient.getQueryData(['listing', id]) == null) {
+    queryClient.setQueryData<Listing | null>(['listing', id], initialListing, {
+      updatedAt: 0,
+    });
+  }
 
   const { data: listing, isLoading, isError, refetch } = useListing(id);
   const {
@@ -99,7 +113,7 @@ export function ItemClient() {
           both rows so lg:sticky pins it from the gallery through the last
           evidence section — without the span the panel would unstick as
           soon as the media row scrolled past. */}
-      <div className="grid gap-6 px-4 py-4 sm:px-6 lg:grid-cols-[minmax(0,1fr)_400px] lg:gap-x-10 lg:gap-y-8">
+      <div className="grid grid-cols-1 gap-6 px-4 py-4 sm:px-6 lg:grid-cols-[minmax(0,1fr)_400px] lg:gap-x-10 lg:gap-y-8">
         <div className="min-w-0 lg:col-start-1 lg:row-start-1">
           <div className="mb-3 lg:hidden">
             <IconButton name="back" aria-label="Back" onClick={() => router.back()} className="-ml-2" />

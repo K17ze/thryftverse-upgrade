@@ -4,6 +4,7 @@
  * Mirrors the mobile platform's MarketCoOwnAsset + v2 order-book shapes.
  */
 
+import { coOwnMarkGbp } from '@/lib/contracts/coown';
 import type {
   ActivityEvent,
   CandlePoint,
@@ -153,6 +154,9 @@ export const CO_OWN_ASSETS: CoOwnAsset[] = [
     totalUnits: 500,
     availableUnits: 118,
     unitPriceGbp: 54.0,
+    // The secondary market has printed (book mid ~£101.5, tape at
+    // 101.5–104) — the mark is the last settled print, not issuance.
+    lastTradePriceGbp: 102.0,
     settlementMode: 'ONEZE',
     issuerJurisdiction: 'United Kingdom',
     marketMovePct24h: 6.8,
@@ -329,15 +333,32 @@ function buildCandles(seed: number, startPrice: number, points: number, stepMs: 
 
 const HOUR = 3_600_000;
 
+/** Rescale the seeded walk so its final close lands on the asset's quoted
+ *  mark — the chart and day range then bracket the price the hero shows. */
+function anchorToMark(assetId: string, candles: CandlePoint[]): CandlePoint[] {
+  const asset = CO_OWN_ASSETS.find((a) => a.id === assetId);
+  const last = candles[candles.length - 1]?.c;
+  if (!asset || last == null || last <= 0) return candles;
+  const k = coOwnMarkGbp(asset) / last;
+  return candles.map((c) => ({
+    t: c.t,
+    o: round2(c.o * k),
+    h: round2(c.h * k),
+    l: round2(c.l * k),
+    c: round2(c.c * k),
+    v: c.v,
+  }));
+}
+
 export const PRICE_HISTORY: Record<string, CandlePoint[]> = {
-  co1: buildCandles(11, 128, 24 * 30, HOUR, 0.05),
-  co2: buildCandles(22, 104, 24 * 30, HOUR, -0.02),
-  co3: buildCandles(33, 52, 24 * 21, HOUR, 0.02),
-  co4: buildCandles(44, 88, 24 * 30, HOUR, 0.16),
-  co5: buildCandles(55, 118, 24 * 30, HOUR, 0.01),
-  co6: buildCandles(66, 84, 24 * 30, HOUR, 0.03),
-  co7: buildCandles(77, 78.5, 24 * 10, HOUR, 0.0),
-  co8: buildCandles(88, 196, 24 * 30, HOUR, -0.06),
+  co1: anchorToMark('co1', buildCandles(11, 128, 24 * 30, HOUR, 0.05)),
+  co2: anchorToMark('co2', buildCandles(22, 104, 24 * 30, HOUR, -0.02)),
+  co3: anchorToMark('co3', buildCandles(33, 52, 24 * 21, HOUR, 0.02)),
+  co4: anchorToMark('co4', buildCandles(44, 88, 24 * 30, HOUR, 0.16)),
+  co5: anchorToMark('co5', buildCandles(55, 118, 24 * 30, HOUR, 0.01)),
+  co6: anchorToMark('co6', buildCandles(66, 84, 24 * 30, HOUR, 0.03)),
+  co7: anchorToMark('co7', buildCandles(77, 78.5, 24 * 10, HOUR, 0.0)),
+  co8: anchorToMark('co8', buildCandles(88, 196, 24 * 30, HOUR, -0.06)),
 };
 
 export function priceWindow(assetId: string, window: PriceWindow): CandlePoint[] {

@@ -10,11 +10,8 @@
 import { memo } from 'react';
 import type { Message } from '@/lib/contracts/domain';
 import { DATA_MODE } from '@/lib/api/client';
-import { isLocalMediaUri } from '@/lib/utils/media';
 import { useReadReceiptsEnabled } from '@/lib/store/chatPrefs';
-import { AppImage } from '@/components/ui/AppImage';
 import { ClientTime } from '@/components/ui/ClientTime';
-import { Icon } from '@/components/ui/Icon';
 import { useToast } from '@/components/ui/Toast';
 
 // Re-exported primitives for external consumers (OfferCard, ListingShareCard, ChatPanel)
@@ -46,6 +43,9 @@ import { VoiceAttachment } from './bubble/VoiceAttachment';
 import { DocumentAttachment } from './bubble/DocumentAttachment';
 import { TranslationRow } from './bubble/TranslationRow';
 import { PollBlock } from './bubble/PollBlock';
+import { MediaAttachment } from './bubble/MediaAttachment';
+import { MessageReactionChips } from './bubble/MessageReactionChips';
+import { MessageReplyQuote } from './bubble/MessageReplyQuote';
 
 export interface MessageBubbleProps {
   message: Message;
@@ -121,7 +121,6 @@ function MessageBubbleImpl({
     return <DeletedMessageTombstone mine={mine} senderLabel={senderLabel} />;
   }
 
-  const isVideo = m.mediaType === 'video';
   const mediaOnly = Boolean(m.mediaUri) && !m.text;
   const reactions = m.reactions ?? [];
   const metaTone = mine ? 'text-text-inverse/60' : 'text-text-muted';
@@ -139,25 +138,6 @@ function MessageBubbleImpl({
       toast.show("Couldn't copy — clipboard access was blocked", 'error');
     }
   };
-
-  const quote = replyTo ? (
-    <>
-      <p
-        className={`text-meta font-semibold ${
-          mine ? 'text-text-inverse' : 'text-brand'
-        }`}
-      >
-        {replyTo.senderName}
-      </p>
-      <p
-        className={`clamp-2 text-meta ${
-          mine ? 'text-text-inverse/70' : 'text-text-secondary'
-        }`}
-      >
-        {replyTo.text}
-      </p>
-    </>
-  ) : null;
 
   return (
     <div
@@ -180,103 +160,18 @@ function MessageBubbleImpl({
               : `${tail ? 'rounded-bl-sm' : ''} bg-surface-alt text-text-primary`
           }`}
         >
-          {replyTo ? (
-            onReplyPress ? (
-              <button
-                type="button"
-                onClick={() => {
-                  if (m.replyToMessageId) onReplyPress(m.replyToMessageId);
-                }}
-                aria-label="Jump to the original message"
-                className={`pressable mb-1.5 block w-full border-l-2 py-0.5 pl-2 text-left ${
-                  mine ? 'border-text-inverse/50' : 'border-brand'
-                }`}
-              >
-                {quote}
-              </button>
-            ) : (
-              <div
-                className={`mb-1.5 border-l-2 py-0.5 pl-2 ${
-                  mine ? 'border-text-inverse/50' : 'border-brand'
-                }`}
-              >
-                {quote}
-              </div>
-            )
-          ) : null}
+          <MessageReplyQuote
+            replyTo={replyTo ?? null}
+            replyToMessageId={m.replyToMessageId}
+            mine={mine}
+            onReplyPress={onReplyPress}
+          />
 
-          {m.mediaUri ? (
-            onMediaPress ? (
-              // Tap → fullscreen lightbox (mobile ChatMediaPreviewScreen).
-              // The video renders inert inside the press target — playback
-              // lives in the lightbox's real controls player.
-              <button
-                type="button"
-                onClick={() => onMediaPress(m)}
-                aria-label={isVideo ? 'Play video' : 'View photo'}
-                className="pressable relative -mx-1 -mb-0.5 block"
-              >
-                {isVideo ? (
-                  <span className="relative block">
-                    <video
-                      src={m.mediaUri}
-                      poster={m.posterUri}
-                      preload="metadata"
-                      className="pointer-events-none mb-1 max-h-72 w-full max-w-[320px] rounded-2xl bg-black"
-                    />
-                    <span
-                      aria-hidden="true"
-                      className="absolute inset-0 mb-1 flex items-center justify-center rounded-2xl"
-                    >
-                      <span className="flex h-11 w-11 items-center justify-center rounded-full bg-media-overlay-scrim text-scrim-text-primary">
-                        <Icon name="play" size={18} filled />
-                      </span>
-                    </span>
-                  </span>
-                ) : isLocalMediaUri(m.mediaUri) ? (
-                  // eslint-disable-next-line @next/next/no-img-element -- local pick, not optimizable
-                  <img
-                    src={m.mediaUri}
-                    alt="Shared media"
-                    className="mb-1 max-h-72 w-full max-w-[320px] rounded-2xl object-cover"
-                  />
-                ) : (
-                  <AppImage
-                    src={m.mediaUri}
-                    alt="Shared media"
-                    aspectRatio={4 / 3}
-                    sizes="320px"
-                    className={`${mediaOnly ? '' : 'mb-1'} rounded-2xl`}
-                  />
-                )}
-              </button>
-            ) : isVideo ? (
-              // Video rides a native player — poster still when the server
-              // supplies one (the mediaUri may be an HLS playlist).
-              <video
-                src={m.mediaUri}
-                poster={m.posterUri}
-                controls
-                preload="metadata"
-                className="mb-1 max-h-72 w-full max-w-[320px] rounded-2xl bg-black"
-              />
-            ) : isLocalMediaUri(m.mediaUri) ? (
-              // eslint-disable-next-line @next/next/no-img-element -- local pick, not optimizable
-              <img
-                src={m.mediaUri}
-                alt="Shared media"
-                className="mb-1 max-h-72 w-full max-w-[320px] rounded-2xl object-cover"
-              />
-            ) : (
-              <AppImage
-                src={m.mediaUri}
-                alt="Shared media"
-                aspectRatio={4 / 3}
-                sizes="320px"
-                className={`${mediaOnly ? '' : 'mb-1'} rounded-2xl`}
-              />
-            )
-          ) : null}
+          <MediaAttachment
+            message={m}
+            mediaOnly={mediaOnly}
+            onMediaPress={onMediaPress}
+          />
 
           {m.type === 'voice' || m.voiceUri ? (
             <VoiceAttachment
@@ -310,12 +205,7 @@ function MessageBubbleImpl({
             </p>
           ) : null}
 
-          {/* Inline translate — mobile parity (WhatsApp/Instagram
-              pattern): foreign-language incoming text offers a quiet
-              Translate link that expands to the translated body plus
-              "Translated from X · Show original". Live-only — the
-              fixture backend has no translator, so the affordance
-              would render a guaranteed error. */}
+          {/* Inline translate — mobile parity */}
           {!mine && m.text && DATA_MODE === 'live' ? (
             <TranslationRow message={m} />
           ) : null}
@@ -326,17 +216,11 @@ function MessageBubbleImpl({
             } ${metaTone}`}
           >
             {m.isEdited ? <span className="text-micro">Edited</span> : null}
-            {/* Local clock time — client-computed (ClientTime): a server
-                render can't know the viewer's timezone, so the label is
-                empty in SSR HTML and fills on mount. */}
             <ClientTime
               iso={m.timestamp}
               format={formatMessageTime}
               className="text-micro"
             />
-            {/* A failed send keeps its 'sending' readStatus — the clock
-                would claim in-flight on a write that already failed; the
-                "Not delivered" affordance below the bubble carries it. */}
             {mine && !failed ? <MessageReceipt status={m.readStatus} /> : null}
           </div>
         </div>
@@ -345,65 +229,15 @@ function MessageBubbleImpl({
           <p className="mt-0.5 text-right text-meta text-text-muted">Seen</p>
         ) : null}
 
-        {/* Reaction chips — the message's emoji content, overlapped on the
-            bubble's bottom edge like the mobile reaction badge. Max three
-            shown; the row reserves space so the next message isn't covered.
-            When the caller wires the reaction edge the chips are real
-            toggle buttons — tap adds/removes the viewer's own reaction. */}
-        {reactions.length > 0 ? (
-          <div
-            className={`absolute -bottom-2.5 z-[1] flex gap-1 ${
-              mine ? 'right-2' : 'left-2'
-            }`}
-            aria-label={`${reactions.length} reaction${
-              reactions.length === 1 ? '' : 's'
-            }`}
-          >
-            {reactions.slice(0, 3).map((r, i) => {
-              const count = r.count ?? r.userIds.length;
-              const chipCls = `flex items-center gap-0.5 rounded-full border px-1.5 py-0.5 leading-none ${
-                r.reactedByMe
-                  ? 'border-brand bg-brand-subtle'
-                  : 'border-border-subtle bg-surface-elevated'
-              }`;
-              const inner = (
-                <>
-                  <span className="text-meta" aria-hidden>
-                    {r.emoji}
-                  </span>
-                  {count > 1 ? (
-                    <span className="tnum text-micro font-semibold text-text-secondary">
-                      {count}
-                    </span>
-                  ) : null}
-                </>
-              );
-              return onToggleReaction && menuable ? (
-                <button
-                  key={`${r.emoji}-${i}`}
-                  type="button"
-                  onClick={() => onToggleReaction(m, r.emoji)}
-                  aria-pressed={r.reactedByMe === true}
-                  aria-label={`${r.emoji} reaction${
-                    count > 1 ? ` — ${count} people` : ''
-                  }`}
-                  className={`pressable relative ${chipCls} after:absolute after:-inset-1.5 after:content-['']`}
-                >
-                  {inner}
-                </button>
-              ) : (
-                <span key={`${r.emoji}-${i}`} className={chipCls}>
-                  {inner}
-                </span>
-              );
-            })}
-          </div>
-        ) : null}
+        {/* Reaction chips */}
+        <MessageReactionChips
+          message={m}
+          mine={mine}
+          menuable={menuable}
+          onToggleReaction={onToggleReaction}
+        />
 
-        {/* Quiet gutter actions — react, reply (swipe-reply's desktop
-            analogue) and copy. Anchored beside the bubble stack so text
-            layout never shifts; hover and keyboard focus reveal them the
-            same way. */}
+        {/* Quiet gutter actions */}
         <MessageActions
           mine={mine}
           onReply={replyable && onReply ? () => onReply(m) : undefined}
@@ -417,15 +251,6 @@ function MessageBubbleImpl({
   );
 }
 
-/**
- * Memoized — a thread with full history re-renders on every poll tick,
- * send, receipt and search keystroke; unchanged bubbles skip their
- * render. The comparator tracks every meaningful prop: message payload
- * (by reference — React Query keeps row identity), the derived booleans,
- * and the reply preview by field (the caller resolves it fresh each
- * render). Callbacks are message-keyed and stable upstream, so identity
- * equality is meaningful — a changed identity re-renders honestly.
- */
 export const MessageBubble = memo(
   MessageBubbleImpl,
   (a, b) =>

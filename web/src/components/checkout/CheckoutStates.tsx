@@ -19,7 +19,7 @@ export function CheckoutSkeleton() {
   return (
     <div className="mx-auto max-w-[1000px] px-4 py-8 sm:px-6" aria-busy aria-label="Loading checkout">
       <Skeleton className="h-8 w-36" />
-      <div className="mt-6 grid gap-10 lg:grid-cols-[minmax(0,1fr)_340px]">
+      <div className="mt-6 grid grid-cols-1 gap-10 lg:grid-cols-[minmax(0,1fr)_340px]">
         <div className="flex flex-col gap-8">
           {Array.from({ length: 2 }).map((_, s) => (
             <div key={s}>

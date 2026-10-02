@@ -49,5 +49,14 @@ export default async function GalleriaCollectionPage({
   const { id } = await params;
   const resolution = await resolveGalleriaCollectionForRoute(id);
   if (resolution.status === 'missing') notFound();
-  return <GalleriaCollectionClient />;
+  // A resolved edit rides down as the client's first-paint fallback —
+  // the hero renders the server's row while the detail query (which
+  // also resolves each piece's listing) revalidates in the background.
+  const value = resolution.status === 'resolved' ? resolution.value : undefined;
+  const initialCollection = value
+    ? 'collection' in value
+      ? value.collection
+      : value
+    : undefined;
+  return <GalleriaCollectionClient initialCollection={initialCollection} />;
 }

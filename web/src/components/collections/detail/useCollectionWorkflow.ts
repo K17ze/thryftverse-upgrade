@@ -8,54 +8,32 @@ import { useShare } from '@/components/profile/useShare';
 import {
   COLLECTIONS,
   PROFILE_COLLECTIONS,
-  collectionById,
   listingsForIds,
 } from '@/components/profile/fixtures';
-import { useBoardCoverThumbs } from '@/components/profile/boardMedia';
 import { useBoardPrefs } from '@/components/profile/boardPrefs';
 import { useCollectionActions } from '@/lib/hooks/collections-queries';
 import { useSellerListings, useUser } from '@/lib/hooks/queries';
 import { useSession } from '@/lib/session/SessionProvider';
 import { useHydrated, useStore } from '@/lib/store/useStore';
 import {
-  itemMovedBefore,
-  movedItem,
   useCollectionEdits,
   useCollectionOverlay,
-  withItemsAdded,
-  withoutItemIds,
 } from '@/lib/store/collectionEdits';
-import {
-  USER_COLLECTION_SEED,
-  type UserCollection,
-} from '@/lib/data/fixtures-collections';
-import { userById } from '@/lib/data/fixtures';
-import { DATA_MODE } from '@/lib/api/client';
 import * as collectionsService from '@/lib/api/services/collections';
 import { fetchListingById } from '@/lib/api/services/listings';
 import {
   mapListingToDiscoverySummary,
   type DiscoveryFeedUnit,
   type DiscoveryListingSummary,
-  type User,
 } from '@/lib/contracts/domain';
-import { timeAgo } from '@/lib/utils/format';
+import {
+  LIVE,
+  type ResolvedCollection,
+} from './collectionDetailTypes';
+import { useCollectionResolution } from './useCollectionResolution';
+import { useCollectionItemOperations } from './useCollectionItemOperations';
 
-const USER_COLLECTIONS_KEY = ['user-collections'] as const;
-const LIVE = DATA_MODE === 'live';
-const EMPTY_IDS: string[] = [];
-
-export interface ResolvedCollection {
-  id: string;
-  title: string;
-  itemIds: string[];
-  owner?: User | null;
-  ownerId?: string;
-  isPrivate?: boolean;
-  description?: string | null;
-  meta?: string;
-  editable: boolean;
-}
+export type { ResolvedCollection };
 
 export function useCollectionWorkflow() {
   const params = useParams();
@@ -111,84 +89,25 @@ export function useCollectionWorkflow() {
   const setCollectionMeta = useCollectionEdits((s) => s.setCollectionMeta);
   const edits = hydrated ? overlay : undefined;
 
-  const resolved = useMemo<ResolvedCollection | null>(() => {
-    if (isCloset) {
-      if (loading || !closetOwner) return null;
-      return {
-        id,
-        title: `${closetOwner.username}'s closet`,
-        itemIds: (closetItems ?? []).map((l) => l.id),
-        owner: closetOwner,
-        editable: false,
-      };
-    }
-    if (LIVE) {
-      const board = boardQuery.data;
-      if (!board || !me) return null;
-      return {
-        id,
-        title: edits?.title ?? board.name,
-        description:
-          edits && 'description' in edits ? edits.description : board.description,
-        itemIds: [...board.itemIds],
-        owner: me,
-        ownerId: me.id,
-        isPrivate:
-          (hydrated ? boardPref?.isPrivate : undefined) ?? board.isPrivate,
-        meta: board.updatedAt ? `Updated ${timeAgo(board.updatedAt)}` : undefined,
-        editable: true,
-      };
-    }
-    const c = collectionById(id);
-    if (!c) return null;
-    const ownerId = 'ownerId' in c ? c.ownerId : 'me';
-    const uc = (
-      queryClient.getQueryData<UserCollection[]>(USER_COLLECTIONS_KEY) ??
-      USER_COLLECTION_SEED
-    ).find((x) => x.id === c.id);
-    const isPrivate =
-      (hydrated ? boardPref?.isPrivate : undefined) ??
-      ('isPrivate' in c ? c.isPrivate : undefined) ??
-      uc?.isPrivate ??
-      false;
-    return {
-      id,
-      title: edits?.title ?? c.title,
-      description:
-        edits && 'description' in edits ? edits.description : uc?.description ?? null,
-      itemIds: [...c.itemIds],
-      owner: ownerId && ownerId !== 'me' ? userById(ownerId) : undefined,
-      ownerId,
-      isPrivate,
-      meta: c.createdAt ? `Updated ${timeAgo(c.createdAt)}` : undefined,
-      editable: !!me && ownerId === me.id,
-    };
-  }, [
+  const {
+    resolved,
+    itemIds,
+    coverItemId,
+    heroThumbs,
+    showHero,
+  } = useCollectionResolution({
     id,
     isCloset,
-    loading,
+    me,
+    hydrated,
+    queryClient,
+    boardPref,
     closetOwner,
     closetItems,
-    me,
-    queryClient,
-    hydrated,
-    boardPref?.isPrivate,
+    loading,
+    boardQueryData: boardQuery.data,
     edits,
-    boardQuery.data,
-  ]);
-
-  const itemIds = useMemo(
-    () => edits?.itemIds ?? resolved?.itemIds ?? [],
-    [edits?.itemIds, resolved],
-  );
-
-  const coverItemId = hydrated ? boardPref?.coverItemId : undefined;
-  const heroThumbs = useBoardCoverThumbs(
-    isCloset ? EMPTY_IDS : itemIds,
-    4,
-    undefined,
-    coverItemId,
-  );
+  });
 
   const boardItemsQuery = useQuery({
     queryKey: ['collection-items', id, itemIds.join(',')],
@@ -224,13 +143,34 @@ export function useCollectionWorkflow() {
   );
 
   const [editing, setEditing] = useState(false);
-  const [selectMode, setSelectMode] = useState(false);
-  const [selectedIds, setSelectedIds] = useState<ReadonlySet<string>>(new Set());
-  const [importOpen, setImportOpen] = useState(false);
   const [optionsOpen, setOptionsOpen] = useState(false);
   const [coverOpen, setCoverOpen] = useState(false);
   const [detailsOpen, setDetailsOpen] = useState(false);
   const [confirmDelete, setConfirmDelete] = useState(false);
+
+  const {
+    selectMode,
+    setSelectMode,
+    selectedIds,
+    setSelectedIds,
+    importOpen,
+    setImportOpen,
+    commitItems,
+    stopEditing,
+    toggleSelect,
+    removeWithUndo,
+    removeSelected,
+    addItems,
+  } = useCollectionItemOperations({
+    id,
+    itemIds,
+    queryClient,
+    addItemsToCollection,
+    removeItemsFromCollection,
+    setCollectionItems,
+    show,
+    setEditing,
+  });
 
   const wishlist = useStore((s) => s.wishlist);
   const saved = useStore((s) => s.saved);
@@ -283,94 +223,6 @@ export function useCollectionWorkflow() {
     router.push('/collections');
   };
 
-  const commitItems = async (next: string[]): Promise<boolean> => {
-    const before = new Set(itemIds);
-    const after = new Set(next);
-    const added = next.filter((x) => !before.has(x));
-    const removed = itemIds.filter((x) => !after.has(x));
-    try {
-      if (added.length > 0) await addItemsToCollection(id, added);
-      if (removed.length > 0) await removeItemsFromCollection(id, removed);
-      if (added.length === 0 && removed.length === 0) {
-        if (!LIVE) {
-          setCollectionItems(id, next);
-          queryClient.setQueryData<UserCollection[]>(USER_COLLECTIONS_KEY, (old) =>
-            old?.map((c) => (c.id === id ? { ...c, itemIds: [...next] } : c)),
-          );
-        }
-      } else if (!LIVE) {
-        setCollectionItems(id, next);
-        queryClient.setQueryData<UserCollection[]>(USER_COLLECTIONS_KEY, (old) =>
-          old?.map((c) => (c.id === id ? { ...c, itemIds: [...next] } : c)),
-        );
-      } else {
-        void queryClient.invalidateQueries({ queryKey: ['collection', id] });
-      }
-      return true;
-    } catch {
-      show("Couldn't update this collection — try again", 'error');
-      return false;
-    }
-  };
-
-  const stopEditing = () => {
-    setEditing(false);
-    setSelectMode(false);
-    setSelectedIds(new Set());
-  };
-
-  const toggleSelect = (itemId: string) => {
-    setSelectedIds((prev) => {
-      const next = new Set(prev);
-      if (next.has(itemId)) next.delete(itemId);
-      else next.add(itemId);
-      return next;
-    });
-  };
-
-  const removeWithUndo = (ids: string[]) => {
-    if (ids.length === 0) return;
-    const orderBefore = itemIds;
-    const next = withoutItemIds(itemIds, new Set(ids));
-    setSelectedIds((prev) => {
-      const cleared = new Set(prev);
-      for (const x of ids) cleared.delete(x);
-      return cleared;
-    });
-    void (async () => {
-      const ok = await commitItems(next);
-      if (!ok) return;
-      show(
-        ids.length === 1 ? 'Removed 1 item' : `Removed ${ids.length} items`,
-        'info',
-        { label: 'Undo', onPress: () => void commitItems(orderBefore) },
-      );
-    })();
-  };
-
-  const removeSelected = () => {
-    removeWithUndo([...selectedIds]);
-    setSelectMode(false);
-  };
-
-  const addItems = (ids: string[]) => {
-    setImportOpen(false);
-    const fresh = ids.filter((x) => !itemIds.includes(x));
-    if (fresh.length === 0) {
-      show('Already in this collection', 'info');
-      return;
-    }
-    void (async () => {
-      const ok = await commitItems(withItemsAdded(itemIds, fresh));
-      if (ok) {
-        show(
-          fresh.length === 1 ? 'Added 1 item' : `Added ${fresh.length} items`,
-          'success',
-        );
-      }
-    })();
-  };
-
   const togglePrivacy = () => {
     if (!resolved) return;
     const next = !resolved.isPrivate;
@@ -405,7 +257,6 @@ export function useCollectionWorkflow() {
   const isEditing = (resolved?.editable ?? false) && editing;
   const viewerOwns = !!me && resolved?.ownerId === me.id;
   const archived = hydrated && boardPref?.archived === true;
-  const showHero = !isCloset && heroThumbs.length > 0;
 
   return {
     id,

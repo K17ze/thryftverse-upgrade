@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
-import { notFound, useParams, useRouter } from 'next/navigation';
+import { useParams, useRouter } from 'next/navigation';
 import { useSession } from '@/lib/session/SessionProvider';
 import { useReviews, useReviewSummary } from '@/lib/hooks/queries';
 import {
@@ -84,6 +84,14 @@ export function usePublicProfileWorkflow() {
   const soldListings = closetListings.filter((l) => l.isSold);
   const reviewRows = reviews ?? [];
 
+  // Closet counts come from the aggregate's server totals
+  // (stats.activeListingCount → user.listingCount, stats.soldListingCount)
+  // — the paged grid only ever holds a window, so its length must never
+  // stand in for the total ("24 for sale" on a 60-item closet).
+  const forSaleTotal = user?.listingCount;
+  const soldTotal = aggregate?.soldListingCount;
+  const closetTotal = (forSaleTotal ?? 0) + (soldTotal ?? 0);
+
   const away = aggregate?.away ?? null;
   const trader = aggregate?.trader ?? null;
   const storefront = aggregate?.storefront ?? null;
@@ -103,12 +111,12 @@ export function usePublicProfileWorkflow() {
           {
             key: 'items' as const,
             label: 'For sale',
-            count: listingsLoading ? undefined : forSale.length,
+            count: forSaleTotal,
           },
           {
             key: 'sold' as const,
             label: 'Sold',
-            count: listingsLoading ? undefined : soldListings.length,
+            count: soldTotal,
           },
         ]
       : []),
@@ -119,7 +127,10 @@ export function usePublicProfileWorkflow() {
       ? [{ key: 'boards' as const, label: 'Boards', count: boards.length }]
       : []),
     { key: 'about' as const, label: 'About' },
-    ...(canViewSocial
+    // Reviews earns a tab only once reviews exist — mobile's tab grammar
+    // (`reviewCount > 0` gates the rail); a member with none keeps Items /
+    // Sold / About, and the tab counts themselves stay hidden at 0.
+    ...(canViewSocial && ((user?.reviewCount ?? 0) > 0 || reviewRows.length > 0)
       ? [
           {
             key: 'reviews' as const,
@@ -168,6 +179,9 @@ export function usePublicProfileWorkflow() {
     closetListings,
     forSale,
     soldListings,
+    forSaleTotal,
+    soldTotal,
+    closetTotal,
     closetThumbs,
     closetMediaPool,
     showMosaic,

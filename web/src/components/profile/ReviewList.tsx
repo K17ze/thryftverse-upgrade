@@ -66,7 +66,7 @@ export function ReviewSummary({
   return (
     <div className="flex items-center gap-6 border-b border-border-subtle pb-5 sm:gap-10">
       <div className="shrink-0">
-        <p className="tnum text-[34px] font-bold leading-none text-text-primary">
+        <p className="tnum text-display leading-none text-text-primary">
           {avg.toFixed(1)}
         </p>
         <RatingStars rating={avg} size={13} className="mt-2" />
@@ -108,9 +108,7 @@ function ReviewRow({
   return (
     <article className="flex gap-3 border-b border-border-subtle py-4 last:border-0">
       {review.isAutomatic ? (
-        <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-surface-alt text-text-muted">
-          <Icon name="check" size={18} />
-        </span>
+        <Icon name="check" size={18} className="mt-1 shrink-0 text-text-muted" />
       ) : href ? (
         <Link href={href} className="shrink-0 self-start rounded-full" aria-label={`Open ${review.reviewerName}'s profile`}>
           <Avatar src={review.reviewerAvatar} name={review.reviewerName} size={40} />

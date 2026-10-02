@@ -57,9 +57,7 @@ function ConsoleMessage({
 }) {
   return (
     <div className="mx-auto flex w-full max-w-[440px] flex-col items-center px-4 py-24 text-center sm:px-6">
-      <span className="flex h-16 w-16 items-center justify-center rounded-full bg-surface-alt text-text-muted">
-        <Icon name={icon} size={26} />
-      </span>
+      <Icon name={icon} size={32} className="text-text-muted" />
       <h1 className="mt-5 text-screen-title text-text-primary">{title}</h1>
       <p className="mt-2 max-w-sm text-body text-text-secondary">{body}</p>
       <div className="mt-7 flex flex-col items-center gap-3">{children}</div>

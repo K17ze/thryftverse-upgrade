@@ -7,12 +7,15 @@ import type { ReactNode } from 'react';
 
 interface SettingsSectionProps {
   title: string;
+  /** Anchor target for the desktop rail's jump links — the index view
+      stamps settingsSectionId(title); detail views leave it unset. */
+  id?: string;
   children: ReactNode;
 }
 
-export function SettingsSection({ title, children }: SettingsSectionProps) {
+export function SettingsSection({ title, id, children }: SettingsSectionProps) {
   return (
-    <section className="mt-8 first:mt-0">
+    <section id={id} className="mt-8 scroll-mt-24 first:mt-0">
       <h2 className="px-4 pb-2 text-label text-text-muted sm:px-5">
         {title}
       </h2>

@@ -32,7 +32,7 @@ function lookCreator(look: Look | LookWithCounts) {
 }
 
 const cardClass =
-  'pressable group relative block w-[220px] shrink-0 snap-start overflow-hidden rounded-xl sm:w-auto';
+  'pressable group relative block w-[220px] shrink-0 snap-start overflow-hidden rounded-lg sm:w-auto';
 
 const scrimClass =
   'absolute inset-0 bg-gradient-to-t from-media-overlay-scrim via-transparent to-transparent';

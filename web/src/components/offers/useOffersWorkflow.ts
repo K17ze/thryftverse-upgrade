@@ -3,7 +3,7 @@ import { useRouter, useSearchParams } from 'next/navigation';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { useToast } from '@/components/ui/Toast';
 import {
-  effectiveOfferStatus,
+  isStandingOffer,
   type OfferRowAction,
 } from '@/components/orders/OfferRow';
 import type { OfferConfirm } from '@/components/offers/OfferConfirmSheet';
@@ -91,10 +91,9 @@ export function useOffersWorkflow() {
     return () => clearInterval(id);
   }, []);
 
-  const isLive = (o: CommerceOffer) => {
-    const s = effectiveOfferStatus(o, nowMs);
-    return s === 'pending' || s === 'countered';
-  };
+  // 'Standing' — the row still carries the live offer a participant can
+  // respond to. Superseded 'countered' rows (live mode) sort with history.
+  const isLive = (o: CommerceOffer) => isStandingOffer(o, nowMs);
 
   const scopedOffers = useMemo(() => {
     const all = offers ?? [];

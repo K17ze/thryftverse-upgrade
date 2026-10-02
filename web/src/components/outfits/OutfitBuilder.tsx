@@ -156,7 +156,7 @@ export function OutfitBuilder() {
         aria-label="Loading outfit builder"
       >
         <Skeleton className="h-7 w-32" />
-        <div className="mt-5 grid gap-6 lg:grid-cols-[minmax(0,1fr)_minmax(320px,380px)]">
+        <div className="mt-5 grid grid-cols-1 gap-6 lg:grid-cols-[minmax(0,1fr)_minmax(320px,380px)]">
           <Skeleton className="aspect-[4/5] w-full max-w-[560px] rounded-xl" />
           <div className="grid grid-cols-3 gap-2">
             {Array.from({ length: 6 }).map((_, i) => (
@@ -213,7 +213,7 @@ export function OutfitBuilder() {
         </div>
       ) : null}
 
-      <div className="mt-5 grid gap-8 px-4 sm:px-6 lg:grid-cols-[minmax(0,1fr)_minmax(320px,380px)]">
+      <div className="mt-5 grid grid-cols-1 gap-8 px-4 sm:px-6 lg:grid-cols-[minmax(0,1fr)_minmax(320px,380px)]">
         {/* ── Composer: canvas + name + save ── */}
         <div>
           <div className="mx-auto w-full max-w-[560px]">

@@ -139,7 +139,9 @@ export function CuratedCollectionClient() {
       <div className="mx-auto max-w-[1440px]">
         <BackBar />
         <div className="mx-4 mt-1 h-52 rounded-xl bg-surface-alt sm:mx-6 sm:h-72" aria-hidden />
-        <div className="mt-4">
+        {/* MasonrySkeleton pads px-1.5 internally — top up to the same
+            16/24px edge the loaded grid lands on below. */}
+        <div className="mt-4 px-2.5 sm:px-[18px]">
           <MasonrySkeleton columns={columns} />
         </div>
       </div>
@@ -214,7 +216,7 @@ export function CuratedCollectionClient() {
             {page.title}
           </h1>
           {page.curatorName ? (
-            <p className="mt-2.5 flex items-center gap-2 text-caption text-scrim-text-secondary">
+            <div className="mt-2.5 flex items-center gap-2 text-caption text-scrim-text-secondary">
               <Avatar src={page.curatorAvatar} name={page.curatorName} size={22} />
               {page.curatorUsername ? (
                 <Link
@@ -231,7 +233,7 @@ export function CuratedCollectionClient() {
               {page.curatorVerified ? (
                 <Icon name="verified" filled size={13} className="text-scrim-text-primary" />
               ) : null}
-            </p>
+            </div>
           ) : null}
         </div>
       </div>
@@ -262,8 +264,11 @@ export function CuratedCollectionClient() {
         </p>
       </div>
 
-      {/* The edit — the same masonry grammar as the feed it came from. */}
-      <div className="mt-4">
+      {/* The edit — the same masonry grammar as the feed it came from.
+          Bands carry their own px-1.5/sm:px-2/lg:px-4 edge; the wrapper
+          tops that up to the page's 16/24px content edge so the grid
+          aligns with the hero and intro above. */}
+      <div className="mt-4 px-2.5 sm:px-4 lg:px-2">
         {page.units.length > 0 ? (
           <MasonryGrid units={page.units} columns={columns} />
         ) : (

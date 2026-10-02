@@ -43,7 +43,7 @@ export function SellerAnalyticsRevenueSection({ data }: { data: SellerAnalyticsV
           { label: 'Orders', value: formatCount(data.ordersTotal) },
           { label: 'Avg sale', value: data.aov != null ? formatPrice(data.aov) : '—' },
           {
-            label: 'View → sale',
+            label: 'View-to-sale',
             value: data.conversionPct != null ? `${data.conversionPct}%` : '—',
           },
         ].map((c) => (

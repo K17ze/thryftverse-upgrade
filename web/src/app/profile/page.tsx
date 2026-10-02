@@ -8,7 +8,7 @@
  * boards carry a lock and are owner-only.
  */
 
-import { useEffect, useMemo, useRef, useState } from 'react';
+import { useEffect, useId, useMemo, useRef, useState } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import { useRouter } from 'next/navigation';
 import { useSession } from '@/lib/session/SessionProvider';
@@ -26,6 +26,7 @@ import { sortBoards, useBoardPrefs } from '@/components/profile/boardPrefs';
 import { CreateBoardSheet } from '@/components/profile/CreateBoardSheet';
 import { ProfileHero, type ProfileStatKey } from '@/components/profile/ProfileHero';
 import { ProfileTabs } from '@/components/profile/ProfileTabs';
+import { tabId, tabPanelId } from '@/components/ui/Tabs';
 import { ProfileSectionHeader } from '@/components/profile/SectionHeader';
 import { ClosetGrid, ClosetGridSkeleton } from '@/components/profile/ClosetGrid';
 import { SaveToBoardSheet } from '@/components/saved/SaveToBoardSheet';
@@ -64,6 +65,7 @@ export default function ProfilePage() {
   const router = useRouter();
   const { user, isGuest } = useSession();
   const [tab, setTab] = useState<TabKey>('listings');
+  const tabsId = useId();
   // File-to-board picker state — the saved tile being offered to a board.
   const [filing, setFiling] = useState<{ id: string; title: string } | null>(null);
   const [createBoardOpen, setCreateBoardOpen] = useState(false);
@@ -130,7 +132,11 @@ export default function ProfilePage() {
     { key: 'boards', label: 'Boards', count: boards.length },
     { key: 'saved', label: 'Saved', count: mounted ? saved.length : undefined },
     { key: 'about', label: 'About' },
-    { key: 'reviews', label: 'Reviews', count: user.reviewCount },
+    // Mobile parity — the rail only carries Reviews once reviews exist;
+    // a designed empty state can't justify a tab that never fills.
+    ...(user.reviewCount > 0
+      ? [{ key: 'reviews' as const, label: 'Reviews', count: user.reviewCount }]
+      : []),
   ];
 
   const moodboards = boards.filter((b) => b.kind === 'moodboard');
@@ -152,10 +158,23 @@ export default function ProfilePage() {
       <ShopRail ownerId={user.id} isOwner listings={listings} />
 
       <div className="mt-5">
-        <ProfileTabs tabs={tabs} active={tab} onChange={setTab} />
+        <ProfileTabs
+          tabs={tabs}
+          active={tab}
+          onChange={setTab}
+          idBase={tabsId}
+        />
       </div>
 
-      <div className="scroll-mt-28 py-4" ref={tabContentRef}>
+      {/* tabpanel for the tablist above — paired with the active tab by
+          id (the shared Tabs primitive owns the tab ids). */}
+      <div
+        className="scroll-mt-28 py-4"
+        ref={tabContentRef}
+        role="tabpanel"
+        id={tabPanelId(tabsId, tab)}
+        aria-labelledby={tabId(tabsId, tab)}
+      >
         {tab === 'listings' ? (
           <ClosetListingsSection
             items={listings}

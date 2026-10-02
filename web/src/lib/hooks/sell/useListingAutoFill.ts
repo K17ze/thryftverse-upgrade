@@ -2,58 +2,38 @@
 
 /**
  * useListingAutoFill — assisted listing autofill backed by POST /listing-intelligence/run.
- * Fills EMPTY draft fields only with non-abstained candidates derived from photo analysis,
- * filename heuristics, and seller notes.
+ *
+ * The run no longer writes to the draft. It produces a per-field review list
+ * (mobile parity with AIPoweredListingScreen's SuggestionRow): each candidate
+ * carries its display value and the wire evidence detail, and nothing reaches
+ * the draft until the seller explicitly accepts that row — or accepts all.
+ * Dismissed rows are dropped; informational candidates (colour — the draft
+ * has no colour field) render dismiss-only.
+ *
+ * Decomposed into:
+ * - useListingAutoFillModel.ts: Candidate parsing, evidence aggregation, condition mapping
+ * - useListingAutoFill.ts: React hook workflow, accept/dismiss handlers, auto-dismiss effect
  */
 
-import { useState } from 'react';
-import type { Listing, ListingCondition } from '@/lib/contracts/domain';
+import { useEffect, useState } from 'react';
+import type { Listing } from '@/lib/contracts/domain';
 import { parseApiError } from '@/lib/api/http';
 import * as listingIntelligenceService from '@/lib/api/services/listingIntelligence';
 import type { SignupAction } from '@/components/auth/SignupWall';
-import type { TaxonomyCollection, TaxonomyNode } from '@/lib/contracts/taxonomy';
-import type { AutoFillControl } from '@/components/sell/PhotosSection';
+import type { TaxonomyCollection } from '@/lib/contracts/taxonomy';
+import type { AutoFillSuggestion } from '@/components/sell/PhotosSection';
 import type { SellDraft, SellErrors } from '@/components/sell/constants';
-import {
-  SIZE_OPTIONS,
-  canonicalCategoryId,
-  categoryNodeName,
-  conditionAllowedFor,
-} from '@/components/sell/taxonomy';
+import { categoryNodeName } from '@/components/sell/taxonomy';
 import type { PhotoMediaEntry } from './useSellMediaUpload';
+import {
+  type AutoFillState,
+  fieldIsFilled,
+  processRunCandidates,
+  remoteFileName,
+} from './useListingAutoFillModel';
 
-/**
- * Backend condition candidates → the composer's canonical conditions.
- * 'New' is deliberately unmapped — the notes evidence behind it
- * ("never worn", nwot) cannot attest to attached tags, and selecting
- * 'New with tags' would overstate the item. Mapping down never does.
- */
-const CONDITION_CANDIDATE_MAP: Record<string, ListingCondition> = {
-  'like new': 'Very good',
-  'very good': 'Very good',
-  good: 'Good',
-  fair: 'Satisfactory',
-};
-
-/** Last path segment of a remote media URL — the filename evidence for
- *  edit-mode media that has no picked File behind it. blob:/data: refs
- *  carry no filename, so they return undefined honestly. */
-export function remoteFileName(url: string): string | undefined {
-  try {
-    const parsed = new URL(url);
-    if (parsed.protocol !== 'http:' && parsed.protocol !== 'https:') {
-      return undefined;
-    }
-    const last = decodeURIComponent(
-      parsed.pathname.split('/').filter(Boolean).pop() ?? '',
-    );
-    return last.includes('.') ? last : undefined;
-  } catch {
-    return undefined;
-  }
-}
-
-export type AutoFillState = Omit<AutoFillControl, 'onRun' | 'onDismiss'>;
+export { remoteFileName } from './useListingAutoFillModel';
+export type { AutoFillState } from './useListingAutoFillModel';
 
 interface UseListingAutoFillOptions {
   draft: SellDraft;
@@ -75,6 +55,114 @@ export function useListingAutoFill({
   clearError,
 }: UseListingAutoFillOptions) {
   const [autoFill, setAutoFill] = useState<AutoFillState>({ phase: 'idle' });
+
+  /** Fold a resolved review list into the next phase: still-pending rows keep
+   *  the panel open; all-resolved collapses to the quiet done line (or back
+   *  to idle when nothing was actually applied). */
+  const settle = (suggestions: AutoFillSuggestion[], basis?: string | null) => {
+    if (suggestions.some((s) => s.status === 'pending')) {
+      setAutoFill({ phase: 'review', suggestions, basis: basis ?? undefined });
+      return;
+    }
+    const applied = suggestions
+      .filter((s) => s.status === 'accepted' && s.patch)
+      .map((s) => s.key);
+    setAutoFill(
+      applied.length
+        ? { phase: 'done', applied, basis: basis ?? undefined }
+        : { phase: 'idle' },
+    );
+  };
+
+  const acceptSuggestion = (key: string) => {
+    if (autoFill.phase !== 'review' || !autoFill.suggestions) return;
+    const item = autoFill.suggestions.find(
+      (s) => s.key === key && s.status === 'pending',
+    );
+    if (!item) return;
+    // Explicit accept — apply even if the field filled since the run; the
+    // seller reviewed the exact value shown. (The auto-dismiss effect below
+    // normally retires stale rows before this can matter.)
+    if (item.patch) {
+      updateDraft(item.patch);
+      item.clears?.forEach(clearError);
+    }
+    settle(
+      autoFill.suggestions.map((s) =>
+        s.key === key ? { ...s, status: 'accepted' as const } : s,
+      ),
+      autoFill.basis,
+    );
+  };
+
+  const dismissSuggestion = (key: string) => {
+    if (autoFill.phase !== 'review' || !autoFill.suggestions) return;
+    settle(
+      autoFill.suggestions.map((s) =>
+        s.key === key && s.status === 'pending'
+          ? { ...s, status: 'dismissed' as const }
+          : s,
+      ),
+      autoFill.basis,
+    );
+  };
+
+  const acceptAllSuggestions = () => {
+    if (autoFill.phase !== 'review' || !autoFill.suggestions) return;
+    const merged: Partial<SellDraft> = {};
+    const clears = new Set<keyof SellErrors>();
+    // Category's patch resets subcategory/size — it must merge before a
+    // sibling size patch regardless of backend candidate order.
+    const pending = autoFill.suggestions.filter(
+      (s) => s.status === 'pending' && s.patch,
+    );
+    const ordered = [
+      ...pending.filter((s) => s.key === 'category'),
+      ...pending.filter((s) => s.key !== 'category'),
+    ];
+    for (const s of ordered) {
+      Object.assign(merged, s.patch);
+      s.clears?.forEach((k) => clears.add(k));
+    }
+    if (Object.keys(merged).length) updateDraft(merged);
+    clears.forEach(clearError);
+    settle(
+      autoFill.suggestions.map((s) =>
+        s.status === 'pending' ? { ...s, status: 'accepted' as const } : s,
+      ),
+      autoFill.basis,
+    );
+  };
+
+  // Seller-typed input retires the matching pending row (mobile markDirty
+  // parity) — a suggestion only ever targets a field that was empty at run
+  // time, so a now-filled field means the seller overrode it themselves.
+  useEffect(() => {
+    setAutoFill((current) => {
+      if (current.phase !== 'review' || !current.suggestions) return current;
+      if (
+        !current.suggestions.some(
+          (s) => s.status === 'pending' && fieldIsFilled(s.key, draft),
+        )
+      ) {
+        return current;
+      }
+      const next = current.suggestions.map((s) =>
+        s.status === 'pending' && fieldIsFilled(s.key, draft)
+          ? { ...s, status: 'dismissed' as const }
+          : s,
+      );
+      if (next.some((s) => s.status === 'pending')) {
+        return { ...current, suggestions: next };
+      }
+      const applied = next
+        .filter((s) => s.status === 'accepted' && s.patch)
+        .map((s) => s.key);
+      return applied.length
+        ? { phase: 'done', applied, basis: current.basis }
+        : { phase: 'idle' };
+    });
+  }, [draft]);
 
   const runAutoFill = async () => {
     if (!requireAuth('create_listing')) return;
@@ -104,113 +192,15 @@ export function useListingAutoFill({
         listingId: editing?.id,
       });
 
-      const patch: Partial<SellDraft> = {};
-      const applied: string[] = [];
-      const errorKeys = new Set<keyof SellErrors>();
-      const basisSources = new Set<string>();
-      let suggested = 0;
-
-      for (const c of run.candidates) {
-        if (c.abstained) continue;
-        const value = c.value?.trim();
-        if (!value) continue;
-
-        switch (c.field) {
-          case 'title':
-            suggested++;
-            if (!draft.title.trim()) {
-              patch.title = value.slice(0, 80);
-              applied.push('title');
-              errorKeys.add('title');
-              basisSources.add(c.evidence.source);
-            }
-            break;
-          case 'brand':
-            suggested++;
-            if (!draft.brand.trim()) {
-              patch.brand = value.slice(0, 50);
-              applied.push('brand');
-              basisSources.add(c.evidence.source);
-            }
-            break;
-          case 'category': {
-            suggested++;
-            if (draft.category) break;
-            const canonical =
-              canonicalCategoryId(value) ||
-              taxonomy.categories.find(
-                (n: TaxonomyNode) => n.parentId === null && n.name.toLowerCase() === value.toLowerCase(),
-              )?.id ||
-              '';
-            if (canonical) {
-              patch.category = canonical;
-              patch.subcategory = '';
-              patch.size = '';
-              applied.push('category');
-              errorKeys.add('category');
-              basisSources.add(c.evidence.source);
-            }
-            break;
-          }
-          case 'size': {
-            suggested++;
-            if (draft.size || patch.size) break;
-            const match = SIZE_OPTIONS.find(
-              (s) => s.toLowerCase() === value.toLowerCase(),
-            );
-            if (match) {
-              patch.size = match;
-              applied.push('size');
-              errorKeys.add('size');
-              basisSources.add(c.evidence.source);
-            }
-            break;
-          }
-          case 'condition': {
-            suggested++;
-            const mapped = CONDITION_CANDIDATE_MAP[value.toLowerCase()];
-            if (
-              !draft.condition &&
-              c.evidence.source === 'seller_notes' &&
-              mapped &&
-              conditionAllowedFor(
-                patch.category ?? draft.category,
-                patch.subcategory ?? draft.subcategory,
-                mapped,
-              )
-            ) {
-              patch.condition = mapped;
-              applied.push('condition');
-              errorKeys.add('condition');
-              basisSources.add(c.evidence.source);
-            }
-            break;
-          }
-          default:
-            break;
-        }
-      }
-
-      if (applied.length) {
-        updateDraft(patch);
-        errorKeys.forEach(clearError);
-      }
-
-      const basis = [...basisSources]
-        .map((s) =>
-          s === 'filename'
-            ? 'the photo filename'
-            : s === 'seller_notes'
-              ? 'your description'
-              : s === 'category_hint'
-                ? 'your category'
-                : 'the photos',
-        )
-        .join(' and ');
+      const { suggestions, suggested, basis } = processRunCandidates(
+        run.candidates,
+        draft,
+        taxonomy,
+      );
 
       setAutoFill(
-        applied.length
-          ? { phase: 'done', applied, basis }
+        suggestions.length
+          ? { phase: 'review', suggestions, basis }
           : {
               phase: 'empty',
               message: suggested
@@ -236,5 +226,8 @@ export function useListingAutoFill({
     setAutoFill,
     runAutoFill,
     resetAutoFill,
+    acceptSuggestion,
+    dismissSuggestion,
+    acceptAllSuggestions,
   };
 }

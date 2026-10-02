@@ -22,3 +22,4 @@ export * as uploads from './uploads';
 export * as listingIntelligence from './listingIntelligence';
 export * as agents from './agents';
 export * as verification from './verification';
+export * as smartSell from './smartSell';

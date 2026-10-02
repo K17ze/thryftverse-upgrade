@@ -35,6 +35,9 @@ export function TagSheet({ open, onClose, selectedIds, onToggle }: TagSheetProps
   return (
     <Sheet open={open} onClose={onClose} title="Tag your pieces">
       <div className="px-4 pb-4 sm:px-6">
+        <p className="mb-3 text-caption text-text-muted">
+          Each pick drops a pin on the cover — drag it onto the piece.
+        </p>
         {isLoading ? (
           <div className="grid grid-cols-3 gap-2" aria-busy aria-label="Loading your listings">
             {[0, 1, 2, 3, 4, 5].map((i) => (

@@ -6,7 +6,7 @@
  * and direct deep link to manage templates in seller-hub.
  */
 
-import { useEffect, useRef, useState } from 'react';
+import { useEffect, useId, useRef, useState } from 'react';
 import Link from 'next/link';
 import { IconButton } from '@/components/ui/IconButton';
 
@@ -30,6 +30,9 @@ export function QuickReplyMenu({
   const [open, setOpen] = useState(false);
   const wrapRef = useRef<HTMLDivElement>(null);
   const btnRef = useRef<HTMLButtonElement>(null);
+  const menuRef = useRef<HTMLDivElement>(null);
+  const menuId = useId();
+  const menuLabelId = useId();
 
   useEffect(() => {
     if (!open) return;
@@ -66,24 +69,53 @@ export function QuickReplyMenu({
         aria-label="Quick replies"
         aria-expanded={open}
         aria-haspopup="menu"
+        aria-controls={open ? menuId : undefined}
         onClick={() => setOpen((o) => !o)}
         disabled={disabled}
       />
       {open ? (
         <div
+          ref={menuRef}
+          id={menuId}
           role="menu"
+          aria-labelledby={menuLabelId}
           onKeyDown={(e) => {
-            if (e.key !== 'Tab') return;
-            // Menu grammar (the FeedItemMenu fix): close, return
-            // focus to the trigger, then let the browser's default
-            // tab step continue from it — an open menu left past its
-            // Tab position strands the tab order.
-            setOpen(false);
-            btnRef.current?.focus();
+            if (e.key === 'Tab') {
+              // Menu grammar (the FeedItemMenu fix): close, return
+              // focus to the trigger, then let the browser's default
+              // tab step continue from it — an open menu left past its
+              // Tab position strands the tab order.
+              setOpen(false);
+              btnRef.current?.focus();
+              return;
+            }
+            // Arrow/Home/End roving (the ConversationRowMenu pattern) —
+            // the "Manage quick replies" link carries menuitem too, so
+            // it's inside the same cycle.
+            const items = [
+              ...(menuRef.current?.querySelectorAll<HTMLElement>(
+                '[role="menuitem"]',
+              ) ?? []),
+            ];
+            if (!items.length) return;
+            const idx = items.indexOf(document.activeElement as HTMLElement);
+            let next = -1;
+            if (e.key === 'ArrowDown') next = (idx + 1) % items.length;
+            else if (e.key === 'ArrowUp')
+              next = idx <= 0 ? items.length - 1 : idx - 1;
+            else if (e.key === 'Home') next = 0;
+            else if (e.key === 'End') next = items.length - 1;
+            if (next >= 0) {
+              e.preventDefault();
+              items[next]?.focus();
+            }
           }}
           className="absolute bottom-full left-0 mb-2 w-72 overflow-hidden rounded-xl border border-border-subtle bg-surface py-1 shadow-floating"
         >
-          <p className="px-3.5 pb-1 pt-2 text-micro font-semibold uppercase tracking-[0.08em] text-text-muted">
+          <p
+            id={menuLabelId}
+            className="px-3.5 pb-1 pt-2 text-micro font-semibold uppercase tracking-[0.08em] text-text-muted"
+          >
             Quick replies
           </p>
           {replies.map((r) => (
@@ -107,6 +139,7 @@ export function QuickReplyMenu({
           ))}
           <Link
             href="/seller-hub/quick-replies"
+            role="menuitem"
             className="block border-t border-border-subtle px-3.5 py-2.5 text-body font-semibold text-text-primary hover:bg-surface-alt transition-colors"
           >
             Manage quick replies

@@ -6,14 +6,14 @@
  * the inline new-case form. Flat canvas, hairline sections, no cards.
  */
 
-import { useState } from 'react';
+import { useId, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { Button } from '@/components/ui/Button';
 import { EmptyState } from '@/components/ui/EmptyState';
 import { Icon } from '@/components/ui/Icon';
 import { IconButton } from '@/components/ui/IconButton';
 import { Skeleton } from '@/components/ui/Skeleton';
-import { Tabs } from '@/components/ui/Tabs';
+import { Tabs, tabId, tabPanelId } from '@/components/ui/Tabs';
 import { useToast } from '@/components/ui/Toast';
 import { POPULAR_ARTICLES } from '@/lib/data/fixtures-support';
 import { SUPPORT_TOPICS, type SupportTopicId } from '@/lib/contracts/support';
@@ -60,6 +60,7 @@ export function SupportHub() {
   const [contactTopic, setContactTopic] = useState<SupportTopicId | undefined>(undefined);
   /** Resolution-centre filter — mirrors the mobile Open/All chips. */
   const [filter, setFilter] = useState<'open' | 'all'>('open');
+  const tabsId = useId();
 
   const handleCreated = (ticketId: string) => {
     show('Case opened — we reply within one working day.', 'success');
@@ -130,9 +131,14 @@ export function SupportHub() {
           active={filter}
           onChange={setFilter}
           ariaLabel="Filter cases"
+          idBase={tabsId}
         />
 
-        <div>
+        <div
+          role="tabpanel"
+          id={tabPanelId(tabsId, filter)}
+          aria-labelledby={tabId(tabsId, filter)}
+        >
           {isGuest ? (
             // Fixture seeds belong to the demo identity — guests get a
             // sign-in prompt, never 'me' data.

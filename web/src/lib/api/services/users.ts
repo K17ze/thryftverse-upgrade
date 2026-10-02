@@ -23,6 +23,9 @@ export interface PublicProfile {
   isRestricted: boolean;
   canViewSocialContent: boolean;
   canViewShop: boolean;
+  /** Server-computed sold total (`stats.soldListingCount`). The closet
+   *  grid is paged, so its loaded length can never stand in for this. */
+  soldListingCount: number;
   trader: NonNullable<PublicProfileAggregateApi['trader']> | null;
   away: NonNullable<PublicProfileAggregateApi['away']> | null;
   storefront: PublicProfileAggregateApi['storefront'] | null;
@@ -119,6 +122,7 @@ export async function fetchUserProfileAggregate(
     isRestricted: viewer?.isRestricted ?? false,
     canViewSocialContent: viewer?.canViewSocialContent ?? true,
     canViewShop: viewer?.canViewShop ?? true,
+    soldListingCount: agg.stats?.soldListingCount ?? 0,
     trader: agg.trader ?? null,
     away: agg.away ?? null,
     storefront: agg.storefront ?? null,

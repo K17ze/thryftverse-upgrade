@@ -31,6 +31,22 @@
  * verification upgrades identityVerified/trustLevel so /profile and
  * /settings read one truth. In live mode the badge comes solely from
  * /users/me.
+ *
+ * Context split: the provider publishes TWO contexts so a high-frequency
+ * stat can't re-render the whole app.
+ *   - SessionIdentityContext — who you are and what you can do (user,
+ *     isGuest, session lifecycle, verification). Changes only on real
+ *     session transitions: login/logout/expiry, /users/me resolving, a
+ *     fixture-mode profile save or KYC outcome.
+ *   - SessionStatsContext — the live follows-store count. A follow tap
+ *     rewrites `followingIds` on every action; folding it into the
+ *     identity value meant every `useSession()` consumer re-rendered
+ *     app-wide on each follow/unfollow.
+ * `useSession()` keeps its exact public API — it subscribes to both
+ * contexts and merges the live count onto `user.following`, so existing
+ * consumers see zero behaviour change. Consumers that only need identity
+ * (ids, avatars, guest gates — the overwhelming majority) should call
+ * `useSessionIdentity()` and stay stable across stats churn.
  */
 
 import { createContext, useCallback, useContext, useEffect, useMemo, useState } from 'react';
@@ -79,7 +95,25 @@ interface SessionValue {
   refreshSession: () => Promise<void>;
 }
 
-const SessionContext = createContext<SessionValue | null>(null);
+/**
+ * The identity context's value — the full session shape, with one honest
+ * difference: `user.following` holds the account truth (fixture user /
+ * /users/me), NOT the live follows-store count. The count is a stat —
+ * read it through `useSessionStats()` or the merged `useSession()`.
+ */
+export interface SessionIdentityValue extends Omit<SessionValue, 'user'> {
+  user: User | null;
+}
+
+export interface SessionStatsValue {
+  /** Live follows-store count for the session user. `null` until
+   *  persisted state hydrates — the account-truth `user.following`
+   *  stands in before then, same gate the old single-context value had. */
+  followingCount: number | null;
+}
+
+const SessionIdentityContext = createContext<SessionIdentityValue | null>(null);
+const SessionStatsContext = createContext<SessionStatsValue | null>(null);
 
 export function SessionProvider({ children }: { children: React.ReactNode }) {
   const isLive = DATA_MODE === 'live';
@@ -187,20 +221,18 @@ export function SessionProvider({ children }: { children: React.ReactNode }) {
 
   const user = useMemo<User | null>(() => {
     if (!baseUser) return null;
-    // Same hydration gate as KYC — the persisted follows count lands only
-    // after localStorage truth is known; SSR renders the account value.
-    let merged: User = {
-      ...baseUser,
-      ...edits,
-      following: hydrated ? followingCount : baseUser.following,
-    };
+    // Identity user — edits + KYC merged, but `following` stays the
+    // account-truth value. The live follows-store count is a stat (see
+    // SessionStatsContext): folding it in here would rebuild the context
+    // value on every follow/unfollow and re-render every consumer.
+    let merged: User = { ...baseUser, ...edits };
     // An approved verification grants the identity tier — upgrades only,
     // never a downgrade of what the account already holds.
     if (localApproved && !merged.identityVerified) {
       merged = { ...merged, isVerified: true, identityVerified: true, trustLevel: 'identity' };
     }
     return merged;
-  }, [baseUser, edits, localApproved, hydrated, followingCount]);
+  }, [baseUser, edits, localApproved]);
 
   const verificationStatus = useMemo<VerificationStatus>(() => {
     if (!isLive && hydrated && kycStatus !== 'not_started') return kycStatus;
@@ -215,7 +247,76 @@ export function SessionProvider({ children }: { children: React.ReactNode }) {
     return 'none';
   }, [user]);
 
-  const value = useMemo<SessionValue>(
+  // Session actions as stable callbacks — the identity context value
+  // must not gain a new function identity on unrelated state moves, or
+  // the memo below re-publishes and the split is cosmetic.
+  const signIn = useCallback(() => {
+    if (isLive) {
+      void hydrateLiveSession();
+      return;
+    }
+    setIsGuest(false);
+  }, [isLive, hydrateLiveSession]);
+
+  const signOut = useCallback(() => {
+    if (isLive) {
+      void authService.logout().then(() => {
+        // Explicit logout is an identity change too — the cache and
+        // persisted slices (follows included) go with the session.
+        adoptIdentity(null);
+        setLiveUser(null);
+        setAccountIdentity(null);
+        setIsGuest(true);
+      });
+      return;
+    }
+    setIsGuest(true);
+  }, [isLive, adoptIdentity]);
+
+  const login = useCallback(
+    async (email: string, password: string) => {
+      if (isLive) {
+        await authService.login({ email, password });
+        // Credentials are in — drop the previous session's cache and
+        // slices now, before the new account's truth resolves, so the
+        // old account's data never renders under the new token.
+        adoptIdentity(null);
+        await hydrateLiveSession();
+        return;
+      }
+      setIsGuest(false);
+    },
+    [isLive, adoptIdentity, hydrateLiveSession],
+  );
+
+  const signup = useCallback(
+    async (email: string, password: string, username: string, referralCode?: string) => {
+      if (isLive) {
+        await authService.signup({ email, password, username, referralCode });
+        adoptIdentity(null);
+        await hydrateLiveSession();
+        return;
+      }
+      setIsGuest(false);
+    },
+    [isLive, adoptIdentity, hydrateLiveSession],
+  );
+
+  const logout = useCallback(async () => {
+    if (isLive) {
+      await authService.logout();
+      adoptIdentity(null);
+      setLiveUser(null);
+      setAccountIdentity(null);
+    }
+    setIsGuest(true);
+  }, [isLive, adoptIdentity]);
+
+  const refreshSession = useCallback(async () => {
+    if (isLive) await hydrateLiveSession();
+  }, [isLive, hydrateLiveSession]);
+
+  const identityValue = useMemo<SessionIdentityValue>(
     () => ({
       user,
       isGuest,
@@ -223,69 +324,84 @@ export function SessionProvider({ children }: { children: React.ReactNode }) {
       accountIdentity,
       verificationStatus,
       verificationTier,
-      signIn: () => {
-        if (isLive) {
-          void hydrateLiveSession();
-          return;
-        }
-        setIsGuest(false);
-      },
-      signOut: () => {
-        if (isLive) {
-          void authService.logout().then(() => {
-            // Explicit logout is an identity change too — the cache and
-            // persisted slices (follows included) go with the session.
-            adoptIdentity(null);
-            setLiveUser(null);
-            setAccountIdentity(null);
-            setIsGuest(true);
-          });
-          return;
-        }
-        setIsGuest(true);
-      },
-      login: async (email, password) => {
-        if (isLive) {
-          await authService.login({ email, password });
-          // Credentials are in — drop the previous session's cache and
-          // slices now, before the new account's truth resolves, so the
-          // old account's data never renders under the new token.
-          adoptIdentity(null);
-          await hydrateLiveSession();
-          return;
-        }
-        setIsGuest(false);
-      },
-      signup: async (email, password, username, referralCode) => {
-        if (isLive) {
-          await authService.signup({ email, password, username, referralCode });
-          adoptIdentity(null);
-          await hydrateLiveSession();
-          return;
-        }
-        setIsGuest(false);
-      },
-      logout: async () => {
-        if (isLive) {
-          await authService.logout();
-          adoptIdentity(null);
-          setLiveUser(null);
-          setAccountIdentity(null);
-        }
-        setIsGuest(true);
-      },
-      refreshSession: async () => {
-        if (isLive) await hydrateLiveSession();
-      },
+      signIn,
+      signOut,
+      login,
+      signup,
+      logout,
+      refreshSession,
     }),
-    [user, isGuest, sessionLoading, accountIdentity, verificationStatus, verificationTier, isLive, hydrateLiveSession, adoptIdentity],
+    [
+      user,
+      isGuest,
+      sessionLoading,
+      accountIdentity,
+      verificationStatus,
+      verificationTier,
+      signIn,
+      signOut,
+      login,
+      signup,
+      logout,
+      refreshSession,
+    ],
   );
 
-  return <SessionContext.Provider value={value}>{children}</SessionContext.Provider>;
+  // The volatile slice. `null` pre-hydration so useSession()'s merge
+  // falls back to the account-truth `user.following` — the identical
+  // gate the single-context value applied.
+  const statsValue = useMemo<SessionStatsValue>(
+    () => ({ followingCount: hydrated ? followingCount : null }),
+    [hydrated, followingCount],
+  );
+
+  return (
+    <SessionIdentityContext.Provider value={identityValue}>
+      <SessionStatsContext.Provider value={statsValue}>
+        {children}
+      </SessionStatsContext.Provider>
+    </SessionIdentityContext.Provider>
+  );
 }
 
-export function useSession(): SessionValue {
-  const ctx = useContext(SessionContext);
-  if (!ctx) throw new Error('useSession must be used within SessionProvider');
+/**
+ * The stable identity slice — everything `useSession()` exposes except
+ * the live follows count (`user.following` is account truth here).
+ * Consumers that only need `user?.id`, avatar, isGuest or the session
+ * actions should subscribe here: follow/unfollow stats churn then costs
+ * them nothing.
+ */
+export function useSessionIdentity(): SessionIdentityValue {
+  const ctx = useContext(SessionIdentityContext);
+  if (!ctx) throw new Error('useSessionIdentity must be used within SessionProvider');
   return ctx;
+}
+
+/** The stats slice — live counts/flags that change under the session. */
+export function useSessionStats(): SessionStatsValue {
+  const ctx = useContext(SessionStatsContext);
+  if (!ctx) throw new Error('useSessionStats must be used within SessionProvider');
+  return ctx;
+}
+
+/**
+ * Full session value — unchanged public API. Subscribes to both contexts
+ * and folds the live follows count onto `user.following`, so consumers
+ * see exactly what the single-context provider served. Consumers that
+ * don't read `user.following` (or the future stats) should prefer
+ * `useSessionIdentity()` — same value minus the stats subscription.
+ */
+export function useSession(): SessionValue {
+  const identity = useContext(SessionIdentityContext);
+  const stats = useContext(SessionStatsContext);
+  const value = useMemo<SessionValue | null>(() => {
+    if (!identity || !stats) return null;
+    const user =
+      identity.user && stats.followingCount !== null
+        ? { ...identity.user, following: stats.followingCount }
+        : identity.user;
+    return { ...identity, user };
+  }, [identity, stats]);
+  if (!value) throw new Error('useSession must be used within SessionProvider');
+  return value;
 }

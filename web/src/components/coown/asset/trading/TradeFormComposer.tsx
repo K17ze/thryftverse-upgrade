@@ -86,7 +86,9 @@ export function TradeFormComposer({
         <legend className="text-micro font-semibold uppercase tracking-[0.08em] text-text-muted">
           Side
         </legend>
-        <div className="mt-2 grid grid-cols-2 gap-2" role="group">
+        {/* Same segmented container as the other pickers; side keeps the
+            up/down tone (trading convention). */}
+        <div className="mt-2 grid grid-cols-2 rounded-full bg-surface-alt p-1" role="group">
           {(['buy', 'sell'] as const).map((s) => {
             const allowed = s === 'buy' ? canBuy : canSell;
             return (
@@ -101,14 +103,14 @@ export function TradeFormComposer({
                     : undefined
                 }
                 onClick={() => setSide(s)}
-                className={`pressable h-11 rounded-md border text-body-emphasis font-semibold ${
+                className={`pressable flex h-10 items-center justify-center rounded-full text-body-emphasis font-semibold ${
                   !allowed
-                    ? 'cursor-not-allowed border-border-subtle text-text-muted opacity-50'
+                    ? 'cursor-not-allowed text-text-muted opacity-50'
                     : side === s
                       ? s === 'buy'
-                        ? 'border-coown-up/40 bg-coown-up-subtle text-coown-up'
-                        : 'border-coown-down/40 bg-coown-down-subtle text-coown-down'
-                      : 'border-border-subtle text-text-secondary hover:text-text-primary'
+                        ? 'bg-coown-up-subtle text-coown-up'
+                        : 'bg-coown-down-subtle text-coown-down'
+                      : 'text-text-secondary hover:text-text-primary'
                 }`}
               >
                 {SIDE_LABEL[s]}
@@ -147,7 +149,7 @@ export function TradeFormComposer({
                   key={frac}
                   type="button"
                   onClick={() => setUnitsText(String(Math.max(1, Math.floor(holdingUnits * frac))))}
-                  className="pressable rounded border border-border-subtle bg-surface-alt px-1.5 py-0.5 text-[11px] font-semibold text-text-secondary hover:border-border hover:text-text-primary"
+                  className="pressable rounded border border-border-subtle bg-surface-alt px-1.5 py-0.5 text-meta font-semibold text-text-secondary hover:border-border hover:text-text-primary"
                 >
                   {frac === 1 ? 'Max' : `${frac * 100}%`}
                 </button>

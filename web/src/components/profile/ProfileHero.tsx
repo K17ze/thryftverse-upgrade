@@ -8,13 +8,14 @@
  * and the action row per variant.
  */
 
+import { useState } from 'react';
 import { useRouter } from 'next/navigation';
 import type { Listing, User } from '@/lib/contracts/domain';
 import { useToast } from '@/components/ui/Toast';
 import { useSignupWall } from '@/components/auth/SignupWall';
 import { useCreateConversation } from '@/lib/hooks/queries';
-import { useShare } from './useShare';
 import { closetMosaicCells, CLOSET_MOSAIC_MIN } from '@/components/closet/ClosetMediaMosaic';
+import { SharePassportSheet } from './SharePassportSheet';
 import { ProfileCoverBand } from './hero/ProfileCoverBand';
 import { ProfileHeroIdentity } from './hero/ProfileHeroIdentity';
 import { ProfileStatsStrip, type ProfileStatKey } from './hero/ProfileStatsStrip';
@@ -61,9 +62,11 @@ export function ProfileHero({
 }: ProfileHeroProps) {
   const router = useRouter();
   const { show } = useToast();
-  const share = useShare();
   const { requireAuth, wall } = useSignupWall();
   const createConversation = useCreateConversation();
+  // Share opens the passport sheet (mobile SharePassportModal parity) —
+  // the card preview carries the identity, the sheet carries the actions.
+  const [shareOpen, setShareOpen] = useState(false);
 
   const hasCoverMedia = Boolean(user.coverPhoto || user.coverVideo);
   const showMosaic = !hasCoverMedia && closetMosaicCells(closetMedia ?? []).length >= CLOSET_MOSAIC_MIN;
@@ -83,12 +86,7 @@ export function ProfileHero({
     }
   };
 
-  const shareProfile = () =>
-    share({
-      url: `${window.location.origin}/u/${user.username}`,
-      title: `@${user.username} on ThryftVerse`,
-      copiedLabel: 'Profile link copied',
-    });
+  const shareProfile = () => setShareOpen(true);
 
   return (
     <section aria-label={`@${user.username} profile`}>
@@ -120,6 +118,13 @@ export function ProfileHero({
       </div>
 
       {wall}
+
+      <SharePassportSheet
+        open={shareOpen}
+        onClose={() => setShareOpen(false)}
+        user={user}
+        soldCount={soldCount}
+      />
     </section>
   );
 }

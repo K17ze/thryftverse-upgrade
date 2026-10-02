@@ -100,7 +100,7 @@ function LivePortfolio({ balanceHidden }: { balanceHidden: boolean }) {
           <h2 className="text-micro font-semibold uppercase tracking-[0.08em] text-text-muted">
             Co-Own fractional equity
           </h2>
-          <Badge variant="neutral" className="py-0 text-[10px]">
+          <Badge variant="neutral" className="py-0 text-micro">
             {positions.length} {positions.length === 1 ? 'holding' : 'holdings'}
           </Badge>
         </div>
@@ -143,7 +143,7 @@ function FixturePortfolio({ balanceHidden }: { balanceHidden: boolean }) {
           <h2 className="text-micro font-semibold uppercase tracking-[0.08em] text-text-muted">
             Co-Own fractional equity
           </h2>
-          <Badge variant="neutral" className="py-0 text-[10px]">
+          <Badge variant="neutral" className="py-0 text-micro">
             2 syndicates
           </Badge>
         </div>

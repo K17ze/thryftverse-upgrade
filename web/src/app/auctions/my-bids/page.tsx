@@ -7,9 +7,9 @@
  * sits on the Active scope; every row lands on its auction.
  */
 
-import { useMemo, useState } from 'react';
+import { useId, useMemo, useState } from 'react';
 import { useRouter } from 'next/navigation';
-import { Tabs } from '@/components/ui/Tabs';
+import { Tabs, tabId, tabPanelId } from '@/components/ui/Tabs';
 import { EmptyState } from '@/components/ui/EmptyState';
 import { Icon } from '@/components/ui/Icon';
 import { MyBidRow, AuctionRowSkeleton, AuctionBoardSkeleton, AuctionCard } from '@/components/auctions';
@@ -18,6 +18,7 @@ import { useAuctionWatchlist } from '@/components/auctions/auctionWatchlist';
 import { useSession } from '@/lib/session/SessionProvider';
 import { useHydrated } from '@/lib/store/useStore';
 import type { MyBidRow as MyBidRowModel } from '@/lib/data/fixtures-auctions';
+import type { MyBidStatus } from '@/lib/contracts/auction';
 
 type Tab = 'active' | 'won' | 'lost' | 'watching';
 
@@ -57,6 +58,7 @@ export default function MyBidsPage() {
   const { board, isLoading, isError, refetch } = useMyBids(viewerId ?? '');
   const { watched } = useAuctionWatchlist();
   const [tab, setTab] = useState<Tab>('active');
+  const tabsId = useId();
   const [endingSoonest, setEndingSoonest] = useState(false);
   // Watching is a server-side scope (watchedOnly) in live mode — the old
   // localStorage ∩ board-page-1 intersection silently dropped watched
@@ -89,6 +91,16 @@ export default function MyBidsPage() {
     () => (hydrated ? watchedAuctions : []),
     [watchedAuctions, hydrated],
   );
+
+  // Per-auction viewer position — the same map the hub derives from the
+  // board, so a watched lot the viewer is losing marks itself Outbid.
+  const viewerStatus = useMemo(() => {
+    const map = new Map<string, MyBidStatus>();
+    for (const rows of Object.values(board)) {
+      for (const row of rows) map.set(row.auction.id, row.status);
+    }
+    return map;
+  }, [board]);
 
   if (isGuest) {
     return (
@@ -128,6 +140,7 @@ export default function MyBidsPage() {
         active={tab}
         onChange={setTab}
         ariaLabel="Bid sections"
+        idBase={tabsId}
       />
 
       {/* Ending-soonest sort — the active-scope utility toggle (mobile
@@ -150,7 +163,12 @@ export default function MyBidsPage() {
         </div>
       ) : null}
 
-      <div className="mt-5">
+      <div
+        className="mt-5"
+        role="tabpanel"
+        id={tabPanelId(tabsId, tab)}
+        aria-labelledby={tabId(tabsId, tab)}
+      >
         {isLoading ? (
           <div className="flex flex-col">
             {Array.from({ length: 3 }).map((_, index) => (
@@ -179,7 +197,11 @@ export default function MyBidsPage() {
           ) : (
             <div className="grid grid-cols-2 gap-x-3 gap-y-8 sm:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5">
               {watchingRows.map((auction) => (
-                <AuctionCard key={auction.id} auction={auction} />
+                <AuctionCard
+                  key={auction.id}
+                  auction={auction}
+                  viewerStatus={viewerStatus.get(auction.id) ?? null}
+                />
               ))}
             </div>
           )

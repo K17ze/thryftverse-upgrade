@@ -29,6 +29,7 @@ const SORT_LABELS: Record<SortKey, string> = {
   'most-liked': 'Most liked',
   'price-asc': 'Price: Low to High',
   'price-desc': 'Price: High to Low',
+  'discount-desc': 'Biggest discount',
   'ending-soon': 'Ending soon',
 };
 

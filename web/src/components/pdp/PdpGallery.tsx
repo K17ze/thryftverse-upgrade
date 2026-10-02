@@ -8,7 +8,7 @@
  * deadline chip that renders only when a real deadline exists.
  */
 
-import { useEffect, useRef, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import Link from 'next/link';
 import dynamic from 'next/dynamic';
 import { AppImage } from '@/components/ui/AppImage';
@@ -45,8 +45,12 @@ export function PdpGallery({ listing }: PdpGalleryProps) {
   const images = listing.images.filter(isUsableUri);
   const [active, setActive] = useState(0);
   const [lightbox, setLightbox] = useState(false);
+  const galleryRef = useRef<HTMLDivElement>(null);
   const desktopRailRef = useRef<HTMLDivElement>(null);
   const mobileRailRef = useRef<HTMLDivElement>(null);
+  /** Pointer-over flag — ←/→ page the photos while the cursor rests on the
+   *  gallery (eBay grammar) even before anything inside takes focus. */
+  const hoverRef = useRef(false);
 
   const ratio =
     resolveListingMediaAspectRatio(listing) ?? DEFAULT_LISTING_MEDIA_ASPECT_RATIO;
@@ -54,11 +58,6 @@ export function PdpGallery({ listing }: PdpGalleryProps) {
   const focalPoint = primaryMedia?.focalPoint ?? getCategoryFocalPoint(listing.category);
   const current = Math.min(active, Math.max(0, images.length - 1));
 
-  const hasPriceDrop =
-    typeof listing.originalPrice === 'number' && listing.originalPrice > listing.price;
-  const discountPercent = hasPriceDrop
-    ? Math.round(((listing.originalPrice! - listing.price) / listing.originalPrice!) * 100)
-    : 0;
   const showSustainability =
     !listing.isSold &&
     (listing.sustainabilityGrade === 'A' || listing.sustainabilityGrade === 'B');
@@ -72,8 +71,53 @@ export function PdpGallery({ listing }: PdpGalleryProps) {
     }
   }, [current]);
 
+  /** Page through photos — wraps at the ends, same as the lightbox. */
+  const step = useCallback(
+    (dir: 1 | -1) => {
+      if (images.length < 2) return;
+      setActive((a) => (Math.min(a, images.length - 1) + dir + images.length) % images.length);
+    },
+    [images.length],
+  );
+
+  // ←/→ page the photos while the gallery owns focus or the pointer rests
+  // on it. Editable targets keep their arrow keys; once the lightbox is
+  // open it owns the same keys (its own document listener), so the stage
+  // never double-steps behind the overlay.
+  useEffect(() => {
+    if (images.length < 2 || lightbox) return;
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key !== 'ArrowLeft' && e.key !== 'ArrowRight') return;
+      const target = e.target as HTMLElement | null;
+      if (
+        target &&
+        (target.tagName === 'INPUT' ||
+          target.tagName === 'TEXTAREA' ||
+          target.tagName === 'SELECT' ||
+          target.isContentEditable)
+      ) {
+        return;
+      }
+      const focused = galleryRef.current?.contains(target) ?? false;
+      if (!focused && !hoverRef.current) return;
+      e.preventDefault();
+      step(e.key === 'ArrowRight' ? 1 : -1);
+    };
+    document.addEventListener('keydown', onKey);
+    return () => document.removeEventListener('keydown', onKey);
+  }, [images.length, lightbox, step]);
+
   return (
-    <div className="flex flex-col gap-2 lg:flex-row lg:gap-3">
+    <div
+      ref={galleryRef}
+      className="flex flex-col gap-2 lg:flex-row lg:gap-3"
+      onPointerEnter={(e) => {
+        if (e.pointerType === 'mouse') hoverRef.current = true;
+      }}
+      onPointerLeave={() => {
+        hoverRef.current = false;
+      }}
+    >
       {/* Thumbnail column — desktop */}
       {images.length > 1 ? (
         <div
@@ -101,9 +145,11 @@ export function PdpGallery({ listing }: PdpGalleryProps) {
 
       {/* Main stage */}
       <div className="min-w-0 flex-1">
-        {/* Relative wrapper — the deadline chip is a real link, so it must
-            sit outside the lightbox button (no nested interactives). */}
-        <div className="relative">
+        {/* Relative wrapper — the deadline chip and the prev/next arrows
+            are real interactives, so they must sit outside the lightbox
+            button (no nested interactives). The named group lets the
+            arrows reveal on stage hover or focus-within. */}
+        <div className="group/stage relative">
           <button
             type="button"
             onClick={() => setLightbox(true)}
@@ -131,11 +177,9 @@ export function PdpGallery({ listing }: PdpGalleryProps) {
             ) : null}
 
             {/* Badge cascade — price drop wins over sustainability */}
-            {!listing.isSold && hasPriceDrop ? (
-              <span className="absolute left-3 top-3 rounded-md bg-overlay px-2.5 py-1 text-caption font-semibold text-scrim-text-primary">
-                -{discountPercent}%
-              </span>
-            ) : !listing.isSold && showSustainability && listing.sustainabilityGrade ? (
+            {/* The discount belongs to the price block — restating it on
+                media would say the same fact twice in one viewport. */}
+            {!listing.isSold && showSustainability && listing.sustainabilityGrade ? (
               <span className="absolute left-3 top-3">
                 <SustainabilityChip grade={listing.sustainabilityGrade} onMedia />
               </span>
@@ -155,6 +199,40 @@ export function PdpGallery({ listing }: PdpGalleryProps) {
               </span>
             ) : null}
           </button>
+
+          {/* Prev/next — desktop on-media controls in the same bg-overlay
+              chip grammar as the expand affordance and counter. Hidden
+              until the stage is hovered or owns focus; pointer events are
+              inert while invisible so they never swallow a lightbox click,
+              and they re-arm on keyboard focus (focus-visible). */}
+          {images.length > 1 ? (
+            <>
+              {[
+                {
+                  dir: -1 as const,
+                  icon: 'back' as const,
+                  label: 'Previous photo',
+                  side: 'left-3',
+                },
+                {
+                  dir: 1 as const,
+                  icon: 'forward' as const,
+                  label: 'Next photo',
+                  side: 'right-3',
+                },
+              ].map(({ dir, icon, label, side }) => (
+                <button
+                  key={label}
+                  type="button"
+                  aria-label={label}
+                  onClick={() => step(dir)}
+                  className={`pressable absolute ${side} top-1/2 hidden h-11 w-11 -translate-y-1/2 items-center justify-center rounded-md bg-overlay text-scrim-text-primary opacity-0 transition-opacity duration-150 focus-visible:opacity-100 group-hover/stage:pointer-events-auto group-hover/stage:opacity-100 group-focus-within/stage:pointer-events-auto group-focus-within/stage:opacity-100 lg:flex lg:pointer-events-none`}
+                >
+                  <Icon name={icon} size={18} />
+                </button>
+              ))}
+            </>
+          ) : null}
 
           {/* Time-bound urgency — only when a real auction window exists.
               Never rendered for ordinary listings: no deadline, no chip —

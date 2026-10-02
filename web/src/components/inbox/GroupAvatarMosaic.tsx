@@ -20,7 +20,10 @@ export interface MosaicMember {
 }
 
 /** Telegram/WhatsApp pattern — stable colour per id (FNV-1a), every fill
- *  has ≥3:1 contrast against white initials. Mirrors AVATAR_PALETTE. */
+ *  has ≥3:1 contrast against the on-media initials. Deliberately a DATA
+ *  palette mirroring mobile's AVATAR_PALETTE (avatar hues must match the
+ *  same id across platforms), not a themed surface colour — hexes here
+ *  are the contract, not a token violation. */
 const AVATAR_PALETTE = [
   '#E5484D',
   '#F5A623',
@@ -116,7 +119,7 @@ export function GroupAvatarMosaic({
         aria-label={`Group avatar, ${initialsOf(initialsSource)}`}
       >
         <span
-          className="font-bold text-white"
+          className="font-bold text-scrim-text-primary"
           style={{ fontSize: Math.round(size * 0.36), letterSpacing: '-0.5px' }}
         >
           {initialsOf(initialsSource)}

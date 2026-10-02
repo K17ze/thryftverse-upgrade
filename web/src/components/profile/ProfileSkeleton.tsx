@@ -5,8 +5,12 @@ import { Skeleton } from '@/components/ui/Skeleton';
 export function ProfileHeroSkeleton({ cover = true }: { cover?: boolean }) {
   return (
     <div aria-busy aria-label="Loading profile">
+      {/* Cover — the real band is full-bleed (ProfileCoverBand's w-screen
+          breakout at h-36/sm:h-48/lg:h-64/xl:h-72), so the skeleton
+          matches it edge-to-edge rather than flashing a contained box
+          that snaps wider when the member's media lands. */}
       {cover ? (
-        <Skeleton className="h-36 w-full rounded-none sm:h-48 lg:mx-6 lg:h-56 lg:w-auto lg:rounded-xl xl:h-64" />
+        <Skeleton className="relative left-1/2 h-36 w-screen -translate-x-1/2 rounded-none sm:h-48 lg:h-64 xl:h-72" />
       ) : null}
       <div className={`px-4 sm:px-6 ${cover ? '' : 'pt-6 lg:pt-8'}`}>
         <div

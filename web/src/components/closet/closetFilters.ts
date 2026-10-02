@@ -14,8 +14,8 @@ export type ClosetSortKey = 'newest' | 'price-asc' | 'price-desc' | 'most-liked'
 
 export const CLOSET_SORT_OPTIONS: { value: ClosetSortKey; label: string }[] = [
   { value: 'newest', label: 'Newest' },
-  { value: 'price-asc', label: 'Price ↑' },
-  { value: 'price-desc', label: 'Price ↓' },
+  { value: 'price-asc', label: 'Price: low to high' },
+  { value: 'price-desc', label: 'Price: high to low' },
   { value: 'most-liked', label: 'Most liked' },
 ];
 

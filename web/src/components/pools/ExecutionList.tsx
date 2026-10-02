@@ -25,9 +25,7 @@ export function ExecutionList({ syndicate }: { syndicate: Syndicate }) {
     <ul className="divide-y divide-border-subtle">
       {entries.map((e) => (
         <li key={e.id} className="flex items-start gap-3 py-3">
-          <span className="mt-0.5 flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-surface-alt text-text-muted">
-            <Icon name={KIND_ICON[e.kind] ?? 'info'} size={15} />
-          </span>
+          <Icon name={KIND_ICON[e.kind] ?? 'info'} size={16} className="mt-0.5 shrink-0 text-text-muted" />
           <div className="min-w-0 flex-1">
             <p className="text-body text-text-secondary">
               {e.kind === 'contribution' ? (

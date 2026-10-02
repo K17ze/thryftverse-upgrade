@@ -58,7 +58,48 @@ export function PulseFeed({ cards }: { cards: PulseCardModel[] }) {
     el.scrollBy({ top: dir * el.clientHeight, behavior: reduced ? 'auto' : 'smooth' });
   }, []);
 
+  // Page-level keys: the feed owns the viewport, so arrows must work
+  // without focusing the column first (TikTok/Shorts grammar). The
+  // container's own onKeyDown still handles keys when focus is inside
+  // the feed — this listener skips those events to avoid a double step,
+  // and skips typing controls/overlays elsewhere on the page.
+  useEffect(() => {
+    const onKey = (e: KeyboardEvent) => {
+      const target = e.target as HTMLElement | null;
+      // Never hijack chords (Ctrl+PageDown switches browser tabs) or keys
+      // an inner widget already handled.
+      if (e.defaultPrevented || e.ctrlKey || e.metaKey || e.altKey) return;
+      if (target && scrollRef.current?.contains(target)) return;
+      if (
+        target?.closest(
+          'input, textarea, select, [contenteditable="true"], [role="dialog"], [role="listbox"], [role="menu"]',
+        )
+      ) {
+        return;
+      }
+      if (e.key === 'ArrowDown' || e.key === 'PageDown') {
+        e.preventDefault();
+        step(1);
+      } else if (e.key === 'ArrowUp' || e.key === 'PageUp') {
+        e.preventDefault();
+        step(-1);
+      } else if (e.key === 'Home') {
+        e.preventDefault();
+        scrollRef.current?.scrollTo({ top: 0 });
+      } else if (e.key === 'End') {
+        e.preventDefault();
+        const el = scrollRef.current;
+        if (el) el.scrollTo({ top: el.scrollHeight });
+      } else if (e.key === 'Escape' && scrollRef.current?.contains(document.activeElement)) {
+        (document.activeElement as HTMLElement).blur();
+      }
+    };
+    window.addEventListener('keydown', onKey);
+    return () => window.removeEventListener('keydown', onKey);
+  }, [step]);
+
   const onKeyDown = (e: React.KeyboardEvent) => {
+    if (e.ctrlKey || e.metaKey || e.altKey) return;
     if (e.key === 'ArrowDown' || e.key === 'PageDown') {
       e.preventDefault();
       step(1);
@@ -112,7 +153,8 @@ export function PulseFeed({ cards }: { cards: PulseCardModel[] }) {
                 card={card}
                 priority={i === 0}
                 position={i + 1}
-                total={cards.length}
+                total={cards.length + 1}
+                active={i === active}
                 followed={hydrated && followingIds.includes(card.creatorId)}
                 onToggleFollow={toggleFollow}
                 requireAuth={requireAuth}
@@ -121,13 +163,17 @@ export function PulseFeed({ cards }: { cards: PulseCardModel[] }) {
           </div>
         ))}
 
-        {/* End of feed — honest marker, no synthetic repeat cycles. */}
-        <div className="flex h-full snap-start items-center justify-center px-6">
+        {/* End of feed — honest marker, no synthetic repeat cycles.
+            Counted in the feed's set size so posinset reports are true. */}
+        <div
+          role="article"
+          aria-posinset={cards.length + 1}
+          aria-setsize={cards.length + 1}
+          className="flex h-full snap-start items-center justify-center px-6"
+        >
           <div className="flex w-full max-w-[340px] flex-col items-center rounded-xl bg-surface px-8 py-10 text-center">
-            <span className="flex h-14 w-14 items-center justify-center rounded-full bg-surface-alt text-text-muted">
-              <Icon name="check" size={24} filled />
-            </span>
-            <h2 className="mt-4 text-section-title font-semibold text-text-primary">
+            <Icon name="check" size={28} filled className="text-text-muted" />
+            <h2 className="mt-3 text-section-title font-semibold text-text-primary">
               You&apos;re all caught up
             </h2>
             <p className="mt-1.5 text-body text-text-secondary">
@@ -153,23 +199,25 @@ export function PulseFeed({ cards }: { cards: PulseCardModel[] }) {
         </div>
       </div>
 
-      {/* Prev/next — desktop affordance beside the column */}
-      <div className="absolute top-1/2 hidden -translate-y-1/2 flex-col gap-2 md:flex left-[calc(50%+234px)]">
+      {/* Prev/next — desktop affordance docked to the card's right edge.
+          Hit area ≠ visible shape: transparent 44px targets, 24px glyphs
+          on the always-dark canvas (drop-scrim, no chrome circles). */}
+      <div className="absolute top-1/2 hidden -translate-y-1/2 flex-col gap-1 md:flex left-[calc(50%+222px)]">
         <IconButton
-          contained
+          onMedia
+          size={24}
           name="chevronUp"
           aria-label="Previous post"
           onClick={() => step(-1)}
           disabled={!edge.prev}
-          className="disabled:pointer-events-none disabled:opacity-40"
         />
         <IconButton
-          contained
+          onMedia
+          size={24}
           name="chevronDown"
           aria-label="Next post"
           onClick={() => step(1)}
           disabled={!edge.next}
-          className="disabled:pointer-events-none disabled:opacity-40"
         />
       </div>
 

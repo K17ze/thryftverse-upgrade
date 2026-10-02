@@ -95,13 +95,11 @@ export function TransactionDetailDrawer({
       <div className="px-5 py-6">
         {/* Amount display header */}
         <div className="border-b border-border-subtle pb-6 text-center">
-          <div className="inline-flex h-12 w-12 items-center justify-center rounded-full bg-surface-alt">
-            <Icon
-              name={meta.icon}
-              size={24}
-              className={positive ? 'text-coown-up' : 'text-text-primary'}
-            />
-          </div>
+          <Icon
+            name={meta.icon}
+            size={28}
+            className={positive ? 'text-coown-up' : 'text-text-secondary'}
+          />
           <p
             className={`tnum mt-3 text-display-small font-bold tracking-tight ${
               positive ? 'text-coown-up' : 'text-text-primary'

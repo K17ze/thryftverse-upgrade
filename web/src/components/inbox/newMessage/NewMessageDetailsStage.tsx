@@ -115,11 +115,11 @@ export function NewMessageDetailsStage({
               />
             </div>
           ))}
-          <p className="mt-1 flex items-center gap-3 py-2 text-body text-text-secondary">
+          <div className="mt-1 flex items-center gap-3 py-2 text-body text-text-secondary">
             <Avatar src={user?.avatar} name="You" size={36} />
             <span className="text-body-emphasis font-semibold text-text-primary">You</span>
             <span className="text-meta text-text-muted">owner</span>
-          </p>
+          </div>
         </div>
       </div>
 

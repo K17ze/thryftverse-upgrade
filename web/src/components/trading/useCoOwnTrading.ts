@@ -13,23 +13,11 @@
 
 import { useQueryClient } from '@tanstack/react-query';
 import type {
-  ActivityEvent,
-  CoOwnAsset,
   CoOwnOrder,
   CoOwnPosition,
-  OrderBookLevel,
-  OrderBookSnapshot,
-  OrderDuration,
-  OrderType,
-  TradeLedgerEntry,
-  TradeSide,
 } from '@/lib/contracts/coown';
 import {
-  CO_OWN_ACTIVITY,
-  CO_OWN_ASSETS,
-  CO_OWN_OPEN_ORDERS,
   CO_OWN_POSITIONS,
-  MARKET_LEDGER,
 } from '@/lib/data/fixtures-coown';
 import { DATA_MODE } from '@/lib/api/client';
 import { ApiRequestError } from '@/lib/api/http';
@@ -37,95 +25,34 @@ import * as coownService from '@/lib/api/services/coown';
 import { useSession } from '@/lib/session/SessionProvider';
 import type { WalletData } from '@/components/wallet/useWalletData';
 import { walletKeys } from '@/components/wallet/walletKeys';
-import { GBP_PER_USD, round2 } from '@/components/wallet/convertViewModel';
+import { round2 } from '@/components/wallet/convertViewModel';
 import { planExecution, type ExecutionPlan } from './orderExecution';
+import {
+  ACTIVITY_KEY,
+  ASSETS_KEY,
+  assetKey,
+  BOOK_KEY,
+  gbpToIze,
+  LEDGER_KEY,
+  nextOrderId,
+  ORDERS_KEY,
+  type PlaceOrderInput,
+  type PlaceOrderResult,
+  POSITIONS_KEY,
+  type PreparedLiveOrder,
+  TAPE_KEY,
+} from './tradingModel';
+import {
+  applyFixtureOrderSettlement,
+  pinSessionKeys,
+} from './fixtureSettlement';
 
-// ── Shared cache addresses — must match lib/hooks/coown-queries ──────
-
-const ASSETS_KEY = ['coown', 'assets'] as const;
-const assetKey = (id: string) => ['coown', 'asset', id] as const;
-const BOOK_KEY = (id: string) => ['coown', 'book', id] as const;
-const ORDERS_KEY = ['coown', 'orders'] as const;
-const POSITIONS_KEY = ['coown', 'positions'] as const;
-const LEDGER_KEY = (id: string) => ['coown', 'ledger', id] as const;
-const TAPE_KEY = ['coown', 'tape'] as const;
-const ACTIVITY_KEY = (id?: string) => ['coown', 'activity', id ?? 'all'] as const;
-
-/** Session order ids carry this prefix so cancels know a release is owed
- *  (fixture seeds were never reserved against — they only flip status). */
-const SESSION_PREFIX = 'sess-';
-let seq = 0;
-const nextOrderId = () =>
-  `${SESSION_PREFIX}${Date.now().toString(36)}-${(seq++).toString(36)}`;
-
-/** GBP obligation → 1ZE settlement units (1ZE is USD-par). */
-const gbpToIze = (gbp: number) => round2(gbp / GBP_PER_USD);
-
-export interface PlaceOrderInput {
-  asset: CoOwnAsset;
-  side: TradeSide;
-  orderType: OrderType;
-  units: number;
-  limitPriceGbp: number | null;
-  /** Time-in-force for the resting remainder — limit orders only.
-   *  'day' maps to GFD, 'gtc' to GTC90 on the wire. */
-  duration?: OrderDuration;
-  bids: OrderBookLevel[];
-  asks: OrderBookLevel[];
-  /** Stable per attempt — the server dedupes on it, so callers mint one
-   *  key when the user confirms an order and reuse it across retries. */
-  idempotencyKey?: string;
-}
-
-export interface PlaceOrderResult {
-  order: CoOwnOrder;
-  /** The evaluated plan — null in live mode (the server owns fills). */
-  plan: ExecutionPlan | null;
-  /** AML flag from the settled response (or its reconciled replay) —
-   *  the trade landed but is under review; the receipt surfaces this. */
-  aml: { alertId: string; status: string } | null;
-}
-
-/**
- * Live-mode pre-commit context: the server preview + the reservation the
- * order must be committed against. Reservations hold the order's full
- * obligation (units × bound + fee) for ~60s — `validUntilMs` is the
- * earlier of the preview's validity and the reservation expiry, i.e. the
- * real commit deadline the review UI counts down to.
- */
-export interface PreparedLiveOrder {
-  /** The exact command preview + reserve ran against — the commit must
-   *  reuse it verbatim or the server-side idempotency/reservation hash
-   *  rejects it as a different order. */
-  command: coownService.CoOwnOrderCommand;
-  preview: coownService.CoOwnOrderPreview;
-  reservation: coownService.CoOwnOrderReservation;
-  validUntilMs: number;
-}
+export type { PlaceOrderInput, PlaceOrderResult, PreparedLiveOrder };
+export { useCancelCoOwnOrder } from './useCancelCoOwnOrder';
 
 export function usePlaceCoOwnOrder() {
   const queryClient = useQueryClient();
   const { user } = useSession();
-
-  /**
-   * Pin the caches a fill touches so a remount can't re-seed them from
-   * fixtures mid-session (the read hooks ship default staleTime).
-   */
-  const pinSessionKeys = (assetId: string) => {
-    if (DATA_MODE === 'live') return;
-    for (const key of [
-      BOOK_KEY(assetId),
-      LEDGER_KEY(assetId),
-      TAPE_KEY,
-      assetKey(assetId),
-      ASSETS_KEY,
-      ACTIVITY_KEY(assetId),
-      ACTIVITY_KEY(),
-      walletKeys.all(user?.id),
-    ]) {
-      queryClient.setQueryDefaults(key, { staleTime: Infinity, gcTime: Infinity });
-    }
-  };
 
   /**
    * Convert the composer's order type into the only two the ingest schema
@@ -356,165 +283,17 @@ export function usePlaceCoOwnOrder() {
       placedAt: now,
     };
 
-    pinSessionKeys(asset.id);
+    pinSessionKeys(queryClient, user.id, asset.id);
 
-    // 1 · the order row — every surface that lists orders reads this.
-    queryClient.setQueryData<CoOwnOrder[]>(ORDERS_KEY, (old) => [
+    applyFixtureOrderSettlement({
+      queryClient,
+      user,
+      asset,
+      side,
+      units,
       order,
-      ...(old ?? CO_OWN_OPEN_ORDERS),
-    ]);
-
-    // 2 · positions — buys blend avg entry; sells lock the full request
-    //    in the order (the unfilled remainder returns on cancel).
-    queryClient.setQueryData<CoOwnPosition[]>(POSITIONS_KEY, (old) => {
-      const list = old ?? CO_OWN_POSITIONS;
-      if (side === 'buy') {
-        if (plan.filledUnits === 0) return list;
-        const existing = list.find((p) => p.assetId === asset.id);
-        if (!existing) {
-          return [
-            ...list,
-            {
-              assetId: asset.id,
-              units: plan.filledUnits,
-              // Cost basis is fee-inclusive — gross + the 1% buy fee —
-              // so reported P&L is net of what the units actually cost.
-              avgEntryPriceGbp: round2(
-                (plan.fillGrossGbp + plan.fillFeeGbp) / plan.filledUnits,
-              ),
-              realizedProfitGbp: 0,
-            },
-          ];
-        }
-        return list.map((p) =>
-          p.assetId === asset.id
-            ? {
-                ...p,
-                units: p.units + plan.filledUnits,
-                // Blend fee-inclusive cost — the buy fee is part of basis.
-                avgEntryPriceGbp: round2(
-                  (p.units * p.avgEntryPriceGbp + plan.fillGrossGbp + plan.fillFeeGbp) /
-                    (p.units + plan.filledUnits),
-                ),
-              }
-            : p,
-        );
-      }
-      return list.map((p) => {
-        if (p.assetId !== asset.id) return p;
-        // Realized P&L is proceeds minus the cost basis of the units sold —
-        // average cost, the same basis the position rows display. A losing
-        // sale books a negative figure; proceeds alone are never profit.
-        const costBasisGbp = plan.filledUnits * p.avgEntryPriceGbp;
-        return {
-          ...p,
-          units: Math.max(0, p.units - units),
-          realizedProfitGbp: round2(
-            (p.realizedProfitGbp ?? 0) + plan.fillGrossGbp - plan.fillFeeGbp - costBasisGbp,
-          ),
-        };
-      });
-    });
-
-    // 3 · the book — fills consume depth; the resting remainder adds a level.
-    queryClient.setQueryData<OrderBookSnapshot | null>(BOOK_KEY(asset.id), (old) => {
-      const base: OrderBookSnapshot =
-        old ?? {
-          assetId: asset.id,
-          bids: [],
-          asks: [],
-          serverTime: now,
-          source: 'fallback',
-          reconciliationState: 'reconciled',
-        };
-      return {
-        ...base,
-        bids: plan.nextBids,
-        asks: plan.nextAsks,
-        serverTime: now,
-      };
-    });
-
-    // 4 · the public tape — one print per level walked, newest first.
-    if (plan.fills.length > 0) {
-      const prints: TradeLedgerEntry[] = plan.fills.map((f, i) => ({
-        id: `${order.id}-f${i}`,
-        assetId: asset.id,
-        side,
-        units: f.units,
-        unitPriceGbp: f.priceGbp,
-        executedAt: now,
-        // Session fills settle inline — mark them so they render as
-        // cleared money, the same state the wire emits.
-        settlementStatus: 'settled',
-      }));
-      queryClient.setQueryData<TradeLedgerEntry[]>(LEDGER_KEY(asset.id), (old) => [
-        ...prints,
-        ...(old ?? MARKET_LEDGER[asset.id] ?? []),
-      ]);
-
-      // Market-wide tape — prepend the prints when the aggregated cache
-      // is warm; a cold cache re-aggregates from the per-asset ledgers on
-      // mount, so seeding here is unnecessary.
-      queryClient.setQueryData<TradeLedgerEntry[]>(TAPE_KEY, (old) =>
-        old ? [...prints, ...old] : old,
-      );
-
-      // 5 · activity feed — the trade shows in the asset's history.
-      const event: ActivityEvent = {
-        id: `${order.id}-ev`,
-        assetId: asset.id,
-        kind: side,
-        actorUsername: user?.username ?? 'you',
-        units: plan.filledUnits,
-        unitPriceGbp: plan.avgFillPriceGbp,
-        note: null,
-        at: now,
-      };
-      const seedFor = (key: readonly unknown[]) =>
-        key[2] === 'all'
-          ? CO_OWN_ACTIVITY
-          : CO_OWN_ACTIVITY.filter((e) => e.assetId === asset.id);
-      for (const key of [ACTIVITY_KEY(asset.id), ACTIVITY_KEY()]) {
-        queryClient.setQueryData<ActivityEvent[]>(key, (old) => [
-          event,
-          ...(old ?? seedFor(key)),
-        ]);
-      }
-    }
-
-    // 6 · asset snapshot — last price + top of book stay consistent with
-    //    the book the trade just wrote.
-    const project = (a: CoOwnAsset): CoOwnAsset =>
-      a.id !== asset.id
-        ? a
-        : {
-            ...a,
-            unitPriceGbp: plan.avgFillPriceGbp ?? a.unitPriceGbp,
-            bestBidGbp: plan.nextBids[0]?.unitPriceGbp ?? null,
-            bestAskGbp: plan.nextAsks[0]?.unitPriceGbp ?? null,
-            bidDepthUnits: plan.nextBids.reduce((s, l) => s + l.units, 0),
-            askDepthUnits: plan.nextAsks.reduce((s, l) => s + l.units, 0),
-          };
-    queryClient.setQueryData<CoOwnAsset | null>(assetKey(asset.id), (old) =>
-      old ? project(old) : project(asset),
-    );
-    queryClient.setQueryData<CoOwnAsset[]>(ASSETS_KEY, (old) =>
-      (old ?? CO_OWN_ASSETS).map(project),
-    );
-
-    // 7 · settlement — buys debit settled 1ZE and reserve the resting
-    //    remainder; sells credit pending (proceeds await settlement).
-    queryClient.setQueryData<WalletData>(walletKeys.all(user?.id), (old) => {
-      if (!old?.ize) return old;
-      const ize = { ...old.ize };
-      if (side === 'buy') {
-        ize.settled = round2(ize.settled - gbpToIze(plan.fillGrossGbp + plan.fillFeeGbp));
-        ize.reserved = round2(ize.reserved + gbpToIze(plan.reserveGbp));
-      } else {
-        ize.pending = round2(ize.pending + gbpToIze(plan.fillGrossGbp - plan.fillFeeGbp));
-      }
-      return { ...old, ize };
+      plan,
+      now,
     });
 
     // Fixture mode has no AML monitor — no flag is a literal absence.
@@ -522,106 +301,4 @@ export function usePlaceCoOwnOrder() {
   };
 
   return { prepareOrder, placeOrder };
-}
-
-/**
- * Cancel a resting order — flips the status, then releases whatever the
- * order still holds: unfilled sell units return to the position, a buy's
- * 1ZE reserve is freed, and the resting depth leaves the book.
- */
-export function useCancelCoOwnOrder() {
-  const queryClient = useQueryClient();
-  const { user } = useSession();
-
-  const cancelOrder = async (orderId: string): Promise<boolean> => {
-    const orders =
-      queryClient.getQueryData<CoOwnOrder[]>([...ORDERS_KEY]) ?? CO_OWN_OPEN_ORDERS;
-    const order = orders.find((o) => o.id === orderId);
-    if (!order || (order.status !== 'open' && order.status !== 'partially_filled')) {
-      return false;
-    }
-
-    if (DATA_MODE === 'live') {
-      // The cancel route is asset-scoped and requires the authenticated
-      // user's id in the body (it must match the session — a mismatch
-      // 403s server-side). A refused cancel throws so the caller shows
-      // the server's own error text instead of a generic failure.
-      if (!user) {
-        throw new ApiRequestError('Sign in to cancel orders', 401, { code: 'AUTH_REQUIRED' });
-      }
-      await coownService.cancelCoOwnOrder({
-        assetId: order.assetId,
-        orderId: order.id,
-        userId: user.id,
-      });
-    }
-
-    const unfilled = order.units - order.filledUnits;
-
-    queryClient.setQueryData<CoOwnOrder[]>(ORDERS_KEY, (old) =>
-      (old ?? orders).map((o) =>
-        o.id === orderId ? { ...o, status: 'cancelled' as const } : o,
-      ),
-    );
-
-    // Session orders hold real locks — release them. Fixture seeds were
-    // never debited, so they only transition status.
-    //
-    // Only a limit order can rest on the book (orderExecution.ts:
-    // restingUnits is 0 for market/protected), and only a resting buy
-    // ever held a 1ZE reserve. A partially-filled market/protected order
-    // keeps neither depth nor reserve — releasing anyway would shave
-    // reserves held by other open orders.
-    const rested = order.orderType === 'limit';
-    if (DATA_MODE !== 'live' && order.id.startsWith(SESSION_PREFIX) && unfilled > 0) {
-      if (rested) {
-        const releaseBookLevel = (level: OrderBookLevel) => {
-          const units = Math.max(0, level.units - unfilled);
-          return { ...level, units, orderCount: Math.max(1, level.orderCount - 1) };
-        };
-        queryClient.setQueryData<OrderBookSnapshot | null>(BOOK_KEY(order.assetId), (old) => {
-          if (!old) return old;
-          const side = order.side === 'buy' ? 'bids' : 'asks';
-          const next = old[side]
-            .map((l) => (l.unitPriceGbp === order.unitPriceGbp ? releaseBookLevel(l) : l))
-            .filter((l) => l.units > 0);
-          return { ...old, [side]: next };
-        });
-      }
-
-      if (order.side === 'sell') {
-        // The full request was locked out of the position at placement —
-        // the unfilled remainder returns for any order type.
-        queryClient.setQueryData<CoOwnPosition[]>(POSITIONS_KEY, (old) =>
-          (old ?? CO_OWN_POSITIONS).map((p) =>
-            p.assetId === order.assetId ? { ...p, units: p.units + unfilled } : p,
-          ),
-        );
-      } else if (rested) {
-        queryClient.setQueryData<WalletData>(walletKeys.all(user?.id), (old) =>
-          old?.ize
-            ? {
-                ...old,
-                ize: {
-                  ...old.ize,
-                  reserved: Math.max(
-                    0,
-                    round2(old.ize.reserved - gbpToIze(unfilled * order.unitPriceGbp)),
-                  ),
-                },
-              }
-            : old,
-        );
-      }
-    }
-
-    if (DATA_MODE === 'live') {
-      for (const key of [ORDERS_KEY, POSITIONS_KEY, BOOK_KEY(order.assetId), walletKeys.root]) {
-        void queryClient.invalidateQueries({ queryKey: [...key] });
-      }
-    }
-    return true;
-  };
-
-  return { cancelOrder };
 }

@@ -132,20 +132,43 @@ export function AgentLedgerView() {
             onAction={() => router.push('/agents')}
           />
         ) : (
-          <ul className="divide-y divide-border-subtle border-y border-border-subtle px-4 sm:px-6">
-            {visible.map((run) => {
-              const bot = botById.get(run.botId);
-              return (
-                <AgentRunRow
-                  key={run.id}
-                  run={run}
-                  botName={bot?.name ?? 'Removed agent'}
-                  botCategory={bot?.category}
-                  showBot
-                />
-              );
-            })}
-          </ul>
+          <>
+            {/* Desktop column head — AgentRunRow re-forms each li onto
+                this track at lg; mobile rows stay stacked, so the head
+                never renders <lg. */}
+            <div
+              aria-hidden="true"
+              className="hidden px-4 sm:px-6 lg:grid lg:grid-cols-[32px_minmax(0,1.2fr)_minmax(0,1fr)_96px_64px] lg:gap-x-6 lg:border-y lg:border-border-subtle lg:py-2"
+            >
+              <span />
+              <span className="text-micro font-semibold uppercase tracking-[0.08em] text-text-muted">
+                Action
+              </span>
+              <span className="text-micro font-semibold uppercase tracking-[0.08em] text-text-muted">
+                Agent · subject
+              </span>
+              <span className="text-right text-micro font-semibold uppercase tracking-[0.08em] text-text-muted">
+                Status
+              </span>
+              <span className="text-right text-micro font-semibold uppercase tracking-[0.08em] text-text-muted">
+                Time
+              </span>
+            </div>
+            <ul className="divide-y divide-border-subtle border-y border-border-subtle px-4 sm:px-6 lg:border-t-0">
+              {visible.map((run) => {
+                const bot = botById.get(run.botId);
+                return (
+                  <AgentRunRow
+                    key={run.id}
+                    run={run}
+                    botName={bot?.name ?? 'Removed agent'}
+                    botCategory={bot?.category}
+                    showBot
+                  />
+                );
+              })}
+            </ul>
+          </>
         )}
       </div>
     </div>

@@ -144,7 +144,10 @@ export function useHomeFeedWorkflow() {
     ).length;
   }, [allUnits, followedSellers]);
 
-  const units = useMemo<DiscoveryFeedUnit[]>(() => {
+  // Filter and rank are separate stages. The filter output is what the
+  // rank pass rewrites, so it stays memoized on its own deps — feed/pref
+  // changes that can't move a unit never touch the O(n) rank below.
+  const filteredUnits = useMemo<DiscoveryFeedUnit[]>(() => {
     const hide = (list: DiscoveryFeedUnit[]) =>
       list.filter((u) => u.type !== 'listing' || !hiddenSet.has(u.listing.id));
     if (followingLive) {
@@ -155,13 +158,7 @@ export function useHomeFeedWorkflow() {
           (u) => u.type === 'listing' && matchesHomeSignal(u.listing, key),
         );
       }
-      return rankFeedUnits(source, {
-        likedIds: [],
-        followingIds: [],
-        downweightedKeys: downKeys,
-        downweightedSizes: downSizes,
-        priceCeilings: ceilings,
-      });
+      return source;
     }
     let source = hide(allUnits);
     if (mode === 'following') {
@@ -175,38 +172,54 @@ export function useHomeFeedWorkflow() {
         (u) => u.type !== 'listing' || matchesHomeSignal(u.listing, key),
       );
     }
-    if (firstPage?.source === 'recommendations') {
-      return rankFeedUnits(source, {
-        likedIds: [],
-        followingIds: [],
-        downweightedKeys: downKeys,
-        downweightedSizes: downSizes,
-        priceCeilings: ceilings,
-      });
-    }
-    return rankFeedUnits(source, {
-      likedIds,
-      followingIds,
-      viewedIds,
-      downweightedKeys: downKeys,
-      downweightedSizes: downSizes,
-      priceCeilings: ceilings,
-    });
+    return source;
   }, [
     allUnits,
     mode,
-    signal,
-    likedIds,
-    followingIds,
+    signal.key,
     followedSellers,
     hiddenSet,
+    followingLive,
+    followingUnits,
+  ]);
+
+  // Local affinity rank only applies to the baseline feed — the
+  // recommendations serve is already server-ranked and the live
+  // following feed keeps server order — so likes/views/follows are only
+  // rank inputs when this flag is on. Gating them this way keeps a
+  // wishlist toggle or a PDP view from re-running the O(n) pass on feeds
+  // whose order they cannot change.
+  const localRank = !followingLive && firstPage?.source !== 'recommendations';
+  const units = useMemo<DiscoveryFeedUnit[]>(() => {
+    const signals = {
+      likedIds: localRank ? likedIds : [],
+      followingIds: localRank ? followingIds : [],
+      viewedIds: localRank ? viewedIds : [],
+      downweightedKeys: downKeys,
+      downweightedSizes: downSizes,
+      priceCeilings: ceilings,
+    };
+    const hasSignals =
+      signals.likedIds.length +
+        signals.followingIds.length +
+        (signals.viewedIds?.length ?? 0) +
+        downKeys.length +
+        downSizes.length +
+        ceilings.length >
+      0;
+    // No signals → pass the filtered array through by reference. A no-op
+    // rankFeedUnits call still allocates a fresh list, which would
+    // invalidate every downstream memo (chunks, band segments, cells).
+    return hasSignals ? rankFeedUnits(filteredUnits, signals) : filteredUnits;
+  }, [
+    filteredUnits,
+    localRank,
+    likedIds,
+    followingIds,
+    viewedIds,
     downKeys,
     downSizes,
     ceilings,
-    viewedIds,
-    firstPage,
-    followingLive,
-    followingUnits,
   ]);
 
   const activeFeed = followingLive ? followingFeed : feed;

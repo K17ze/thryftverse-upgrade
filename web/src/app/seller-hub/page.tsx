@@ -25,7 +25,6 @@ import { SellerRevenueSection } from '@/components/seller/hub/SellerRevenueSecti
 import { SellerMetricsGrid } from '@/components/seller/hub/SellerMetricsGrid';
 import { SellerListingsPerformance } from '@/components/seller/hub/SellerListingsPerformance';
 import { SellerOpportunitiesRail } from '@/components/seller/hub/SellerOpportunitiesRail';
-import { SellerQuickActionsRail } from '@/components/seller/hub/SellerQuickActionsRail';
 
 export default function SellerHubPage() {
   const [period, setPeriod] = useState<SellerPeriod>('30d');
@@ -65,8 +64,6 @@ export default function SellerHubPage() {
           <SellerEarningsHeader
             overview={overview.data}
             earnings={earnings.data}
-            period={period}
-            onPeriodChange={setPeriod}
           />
 
           {/* ── Ops band — at lg the chart takes the lead column and the
@@ -80,7 +77,12 @@ export default function SellerHubPage() {
             }
           >
             <SellerOpsRadar todos={todos.data} className="lg:order-2 lg:mt-10" />
-            <SellerRevenueSection overview={overview.data} period={period} className="lg:order-1" />
+            <SellerRevenueSection
+              overview={overview.data}
+              period={period}
+              onPeriodChange={setPeriod}
+              className="lg:order-1"
+            />
           </div>
 
           {/* ── Metric grid — flat cells, hairline dividers ── */}
@@ -97,9 +99,6 @@ export default function SellerHubPage() {
             opportunities={overview.data.opportunities}
             currency={overview.data.currency}
           />
-
-          {/* ── Quick actions — quiet rail ── */}
-          <SellerQuickActionsRail />
         </>
       )}
     </div>

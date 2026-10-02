@@ -13,6 +13,8 @@ import { uploadMediaFile } from '@/lib/api/services/uploads';
 import type { StagedMediaReceipt } from '@/lib/api/services/creator';
 import { parseApiError } from '@/lib/api/http';
 import { Icon } from '@/components/ui/Icon';
+import { isCameraCaptureSupported } from '@/lib/media/cameraSupport';
+import { CreateCameraSheet } from './CreateCameraSheet';
 
 export interface StagedMedia {
   /** Blob URL while local, receipt publicUrl once finalized, or a remote
@@ -137,6 +139,15 @@ interface MediaFieldProps {
 
 export function MediaField({ id, media, disabled, onPick, onClear, overlay }: MediaFieldProps) {
   const inputRef = useRef<HTMLInputElement>(null);
+  const [cameraOpen, setCameraOpen] = useState(false);
+  /** getUserMedia is a secure-context, post-mount capability — the capture
+   *  affordance renders only once support is actually detected, so SSR and
+   *  unsupported browsers see the upload path and never a dead button. */
+  const [cameraSupported, setCameraSupported] = useState(false);
+
+  useEffect(() => {
+    setCameraSupported(isCameraCaptureSupported());
+  }, []);
 
   return (
     <div>
@@ -214,17 +225,46 @@ export function MediaField({ id, media, disabled, onPick, onClear, overlay }: Me
           ) : null}
         </figure>
       ) : (
-        <button
-          type="button"
-          onClick={() => inputRef.current?.click()}
-          disabled={disabled}
-          className="pressable flex aspect-[4/5] w-full flex-col items-center justify-center gap-3 rounded-lg border border-dashed border-border bg-surface-alt/60 text-text-secondary transition-colors hover:border-text-muted hover:text-text-primary"
-        >
-          <Icon name="camera" size={26} />
-          <span className="text-body-emphasis font-medium">Add photo or video</span>
-          <span className="text-caption text-text-muted">Uploaded securely before publishing</span>
-        </button>
+        <div>
+          <button
+            type="button"
+            onClick={() => inputRef.current?.click()}
+            disabled={disabled}
+            className="pressable flex aspect-[4/5] w-full flex-col items-center justify-center gap-3 rounded-lg border border-dashed border-border bg-surface-alt/60 text-text-secondary transition-colors hover:border-text-muted hover:text-text-primary"
+          >
+            <Icon name="camera" size={26} />
+            <span className="text-body-emphasis font-medium">Add photo or video</span>
+            <span className="text-caption text-text-muted">Uploaded securely before publishing</span>
+          </button>
+          {/* Camera capture — the mobile camera-first entry's web
+              counterpart; captured frames stage through the same pick()
+              path as a file. Only offered where a camera is real. */}
+          {cameraSupported && !disabled ? (
+            <div className="mt-1 flex justify-center">
+              <button
+                type="button"
+                onClick={() => setCameraOpen(true)}
+                className="pressable flex h-11 items-center gap-2 rounded-md px-3 text-body font-medium text-text-secondary transition-colors hover:text-text-primary"
+              >
+                <Icon name="camera" size={18} />
+                Take a photo
+              </button>
+            </div>
+          ) : null}
+        </div>
       )}
+
+      {cameraSupported ? (
+        <CreateCameraSheet
+          open={cameraOpen}
+          onClose={() => setCameraOpen(false)}
+          onCapture={(files) => {
+            setCameraOpen(false);
+            if (files[0]) onPick(files[0]);
+          }}
+          remainingSlots={1}
+        />
+      ) : null}
 
       {media?.error ? (
         <p role="alert" className="mt-2 flex items-start gap-1.5 text-caption text-danger-text">

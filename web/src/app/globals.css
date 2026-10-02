@@ -243,6 +243,10 @@
   --text-display--line-height: 38px;
   --text-display--letter-spacing: -0.5px;
   --text-display--font-weight: 700;
+  --text-display-small: 24px;
+  --text-display-small--line-height: 30px;
+  --text-display-small--letter-spacing: -0.4px;
+  --text-display-small--font-weight: 700;
   --text-display-large: 40px;
   --text-display-large--line-height: 48px;
   --text-display-large--letter-spacing: -0.6px;
@@ -280,6 +284,24 @@ html {
   -webkit-font-smoothing: antialiased;
   -moz-osx-font-smoothing: grayscale;
   text-rendering: optimizeLegibility;
+  /* WCAG 2.4.11 — focused targets must scroll clear of the fixed
+     chrome: the sticky header (h-14 <md; h-16 + the department rail in
+     the md–lg gap) and the bottom docks (the 68px mobile tab bar <md;
+     the PDP buy dock at bottom-0 in the md–lg gap). */
+  scroll-padding-top: 56px;
+  scroll-padding-bottom: calc(68px + env(safe-area-inset-bottom, 0px));
+}
+@media (min-width: 768px) {
+  html {
+    scroll-padding-top: 107px;
+    scroll-padding-bottom: 96px;
+  }
+}
+@media (min-width: 1024px) {
+  html {
+    scroll-padding-top: 64px;
+    scroll-padding-bottom: 0;
+  }
 }
 
 body {
@@ -330,10 +352,18 @@ body {
 :focus:not(:focus-visible) {
   outline: none;
 }
-/* Form inputs and textareas manage their own border/focus container styles */
-input:not([type="checkbox"]):not([type="radio"]):not([type="range"]):focus-visible,
-textarea:focus-visible {
-  outline: none;
+/* Text-entry fields swap the default ring for only a hairline container-
+   border change — too quiet for WCAG 2.4.7 — so the brand ring is
+   re-applied on :focus-visible. The explicit type list keeps checkboxes,
+   radios and other control inputs on the single default ring (no
+   double-render); `input:not([type])` covers type-less text inputs. */
+:where(
+  input[type="text"], input[type="search"], input[type="email"],
+  input[type="password"], input[type="number"], input[type="tel"],
+  input[type="url"], input:not([type]), textarea
+):focus-visible {
+  outline: 2px solid var(--brand);
+  outline-offset: 2px;
 }
 
 
@@ -362,7 +392,8 @@ textarea:focus-visible {
 }
 .text-price-list,
 .text-price-hero,
-.text-numeric-meta {
+.text-numeric-meta,
+.text-display-small {
   font-variant-numeric: tabular-nums lining-nums;
   font-feature-settings: "tnum" 1, "lnum" 1;
 }
@@ -574,6 +605,37 @@ h2 {
   animation: toast-exit 160ms cubic-bezier(0.4, 0, 1, 1) both;
 }
 
+/* Rotating search hint — the idle placeholder cycles on a ~4s beat
+   (search/RotatingSearchHint.tsx). Same grammar as toast: 8px rise into
+   place at deliberate tier, exit drifts up and fades ease-in. JS gates
+   the overlay on useReducedMotion; the squash below is the backstop. */
+@keyframes hint-in {
+  from {
+    opacity: 0;
+    transform: translateY(8px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+@keyframes hint-out {
+  from {
+    opacity: 1;
+    transform: translateY(0);
+  }
+  to {
+    opacity: 0;
+    transform: translateY(-8px);
+  }
+}
+@utility hint-in {
+  animation: hint-in 280ms var(--ease-standard) both;
+}
+@utility hint-out {
+  animation: hint-out 180ms cubic-bezier(0.4, 0, 1, 1) both;
+}
+
 /* Interactive media — opt-in hover zoom inside a `group` container.
    3% scale over 300ms: perceptible, never playful. Apply to the media
    element; the parent carries `group` + overflow-hidden. */
@@ -607,7 +669,9 @@ h2 {
   .fade-in,
   .sheet-enter,
   .toast-enter,
-  .toast-exit {
+  .toast-exit,
+  .hint-in,
+  .hint-out {
     animation: none;
   }
   .media-zoom {

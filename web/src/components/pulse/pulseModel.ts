@@ -167,7 +167,10 @@ export function buildPulseFeed(now = Date.now()): PulseCardModel[] {
       mediaUri: a.image,
       caption: a.title,
       href: `/auctions/${a.id}`,
-      meta: `Ends in ${formatDuration(vm.msToEnd)} · ${formatPrice(a.currentBid)}${
+      // Compact chip meta — the card's LIVE badge carries the signal,
+      // so the meta is just countdown + standing bid (same shape the
+      // ticking card re-derives; first paint and ticks agree).
+      meta: `${formatDuration(vm.msToEnd)} · ${formatPrice(a.currentBid)}${
         a.bidCount ? ` · ${a.bidCount} ${a.bidCount === 1 ? 'bid' : 'bids'}` : ''
       }`,
       endsAt: new Date(a.endsAt).getTime(),
@@ -308,7 +311,7 @@ export async function buildPulseFeedLive(
       mediaUri: a.image,
       caption: a.title,
       href: `/auctions/${a.id}`,
-      meta: `Ends in ${formatDuration(endsAt - now)} · ${formatPrice(a.currentBid)}${
+      meta: `${formatDuration(endsAt - now)} · ${formatPrice(a.currentBid)}${
         a.bidCount ? ` · ${a.bidCount} ${a.bidCount === 1 ? 'bid' : 'bids'}` : ''
       }`,
       endsAt,

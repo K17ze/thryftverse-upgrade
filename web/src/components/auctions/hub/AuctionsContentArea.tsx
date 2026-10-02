@@ -90,11 +90,16 @@ export function AuctionsContentArea({
           }
         />
       ) : scope === 'live' ? (
-        <AuctionsLiveScope auctions={scoped} />
+        <AuctionsLiveScope auctions={scoped} viewerStatus={viewerStatus} />
       ) : scope === 'watching' ? (
         <div className="grid grid-cols-2 gap-x-3 gap-y-8 md:grid-cols-3 xl:grid-cols-5">
           {scoped.map((auction, index) => (
-            <AuctionCard key={auction.id} auction={auction} priority={index < 5} />
+            <AuctionCard
+              key={auction.id}
+              auction={auction}
+              priority={index < 5}
+              viewerStatus={viewerStatus.get(auction.id) ?? null}
+            />
           ))}
         </div>
       ) : (

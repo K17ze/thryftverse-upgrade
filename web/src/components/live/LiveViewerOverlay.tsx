@@ -32,6 +32,7 @@ import { useLiveRoom } from './useLiveRoom';
 import { liveSellerOf } from './useLiveSessions';
 import { usePinnedChatNote } from './livePins';
 import { lockBodyScroll } from '@/lib/a11y/scrollLock';
+import { restoreFocus } from '@/lib/a11y/focus';
 import { formatCount } from '@/lib/utils/format';
 
 interface LiveViewerOverlayProps {
@@ -97,7 +98,7 @@ export function LiveViewerOverlay({ session, onClose }: LiveViewerOverlayProps) 
     return () => {
       document.removeEventListener('keydown', onKey);
       releaseScroll();
-      prev?.focus();
+      restoreFocus(prev);
     };
   }, [session, onClose]);
 
@@ -270,7 +271,7 @@ export function LiveViewerOverlay({ session, onClose }: LiveViewerOverlayProps) 
       {/* Mobile chat — on-canvas panel over the stage, same scrim grammar.
           Desktop keeps the always-on column above. */}
       {chatOpen ? (
-        <div className="absolute inset-x-0 bottom-0 z-elevated flex max-h-[58dvh] flex-col border-t border-white/10 bg-black/85 backdrop-blur-md md:hidden">
+        <div className="absolute inset-x-0 bottom-0 z-elevated flex max-h-[58dvh] flex-col bg-overlay md:hidden">
           <div className="flex items-center justify-between pb-1 pl-4 pr-1 pt-1.5">
             <span className="text-meta font-semibold uppercase tracking-wide text-scrim-text-secondary">
               {live ? 'Live chat' : 'Chat replay'}

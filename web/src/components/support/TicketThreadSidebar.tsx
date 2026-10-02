@@ -1,6 +1,7 @@
 'use client';
 
 import Link from 'next/link';
+import { AppImage } from '@/components/ui/AppImage';
 import { Icon, type AppIconName } from '@/components/ui/Icon';
 import {
   contextLinkHref,
@@ -113,11 +114,13 @@ export function TicketThreadSidebar({
                   aria-label={`Open evidence photo ${i + 1}`}
                   className="pressable block"
                 >
-                  {/* eslint-disable-next-line @next/next/no-img-element -- evidence can be a session-local blob URL */}
-                  <img
+                  {/* AppImage routes blob:/data: evidence to a raw img and
+                      remote to next/image — the "blob URL" carve-out is stale. */}
+                  <AppImage
                     src={item.uri}
                     alt={`Evidence photo ${i + 1}`}
-                    className="h-[72px] w-[72px] rounded-md object-cover"
+                    sizes="72px"
+                    className="h-[72px] w-[72px] rounded-md"
                   />
                 </a>
               </li>

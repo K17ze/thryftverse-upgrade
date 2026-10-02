@@ -18,7 +18,7 @@ const BTN =
 
 export function SocialButtons({ loading, onGoogle, onApple }: SocialButtonsProps) {
   return (
-    <div className="grid gap-2.5">
+    <div className="grid grid-cols-1 gap-2.5">
       <button type="button" onClick={onGoogle} disabled={!!loading} className={BTN}>
         <IoLogoGoogle size={18} aria-hidden />
         {loading === 'google' ? 'Continuing' : 'Continue with Google'}

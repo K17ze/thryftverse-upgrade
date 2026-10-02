@@ -120,3 +120,4 @@ web/scripts/dx2-*.mjs
 
 # SDD/agent scratch workspace
 .superpowers/
+.shots-*/

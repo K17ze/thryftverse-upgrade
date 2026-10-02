@@ -11,6 +11,7 @@
 import { useEffect, useRef, useState } from 'react';
 import { Icon } from '@/components/ui/Icon';
 import { useTagAutocomplete } from '@/lib/hooks/sell/useTagAutocomplete';
+import { isFocusRestore } from '@/lib/a11y/focus';
 import { parseTagInput } from '@/lib/hooks/sell/tagTaxonomy';
 import { MAX_TAGS } from './constants';
 import { SellField } from './SellField';
@@ -126,7 +127,10 @@ export function TagField({ tags, onChange }: TagFieldProps) {
                 setOpen(true);
                 setActiveIndex(-1);
               }}
-              onFocus={() => setOpen(true)}
+              onFocus={() => {
+                // A focus restore is not the user re-entering the field.
+                if (!isFocusRestore()) setOpen(true);
+              }}
               onBlur={(e) => {
                 if (!boxRef.current?.contains(e.relatedTarget as Node)) close();
               }}

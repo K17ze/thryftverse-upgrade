@@ -28,7 +28,7 @@ export function BoardCard({ href, title, thumbs, count, ownerName, isPrivate }: 
     <Link
       href={href}
       className="group block pressable"
-      aria-label={`${title}, ${count} items`}
+      aria-label={`${title}, ${count} ${count === 1 ? 'item' : 'items'}`}
     >
       <div className="relative overflow-hidden rounded-xl bg-surface-alt" style={{ aspectRatio: '0.85' }}>
         {cells.length > 1 ? (

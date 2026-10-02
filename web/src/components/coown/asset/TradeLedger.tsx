@@ -7,6 +7,7 @@
  * the mobile MarketLedger tape view).
  */
 
+import { Icon } from '@/components/ui/Icon';
 import type { TradeLedgerEntry } from '@/lib/contracts/coown';
 import { gbp } from '../format';
 
@@ -73,11 +74,16 @@ export function TradeTape({
                 ? 'Buy '
                 : t.side === 'sell'
                   ? 'Sell '
-                  : tick === 'up'
-                    ? '▲ '
-                    : tick === 'down'
-                      ? '▼ '
-                      : ''}
+                  : tick === 'up' || tick === 'down'
+                    ? (
+                        <Icon
+                          name={tick === 'up' ? 'deltaUp' : 'deltaDown'}
+                          size={10}
+                          filled
+                          className="mr-1 inline-block -translate-y-px"
+                        />
+                      )
+                    : ''}
               {gbp(t.unitPriceGbp)}
               {uncleared ? (
                 <span className="ml-2 text-meta font-normal text-text-muted">

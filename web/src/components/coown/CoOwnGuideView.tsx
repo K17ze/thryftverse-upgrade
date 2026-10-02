@@ -72,9 +72,7 @@ export function CoOwnGuideView() {
         {SECTIONS.map((s, i) => (
           <li key={s.title} className="flex gap-4 lg:border-t lg:border-border-subtle lg:py-7">
             <div className="flex flex-col items-center">
-              <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-surface-alt text-brand">
-                <Icon name={s.icon} size={20} />
-              </span>
+              <Icon name={s.icon} size={20} className="mt-0.5 shrink-0 self-start text-text-secondary" />
               {i < SECTIONS.length - 1 ? (
                 <span className="mt-3 w-px flex-1 bg-border-subtle lg:hidden" aria-hidden="true" />
               ) : null}

@@ -9,7 +9,7 @@ import { useEffect, useId, useRef, useState } from 'react';
 import { createPortal } from 'react-dom';
 import { IconButton } from './IconButton';
 import { lockBodyScroll } from '@/lib/a11y/scrollLock';
-import { trapTabKey } from '@/lib/a11y/focus';
+import { restoreFocus, trapTabKey } from '@/lib/a11y/focus';
 
 /** Pixels of downward travel that commit a drag to dismiss — under it the
  *  sheet snaps back. Roughly a confident thumb pull, not a scroll graze. */
@@ -78,7 +78,7 @@ export function Sheet({ open, onClose, title, ariaLabel, children, maxWidth = 56
     return () => {
       document.removeEventListener('keydown', onKey);
       unlock();
-      prev?.focus({ preventScroll: true });
+      restoreFocus(prev);
     };
   }, [open]);
 

@@ -229,56 +229,66 @@ export function FixtureAlgorithmView() {
           ))}
         </div>
       ) : (
-        <>
-          {/* Dials — continuous signals; side-by-side columns at lg. */}
-          <section aria-label="Feed dials" className="mt-8">
-            <div className="divide-y divide-border-subtle border-y border-border-subtle lg:grid lg:grid-cols-2 lg:divide-x lg:divide-y-0">
-              <SliderRow
-                label="Price comfort"
-                valueLabel={priceComfortLabel(priceComfort)}
-                min={10}
-                max={300}
-                step={10}
-                value={priceComfort}
-                onChange={setPriceComfort}
-                startHint="£10"
-                endHint="Any"
+        /* lg composition — the continuous dials pin to a sticky side
+           rail while the signal lists form the main column. The rail is
+           DOM-first so mobile keeps its note → dials → lists order. */
+        <div className="lg:grid lg:grid-cols-[minmax(0,1fr)_360px] lg:gap-x-12">
+          <aside className="lg:sticky lg:top-24 lg:col-start-2 lg:row-start-1 lg:self-start">
+            {/* Dials — continuous signals; a stacked hairline strip in
+                the rail, side-by-side columns only on the phone-width
+                canvas is gone at lg. */}
+            <section aria-label="Feed dials" className="mt-8 lg:mt-10">
+              <div className="divide-y divide-border-subtle border-y border-border-subtle">
+                <SliderRow
+                  label="Price comfort"
+                  valueLabel={priceComfortLabel(priceComfort)}
+                  min={10}
+                  max={300}
+                  step={10}
+                  value={priceComfort}
+                  onChange={setPriceComfort}
+                  startHint="£10"
+                  endHint="Any"
+                />
+                <SliderRow
+                  label="Fresh or trending"
+                  valueLabel={discoveryLabel(discoveryDial)}
+                  min={0}
+                  max={100}
+                  step={1}
+                  value={discoveryDial}
+                  onChange={setDiscoveryDial}
+                  startHint="Just-listed"
+                  endHint="Trending"
+                />
+              </div>
+            </section>
+          </aside>
+
+          <div className="min-w-0 lg:col-start-1 lg:row-start-1">
+            {/* Signal lists — stacked on mobile, side-by-side inside the
+                main column at xl. */}
+            <div className="xl:grid xl:grid-cols-2 xl:gap-x-12">
+              <LocalTopicSection
+                title="Interests"
+                hint="Topics the feed weighs up or down — all removable, all on this device."
+                kind="topics"
+                items={topics}
+                suggestions={SUGGESTED_TOPICS}
+                addPlaceholder="Add an interest"
               />
-              <SliderRow
-                label="Fresh or trending"
-                valueLabel={discoveryLabel(discoveryDial)}
-                min={0}
-                max={100}
-                step={1}
-                value={discoveryDial}
-                onChange={setDiscoveryDial}
-                startHint="Just-listed"
-                endHint="Trending"
+
+              <LocalTopicSection
+                title="Brands"
+                hint="Brand signals you've set yourself — add or tune freely."
+                kind="brands"
+                items={brands}
+                suggestions={SUGGESTED_BRANDS}
+                addPlaceholder="Add a brand"
               />
             </div>
-          </section>
-
-          {/* Signal lists — stacked on mobile, side-by-side columns at xl. */}
-          <div className="xl:grid xl:grid-cols-2 xl:gap-x-12">
-            <LocalTopicSection
-              title="Interests"
-              hint="Topics the feed weighs up or down — all removable, all on this device."
-              kind="topics"
-              items={topics}
-              suggestions={SUGGESTED_TOPICS}
-              addPlaceholder="Add an interest"
-            />
-
-            <LocalTopicSection
-              title="Brands"
-              hint="Brand signals you've set yourself — add or tune freely."
-              kind="brands"
-              items={brands}
-              suggestions={SUGGESTED_BRANDS}
-              addPlaceholder="Add a brand"
-            />
           </div>
-        </>
+        </div>
       )}
 
       <p className="px-4 pb-4 pt-8 text-center text-meta text-text-muted sm:px-6">

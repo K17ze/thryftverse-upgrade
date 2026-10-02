@@ -77,6 +77,13 @@ export function PdpPriceBlock({
         </p>
       ) : null}
 
+      {listing.authenticity?.status === 'verified' ? (
+        <p className="mt-1 flex items-center gap-1.5 text-body font-medium text-commerce-trust">
+          <Icon name="verified" size={16} className="shrink-0 text-commerce-trust" />
+          <span>{listing.authenticity.label ?? 'Authenticity Guaranteed'}</span>
+        </p>
+      ) : null}
+
       {/* Facts grid */}
       <dl className="mt-5 grid grid-cols-3 gap-3 border-y border-border-subtle py-4">
         {facts.map((f) => (

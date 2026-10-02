@@ -48,12 +48,7 @@ export default function CategoriesPage() {
 
       {/* Expandable index — flat rows, hairline separators */}
       <div className="mt-8">
-        <h2 className="text-label text-text-muted">
-          All categories
-        </h2>
-        <div className="mt-2.5">
-          <CategoryIndex />
-        </div>
+        <CategoryIndex />
       </div>
     </div>
   );

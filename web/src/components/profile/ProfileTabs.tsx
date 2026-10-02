@@ -16,6 +16,9 @@ interface ProfileTabsProps<T extends string> {
   onChange?: (tab: T) => void;
   /** Accessible label for the tablist/nav landmark. */
   ariaLabel?: string;
+  /** Tab↔tabpanel pairing base — the caller's useId() when it renders a
+   *  role="tabpanel" region (see ui/Tabs). */
+  idBase?: string;
 }
 
 export function ProfileTabs<T extends string>({
@@ -23,6 +26,7 @@ export function ProfileTabs<T extends string>({
   active,
   onChange,
   ariaLabel = 'Sections',
+  idBase,
 }: ProfileTabsProps<T>) {
   return (
     <div className="sticky top-14 z-elevated bg-background/95 backdrop-blur-sm md:top-16">
@@ -31,6 +35,7 @@ export function ProfileTabs<T extends string>({
         active={active}
         onChange={onChange}
         ariaLabel={ariaLabel}
+        idBase={idBase}
         railClassName="px-1 sm:px-3"
       />
     </div>

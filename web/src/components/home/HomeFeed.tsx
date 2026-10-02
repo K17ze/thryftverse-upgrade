@@ -4,17 +4,22 @@
  * HomeFeed — the authored home canvas. The discovery feed is rendered as
  * sequential MasonryGrid chunks with full-bleed module bands interleaved
  * between them (shelves are siblings of the grid, never inside columns).
- * Density alternates on purpose — a product rail, a denser grid, a quiet
- * editorial/members break, back to the feed (Vinted rhythm; the Looks
- * band ports the mobile HomeLookBreak interruption):
+ * The page leads with a single shelf — the "Start here" entry band
+ * (app/page.tsx) — so the first viewport reads chrome → one dominant
+ * media rail → grid; every other rail lives inside the feed rhythm.
+ * Density alternates on purpose — a product rail, session memory, a
+ * denser grid, a quiet editorial/members break, back to the feed
+ * (Vinted rhythm; the Looks band ports the mobile HomeLookBreak
+ * interruption):
  *
- *   Recently viewed rail (session memory — self-omits for guests/empty)
- *   Fresh drops rail (leads the feed)
- *   chunk 0–8    → Looks to shop rail
- *   chunk 8–16   → Member edits rail (→ /collections)
- *   chunk 16–24  → Featured sellers strip
- *   chunk 24–32  → Galleria editorial banner
- *   chunk 32+    → rest of the feed, honest end marker
+ *   chunk 0–8    → Recently viewed rail (session memory — self-omits
+ *                  for guests/empty; still leads the error/empty states)
+ *   chunk 8–16   → Fresh drops rail
+ *   chunk 16–24  → Looks to shop rail
+ *   chunk 24–32  → Member edits rail (→ /collections)
+ *   chunk 32–40  → Featured sellers strip
+ *   chunk 40–48  → Galleria editorial banner
+ *   chunk 48+    → rest of the feed, honest end marker
  *
  * A module only renders when the feed actually continues past its
  * breakpoint, so filtered/short feeds stay clean.
@@ -27,9 +32,10 @@
  */
 
 import { Fragment, useEffect, useMemo, useRef } from 'react';
+import type { ReactNode } from 'react';
 import type { DiscoveryFeedUnit } from '@/lib/contracts/domain';
 import { MasonryGrid } from '@/components/feed/MasonryGrid';
-import { MasonrySkeleton, Skeleton } from '@/components/ui/Skeleton';
+import { MasonrySkeleton } from '@/components/ui/Skeleton';
 import { EmptyState } from '@/components/ui/EmptyState';
 import { Icon } from '@/components/ui/Icon';
 import { RecentlyViewedRail } from './modules/RecentlyViewedRail';
@@ -65,39 +71,37 @@ interface HomeFeedProps {
     actionLabel?: string;
     onAction?: () => void;
   };
+  /** Desktop demotion slot — on ≥lg the story rail stops leading the
+   *  page and renders as the break after the first masonry chunk
+   *  (mobile keeps it above the feed; see app/page.tsx). Rendered in
+   *  every state branch so loading/error/empty don't drop the rail. */
+  storyRail?: ReactNode;
 }
 
-/** Module bands keyed by the feed position (unit count) they follow. */
-const MODULE_BANDS: { after: number; Module: React.ComponentType }[] = [
-  { after: 8, Module: LooksRail },
-  { after: 16, Module: MemberEditsRail },
-  { after: 24, Module: FeaturedSellersRail },
-  { after: 32, Module: GalleriaBanner },
+/** Module bands keyed by the feed position (unit count) they follow.
+ *  Bands that read the units (FreshDrops) take them as a prop; the rest
+ *  own their data and ignore it. */
+const MODULE_BANDS: {
+  after: number;
+  Module: React.ComponentType<{ units: DiscoveryFeedUnit[] }>;
+}[] = [
+  { after: 8, Module: RecentlyViewedRail },
+  { after: 16, Module: FreshDropsRail },
+  { after: 24, Module: LooksRail },
+  { after: 32, Module: MemberEditsRail },
+  { after: 40, Module: FeaturedSellersRail },
+  { after: 48, Module: GalleriaBanner },
 ];
 
 /**
- * Loading state mirrors the module layout it replaces — a rail skeleton
- * (header line + shelf of tiles) over the masonry skeleton — so the
- * first paint already reads as the composed surface, not a spinner.
+ * Loading state mirrors the composition it replaces — the lead shelf is
+ * real content (EntryBand resolves from its own source), so the feed's
+ * first element is the grid: masonry skeleton only, no phantom shelf —
+ * the first paint already reads as the composed surface, not a spinner.
  */
 function HomeFeedSkeleton({ columns }: { columns: number }) {
   return (
     <div className="flex flex-col" aria-busy="true" aria-label="Loading feed">
-      <section className="py-5 sm:py-6">
-        <div className="mb-3 flex items-baseline justify-between px-4 sm:px-6">
-          <Skeleton className="h-5 w-24" />
-          <Skeleton className="h-4 w-14" />
-        </div>
-        <div className="flex gap-3 overflow-hidden px-4 sm:px-6">
-          {Array.from({ length: 7 }).map((_, i) => (
-            <div key={i} className="w-[180px] shrink-0 sm:w-[220px]">
-              <Skeleton className="aspect-[4/5] w-full rounded-lg" />
-              <Skeleton className="mt-2 h-3.5 w-4/5" />
-              <Skeleton className="mt-1.5 h-3.5 w-2/5" />
-            </div>
-          ))}
-        </div>
-      </section>
       <MasonrySkeleton columns={columns} />
     </div>
   );
@@ -116,6 +120,7 @@ export function HomeFeed({
   loadMoreError,
   onLoadMore,
   empty,
+  storyRail,
 }: HomeFeedProps) {
   const sentinelRef = useRef<HTMLDivElement>(null);
 
@@ -148,7 +153,12 @@ export function HomeFeed({
   }, [units]);
 
   if (isLoading) {
-    return <HomeFeedSkeleton columns={columns} />;
+    return (
+      <div className="flex flex-col">
+        {storyRail}
+        <HomeFeedSkeleton columns={columns} />
+      </div>
+    );
   }
 
   if (isError) {
@@ -157,6 +167,7 @@ export function HomeFeed({
     return (
       <div className="flex flex-col">
         <RecentlyViewedRail />
+        {storyRail}
         <EmptyState
           icon="warning"
           title="Couldn’t load the feed"
@@ -178,14 +189,17 @@ export function HomeFeed({
           <RefreshErrorBanner onRetry={onRefreshRetry} />
         ) : null}
         <RecentlyViewedRail />
-        <MasonryGrid
-          units={[]}
-          columns={columns}
-          emptyTitle={empty?.title}
-          emptySubtitle={empty?.subtitle}
-          emptyActionLabel={empty?.actionLabel}
-          onEmptyAction={empty?.onAction}
-        />
+        {storyRail}
+        <div className="px-2.5 sm:px-4 lg:px-2">
+          <MasonryGrid
+            units={[]}
+            columns={columns}
+            emptyTitle={empty?.title}
+            emptySubtitle={empty?.subtitle}
+            emptyActionLabel={empty?.actionLabel}
+            onEmptyAction={empty?.onAction}
+          />
+        </div>
       </div>
     );
   }
@@ -195,8 +209,6 @@ export function HomeFeed({
       {refreshError ? (
         <RefreshErrorBanner onRetry={onRefreshRetry} />
       ) : null}
-      <RecentlyViewedRail />
-      <FreshDropsRail units={units} />
       {chunks.map((chunk, i) => {
         const band = i < MODULE_BANDS.length ? MODULE_BANDS[i] : null;
         const showBand = band !== null && units.length > band.after;
@@ -207,9 +219,25 @@ export function HomeFeed({
               // Priority budget: exactly one preloaded image per page —
               // the first cell of the first chunk's grid. Later chunks
               // (and every module rail) leave the budget untouched.
-              <MasonryGrid units={chunk} columns={columns} prioritizeFirst={i === 0} />
+              <div className="px-2.5 sm:px-4 lg:px-2">
+                <MasonryGrid units={chunk} columns={columns} prioritizeFirst={i === 0} />
+              </div>
             ) : null}
-            {showBand ? <band.Module /> : null}
+            {/* ≥lg: the demoted story rail is the break after the first
+                chunk — mid-feed rhythm instead of leading chrome. */}
+            {i === 0 && chunk.length > 0 ? storyRail : null}
+            {showBand ? (
+              // Offscreen module bands skip layout/paint; `auto` swaps
+              // the estimate for the real height after first render.
+              <div
+                style={{
+                  contentVisibility: 'auto',
+                  containIntrinsicSize: 'auto 360px',
+                }}
+              >
+                <band.Module units={units} />
+              </div>
+            ) : null}
           </Fragment>
         );
       })}

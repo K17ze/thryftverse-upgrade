@@ -2,8 +2,10 @@
 
 /**
  * ClosetBrandRail — horizontal brand chips derived from the seller's own
- * listings (port of ClosetBrandFilterRow): "All" + the brands they stock,
- * each with a tnum count. Only rendered when the closet stocks >1 brand.
+ * listings (port of ClosetBrandFilterRow): "All" + the brands they stock.
+ * Labels only — mobile parity carries no per-brand count, and a rail of
+ * "Brand 1" suffixes is noise, not information. The count stays in the
+ * chip's aria-label where it's still true and useful.
  */
 
 import { Chip } from '@/components/ui/Chip';
@@ -19,7 +21,7 @@ interface ClosetBrandRailProps {
 export function ClosetBrandRail({ brands, active, onSelect }: ClosetBrandRailProps) {
   return (
     <nav
-      className="no-scrollbar flex gap-1.5 overflow-x-auto px-4 pb-3 sm:px-6"
+      className="no-scrollbar flex gap-1.5 overflow-x-auto whitespace-nowrap px-4 pb-3 sm:px-6"
       aria-label="Filter by brand"
     >
       <Chip selected={active === null} onClick={() => onSelect(null)}>
@@ -33,7 +35,6 @@ export function ClosetBrandRail({ brands, active, onSelect }: ClosetBrandRailPro
           onClick={() => onSelect(active === b.value ? null : b.value)}
         >
           {b.label}
-          <span className="tnum text-meta opacity-60">{b.count}</span>
         </Chip>
       ))}
     </nav>

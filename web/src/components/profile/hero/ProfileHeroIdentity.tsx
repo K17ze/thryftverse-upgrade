@@ -29,6 +29,31 @@ export function ProfileHeroIdentity({ user, hasCoverBand, children }: ProfileHer
   const verificationTier = verificationTierFor(user);
   const displayName = user.displayName?.trim() || null;
 
+  // Meta line — dot-separated segments; a segment that never lands never
+  // leaves a stray "·" leading the line.
+  const location = user.location?.trim();
+  const metaSegments: { key: string; node: React.ReactNode }[] = [
+    ...(location
+      ? [
+          {
+            key: 'loc',
+            node: (
+              <>
+                <Icon name="location" size={13} />
+                {location}
+              </>
+            ),
+          },
+        ]
+      : []),
+    ...(user.lastSeen
+      ? [{ key: 'seen', node: <>Active {user.lastSeen}</> }]
+      : []),
+    ...(memberSince
+      ? [{ key: 'joined', node: <>Joined {memberSince}</> }]
+      : []),
+  ];
+
   return (
     <div
       className={`flex items-start gap-4 sm:gap-6 lg:gap-10 ${
@@ -96,22 +121,16 @@ export function ProfileHeroIdentity({ user, hasCoverBand, children }: ProfileHer
 
         {user.bio ? <BioText bio={user.bio} /> : null}
 
-        <p className="mt-1.5 flex flex-wrap items-center gap-x-1.5 gap-y-0.5 text-meta text-text-muted">
-          <Icon name="location" size={13} />
-          {user.location}
-          {user.lastSeen ? (
-            <>
-              <span aria-hidden>·</span>
-              Active {user.lastSeen}
-            </>
-          ) : null}
-          {memberSince ? (
-            <>
-              <span aria-hidden>·</span>
-              Joined {memberSince}
-            </>
-          ) : null}
-        </p>
+        {metaSegments.length > 0 ? (
+          <p className="mt-1.5 flex flex-wrap items-center gap-x-1.5 gap-y-0.5 text-meta text-text-muted">
+            {metaSegments.map((s, i) => (
+              <span key={s.key} className="flex items-center gap-1.5">
+                {i > 0 ? <span aria-hidden>·</span> : null}
+                {s.node}
+              </span>
+            ))}
+          </p>
+        ) : null}
 
         {user.website ? (
           <p className="mt-1 flex items-center gap-1.5 text-meta">

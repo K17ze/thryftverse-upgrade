@@ -6,7 +6,7 @@ import { Skeleton } from '@/components/ui/Skeleton';
 
 export default function AgentLedgerPage() {
   return (
-    <div className="mx-auto w-full max-w-2xl pb-16 lg:max-w-[1440px]">
+    <div className="mx-auto w-full max-w-2xl pb-16 lg:max-w-[1100px]">
       {/* AgentLedgerView reads its deep-link params via useSearchParams —
           the fallback mirrors the ledger-row geometry so the bailout
           paints structure, not blank. */}

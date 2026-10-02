@@ -6,29 +6,20 @@
  */
 
 import { Chip } from '@/components/ui/Chip';
-import { Icon } from '@/components/ui/Icon';
-import { useTaxonomy } from '@/lib/hooks/sell/useTaxonomy';
 import {
-  allowedConditionsFor,
-  categoryOptions,
-  conditionAllowedFor,
-  subcategoryOptions,
-} from './taxonomy';
-import {
-  CONDITION_OPTIONS,
   DESCRIPTION_MAX,
   DESCRIPTION_MIN,
   POPULAR_BRANDS,
-  SUSTAINABILITY_TAG_OPTIONS,
-  isSizelessCategory,
-  isSizeRequiredCategory,
-  sizesForCategory,
   type SellDraft,
   type SellErrors,
 } from './constants';
 import { INPUT_CLASS, INPUT_ERROR_CLASS, SellField } from './SellField';
 import { SellSection } from './SellSection';
 import { TagField } from './TagField';
+import { CategoryFields } from './details/CategoryFields';
+import { ConditionField } from './details/ConditionField';
+import { SizeField } from './details/SizeField';
+import { SustainabilityField } from './details/SustainabilityField';
 
 interface DetailsSectionProps {
   draft: SellDraft;
@@ -37,38 +28,19 @@ interface DetailsSectionProps {
   clearError: (key: keyof SellErrors) => void;
 }
 
-const SELECT_CLASS = `${INPUT_CLASS} appearance-none pr-10`;
-
-function Chevron() {
+export function DetailsSection({
+  draft,
+  errors,
+  update,
+  clearError,
+}: DetailsSectionProps) {
   return (
-    <Icon
-      name="chevronDown"
-      size={16}
-      className="pointer-events-none absolute right-3.5 top-1/2 -translate-y-1/2 text-text-muted"
-    />
-  );
-}
-
-export function DetailsSection({ draft, errors, update, clearError }: DetailsSectionProps) {
-  // Canonical picker vocabulary — the taxonomy seed until live /taxonomy
-  // resolves. Category/subcategory selects emit node ids; labels come from
-  // node names.
-  const { taxonomy } = useTaxonomy();
-  const categories = categoryOptions(taxonomy.categories);
-  const subcategories = subcategoryOptions(taxonomy.categories, draft.category);
-  const sizes = sizesForCategory(draft.category, draft.subcategory);
-  const sizeless = isSizelessCategory(draft.category, draft.subcategory);
-  // Category policy parity: size is a hard requirement under the shoes
-  // policy; recommended for apparel/sports, hidden when sizeless.
-  const sizeRequired = isSizeRequiredCategory(draft.category, draft.subcategory);
-  // Condition picker respects the category policy too — 'New with tags'
-  // can't apply where a garment tag can't exist (electronics, cars, yachts).
-  const conditionOptions = CONDITION_OPTIONS.filter((opt) =>
-    allowedConditionsFor(draft.category, draft.subcategory).includes(opt.value),
-  );
-
-  return (
-    <SellSection id="sell-details" step={2} title="Details" subtitle="The facts buyers filter on.">
+    <SellSection
+      id="sell-details"
+      step={2}
+      title="Details"
+      subtitle="The facts buyers filter on."
+    >
       <div className="flex flex-col gap-6">
         <SellField
           id="sell-field-title"
@@ -76,7 +48,13 @@ export function DetailsSection({ draft, errors, update, clearError }: DetailsSec
           required
           done={draft.title.trim().length >= 3}
           error={errors.title}
-          hint={!errors.title && draft.title.trim().length > 0 && draft.title.trim().length < 10 ? 'Describe the item — include the style or model name.' : undefined}
+          hint={
+            !errors.title &&
+            draft.title.trim().length > 0 &&
+            draft.title.trim().length < 10
+              ? 'Describe the item — include the style or model name.'
+              : undefined
+          }
         >
           <input
             id="sell-field-title"
@@ -89,8 +67,12 @@ export function DetailsSection({ draft, errors, update, clearError }: DetailsSec
             placeholder="e.g. Vintage Levi's 501 jeans"
             maxLength={80}
             aria-invalid={!!errors.title}
-            aria-describedby={errors.title ? 'sell-field-title-error' : undefined}
-            className={`${INPUT_CLASS} ${errors.title ? INPUT_ERROR_CLASS : ''}`}
+            aria-describedby={
+              errors.title ? 'sell-field-title-error' : undefined
+            }
+            className={`${INPUT_CLASS} ${
+              errors.title ? INPUT_ERROR_CLASS : ''
+            }`}
           />
         </SellField>
 
@@ -109,7 +91,9 @@ export function DetailsSection({ draft, errors, update, clearError }: DetailsSec
               <Chip
                 key={brand}
                 selected={draft.brand === brand}
-                onClick={() => update({ brand: draft.brand === brand ? '' : brand })}
+                onClick={() =>
+                  update({ brand: draft.brand === brand ? '' : brand })
+                }
               >
                 {brand}
               </Chip>
@@ -117,191 +101,26 @@ export function DetailsSection({ draft, errors, update, clearError }: DetailsSec
           </div>
         </SellField>
 
-        <div className="grid gap-6 sm:grid-cols-2">
-          <SellField
-            id="sell-field-category"
-            label="Category"
-            required
-            done={!!draft.category}
-            error={errors.category}
-          >
-            <div className="relative">
-              <select
-                id="sell-field-category"
-                value={draft.category}
-                onChange={(e) => {
-                  const category = e.target.value;
-                  const patch: Partial<SellDraft> = {
-                    category,
-                    subcategory: '',
-                    size: '',
-                  };
-                  // A condition the new category's policy disallows (e.g.
-                  // 'New with tags' on electronics) can't ride forward —
-                  // the seller re-picks from the allowed set.
-                  if (
-                    draft.condition &&
-                    !conditionAllowedFor(category, undefined, draft.condition)
-                  ) {
-                    patch.condition = '';
-                  }
-                  update(patch);
-                  clearError('category');
-                }}
-                aria-invalid={!!errors.category}
-                aria-describedby={errors.category ? 'sell-field-category-error' : undefined}
-                className={`${SELECT_CLASS} ${errors.category ? INPUT_ERROR_CLASS : ''} ${
-                  draft.category ? '' : 'text-text-muted'
-                }`}
-              >
-                <option value="" disabled>
-                  Select category
-                </option>
-                {categories.map((c) => (
-                  <option key={c.value} value={c.value}>
-                    {c.label}
-                  </option>
-                ))}
-              </select>
-              <Chevron />
-            </div>
-          </SellField>
+        <CategoryFields
+          draft={draft}
+          errors={errors}
+          update={update}
+          clearError={clearError}
+        />
 
-          <SellField id="sell-field-subcategory" label="Type" optional>
-            <div className="relative">
-              <select
-                id="sell-field-subcategory"
-                value={draft.subcategory}
-                onChange={(e) => {
-                  const subcategory = e.target.value;
-                  const patch: Partial<SellDraft> = { subcategory };
-                  // Leaf switch can retire a size pick (e.g. Clothing →
-                  // Beauty) or a condition the new leaf disallows.
-                  if (isSizelessCategory(draft.category, subcategory)) {
-                    patch.size = '';
-                  }
-                  if (
-                    draft.condition &&
-                    !conditionAllowedFor(draft.category, subcategory, draft.condition)
-                  ) {
-                    patch.condition = '';
-                  }
-                  update(patch);
-                }}
-                disabled={!subcategories.length}
-                className={`${SELECT_CLASS} disabled:opacity-50 ${
-                  draft.subcategory ? '' : 'text-text-muted'
-                }`}
-              >
-                <option value="">
-                  {subcategories.length ? 'Select type' : 'Select a category first'}
-                </option>
-                {subcategories.map((s) => (
-                  <option key={s.value} value={s.value}>
-                    {s.label}
-                  </option>
-                ))}
-              </select>
-              <Chevron />
-            </div>
-          </SellField>
-        </div>
+        <ConditionField
+          draft={draft}
+          errors={errors}
+          update={update}
+          clearError={clearError}
+        />
 
-        <div id="sell-field-condition">
-          <div className="mb-1.5 flex items-baseline justify-between">
-            <span className="text-caption font-medium text-text-secondary">Condition</span>
-            {draft.condition ? (
-              <Icon name="check" size={14} className="text-success-text" />
-            ) : (
-              <span className="text-micro text-text-muted">Required</span>
-            )}
-          </div>
-          <div
-            role="radiogroup"
-            aria-label="Condition"
-            aria-invalid={!!errors.condition}
-            aria-describedby={errors.condition ? 'sell-field-condition-error' : undefined}
-            className="grid gap-2 sm:grid-cols-2"
-          >
-            {conditionOptions.map((opt) => {
-              const selected = draft.condition === opt.value;
-              return (
-                <button
-                  key={opt.value}
-                  type="button"
-                  role="radio"
-                  aria-checked={selected}
-                  onClick={() => {
-                    update({ condition: opt.value });
-                    clearError('condition');
-                  }}
-                  className={`pressable flex items-start justify-between gap-3 rounded-lg border px-3.5 py-3 text-left transition-colors ${
-                    selected
-                      ? 'border-text-primary bg-surface-alt'
-                      : errors.condition
-                        ? 'border-danger-border hover:border-text-muted'
-                        : 'border-border hover:border-text-muted'
-                  }`}
-                >
-                  <span>
-                    <span className="block text-body font-medium text-text-primary">
-                      {opt.value}
-                    </span>
-                    <span className="mt-0.5 block text-caption text-text-muted">{opt.hint}</span>
-                  </span>
-                  {selected ? (
-                    <Icon name="check" size={16} className="mt-0.5 shrink-0 text-success-text" />
-                  ) : null}
-                </button>
-              );
-            })}
-          </div>
-          {errors.condition ? (
-            <p id="sell-field-condition-error" role="alert" className="mt-1.5 text-caption text-danger-text">
-              {errors.condition}
-            </p>
-          ) : null}
-        </div>
-
-        {draft.category && !sizeless ? (
-          <div id="sell-field-size">
-            <div className="mb-1.5 flex items-baseline justify-between">
-              <span className="text-caption font-medium text-text-secondary">Size</span>
-              {sizeRequired ? (
-                draft.size ? (
-                  <Icon name="check" size={14} className="text-success-text" />
-                ) : (
-                  <span className="text-micro text-text-muted">Required</span>
-                )
-              ) : (
-                <span className="text-micro text-text-muted">Recommended</span>
-              )}
-            </div>
-            <div
-              className="flex flex-wrap gap-1.5"
-              aria-invalid={!!errors.size}
-              aria-describedby={errors.size ? 'sell-field-size-error' : undefined}
-            >
-              {sizes.map((size) => (
-                <Chip
-                  key={size}
-                  selected={draft.size === size}
-                  onClick={() => {
-                    update({ size: draft.size === size ? '' : size });
-                    clearError('size');
-                  }}
-                >
-                  {size}
-                </Chip>
-              ))}
-            </div>
-            {errors.size ? (
-              <p id="sell-field-size-error" role="alert" className="mt-1.5 text-caption text-danger-text">
-                {errors.size}
-              </p>
-            ) : null}
-          </div>
-        ) : null}
+        <SizeField
+          draft={draft}
+          errors={errors}
+          update={update}
+          clearError={clearError}
+        />
 
         <SellField
           id="sell-field-description"
@@ -330,7 +149,9 @@ export function DetailsSection({ draft, errors, update, clearError }: DetailsSec
               maxLength={DESCRIPTION_MAX}
               placeholder="e.g. 90s 501s, perfect wash and fade. Button fly, no repairs needed."
               aria-invalid={!!errors.description}
-              aria-describedby={errors.description ? 'sell-field-description-error' : undefined}
+              aria-describedby={
+                errors.description ? 'sell-field-description-error' : undefined
+              }
               className={`w-full resize-y rounded-md border bg-input px-3.5 py-3 text-body text-input-text placeholder:text-text-muted transition-colors focus:border-text-muted focus:outline-none ${
                 errors.description ? 'border-danger-border' : 'border-border'
               }`}
@@ -343,71 +164,8 @@ export function DetailsSection({ draft, errors, update, clearError }: DetailsSec
 
         <TagField tags={draft.tags} onChange={(tags) => update({ tags })} />
 
-        {/* Sustainability — seller-asserted attributes, ported from the
-            mobile SustainabilityTags selector. Each chip is a labelled
-            switch with a 44px hit area; the impact summary below is
-            honest about what a claim means — never a verified grade. */}
-        <fieldset id="sell-field-sustainability">
-          <div className="mb-1.5 flex items-baseline justify-between">
-            <legend className="text-caption font-medium text-text-secondary">
-              Sustainability
-            </legend>
-            <span className="text-micro text-text-muted">Optional</span>
-          </div>
-          <div className="flex flex-wrap gap-1.5" role="group" aria-label="Sustainability attributes">
-            {SUSTAINABILITY_TAG_OPTIONS.map((opt) => {
-              const selected = draft.sustainabilityTags.includes(opt.id);
-              return (
-                <button
-                  key={opt.id}
-                  type="button"
-                  role="switch"
-                  aria-checked={selected}
-                  aria-label={`${opt.label} — mark this listing ${opt.label.toLowerCase()}`}
-                  onClick={() =>
-                    update({
-                      sustainabilityTags: selected
-                        ? draft.sustainabilityTags.filter((t) => t !== opt.id)
-                        : [...draft.sustainabilityTags, opt.id],
-                    })
-                  }
-                  className={`pressable relative inline-flex h-9 shrink-0 items-center gap-1.5 rounded-full px-4 text-body font-medium after:absolute after:-inset-y-1 after:content-[""] ${
-                    selected
-                      ? 'bg-brand text-text-inverse'
-                      : 'bg-surface-alt text-text-primary hover:bg-surface-raised'
-                  }`}
-                >
-                  <Icon name={opt.icon} filled={selected} size={16} />
-                  {opt.label}
-                </button>
-              );
-            })}
-          </div>
-          {/* Truth line — mirrors the mobile disclosure: these are the
-              seller's own assertions, not a platform-verified grade. */}
-          <p className="mt-2 text-meta text-text-muted">
-            Your claims — shown to buyers as seller-provided, not independently verified.
-          </p>
-          {draft.sustainabilityTags.length ? (
-            <ul className="mt-2.5 space-y-1" aria-label="Sustainability impact">
-              {SUSTAINABILITY_TAG_OPTIONS.filter((t) =>
-                draft.sustainabilityTags.includes(t.id),
-              ).map((t) => (
-                <li
-                  key={t.id}
-                  className="flex items-start gap-1.5 text-caption text-text-secondary"
-                >
-                  <Icon name="check" size={14} className="mt-px shrink-0 text-success-text" />
-                  <span>
-                    <span className="font-semibold text-text-primary">{t.label}</span>
-                    {' — '}
-                    {t.impact}
-                  </span>
-                </li>
-              ))}
-            </ul>
-          ) : null}
-        </fieldset>
+        {/* Sustainability — seller-asserted attributes */}
+        <SustainabilityField draft={draft} update={update} />
       </div>
     </SellSection>
   );

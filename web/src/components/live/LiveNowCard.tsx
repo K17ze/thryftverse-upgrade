@@ -8,10 +8,14 @@
 
 import type { LiveSession } from '@/lib/data/fixtures-media';
 import { liveSellerOf } from './useLiveSessions';
+import { useSessionPins } from './livePins';
 import { AppImage } from '@/components/ui/AppImage';
 import { Avatar } from '@/components/ui/Avatar';
 import { Icon } from '@/components/ui/Icon';
 import { LiveBadge } from './LiveBadge';
+import { DATA_MODE } from '@/lib/api/client';
+import { listingById } from '@/lib/data/fixtures';
+import { getListingCoverUri } from '@/lib/utils/media';
 import { formatCount, formatPrice } from '@/lib/utils/format';
 
 interface LiveNowCardProps {
@@ -25,6 +29,15 @@ export function LiveNowCard({ session, onWatch, variant = 'card' }: LiveNowCardP
   const seller = liveSellerOf(session);
   const hero = variant === 'hero';
 
+  // The lot on the table — fixture sessions resolve the first pinned
+  // listing (the shared pins store; live mode has no pins endpoint and
+  // carries currentItemTitle/currentBid on the session instead).
+  const pinIds = useSessionPins(session.id);
+  const onTable =
+    hero && DATA_MODE !== 'live' && pinIds.length > 0
+      ? listingById(pinIds[0]) ?? null
+      : null;
+
   return (
     <article className={hero ? '' : 'w-[280px] shrink-0 sm:w-[320px]'}>
       <button
@@ -35,7 +48,10 @@ export function LiveNowCard({ session, onWatch, variant = 'card' }: LiveNowCardP
       >
         <div
           className={`relative w-full overflow-hidden rounded-xl bg-surface-alt ${
-            hero ? 'aspect-[4/3] sm:aspect-[21/9]' : 'aspect-[4/3]'
+            // Hero sits in a ~8/13 column at lg (dock beside it), full
+            // width below — broadcast aspect in the split, capped so a
+            // dockless hero never eats the viewport.
+            hero ? 'aspect-[4/3] sm:aspect-[16/9] lg:max-h-[560px]' : 'aspect-[4/3]'
           }`}
         >
           <AppImage
@@ -44,7 +60,7 @@ export function LiveNowCard({ session, onWatch, variant = 'card' }: LiveNowCardP
             fill
             priority={hero}
             className="h-full w-full"
-            sizes={hero ? '(max-width: 768px) 100vw, 1440px' : '320px'}
+            sizes={hero ? '(max-width: 1024px) 100vw, 62vw' : '320px'}
           />
 
           {/* Top chrome — badge + viewers, no solid circles */}
@@ -85,6 +101,32 @@ export function LiveNowCard({ session, onWatch, variant = 'card' }: LiveNowCardP
                 >
                   {session.title}
                 </h3>
+                {/* What's selling — the first pin is the lot on the table
+                    (fixture shows); sits inside the watch target so a tap
+                    lands on the show that sells it. */}
+                {onTable ? (
+                  <span className="mt-3 flex w-fit max-w-full items-center gap-2.5 rounded-lg bg-overlay/90 px-2.5 py-2">
+                    <span className="relative h-9 w-9 shrink-0 overflow-hidden rounded-sm bg-white/10">
+                      <AppImage
+                        src={getListingCoverUri(onTable.images)}
+                        alt=""
+                        fill
+                        sizes="36px"
+                        className="h-full w-full"
+                      />
+                    </span>
+                    <span className="min-w-0">
+                      <span className="block text-micro font-semibold uppercase tracking-[0.08em] text-scrim-text-secondary">
+                        On the table
+                      </span>
+                      <span className="clamp-1 block text-caption font-medium text-scrim-text-primary">
+                        {onTable.title}
+                        {' · '}
+                        <span className="tnum font-semibold">{formatPrice(onTable.price)}</span>
+                      </span>
+                    </span>
+                  </span>
+                ) : null}
                 {/* Live-mode contract fields — render only when the backend
                     reports a lot under the hammer (mobile bidRow parity). */}
                 {session.currentBid != null ? (

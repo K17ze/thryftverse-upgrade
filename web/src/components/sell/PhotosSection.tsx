@@ -10,7 +10,6 @@
  */
 
 import { useRef, useState } from 'react';
-import { Icon } from '@/components/ui/Icon';
 import {
   SortablePhotoStrip,
   type StripPhoto,
@@ -18,6 +17,15 @@ import {
 import { isLocalMediaUri, isVideoUri } from '@/lib/utils/media';
 import { MAX_PHOTOS } from './constants';
 import { SellSection } from './SellSection';
+import {
+  PhotoAutoFillReview,
+  type AutoFillControl,
+  type AutoFillSuggestion,
+} from './photos/PhotoAutoFillReview';
+import { EmptyPhotoDropzone } from './photos/EmptyPhotoDropzone';
+import { PhotoActionRow } from './photos/PhotoActionRow';
+
+export type { AutoFillControl, AutoFillSuggestion };
 
 /** Per-photo live-upload state, keyed by the staged preview URL. */
 export interface PhotoMediaState {
@@ -29,25 +37,6 @@ export interface PhotoMediaState {
   kind?: 'image' | 'video';
   /** Poster still preview for video slots (blob: uri or remote url). */
   poster?: string | null;
-}
-
-/**
- * Auto-fill control — the assisted-extraction affordance for the photos
- * step (POST /listing-intelligence/run via the parent). Rendered only in
- * live mode: fixture mode has no backend to consult and a dead button
- * would be dishonest. Candidates are advisory — the flow applies them to
- * empty fields only and the seller reviews everything below.
- */
-export interface AutoFillControl {
-  phase: 'idle' | 'running' | 'done' | 'empty' | 'error';
-  /** Field labels the last run filled (e.g. 'title', 'brand'). */
-  applied?: string[];
-  /** The backend's own failure text when phase === 'error'. */
-  message?: string | null;
-  /** Honest provenance for the done line (e.g. 'the photo filename'). */
-  basis?: string | null;
-  onRun: () => void;
-  onDismiss?: () => void;
 }
 
 interface PhotosSectionProps {
@@ -127,9 +116,7 @@ export function PhotosSection({
           : `Add up to ${MAX_PHOTOS} photos or a video — the first photo is your cover.`
       }
     >
-      {/* Shot list — mirrors the mobile photo-tips guidance: the frames
-          buyers look for before they'll trust a listing. Quiet checklist
-          copy, not a gate. */}
+      {/* Shot list — mirrors the mobile photo-tips guidance */}
       <p className="mb-3 text-caption text-text-muted">
         Cover the essentials: <span className="font-medium text-text-secondary">front</span>,{' '}
         <span className="font-medium text-text-secondary">back</span>,{' '}
@@ -156,35 +143,12 @@ export function PhotosSection({
         onDrop={handleContainerDrop}
       >
         {!hasPhotos ? (
-          <div>
-            <button
-              type="button"
-              onClick={pick}
-              className={`pressable flex h-44 w-full flex-col items-center justify-center gap-2 rounded-lg border border-dashed text-center transition-colors ${
-                draggingFiles
-                  ? 'border-text-muted bg-surface-alt'
-                  : 'border-border hover:border-text-muted'
-              }`}
-            >
-              <Icon name="camera" size={28} className="text-text-muted" />
-              <span className="text-body-emphasis font-medium text-text-primary">Add photos</span>
-              <span className="text-caption text-text-muted">
-                Drag and drop or browse — good light sells faster
-              </span>
-            </button>
-            {cameraSupported && onTakePhoto ? (
-              <div className="mt-2 flex justify-center">
-                <button
-                  type="button"
-                  onClick={onTakePhoto}
-                  className="pressable flex h-11 items-center gap-2 rounded-md px-3 text-body font-medium text-text-secondary transition-colors hover:text-text-primary"
-                >
-                  <Icon name="camera" size={18} />
-                  Take photo
-                </button>
-              </div>
-            ) : null}
-          </div>
+          <EmptyPhotoDropzone
+            draggingFiles={draggingFiles}
+            cameraSupported={cameraSupported}
+            onPick={pick}
+            onTakePhoto={onTakePhoto}
+          />
         ) : (
           <>
             <SortablePhotoStrip
@@ -199,102 +163,15 @@ export function PhotosSection({
             />
 
             {/* Quiet action row — the mobile media-studio grammar. */}
-            <div className="mt-3 flex items-center gap-4">
-              {canAdd ? (
-                <button
-                  type="button"
-                  onClick={pick}
-                  className="pressable flex h-11 items-center gap-2 rounded-md text-body font-medium text-text-secondary transition-colors hover:text-text-primary"
-                >
-                  <Icon name="images" size={16} />
-                  Add more
-                </button>
-              ) : null}
-              {cameraSupported && onTakePhoto && canAdd ? (
-                <button
-                  type="button"
-                  onClick={onTakePhoto}
-                  className="pressable flex h-11 items-center gap-2 rounded-md text-body font-medium text-text-secondary transition-colors hover:text-text-primary"
-                >
-                  <Icon name="camera" size={16} />
-                  Take photo
-                </button>
-              ) : null}
-            </div>
+            <PhotoActionRow
+              canAdd={canAdd}
+              cameraSupported={cameraSupported}
+              onPick={pick}
+              onTakePhoto={onTakePhoto}
+            />
 
-            {/* Assisted autofill — advisory field candidates from the
-                backend's listing-intelligence run. Never silent: the run
-                reports what it filled (or that it found nothing) and every
-                value stays editable below. */}
-            {autoFill ? (
-              <div className="mt-4 border-t border-border-subtle pt-4">
-                {autoFill.phase === 'idle' || autoFill.phase === 'running' ? (
-                  <button
-                    type="button"
-                    onClick={autoFill.onRun}
-                    disabled={autoFill.phase === 'running'}
-                    className="pressable flex h-11 items-center gap-2 rounded-md text-body font-medium text-text-secondary transition-colors hover:text-text-primary disabled:opacity-50"
-                  >
-                    <Icon name="scan" size={16} />
-                    {autoFill.phase === 'running'
-                      ? 'Reading photo details…'
-                      : 'Auto-fill details'}
-                  </button>
-                ) : autoFill.phase === 'error' ? (
-                  <div role="alert" className="flex items-start gap-2.5">
-                    <Icon
-                      name="warning"
-                      size={16}
-                      className="mt-0.5 shrink-0 text-danger-text"
-                    />
-                    <div className="min-w-0 flex-1">
-                      <p className="text-caption text-text-secondary">
-                        {autoFill.message ??
-                          'Couldn’t read the photo details.'}{' '}
-                        Fill them in below.
-                      </p>
-                      <button
-                        type="button"
-                        onClick={autoFill.onRun}
-                        className="pressable mt-1 text-caption font-semibold text-text-primary underline-offset-4 hover:underline"
-                      >
-                        Try again
-                      </button>
-                    </div>
-                  </div>
-                ) : (
-                  <div className="flex items-start gap-2.5">
-                    <Icon
-                      name={autoFill.phase === 'done' ? 'check' : 'info'}
-                      size={16}
-                      className={`mt-0.5 shrink-0 ${
-                        autoFill.phase === 'done'
-                          ? 'text-success-text'
-                          : 'text-text-muted'
-                      }`}
-                    />
-                    <p className="min-w-0 flex-1 text-caption text-text-secondary">
-                      {autoFill.phase === 'done' && autoFill.applied?.length
-                        ? `Auto-filled ${autoFill.applied.join(', ')}${
-                            autoFill.basis ? ` from ${autoFill.basis}` : ''
-                          } — review them below.`
-                        : autoFill.message ??
-                          'Nothing readable to suggest — fill the details below.'}
-                    </p>
-                    {autoFill.onDismiss ? (
-                      <button
-                        type="button"
-                        onClick={autoFill.onDismiss}
-                        aria-label="Dismiss"
-                        className="pressable -m-1 shrink-0 rounded-md p-1 text-text-muted transition-colors hover:text-text-primary"
-                      >
-                        <Icon name="close" size={14} />
-                      </button>
-                    ) : null}
-                  </div>
-                )}
-              </div>
-            ) : null}
+            {/* Assisted autofill */}
+            {autoFill ? <PhotoAutoFillReview autoFill={autoFill} /> : null}
           </>
         )}
       </div>

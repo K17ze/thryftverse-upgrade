@@ -48,13 +48,32 @@ export type OfferRowAction = 'accept' | 'counter' | 'decline' | 'cancel';
  * same row as status 'countered' (the backend supersedes via a new
  * pending row), so the live/actionable set is pending OR countered.
  */
+/**
+ * Statuses that still carry the standing offer — the only rows that may
+ * offer accept / counter / exit verbs. The backend supersedes a counter
+ * with a FRESH pending row (POST /offers/:id/counter sets the parent to
+ * 'countered' and inserts the new pending offer), so in live mode a
+ * 'countered' row is terminal history — actions on it would 409. The
+ * fixture model instead keeps the standing counter on the same row as
+ * status 'countered', so fixture rows stay actionable while countered.
+ */
+const STANDING_STATUSES: ReadonlySet<OfferStatus> = new Set(
+  DATA_MODE === 'live' ? ['pending'] : ['pending', 'countered'],
+);
+
+/** True while the row still carries the standing offer (pending, or
+ *  countered in the fixture model) — see STANDING_STATUSES. */
+export function isStandingOffer(offer: CommerceOffer, nowMs: number): boolean {
+  return STANDING_STATUSES.has(effectiveOfferStatus(offer, nowMs));
+}
+
 export function resolveOfferActions(
   offer: CommerceOffer,
   viewerId: string,
   nowMs: number,
 ): OfferRowAction[] {
   const effective = effectiveOfferStatus(offer, nowMs);
-  if (effective !== 'pending' && effective !== 'countered') return [];
+  if (!STANDING_STATUSES.has(effective)) return [];
   const isSeller = offer.sellerId === viewerId;
   const isBuyer = offer.buyerId === viewerId;
   const ownMove = offer.offeredByUserId === viewerId;
@@ -179,7 +198,10 @@ export function OfferRow({ offer, direction, viewerId, nowMs, onAction }: OfferR
     : userById(counterpartyId)?.username ?? 'member';
 
   const effective = effectiveOfferStatus(offer, nowMs);
-  const live = effective === 'pending' || effective === 'countered';
+  // 'live' = the row still carries the standing offer — a superseded
+  // 'countered' row in live mode is history: no countdown, no
+  // ball-in-court, no actions.
+  const live = isStandingOffer(offer, nowMs);
   const status = { label: OFFER_STATUS_LABEL[effective], variant: STATUS_VARIANT[effective] };
   const actions = resolveOfferActions(offer, viewerId, nowMs);
   // Whose move is it? The standing offer's author is waiting; the other
@@ -190,9 +212,57 @@ export function OfferRow({ offer, direction, viewerId, nowMs, onAction }: OfferR
 
   const timeLeft = live && offer.expiresAt ? formatTimeLeft(offer.expiresAt, nowMs) : null;
 
+  /* The right-aligned trailing cluster — the resolved role/state action set,
+     or the accepted-deal receipt line when the negotiation is done. It renders
+     in two positions (only one visible per breakpoint): the last grid cell on
+     lg, so the row stays single/dual-line instead of dropping a tall action
+     row under dead middle space; and a wrap line under the title on narrow
+     viewports. The decline verb is Withdraw on your own standing counter
+     (retract, not reject), Cancel on the buyer's exit. */
+  const trailingCluster =
+    actions.length > 0 ? (
+      <>
+        {actions.includes('accept') ? (
+          <Button variant="primary" size="sm" onClick={() => onAction(offer, 'accept')}>
+            Accept <span className="tnum">{formatPrice(offer.amount)}</span>
+          </Button>
+        ) : null}
+        {actions.includes('counter') ? (
+          <Button variant="secondary" size="sm" onClick={() => onAction(offer, 'counter')}>
+            Counter
+          </Button>
+        ) : null}
+        {actions.includes('decline') ? (
+          <Button variant="quiet" size="sm" onClick={() => onAction(offer, 'decline')}>
+            {ownMove ? 'Withdraw' : 'Decline'}
+          </Button>
+        ) : null}
+        {actions.includes('cancel') ? (
+          <Button variant="quiet" size="sm" onClick={() => onAction(offer, 'cancel')}>
+            Cancel
+          </Button>
+        ) : null}
+      </>
+    ) : offer.status === 'accepted' ? (
+      <p className="flex items-center gap-1.5 text-caption text-success-text">
+        <Icon name="check" size={13} filled />
+        Deal made —{' '}
+        {offerOrderId(offer) ? (
+          <Link
+            href={`/orders/${offerOrderId(offer)}`}
+            className="pressable font-semibold underline underline-offset-2"
+          >
+            view the order
+          </Link>
+        ) : (
+          'see your orders for dispatch updates.'
+        )}
+      </p>
+    ) : null;
+
   return (
     <li className="py-4">
-      <div className="flex items-center gap-3 lg:grid lg:grid-cols-[3.5rem_minmax(0,1.3fr)_minmax(0,0.8fr)_9.5rem_7rem] lg:gap-x-5">
+      <div className="flex items-center gap-3 lg:grid lg:grid-cols-[3.5rem_minmax(0,1fr)_11rem_9.5rem_auto_auto] lg:gap-x-5">
         <Link
           href={`/item/${offer.listingId}`}
           className="pressable w-14 shrink-0 overflow-hidden rounded-md"
@@ -234,7 +304,7 @@ export function OfferRow({ offer, direction, viewerId, nowMs, onAction }: OfferR
           {/* Ball-in-court — the negotiation never leaves the reader
               guessing who owes the next move. */}
           {awaitingMe ? (
-            <p className="mt-1 text-caption font-medium text-commerce-trust">Your move</p>
+            <p className="mt-1 text-caption font-medium text-text-primary">Your move</p>
           ) : waitingOnThem ? (
             <p className="mt-1 text-caption text-text-muted">Waiting on @{counterpartyName}</p>
           ) : null}
@@ -269,9 +339,12 @@ export function OfferRow({ offer, direction, viewerId, nowMs, onAction }: OfferR
           <p className="tnum text-body-large font-bold text-text-primary">
             {formatPrice(offer.amount)}
           </p>
-          <p className="tnum text-caption text-text-muted line-through">
-            {formatPrice(offer.originalPrice)}
-          </p>
+          {/* An at-ask offer has no discount to strike through. */}
+          {offer.originalPrice !== offer.amount ? (
+            <p className="tnum text-caption text-text-muted line-through">
+              {formatPrice(offer.originalPrice)}
+            </p>
+          ) : null}
           {timeLeft ? (
             <p className={`tnum mt-0.5 text-caption ${expiryToneClass(offer.expiresAt!, nowMs)}`}>
               {timeLeft}
@@ -282,50 +355,22 @@ export function OfferRow({ offer, direction, viewerId, nowMs, onAction }: OfferR
         <span className="hidden w-24 shrink-0 justify-end sm:flex">
           <Badge variant={status.variant}>{status.label}</Badge>
         </span>
+
+        {/* Desktop action cell — last grid column, so the cluster sits on
+            the same line as the offer instead of a second bottom row. */}
+        {trailingCluster ? (
+          <div className="hidden lg:flex lg:items-center lg:justify-end lg:gap-2">
+            {trailingCluster}
+          </div>
+        ) : null}
       </div>
 
-      {/* Actions — the resolved role/state set, nothing more: the other
-          side's standing offer gets the full response grammar (seller
-          declines, buyer cancels); your own standing move gets only its
-          legal exit — Withdraw for a seller, Cancel for a buyer. */}
-      {actions.length > 0 ? (
-        <div className="mt-3 flex gap-2 pl-[68px] lg:mt-2.5 lg:justify-end lg:pl-0">
-          {actions.includes('accept') ? (
-            <Button variant="primary" size="sm" onClick={() => onAction(offer, 'accept')}>
-              Accept <span className="tnum">{formatPrice(offer.amount)}</span>
-            </Button>
-          ) : null}
-          {actions.includes('counter') ? (
-            <Button variant="secondary" size="sm" onClick={() => onAction(offer, 'counter')}>
-              Counter
-            </Button>
-          ) : null}
-          {actions.includes('decline') ? (
-            <Button variant="quiet" size="sm" onClick={() => onAction(offer, 'decline')}>
-              {ownMove ? 'Withdraw' : 'Decline'}
-            </Button>
-          ) : null}
-          {actions.includes('cancel') ? (
-            <Button variant="quiet" size="sm" onClick={() => onAction(offer, 'cancel')}>
-              Cancel
-            </Button>
-          ) : null}
+      {/* Narrow viewports — the same cluster wraps to a right-aligned line
+          under the row (native actionsRow grammar). */}
+      {trailingCluster ? (
+        <div className="mt-3 flex flex-wrap items-center justify-end gap-2 lg:hidden">
+          {trailingCluster}
         </div>
-      ) : offer.status === 'accepted' ? (
-        <p className="mt-2.5 flex items-center gap-1.5 pl-[68px] text-caption text-success-text lg:justify-end lg:pl-0">
-          <Icon name="check" size={13} filled />
-          Deal made —{' '}
-          {offerOrderId(offer) ? (
-            <Link
-              href={`/orders/${offerOrderId(offer)}`}
-              className="pressable font-semibold underline underline-offset-2"
-            >
-              view the order
-            </Link>
-          ) : (
-            'see your orders for dispatch updates.'
-          )}
-        </p>
       ) : null}
     </li>
   );

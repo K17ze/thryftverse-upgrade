@@ -83,6 +83,8 @@ export function buildSuggestionOptions(
           kind: 'listing',
           term: l.title,
           listing: l,
+          // PDP direct — selection navigates to the item, not a title query.
+          href: `/item/${l.id}`,
         });
         found += 1;
       }
@@ -126,10 +128,16 @@ const LIVE = DATA_MODE === 'live';
  * the real directory (GET /users/search), with trending queries/brands
  * from the shared trending hooks.
  */
-export function useSuggestionOptions(query: string, recent: string[]): SuggestionOption[] {
+export function useSuggestionOptions(
+  query: string,
+  recent: string[],
+  /** False drops the wire reads entirely — the search-autocomplete
+   *  device preference keeps the field a plain search box. */
+  enabled = true,
+): SuggestionOption[] {
   const deferredQ = useDeferredValue(query.trim());
   const debouncedQ = useDebouncedValue(deferredQ, 220);
-  const usable = debouncedQ.length >= 2;
+  const usable = enabled && debouncedQ.length >= 2;
   const autocompleteQuery = useQuery({
     queryKey: ['search-suggest', 'autocomplete', debouncedQ],
     queryFn: ({ signal }) => fetchAutocompleteSuggestions(debouncedQ, 8, signal),
@@ -181,7 +189,14 @@ export function useSuggestionOptions(query: string, recent: string[]): Suggestio
         }
       }
       for (const l of (listingsQuery.data?.items ?? []).slice(0, MAX_LISTING_RESULTS)) {
-        options.push({ id: `listing-${l.id}`, kind: 'listing', term: l.title, listing: l });
+        options.push({
+          id: `listing-${l.id}`,
+          kind: 'listing',
+          term: l.title,
+          listing: l,
+          // Same PDP direct-navigation contract as the fixture builder.
+          href: `/item/${l.id}`,
+        });
       }
       for (const u of (membersQuery.data ?? []).slice(0, MAX_MEMBER_RESULTS)) {
         options.push({

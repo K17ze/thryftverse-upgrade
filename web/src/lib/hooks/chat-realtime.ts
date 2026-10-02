@@ -24,6 +24,18 @@
  *     conversations' topics so row previews and unread badges move live.
  *     The REST poll in useConversations stays the fallback baseline.
  *
+ *   useNotificationRealtime — app-wide `notifications.user:{userId}`.
+ *
+ * Transport: every surface registers its topics with ONE module-level
+ * stream manager — the backend endpoint is already multiplexed
+ * (/realtime/stream?topics=a,b,c), so the app-wide notification feed,
+ * the inbox topics and the open-thread topics ride a single connection
+ * instead of one fetch-stream per hook (on /inbox/[id] that collapsed
+ * 3 concurrent streams into 1). Subscribing again on a topic set already
+ * covered is free; frames are delivered only to subscribers of their
+ * topic, so each hook sees exactly what its own dedicated stream would
+ * have delivered.
+ *
  * Guests and fixture mode never connect — REST stays the only truth there.
  */
 
@@ -35,7 +47,7 @@ import {
   realtimePayloadToWebMessage,
   type MessageWithSaveState,
 } from '@/lib/api/services/chat';
-import { useSession } from '@/lib/session/SessionProvider';
+import { useSessionIdentity } from '@/lib/session/SessionProvider';
 import { useHydrated } from '@/lib/store/useStore';
 import type { Conversation, Message } from '@/lib/contracts/domain';
 import { useConversations } from './queries';
@@ -204,12 +216,254 @@ export function mergeIncomingIntoRow(
 
 // ── Shared SSE pump ──────────────────────────────────────────────────────
 
+interface StreamSubscriber {
+  /** The topic set this subscriber asked for — frames are delivered only
+   *  to subscribers of their topic, so a shared connection changes
+   *  nothing about what each hook observes. */
+  topics: ReadonlySet<string>;
+  onEvent: (event: ChatRealtimeEnvelope) => void;
+  onResync?: () => void;
+}
+
+/**
+ * Module-level stream registry. `/realtime/stream` accepts an arbitrary
+ * topic list, so instead of one connection per hook the union of every
+ * active subscription's topics rides a SINGLE connection.
+ *
+ * Lifecycle:
+ *   - subscribe → recompute the union; connect cold, or debounce a
+ *     reconnect when the union moved under a live stream. The debounce
+ *     (~150ms) coalesces StrictMode double-mounts and inbox-list churn
+ *     (up to 40 `chat.conversation:*` topics can change in one commit)
+ *     into one re-subscribe.
+ *   - reconnect — drop or deliberate — resyncs EVERY subscriber: SSE has
+ *     no replay, and the abort→connect window is a blind spot the caches
+ *     must not trust. A mid-stream seq gap resyncs only the subscribers
+ *     of the gapped topic (seq is per-topic server-side).
+ *   - last unsubscribe → abort + clear; next subscribe cold-starts.
+ *   - 401/403 is terminal (a revoked token won't heal on backoff) until
+ *     the subscription set changes — a new login's fresh token deserves
+ *     a fresh attempt.
+ */
+const streamSubscribers = new Set<StreamSubscriber>();
+let streamController: AbortController | null = null;
+let streamRetryTimer: ReturnType<typeof setTimeout> | null = null;
+let streamResubscribeTimer: ReturnType<typeof setTimeout> | null = null;
+/** Supersede token — bumped on every connect/teardown so a superseded
+ *  pump can never resync or schedule retries after its death. */
+let streamGeneration = 0;
+let streamAttempt = 0;
+let streamTerminal = false;
+/** Set when a deliberate reconnect (topic churn under a live stream) is
+ *  pending — the abort→connect window is a blind spot, so a resync is
+ *  owed once the replacement stream is live. */
+let streamPendingResync = false;
+/** The desired union key the live (or next) connection must carry. */
+let streamTopicsKey = '';
+/** Per-topic seq watermarks — backend getNextSequence is per-topic. */
+const streamLastSeq = new Map<string, number>();
+
+function subscribedTopicsKey(): string {
+  const all = new Set<string>();
+  for (const sub of streamSubscribers) {
+    for (const t of sub.topics) all.add(t);
+  }
+  return [...all].sort().join(',');
+}
+
+function resyncAll() {
+  for (const sub of streamSubscribers) {
+    try {
+      sub.onResync?.();
+    } catch {
+      // A resync handler must never kill the pump loop.
+    }
+  }
+}
+
+function resyncTopic(topic: string) {
+  for (const sub of streamSubscribers) {
+    if (!topic || sub.topics.has(topic)) {
+      try {
+        sub.onResync?.();
+      } catch {
+        // Same isolation as resyncAll.
+      }
+    }
+  }
+}
+
+function dispatchStreamEvent(event: ChatRealtimeEnvelope) {
+  const topic = typeof event.topic === 'string' ? event.topic : '';
+  if (typeof event.seq === 'number' && topic) {
+    const last = streamLastSeq.get(topic) ?? 0;
+    if (last > 0 && event.seq > last + 1) {
+      // Missed events — resnapshot the topic's subscribers first, then
+      // still apply this frame: it was published post-commit, so the
+      // refetch lands it anyway.
+      resyncTopic(topic);
+    }
+    streamLastSeq.set(topic, Math.max(last, event.seq));
+  }
+  for (const sub of streamSubscribers) {
+    // Topic-scoped delivery — a shared connection must not hand a
+    // subscriber frames it never asked for (handlers guard too, but
+    // scoping here keeps each hook's contract identical to a dedicated
+    // stream). Untopiced frames go to everyone, matching the old
+    // per-connection behaviour.
+    if (topic && !sub.topics.has(topic)) continue;
+    try {
+      sub.onEvent(event);
+    } catch {
+      // A handler must never kill the pump — the next frame still lands.
+    }
+  }
+}
+
+async function connectStream() {
+  const generation = ++streamGeneration;
+  const stale = () => generation !== streamGeneration;
+  const topicKey = streamTopicsKey;
+  if (!topicKey || streamTerminal || DATA_MODE !== 'live') return;
+
+  const controller = new AbortController();
+  streamController = controller;
+  try {
+    const session = await getAuthSession();
+    if (stale()) return;
+    if (!session?.accessToken) throw new Error('no token');
+    const url = `${getApiBaseUrl()}/realtime/stream?topics=${encodeURIComponent(topicKey)}`;
+    const response = await fetch(url, {
+      headers: { Authorization: `Bearer ${session.accessToken}` },
+      signal: controller.signal,
+    });
+    if (response.status === 401 || response.status === 403) {
+      // Auth gate is terminal — retrying cannot change it. REST polls
+      // stay the baseline until the subscription set changes.
+      streamTerminal = true;
+      return;
+    }
+    if (!response.ok || !response.body) {
+      throw new Error(`stream failed (${response.status})`);
+    }
+    streamAttempt = 0;
+    if (streamPendingResync) {
+      // Stream is live again after a deliberate teardown — anything that
+      // landed in the blind window is only reachable via a resnapshot.
+      streamPendingResync = false;
+      resyncAll();
+    }
+
+    const reader = response.body.getReader();
+    const decoder = new TextDecoder();
+    let buffer = '';
+    let dataLines: string[] = [];
+    const flush = () => {
+      if (dataLines.length === 0) return;
+      try {
+        dispatchStreamEvent(JSON.parse(dataLines.join('\n')) as ChatRealtimeEnvelope);
+      } catch {
+        // Malformed frame — drop it; a missed seq still resyncs.
+      }
+      dataLines = [];
+    };
+    for (;;) {
+      const { done, value } = await reader.read();
+      if (done || stale()) break;
+      buffer += decoder.decode(value, { stream: true });
+      let newline: number;
+      while ((newline = buffer.indexOf('\n')) >= 0) {
+        const line = buffer.slice(0, newline).replace(/\r$/, '');
+        buffer = buffer.slice(newline + 1);
+        if (line === '') flush();
+        else if (line.startsWith('data:')) dataLines.push(line.slice(5).trimStart());
+        // `event:`/`id:`/comment (heartbeat) lines need no handling.
+      }
+    }
+  } catch {
+    // Aborted intentionally or network drop — handled below.
+  } finally {
+    if (streamController === controller) streamController = null;
+  }
+
+  if (stale() || streamTerminal) return;
+  // The gap between connections may have lost events — resnapshot.
+  streamLastSeq.clear();
+  resyncAll();
+  const delayMs = Math.min(1000 * 2 ** streamAttempt, 15_000);
+  streamAttempt += 1;
+  streamRetryTimer = setTimeout(() => {
+    streamRetryTimer = null;
+    if (generation === streamGeneration) void connectStream();
+  }, delayMs);
+}
+
+function teardownStream() {
+  streamGeneration += 1;
+  streamController?.abort();
+  streamController = null;
+  if (streamRetryTimer) {
+    clearTimeout(streamRetryTimer);
+    streamRetryTimer = null;
+  }
+  streamAttempt = 0;
+  streamLastSeq.clear();
+}
+
+/**
+ * Reconcile the live connection with the current subscription union —
+ * called after every subscribe/unsubscribe.
+ */
+function syncStream() {
+  const nextKey = subscribedTopicsKey();
+  if (nextKey === streamTopicsKey) return; // union unchanged — nothing to do
+  streamTopicsKey = nextKey;
+  // The membership moved — a new subscriber may carry a fresh token, so
+  // a terminal auth gate gets one more honest attempt.
+  streamTerminal = false;
+  if (streamResubscribeTimer) {
+    clearTimeout(streamResubscribeTimer);
+    streamResubscribeTimer = null;
+  }
+  if (!nextKey) {
+    // Empty union — keep the stream hot briefly rather than tearing down
+    // on the spot. StrictMode's mount→unmount→mount and route transitions
+    // (inbox unmounts, thread mounts a beat later) re-subscribe inside
+    // the window and cancel the teardown entirely — zero reconnect churn.
+    streamResubscribeTimer = setTimeout(() => {
+      streamResubscribeTimer = null;
+      teardownStream();
+    }, 150);
+    return;
+  }
+  if (!streamController) {
+    // Cold start (or mid-backoff) — connect now, no debounce.
+    void connectStream();
+    return;
+  }
+  // Topic churn under a live stream — debounce so mount/unmount bursts
+  // and inbox-list updates collapse into one reconnect instead of a
+  // connect/abort/connect thrash. The deliberate teardown's stale() exit
+  // skips the drop-path resync, so flag it owed: frames lost in the
+  // abort→connect window are recovered by resyncAll() once the new
+  // stream is live.
+  streamPendingResync = true;
+  streamResubscribeTimer = setTimeout(() => {
+    streamResubscribeTimer = null;
+    teardownStream();
+    void connectStream();
+  }, 150);
+}
+
 /**
  * Subscribe to a set of realtime topics over the SSE endpoint. Events
  * dispatch to `onEvent`; a per-topic seq gap or a dropped connection fires
  * `onResync` so callers resnapshot rather than trust state across a break.
  * 401/403 is terminal (a revoked token won't heal on backoff); everything
  * else reconnects with capped exponential backoff.
+ *
+ * The subscription registers with the shared stream manager — callers
+ * never own a connection, so N mounted realtime hooks cost ONE stream.
  */
 export function useChatRealtime({
   topics,
@@ -233,110 +487,16 @@ export function useChatRealtime({
 
   useEffect(() => {
     if (DATA_MODE !== 'live' || !enabled || !topicsKey) return;
-    const topicList = topicsKey.split(',');
-
-    let disposed = false;
-    let terminal = false;
-    let controller: AbortController | null = null;
-    let retryTimer: ReturnType<typeof setTimeout> | null = null;
-    let attempt = 0;
-    // seq is per-topic (backend getNextSequence(normalized)) — track each
-    // topic's watermark so a gap on any of them resyncs.
-    const lastSeq = new Map<string, number>();
-
-    const resync = () => onResyncRef.current?.();
-
-    const dispatch = (event: ChatRealtimeEnvelope) => {
-      const topic = typeof event.topic === 'string' ? event.topic : '';
-      if (typeof event.seq === 'number' && topic) {
-        const last = lastSeq.get(topic) ?? 0;
-        if (last > 0 && event.seq > last + 1) {
-          // Missed events — resnapshot first, then still apply this frame:
-          // it was published post-commit, so the refetch lands it anyway.
-          resync();
-        }
-        lastSeq.set(topic, Math.max(last, event.seq));
-      }
-      try {
-        onEventRef.current(event);
-      } catch {
-        // A handler must never kill the pump — the next frame still lands.
-      }
+    const subscriber: StreamSubscriber = {
+      topics: new Set(topicsKey.split(',')),
+      onEvent: (event) => onEventRef.current(event),
+      onResync: () => onResyncRef.current?.(),
     };
-
-    const connect = async () => {
-      controller = new AbortController();
-      try {
-        const session = await getAuthSession();
-        if (disposed || terminal) return;
-        if (!session?.accessToken) throw new Error('no token');
-        const url = `${getApiBaseUrl()}/realtime/stream?topics=${encodeURIComponent(
-          topicList.join(','),
-        )}`;
-        const response = await fetch(url, {
-          headers: { Authorization: `Bearer ${session.accessToken}` },
-          signal: controller.signal,
-        });
-        if (response.status === 401 || response.status === 403) {
-          // Auth gate is terminal — retrying cannot change it. REST polls
-          // stay the baseline until remount.
-          terminal = true;
-          return;
-        }
-        if (!response.ok || !response.body) {
-          throw new Error(`stream failed (${response.status})`);
-        }
-        attempt = 0;
-
-        const reader = response.body.getReader();
-        const decoder = new TextDecoder();
-        let buffer = '';
-        let dataLines: string[] = [];
-        const flush = () => {
-          if (dataLines.length === 0) return;
-          try {
-            dispatch(JSON.parse(dataLines.join('\n')) as ChatRealtimeEnvelope);
-          } catch {
-            // Malformed frame — drop it; a missed seq still resyncs.
-          }
-          dataLines = [];
-        };
-        for (;;) {
-          const { done, value } = await reader.read();
-          if (done || disposed) break;
-          buffer += decoder.decode(value, { stream: true });
-          let newline: number;
-          while ((newline = buffer.indexOf('\n')) >= 0) {
-            const line = buffer.slice(0, newline).replace(/\r$/, '');
-            buffer = buffer.slice(newline + 1);
-            if (line === '') flush();
-            else if (line.startsWith('data:')) dataLines.push(line.slice(5).trimStart());
-            // `event:`/`id:`/comment (heartbeat) lines need no handling.
-          }
-        }
-      } catch {
-        // Aborted intentionally or network drop — reconnect below.
-      } finally {
-        controller = null;
-      }
-
-      if (disposed || terminal) return;
-      // The gap between connections may have lost events — resnapshot.
-      lastSeq.clear();
-      resync();
-      const delayMs = Math.min(1000 * 2 ** attempt, 15_000);
-      attempt += 1;
-      retryTimer = setTimeout(() => {
-        if (!disposed) void connect();
-      }, delayMs);
-    };
-
-    void connect();
-
+    streamSubscribers.add(subscriber);
+    syncStream();
     return () => {
-      disposed = true;
-      controller?.abort();
-      if (retryTimer) clearTimeout(retryTimer);
+      streamSubscribers.delete(subscriber);
+      syncStream();
     };
   }, [topicsKey, enabled]);
 }
@@ -693,7 +853,7 @@ const INBOX_TOPIC_CAP = 40;
  */
 export function useInboxRealtime(openConversationId?: string) {
   const qc = useQueryClient();
-  const { user, isGuest } = useSession();
+  const { user, isGuest } = useSessionIdentity();
   const hydrated = useHydrated();
   const viewerId = user?.id ?? '';
   const { data: conversations } = useConversations();
@@ -864,7 +1024,7 @@ export function useInboxRealtime(openConversationId?: string) {
  */
 export function useNotificationRealtime() {
   const qc = useQueryClient();
-  const { user, isGuest } = useSession();
+  const { user, isGuest } = useSessionIdentity();
   const hydrated = useHydrated();
   const viewerId = user?.id ?? '';
 

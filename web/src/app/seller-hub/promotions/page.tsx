@@ -76,7 +76,22 @@ export default function SellerPromotionsPage() {
               />
             </div>
           ) : (
-            <ul className="mt-5 divide-y divide-border-subtle border-y border-border-subtle">
+            <>
+            {/* Column header — desktop table grammar; mirrors the row's
+                lg grid (56px thumb, listing, spend, reach, status,
+                actions). Visual signpost only. */}
+            <div
+              aria-hidden="true"
+              className="mt-6 hidden lg:grid lg:grid-cols-[3.5rem_minmax(0,1.4fr)_7rem_minmax(0,10rem)_minmax(0,10rem)_9rem] lg:gap-x-5 lg:border-b lg:border-border-subtle lg:pb-2"
+            >
+              <span />
+              <span className="text-label text-text-muted">Listing</span>
+              <span className="text-label text-text-muted">Spend</span>
+              <span className="text-label text-text-muted">Impressions · taps</span>
+              <span className="text-label text-text-muted">Status</span>
+              <span className="text-right text-label text-text-muted">Actions</span>
+            </div>
+            <ul className="mt-5 divide-y divide-border-subtle border-y border-border-subtle lg:mt-0 lg:border-t-0">
               {rows.map((row) => (
                 <PromotionListRow
                   key={row.promotion.id}
@@ -87,6 +102,7 @@ export default function SellerPromotionsPage() {
                 />
               ))}
             </ul>
+            </>
           )}
 
           {!liveMode ? (

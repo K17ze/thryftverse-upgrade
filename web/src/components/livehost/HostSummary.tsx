@@ -35,9 +35,7 @@ export function HostSummary({ stream, onDone }: HostSummaryProps) {
 
   return (
     <div className="mx-auto flex w-full max-w-[440px] flex-col items-center px-4 py-20 text-center sm:px-6">
-      <span className="flex h-16 w-16 items-center justify-center rounded-full bg-surface-alt text-success-text">
-        <Icon name="check" filled size={28} />
-      </span>
+      <Icon name="check" filled size={32} className="text-success-text" />
       <h1 className="mt-5 text-screen-title text-text-primary">Stream ended</h1>
       <p className="mt-1.5 text-meta text-text-muted">
         Simulated results — no real viewers, orders or payouts.

@@ -15,9 +15,7 @@ export function HostGate() {
   const router = useRouter();
   return (
     <div className="mx-auto flex w-full max-w-[400px] flex-col items-center px-4 py-24 text-center sm:px-6">
-      <span className="flex h-16 w-16 items-center justify-center rounded-full bg-surface-alt text-text-muted">
-        <Icon name="videocam" size={28} />
-      </span>
+      <Icon name="videocam" size={32} className="text-text-muted" />
       <h1 className="mt-5 text-screen-title text-text-primary">
         Join ThryftVerse to go live
       </h1>

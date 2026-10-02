@@ -8,8 +8,8 @@
  * editorial density, not critical path, so absence beats fabrication.
  */
 
-import { useMemo } from 'react';
-import { useQuery } from '@tanstack/react-query';
+import { useEffect, useMemo } from 'react';
+import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { DATA_MODE } from '@/lib/api/client';
 import { fetchLooks } from '@/lib/api/services/social';
 import { fetchTrendingFeed } from '@/lib/api/services/feed';
@@ -18,7 +18,7 @@ import { fetchListingById } from '@/lib/api/services/listings';
 import { fetchSellerSummary, fetchUserProfile, type SellerSummary } from '@/lib/api/services/users';
 import type { Listing, User } from '@/lib/contracts/domain';
 import { listingById } from '@/lib/data/fixtures';
-import { useSession } from '@/lib/session/SessionProvider';
+import { useSessionIdentity } from '@/lib/session/SessionProvider';
 import { useHydrated } from '@/lib/store/useStore';
 import { useRecentlyViewed } from '@/lib/store/recentlyViewed';
 
@@ -30,12 +30,21 @@ const LIVE = DATA_MODE === 'live';
  * Fixture mode resolves ids synchronously from the bundled catalogue;
  * live mode fetches each id through GET /listings/:id — ids that 404 or
  * fail drop out rather than rendering a dead card.
+ *
+ * NOTE (N+1): the wire has NO bulk by-ids contract — GET /listings takes
+ * query/facets/cursor but no `ids` param, and lib/api/client.ts (agent
+ * W-owned, read-only here) exposes no batch accessor. Until a bulk
+ * endpoint exists the per-id settle stays, but each resolved row is
+ * seeded into its canonical `['listing', id]` cache entry — the PDP's
+ * `useListing` then mounts warm instead of re-fetching a listing this
+ * rail just resolved. Ids are deduped so a repeated id costs one fetch.
  */
 export function useResolvedListings(ids: readonly string[]) {
   const hydrated = useHydrated();
+  const qc = useQueryClient();
   const key = ids.join('|');
   const wanted = useMemo(
-    () => (hydrated ? key.split('|').filter(Boolean) : []),
+    () => (hydrated ? [...new Set(key.split('|').filter(Boolean))] : []),
     [hydrated, key],
   );
 
@@ -50,6 +59,19 @@ export function useResolvedListings(ids: readonly string[]) {
     enabled: LIVE && wanted.length > 0,
     staleTime: 60_000,
   });
+
+  // Seed the canonical per-listing cache entries so a tap through to the
+  // PDP renders the already-resolved listing instead of a cold fetch.
+  // Stale-stamped (updatedAt 0) and never clobbers an existing row — the
+  // PDP's own fetch still revalidates on mount and a fresher detail read
+  // always wins over module data.
+  useEffect(() => {
+    for (const listing of query.data ?? []) {
+      const key = ['listing', listing.id] as const;
+      if (qc.getQueryData(key) !== undefined) continue;
+      qc.setQueryData(key, listing, { updatedAt: 0 });
+    }
+  }, [qc, query.data]);
 
   const items: Listing[] = LIVE
     ? (query.data ?? [])
@@ -139,7 +161,7 @@ export function useMemberEdits(limit = 12) {
  * can't resolve are dropped, not rendered with fabricated stats.
  */
 export function useFeaturedSellers(limit = 6) {
-  const { user } = useSession();
+  const { user } = useSessionIdentity();
   const myId = LIVE ? (user?.id ?? null) : null;
   return useQuery({
     queryKey: ['home', 'featured-sellers', myId, limit],

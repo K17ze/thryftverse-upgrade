@@ -37,9 +37,7 @@ function StageNote({
 }) {
   return (
     <div className="absolute inset-0 flex flex-col items-center justify-center gap-3 bg-black px-6 text-center">
-      <span className="flex h-14 w-14 items-center justify-center rounded-full bg-white/10 text-scrim-text-secondary">
-        <Icon name={icon} size={24} />
-      </span>
+      <Icon name={icon} size={28} className="text-scrim-text-secondary" />
       <p className="text-body-emphasis font-semibold text-scrim-text-primary">{title}</p>
       {body ? (
         <p className="max-w-xs text-caption text-scrim-text-secondary">{body}</p>

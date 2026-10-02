@@ -14,7 +14,7 @@
  * state and honest empties cover the full state machine.
  */
 
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useId, useMemo, useState } from 'react';
 import Link from 'next/link';
 import { useQueryClient } from '@tanstack/react-query';
 import { useNotificationFeed } from '@/components/notifications/useNotificationFeed';
@@ -24,7 +24,7 @@ import { useNotificationCursor } from '@/lib/store/notificationCursor';
 import { useHydrated } from '@/lib/store/useStore';
 import { isQuietHoursActive, useSettingsPrefs } from '@/lib/store/settingsPrefs';
 import { Button } from '@/components/ui/Button';
-import { Tabs } from '@/components/ui/Tabs';
+import { Tabs, tabId, tabPanelId } from '@/components/ui/Tabs';
 import { EmptyState } from '@/components/ui/EmptyState';
 import { StateGate } from '@/components/flagship/StateGate';
 import { Icon } from '@/components/ui/Icon';
@@ -53,6 +53,8 @@ export default function NotificationsPage() {
   // Load more paginates within the filter, client-side pass-through in
   // fixture mode (filterNotifications below still applies it).
   const [filter, setFilter] = useState<NotificationFilter>('all');
+  // Tab↔panel pairing base — the filter tabs own the feed region below.
+  const tabsId = useId();
   const {
     data: feed,
     isLoading,
@@ -188,19 +190,22 @@ export default function NotificationsPage() {
   };
 
   return (
-    <div className="mx-auto w-full max-w-2xl px-4 py-8 sm:px-6">
-      <div className="flex items-center justify-between gap-3">
+    // Centered feed column — widened at lg so rows can carry real
+    // columns (icon | copy | entity thumb | time/actions) instead of
+    // staying a phone-width strip.
+    <div className="mx-auto w-full max-w-2xl px-4 py-8 sm:px-6 lg:max-w-[760px]">
+      <div className="flex flex-wrap items-center justify-between gap-x-3 gap-y-1">
         <h1 className="text-screen-title text-text-primary">
           Notifications
           {unreadCount > 0 ? (
-            <span className="tnum ml-2 align-middle text-meta font-semibold text-text-muted">
+            <span className="tnum ml-2 whitespace-nowrap align-middle text-meta font-semibold text-text-muted">
               {unreadCount} unread
             </span>
           ) : null}
         </h1>
         <div className="flex items-center gap-1">
           {unreadCount > 0 ? (
-            <Button variant="quiet" size="sm" onClick={handleMarkAll}>
+            <Button variant="quiet" size="sm" className="whitespace-nowrap" onClick={handleMarkAll}>
               Mark all read
             </Button>
           ) : null}
@@ -255,12 +260,19 @@ export default function NotificationsPage() {
         active={filter}
         onChange={setFilter}
         ariaLabel="Filter notifications"
+        idBase={tabsId}
       />
 
       {/* StateGate resolves loading/error/offline from the notifications
           registry entry (offline reads "You're offline"); the per-filter
           empties stay bespoke — notificationFilterEmpty carries context
-          the registry doesn't have. */}
+          the registry doesn't have. The whole gated region is the active
+          tab's panel. */}
+      <div
+        role="tabpanel"
+        id={tabPanelId(tabsId, filter)}
+        aria-labelledby={tabId(tabsId, filter)}
+      >
       <StateGate
         domain="notifications"
         isLoading={isLoading}
@@ -348,6 +360,7 @@ export default function NotificationsPage() {
         </>
       )}
       </StateGate>
+      </div>
 
       <NotificationFilterSheet
         open={filterSheetOpen}

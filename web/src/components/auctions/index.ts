@@ -1,4 +1,11 @@
-export { AuctionCard, auctionChipLabel, auctionChipUrgency } from './AuctionCard';
+export {
+  AuctionCard,
+  auctionChipLabel,
+  auctionChipUrgency,
+  ViewerBidChip,
+  viewerStatusLabel,
+  viewerStatusTone,
+} from './AuctionCard';
 export { AuctionCountdownChip, AuctionCountdownClock } from './AuctionCountdown';
 export { AuctionAttentionStrip, type AttentionKind } from './AuctionAttentionStrip';
 export { AuctionResultRow, AuctionScheduleRow } from './AuctionRows';

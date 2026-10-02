@@ -44,5 +44,13 @@ export default async function ItemPage({ params }: ItemPageProps) {
   const { id } = await params;
   const resolution = await resolveListingForRoute(id);
   if (resolution.status === 'missing') notFound();
-  return <ItemClient />;
+  // A resolved listing rides down as the client's query seed — the PDP
+  // paints the server's row instead of paying a second render-blocking
+  // fetch. 'unresolvable' (session-published fixtures) keeps the
+  // client-owned resolution path.
+  return (
+    <ItemClient
+      initialListing={resolution.status === 'resolved' ? resolution.value : undefined}
+    />
+  );
 }

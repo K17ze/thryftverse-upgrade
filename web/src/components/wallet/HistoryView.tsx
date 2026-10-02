@@ -270,7 +270,7 @@ export function HistoryView() {
   return (
     <div className="mx-auto w-full max-w-4xl pb-16 lg:max-w-[1440px]">
       {/* Navigation header */}
-      <div className="flex items-center gap-1 px-2 pt-1 sm:px-4">
+      <div className="flex items-center gap-1 px-2 pt-1 sm:px-4 lg:px-6">
         <IconButton
           name="back"
           aria-label="Back to wallet"
@@ -284,63 +284,71 @@ export function HistoryView() {
         </div>
       </div>
 
-      {/* Metrics Summary Strip (Polymarket / eBay financial standard) */}
+      {/* Metrics Summary Strip (Polymarket / eBay financial standard) —
+          flat hairline cells at lg. */}
       <HistoryMetricsStrip
         moneyInByCurrency={moneyInByCurrency}
         moneyOutByCurrency={moneyOutByCurrency}
         nets={nets}
+        transactionCount={filtered.length}
       />
 
-      {/* Controls: Search, Date Range, Asset & Category filters */}
-      <HistoryControls
-        searchQuery={searchQuery}
-        onSearchChange={setSearchQuery}
-        dateRange={dateRange}
-        onDateRangeChange={setDateRange}
-        dateRangeOptions={dateRangeOptions}
-        onExportCsv={exportCsv}
-        assetFilter={assetFilter}
-        onAssetFilterChange={(val) => {
-          setAssetFilter(val);
-          setVisibleCount(LEDGER_PAGE_SIZE);
-        }}
-        categoryFilter={filter}
-        onCategoryFilterChange={(val) => {
-          setFilter(val);
-          setVisibleCount(LEDGER_PAGE_SIZE);
-        }}
-        visibleCount={visible.length}
-        totalCount={filtered.length}
-      />
-
-      {/* Grouped Month Ledger with Click-to-Inspect */}
-      <div className="mt-3">
-        <LedgerList
-          entries={visible}
-          emptyTitle="No activity found"
-          emptySubtitle="No movements match your current filters or search term."
-          onSelectEntry={handleSelectEntry}
+      {/* Filters + ledger — below lg they stack in document order; at lg
+          the controls pin to a ~200px left rail (the settings grammar)
+          and the ledger takes the fluid column. */}
+      <div className="lg:mt-6 lg:grid lg:grid-cols-[200px_minmax(0,1fr)] lg:items-start lg:gap-10 lg:px-6 xl:gap-14">
+        <HistoryControls
+          searchQuery={searchQuery}
+          onSearchChange={setSearchQuery}
+          dateRange={dateRange}
+          onDateRangeChange={setDateRange}
+          dateRangeOptions={dateRangeOptions}
+          onExportCsv={exportCsv}
+          assetFilter={assetFilter}
+          onAssetFilterChange={(val) => {
+            setAssetFilter(val);
+            setVisibleCount(LEDGER_PAGE_SIZE);
+          }}
+          categoryFilter={filter}
+          onCategoryFilterChange={(val) => {
+            setFilter(val);
+            setVisibleCount(LEDGER_PAGE_SIZE);
+          }}
+          visibleCount={visible.length}
+          totalCount={filtered.length}
         />
-      </div>
 
-      {/* Load More Pagination — local reveal first, then a wider server
-          window via the wallet ledger feed (live mode only). */}
-      {showLoadMore ? (
-        <div className="mt-6 flex justify-center px-4 sm:px-6">
-          <Button
-            variant="secondary"
-            size="md"
-            onClick={handleLoadMore}
-            disabled={txQuery.isFetchingMore}
-          >
-            {txQuery.isFetchingMore
-              ? 'Loading…'
-              : localRemaining > 0
-                ? `Load more transactions (${localRemaining} remaining)`
-                : 'Load more transactions'}
-          </Button>
+        <div className="min-w-0">
+          {/* Grouped Month Ledger with Click-to-Inspect */}
+          <div className="mt-3 lg:mt-0">
+            <LedgerList
+              entries={visible}
+              emptyTitle="No activity found"
+              emptySubtitle="No movements match your current filters or search term."
+              onSelectEntry={handleSelectEntry}
+            />
+          </div>
+
+          {/* Load More Pagination — local reveal first, then a wider
+              server window via the wallet ledger feed (live mode). */}
+          {showLoadMore ? (
+            <div className="mt-6 flex justify-center px-4 sm:px-6">
+              <Button
+                variant="secondary"
+                size="md"
+                onClick={handleLoadMore}
+                disabled={txQuery.isFetchingMore}
+              >
+                {txQuery.isFetchingMore
+                  ? 'Loading…'
+                  : localRemaining > 0
+                    ? `Load more transactions (${localRemaining} remaining)`
+                    : 'Load more transactions'}
+              </Button>
+            </div>
+          ) : null}
         </div>
-      ) : null}
+      </div>
 
       {/* Transaction Detail Slide-Over Drawer */}
       <TransactionDetailDrawer

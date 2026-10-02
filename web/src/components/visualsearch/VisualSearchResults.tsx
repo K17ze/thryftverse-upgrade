@@ -6,16 +6,23 @@
  * work, never "AI"); populated → honest-match note + masonry grid;
  * empty → recovery actions; error → retry. Mirrors mobile's
  * VisualSearchResults grammar.
+ *
+ * Save-to-collection lives on the tiles: the layers glyph (top corner,
+ * hover-reveal) is the web equivalent of mobile's long-press →
+ * SaveToCollectionModal and opens the shared SaveToBoardSheet — the same
+ * real edge the saved surface and PDP file through.
  */
 
-import { useMemo } from 'react';
+import { useCallback, useState } from 'react';
 import Link from 'next/link';
-import { MasonryGrid } from '@/components/feed/MasonryGrid';
 import { useResultColumns } from '@/components/filters/useResultColumns';
 import { EmptyState } from '@/components/ui/EmptyState';
 import { Icon } from '@/components/ui/Icon';
 import { MasonrySkeleton } from '@/components/ui/Skeleton';
-import { mapListingToDiscoverySummary, type DiscoveryFeedUnit, type Listing } from '@/lib/contracts/domain';
+import { SaveToBoardSheet } from '@/components/saved/SaveToBoardSheet';
+import { useSignupWall } from '@/components/auth/SignupWall';
+import type { Listing } from '@/lib/contracts/domain';
+import { VisualSearchResultsGrid } from './VisualSearchResultsGrid';
 import {
   ANALYSIS_PHASE_LABEL,
   type AnalysisPhase,
@@ -29,6 +36,10 @@ interface VisualSearchResultsProps {
   honestNote: string;
   hasRemovedAttributes: boolean;
   onRestoreAttributes: () => void;
+  /** Member-added filters are live — the empty state's first recovery is
+   *  widening them rather than blaming the photo. */
+  hasManualFilters: boolean;
+  onClearManualFilters: () => void;
   onChooseAnother: () => void;
   onRetry: () => void;
 }
@@ -48,19 +59,26 @@ export function VisualSearchResults({
   honestNote,
   hasRemovedAttributes,
   onRestoreAttributes,
+  hasManualFilters,
+  onClearManualFilters,
   onChooseAnother,
   onRetry,
 }: VisualSearchResultsProps) {
   const columns = useResultColumns();
+  const { requireAuth } = useSignupWall();
+  // Hold-to-file web equivalent — the tile currently offered to a board.
+  const [filing, setFiling] = useState<{ id: string; title: string } | null>(
+    null,
+  );
 
-  const units = useMemo<DiscoveryFeedUnit[]>(
-    () =>
-      results.map((listing) => ({
-        type: 'listing',
-        id: `vs-${listing.id}`,
-        listing: mapListingToDiscoverySummary(listing),
-      })),
-    [results],
+  const handleFileItem = useCallback(
+    (item: Listing) => {
+      // Filing is account-backed — the sheet returns null for guests, so
+      // the wall must run first or the glyph would look dead.
+      if (!requireAuth('save_item')) return;
+      setFiling({ id: item.id, title: item.title });
+    },
+    [requireAuth],
   );
 
   if (status === 'analyzing') {
@@ -79,6 +97,11 @@ export function VisualSearchResults({
   }
 
   if (status === 'empty') {
+    const action = hasManualFilters
+      ? { label: 'Clear added filters', run: onClearManualFilters }
+      : hasRemovedAttributes
+        ? { label: 'Restore attributes', run: onRestoreAttributes }
+        : { label: 'Choose another photo', run: onChooseAnother };
     return (
       <div>
         <ResultsHeader>
@@ -88,9 +111,13 @@ export function VisualSearchResults({
         <EmptyState
           icon="eye"
           title="No visual matches"
-          subtitle="The catalogue has nothing close to that — widen the detected attributes or try another photo."
-          actionLabel={hasRemovedAttributes ? 'Restore attributes' : 'Choose another photo'}
-          onAction={hasRemovedAttributes ? onRestoreAttributes : onChooseAnother}
+          subtitle={
+            hasManualFilters
+              ? 'Nothing matches that combination — widen the filters you added or try another photo.'
+              : "The catalogue has nothing close to that — widen the detected attributes or try another photo."
+          }
+          actionLabel={action.label}
+          onAction={action.run}
         />
         <p className="mt-2 text-center text-caption text-text-muted">
           or{' '}
@@ -132,7 +159,17 @@ export function VisualSearchResults({
         <Icon name="info" size={14} className="mt-px shrink-0" />
         {honestNote}
       </p>
-      <MasonryGrid units={units} columns={columns} />
+      <VisualSearchResultsGrid
+        results={results}
+        columns={columns}
+        onFileItem={handleFileItem}
+      />
+      <SaveToBoardSheet
+        open={filing !== null}
+        onClose={() => setFiling(null)}
+        itemId={filing?.id ?? null}
+        itemLabel={filing?.title}
+      />
     </div>
   );
 }

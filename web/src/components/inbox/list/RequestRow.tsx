@@ -1,5 +1,6 @@
 'use client';
 
+import { memo } from 'react';
 import Link from 'next/link';
 import type { Conversation } from '@/lib/contracts/domain';
 import { Avatar } from '@/components/ui/Avatar';
@@ -11,8 +12,13 @@ import {
   lastMessagePreview,
 } from '../inboxModel';
 
-/** Request row — brand accent edge, listing context, inline actions. */
-export function RequestRow({
+/**
+ * Request row — brand accent edge, listing context, inline actions.
+ * Memoized on conversation identity: the accept/decline/block closures
+ * capture only the conversation prop and stable store/query deps, so
+ * an unrelated inbox merge leaves every other request untouched.
+ */
+function RequestRowImpl({
   conversation: c,
   onAccept,
   onDecline,
@@ -24,7 +30,16 @@ export function RequestRow({
   onBlock: () => void;
 }) {
   return (
-    <div className="px-3 py-1.5">
+    <div
+      className="px-3 py-1.5"
+      // Group marker — focusAdjacentGroupControl walks to it from the
+      // action buttons to park focus on a sibling row before an
+      // accept/decline write unmounts this one.
+      data-request-row
+      // Same content-visibility windowing as ConversationRowItem — the
+      // taller action dock gets its own best-known height hint.
+      style={{ contentVisibility: 'auto', containIntrinsicSize: 'auto 148px' }}
+    >
       <div className="relative rounded-lg border-l-2 border-brand bg-brand-subtle">
         <Link
           href={`/inbox/${c.id}`}
@@ -71,3 +86,8 @@ export function RequestRow({
     </div>
   );
 }
+
+export const RequestRow = memo(
+  RequestRowImpl,
+  (a, b) => a.conversation === b.conversation,
+);

@@ -204,17 +204,19 @@ export function BidPanel({
         </p>
       ) : null}
 
-      {/* Price lockup */}
+      {/* Price lockup — the hero carries the live read on its own ("N
+          bids · Starting £x" anchors it); the eyebrow returns only once
+          ended, where it disambiguates the settled number. */}
       <div className="flex flex-col gap-1">
-        <span className="text-meta font-semibold uppercase tracking-wide text-text-muted">
-          {ended
-            ? auctionOutcome(auction) === 'sold'
+        {ended ? (
+          <span className="text-meta font-semibold uppercase tracking-wide text-text-muted">
+            {auctionOutcome(auction) === 'sold'
               ? 'Winning bid'
               : auction.bidCount > 0
                 ? 'Highest bid'
-                : 'Unsold · starting bid'
-            : 'Current bid'}
-        </span>
+                : 'Unsold · starting bid'}
+          </span>
+        ) : null}
         <span className="tnum text-price-hero font-bold text-text-primary">
           {formatPrice(ended && auction.bidCount === 0 ? auction.startingBid : auction.currentBid)}
         </span>

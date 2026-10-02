@@ -1,18 +1,20 @@
 'use client';
 
 /**
- * ListingReportMenu — the PDP overflow affordance for reporting a listing.
- * Two sheets: the small options menu ("Report this item") and the report
- * composer (reason list + optional note). Live mode files the report at
- * POST /listings/:id/report — the moderation intake, not a support case.
- * Fixture mode keeps the session-ticket demo path so the receipt link
- * resolves inside the demo dataset.
+ * ListingReportMenu — the PDP's single ··· overflow affordance. One Sheet
+ * carries every secondary listing action (Save to board, Share, …) above
+ * the "Report this item" row, which opens the report composer (reason list
+ * + optional note). Live mode files the report at POST /listings/:id/report
+ * — the moderation intake, not a support case. Fixture mode keeps the
+ * session-ticket demo path so the receipt link resolves inside the demo
+ * dataset. Keyboard: Esc closes (Sheet), Up/Down rove the options, focus
+ * returns to the trigger on close (Sheet restoreFocus).
  */
 
-import { useState } from 'react';
+import { useState, type KeyboardEvent } from 'react';
 import { useRouter } from 'next/navigation';
 import { Button } from '@/components/ui/Button';
-import { Icon } from '@/components/ui/Icon';
+import { Icon, type AppIconName } from '@/components/ui/Icon';
 import { IconButton } from '@/components/ui/IconButton';
 import { Sheet } from '@/components/ui/Sheet';
 import { useToast } from '@/components/ui/Toast';
@@ -26,11 +28,23 @@ import {
 } from '@/components/report/reportModel';
 import type { Listing } from '@/lib/contracts/domain';
 
-interface ListingReportMenuProps {
-  listing: Pick<Listing, 'id' | 'title'>;
+/** A secondary action row in the options sheet. The menu closes before
+ *  `onSelect` runs so a follow-up sheet (Save to board) opens cleanly and
+ *  focus restoration stays correct. */
+export interface ListingMenuItem {
+  icon: AppIconName;
+  label: string;
+  onSelect: () => void;
 }
 
-export function ListingReportMenu({ listing }: ListingReportMenuProps) {
+interface ListingReportMenuProps {
+  listing: Pick<Listing, 'id' | 'title'>;
+  /** Secondary actions rendered above "Report this item". */
+  items?: ListingMenuItem[];
+  className?: string;
+}
+
+export function ListingReportMenu({ listing, items, className }: ListingReportMenuProps) {
   const router = useRouter();
   const { show } = useToast();
   const { createTicket } = useSupportActions();
@@ -45,6 +59,25 @@ export function ListingReportMenu({ listing }: ListingReportMenuProps) {
     setReason(null);
     setNote('');
     setSending(false);
+  };
+
+  // Roving focus inside the options list — Esc and focus-restore come from
+  // Sheet; Up/Down completes the menu keyboard grammar.
+  const onMenuKeyDown = (e: KeyboardEvent<HTMLUListElement>) => {
+    if (e.key !== 'ArrowDown' && e.key !== 'ArrowUp') return;
+    const options = Array.from(
+      e.currentTarget.querySelectorAll<HTMLButtonElement>('button'),
+    );
+    if (options.length === 0) return;
+    e.preventDefault();
+    const current = options.indexOf(document.activeElement as HTMLButtonElement);
+    const next =
+      e.key === 'ArrowDown'
+        ? (current + 1) % options.length
+        : current <= 0
+          ? options.length - 1
+          : current - 1;
+    options[next]?.focus();
   };
 
   const submit = async () => {
@@ -92,6 +125,7 @@ export function ListingReportMenu({ listing }: ListingReportMenuProps) {
         aria-haspopup="dialog"
         aria-expanded={menuOpen}
         onClick={() => setMenuOpen(true)}
+        className={className}
       />
       <Sheet
         open={menuOpen}
@@ -100,8 +134,25 @@ export function ListingReportMenu({ listing }: ListingReportMenuProps) {
         maxWidth={400}
       >
         <div className="px-5 pb-5">
-          <ul className="flex flex-col">
-            <li>
+          <ul className="flex flex-col" onKeyDown={onMenuKeyDown}>
+            {items?.map((item) => (
+              <li key={item.label}>
+                <button
+                  type="button"
+                  onClick={() => {
+                    setMenuOpen(false);
+                    item.onSelect();
+                  }}
+                  className="pressable flex min-h-12 w-full items-center gap-3.5 py-3 text-left text-text-primary"
+                >
+                  <Icon name={item.icon} size={20} />
+                  <span className="flex-1 text-body-emphasis font-medium">
+                    {item.label}
+                  </span>
+                </button>
+              </li>
+            ))}
+            <li className={items?.length ? 'border-t border-border-subtle' : ''}>
               <button
                 type="button"
                 onClick={() => {

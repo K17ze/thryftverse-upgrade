@@ -144,7 +144,7 @@ function CheckoutInner() {
         </div>
       ) : null}
 
-      <div className="mt-6 grid gap-10 lg:grid-cols-[minmax(0,1fr)_340px]">
+      <div className="mt-6 grid grid-cols-1 gap-10 lg:grid-cols-[minmax(0,1fr)_340px]">
         <CheckoutFormRail
           addresses={addresses}
           addressId={addressId}

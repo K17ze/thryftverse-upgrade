@@ -27,8 +27,9 @@ function formatCountdownSentence(ms: number): string {
 }
 
 /** Under an hour to the hammer — the native countdown bar's danger
- *  threshold (AuctionCountdownBar.tsx:26). */
-const URGENT_MS = 60 * 60_000;
+ *  threshold (AuctionCountdownBar.tsx:26). Hub tiles reuse it as the
+ *  per-second escalation window. */
+export const URGENT_MS = 60 * 60_000;
 
 const CHIP_TONE: Record<CountdownUrgency, string> = {
   normal: 'text-scrim-text-primary',
@@ -37,7 +38,9 @@ const CHIP_TONE: Record<CountdownUrgency, string> = {
   ended: 'text-scrim-text-primary',
 };
 
-/** Card chip — "Ends in 2h 14m" / "Starts in 40m" / "Ended". */
+/** Card chip — "Ends in 2h 14m" / "Starts in 40m" / "Ended". A solid
+ *  media scrim (`bg-overlay`), never glass: no blur, no border, no
+ *  shadow — `drop-scrim` keeps the glyph and digits legible on media. */
 export function AuctionCountdownChip({
   label,
   urgency,
@@ -46,7 +49,7 @@ export function AuctionCountdownChip({
   urgency: CountdownUrgency;
 }) {
   return (
-    <span className="inline-flex items-center gap-1.5 rounded-md bg-overlay/85 px-2.5 py-1 text-meta font-semibold backdrop-blur-md border border-white/10 shadow-sm">
+    <span className="inline-flex items-center gap-1.5 rounded-md bg-overlay px-2.5 py-1 text-meta font-semibold">
       <Icon name="clock" size={12} className="text-scrim-text-primary drop-scrim" />
       <span className={`tnum drop-scrim ${CHIP_TONE[urgency]}`}>{label}</span>
     </span>

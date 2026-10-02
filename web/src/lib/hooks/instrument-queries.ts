@@ -8,37 +8,11 @@
  *    useSavedPaymentMethods) stays the single truth — reads, writes and
  *    default resolution are unchanged.
  *  - live: server rows only.
- *
- *    Addresses ride GET/POST/DELETE /users/:id/addresses. No address PATCH
- *    or set-default route exists server-side (verified
- *    backend/api/src/index.ts — only list, create, delete), so edit and
- *    re-default on existing rows are honestly absent in live: the create
- *    payload's isDefault flag is the only default write, the server
- *    auto-defaults the first address, and DELETE re-promotes the freshest
- *    remaining row when the default goes away.
- *
- *    Payment methods are the Stripe-projected GET /v2/payments/methods
- *    rail. Detach and set-default exist but key on the provider's pm_* ref
- *    (DELETE /v2/payments/methods/:providerMethodId, PATCH
- *    /v2/payments/methods/:providerMethodId/default), which the mapped
- *    PaymentMethod contract drops — each action re-reads the rail to
- *    resolve the ref (verify-then-act: a stale row answers not-found
- *    instead of mutating the wrong instrument). There is no web card-add
- *    rail: legacy POST /users/:id/payment-methods is permanently 410
- *    TOKENISED_PAYMENT_METHOD_REQUIRED, so addPaymentMethod is null in
- *    live and the card sheet self-gates into its tokenisation notice.
- *
- *    Order surfaces resolve the ids stamped on the order itself — GET
- *    /orders/:id carries addressId/paymentMethodId — matched against the
- *    same live rails. Unresolvable refs (wallet-paid, detached method,
- *    deleted address) omit the row instead of falling back to a local
- *    default.
  */
 
 import { useCallback, useMemo } from 'react';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
-import { DATA_MODE } from '@/lib/api/client';
-import { fetchJson, parseApiError } from '@/lib/api/http';
+import { parseApiError, fetchJson } from '@/lib/api/http';
 import * as checkoutService from '@/lib/api/services/checkout';
 import { useSession } from '@/lib/session/SessionProvider';
 import {
@@ -48,97 +22,32 @@ import {
 } from '@/lib/store/userPaymentData';
 import type { Address, PaymentMethod } from '@/lib/contracts/domain';
 
-const IS_LIVE = DATA_MODE === 'live';
+import {
+  IS_LIVE,
+  EMPTY_LIST,
+  addressQueryKey,
+  methodsQueryKey,
+  type AddressInput,
+  type PaymentMethodInput,
+  type ManagedAddresses,
+  type ManagedPaymentMethods,
+  type OrderInstrumentFacts,
+} from './instruments/instrumentTypes';
+import {
+  deleteLiveAddress,
+  resolveProviderMethodRef,
+  fetchLiveOrderInstrumentRefs,
+} from './instruments/instrumentHelpers';
 
-/** Stable empty list — `query.data ?? []` would allocate a fresh array
- *  every render and churn downstream memo deps. */
-const EMPTY_LIST: never[] = [];
-
-export type AddressInput = Omit<Address, 'id' | 'isDefault'>;
-export type PaymentMethodInput = Omit<PaymentMethod, 'id' | 'isDefault'>;
-
-// The same keys useCheckoutInstruments publishes — settings, checkout and
-// the order pages share one cache, so a settings mutation invalidates the
-// rail everywhere it is mounted.
-const addressQueryKey = (userId: string | null) =>
-  ['checkout', 'addresses', userId ?? 'guest'] as const;
-const methodsQueryKey = (userId: string | null) =>
-  ['checkout', 'payment-methods', userId ?? 'guest'] as const;
-
-// ── Private live helpers ─────────────────────────────────────────────────────
-
-/** DELETE /users/:userId/addresses/:addressId — the only address mutation
- *  route besides create. 404s throw through fetchJson. */
-async function deleteLiveAddress(userId: string, addressId: string): Promise<void> {
-  await fetchJson(
-    `/users/${encodeURIComponent(userId)}/addresses/${encodeURIComponent(addressId)}`,
-    { method: 'DELETE' },
-  );
-}
-
-interface LivePaymentMethodRow {
-  /** Numeric user_payment_methods id — matches the mapped PaymentMethod.id. */
-  id: number;
-  /** The pm_* ref the v2 detach/default routes key on. */
-  providerPaymentMethodId?: string | null;
-}
-
-/** Fresh read of the raw methods rail to resolve a row's provider ref —
- *  verify-then-act: if the method vanished since the list rendered, this
- *  answers null instead of detaching the wrong instrument. */
-async function resolveProviderMethodRef(localId: string): Promise<string | null> {
-  const payload = await fetchJson<{ ok?: boolean; items?: LivePaymentMethodRow[] }>(
-    '/v2/payments/methods',
-  );
-  const row = (payload.items ?? []).find((r) => String(r.id) === localId);
-  return typeof row?.providerPaymentMethodId === 'string'
-    ? row.providerPaymentMethodId
-    : null;
-}
-
-/** GET /orders/:id emits the instrument ids the order was placed with;
- *  the mapped CommerceOrder contract drops them, so this reads the raw row. */
-async function fetchLiveOrderInstrumentRefs(
-  orderId: string,
-  signal?: AbortSignal,
-): Promise<{ addressId: number | null; paymentMethodId: number | null }> {
-  const payload = await fetchJson<{
-    ok?: boolean;
-    order?: { addressId?: number | null; paymentMethodId?: number | null } | null;
-  }>(`/orders/${encodeURIComponent(orderId)}`, undefined, { signal });
-  const order = payload.order;
-  return {
-    addressId: typeof order?.addressId === 'number' ? order.addressId : null,
-    paymentMethodId:
-      typeof order?.paymentMethodId === 'number' ? order.paymentMethodId : null,
-  };
-}
+export type {
+  AddressInput,
+  PaymentMethodInput,
+  ManagedAddresses,
+  ManagedPaymentMethods,
+  OrderInstrumentFacts,
+};
 
 // ── Addresses (settings management + shared count read) ─────────────────────
-
-export interface ManagedAddresses {
-  mode: 'fixture' | 'live';
-  addresses: Address[];
-  defaultAddress: Address | null;
-  /** Live read still in flight (always false in fixture). */
-  isLoading: boolean;
-  /** Live read failed — callers show an honest retry, not an empty rail. */
-  isError: boolean;
-  refetch: () => void;
-  /** Address PATCH doesn't exist server-side — null in live so any edit
-   *  control omits itself rather than pretending to save. */
-  updateAddress: ((id: string, fields: AddressInput) => void) | null;
-  /** No set-default route exists — null in live. The create payload's
-   *  isDefault flag is the only live default write. */
-  setDefaultAddress: ((id: string) => void) | null;
-  /** Both modes: fixture writes the local overlay, live POSTs the server
-   *  row and re-reads so the resolved default is the server's. */
-  addAddress: (fields: AddressInput, makeDefault: boolean) => Promise<Address>;
-  /** Both modes; live resolves promotedToDefault from the refreshed list
-   *  (the server re-promotes a default itself — the flag is only reported
-   *  when the re-read actually shows a new default). */
-  removeAddress: (id: string) => Promise<RemoveEntryResult>;
-}
 
 export function useManagedAddresses(): ManagedAddresses {
   const { user } = useSession();
@@ -250,28 +159,6 @@ export function useManagedAddresses(): ManagedAddresses {
 
 // ── Payment methods (settings management) ────────────────────────────────────
 
-export interface ManagedPaymentMethods {
-  mode: 'fixture' | 'live';
-  methods: PaymentMethod[];
-  isLoading: boolean;
-  isError: boolean;
-  /** The provider isn't configured (PAYMENT_PROVIDER_UNAVAILABLE, 503) —
-   *  a stable condition, not a blip; callers show the tokenisation notice
-   *  instead of a retry loop. */
-  providerUnavailable: boolean;
-  refetch: () => void;
-  /** Device-local checkout preference — honest in both modes (it orders
-   *  the charge source, it is never presented as server state). */
-  useBalanceFirst: boolean;
-  setUseBalanceFirst: (v: boolean) => void;
-  /** Fixture-only local card write — null in live (no web card rail; the
-   *  legacy create route is permanently 410). */
-  addPaymentMethod: ((p: PaymentMethodInput) => PaymentMethod) | null;
-  removePaymentMethod: (id: string) => Promise<RemoveEntryResult>;
-  /** Both modes — live PATCHes the provider-bound default route. */
-  setDefaultPaymentMethod: (id: string) => Promise<void>;
-}
-
 export function useManagedPaymentMethods(): ManagedPaymentMethods {
   const { user } = useSession();
   const userId = user?.id ?? null;
@@ -294,9 +181,6 @@ export function useManagedPaymentMethods(): ManagedPaymentMethods {
   } = useQuery({
     queryKey: methodsQueryKey(userId),
     enabled: IS_LIVE && !!userId,
-    // Provider-unconfigured and auth failures are stable — one retry keeps a
-    // transient blip recoverable without churning a dead endpoint (same
-    // posture as useCheckoutInstruments).
     retry: 1,
     queryFn: ({ signal }) => checkoutService.fetchLivePaymentMethods(signal),
   });
@@ -308,8 +192,6 @@ export function useManagedPaymentMethods(): ManagedPaymentMethods {
       const providerRef = await resolveProviderMethodRef(id);
       if (!providerRef) return { ok: false, reason: 'not_found' };
       const wasDefault = liveMethods.some((m) => m.id === id && m.isDefault);
-      // Detach at the provider — the local projection flips to 'detached'
-      // server-side and the sync re-promotes a default when one goes away.
       await fetchJson(`/v2/payments/methods/${encodeURIComponent(providerRef)}`, {
         method: 'DELETE',
       });
@@ -393,16 +275,6 @@ export function useManagedPaymentMethods(): ManagedPaymentMethods {
 }
 
 // ── Order instrument facts (order detail + receipt) ──────────────────────────
-
-export interface OrderInstrumentFacts {
-  /** The buyer's address the order was placed against — null when the
-   *  order carries no addressId or the row no longer exists. */
-  deliveryAddress: Address | null;
-  /** The tokenised method the order charged — null when unresolvable
-   *  (wallet-paid, detached, provider unconfigured) or not requested. */
-  paymentMethod: PaymentMethod | null;
-  isLoading: boolean;
-}
 
 /**
  * Per-order instrument resolution — live mode only; fixture callers keep

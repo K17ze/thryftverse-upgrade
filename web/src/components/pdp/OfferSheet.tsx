@@ -238,6 +238,9 @@ export function OfferSheet({ open, onClose, listing, counterTo, onSend, busy = f
                   setError('');
                 }}
                 onKeyDown={(e) => {
+                  // Enter mid-IME-composition commits the candidate —
+                  // don't advance to review on it.
+                  if (e.nativeEvent.isComposing) return;
                   if (e.key === 'Enter') toReview();
                 }}
                 placeholder="0.00"
